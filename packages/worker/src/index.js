@@ -41,7 +41,12 @@ export default {
         }
 
         if (method === 'GET' && path === '/me') {
-          response = json(user);
+          const db = getDB(env);
+          const [streakData, exchangeData] = await Promise.all([
+            db.getStreak(user.id),
+            db.getExchangeCount(user.id),
+          ]);
+          response = json({ ...user, streak: streakData.streak, exchangeCount: exchangeData.count });
         } else if (method === 'POST' && path === '/notes') {
           response = await handlePostNote(request, user, env);
         } else if (method === 'GET' && path === '/notes/inbox') {

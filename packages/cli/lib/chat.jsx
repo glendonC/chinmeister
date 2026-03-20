@@ -134,7 +134,7 @@ export function Chat({ config, user, navigate }) {
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
       <Box justifyContent="space-between">
         <Text bold>Chat</Text>
-        <Text dimColor>{roomCount} dev{roomCount !== 1 ? 's' : ''} here</Text>
+        <Text dimColor>{roomCount <= 1 ? 'just you here' : `${roomCount} devs here`}</Text>
       </Box>
       {!connected && <Text color="red">Reconnecting...</Text>}
       <Text>{''}</Text>

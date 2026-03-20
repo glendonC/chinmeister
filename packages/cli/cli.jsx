@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { render, Box, Text, useApp, useInput } from 'ink';
-import { loadConfig, saveConfig, configExists } from './lib/config.js';
+import { loadConfig, saveConfig, configExists, deleteConfig } from './lib/config.js';
 import { api } from './lib/api.js';
 import { Welcome } from './lib/init.jsx';
 import { Home } from './lib/home.jsx';
@@ -9,6 +9,13 @@ import { Inbox } from './lib/inbox.jsx';
 import { Feed } from './lib/feed.jsx';
 import { Chat } from './lib/chat.jsx';
 import { Customize } from './lib/customize.jsx';
+
+// Handle reset command before launching TUI
+if (process.argv[2] === 'reset') {
+  deleteConfig();
+  console.log('Config cleared. Run chinwag to start fresh.');
+  process.exit(0);
+}
 
 // Set terminal tab title
 process.stdout.write('\x1b]0;chinwag\x07');

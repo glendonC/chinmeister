@@ -96,19 +96,28 @@ export function Home({ user, config, navigate, refreshUser, inboxRead }) {
   const handle = user?.handle || config?.handle || 'unknown';
   const color = user?.color || config?.color || 'white';
   const status = user?.status;
+  const streak = user?.streak || 0;
+  const exchangeCount = user?.exchangeCount || 0;
+
+  const onlinePart = stats.online >= 10
+    ? `${stats.online} devs online`
+    : stats.online >= 1
+      ? 'a few devs online'
+      : null;
 
   const statsLine = [
-    `${stats.online} dev${stats.online !== 1 ? 's' : ''} online`,
+    onlinePart,
     stats.notesToday ? `${stats.notesToday} note${stats.notesToday !== 1 ? 's' : ''} today` : null,
   ].filter(Boolean).join('  ·  ');
 
   return (
     <Box flexDirection="column">
       <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
-        <Text>Welcome back, <Text color={getInkColor(color)} bold>{handle}</Text></Text>
+        <Text>Welcome back, <Text color={getInkColor(color)} bold>{handle}</Text>{streak > 0 ? <Text dimColor>  {streak}d streak</Text> : ''}</Text>
         {status && <Text dimColor>— {status}</Text>}
+        <Text dimColor>{exchangeCount} note{exchangeCount !== 1 ? 's' : ''} exchanged</Text>
         <Text>{''}</Text>
-        <Text dimColor>{statsLine}</Text>
+        {statsLine && <Text dimColor>{statsLine}</Text>}
       </Box>
 
       <Box flexDirection="column" paddingX={1}>

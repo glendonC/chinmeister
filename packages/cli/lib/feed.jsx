@@ -91,6 +91,7 @@ export function Feed({ config, navigate }) {
             <Box>
               <Text>{isSelected ? '▸' : ' '} </Text>
               <Text color={getInkColor(note.color)} bold>{note.handle}</Text>
+              {note.streak > 0 && <Text dimColor> ({note.streak}d)</Text>}
               <Text dimColor> · {timeAgo}</Text>
             </Box>
             <Text>  {note.message}</Text>

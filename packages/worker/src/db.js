@@ -342,32 +342,39 @@ export class DatabaseDO extends DurableObject {
     let rows;
     if (cursor && excludeUserId) {
       rows = this.sql.exec(`
-        SELECT n.id, u.handle, u.color, u.status, n.message, n.created_at
+        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
         FROM notes n JOIN users u ON u.id = n.author_id
         WHERE n.date = ? AND n.created_at < ? AND n.author_id != ?
         ORDER BY n.created_at DESC LIMIT ?
       `, today, cursor, excludeUserId, limit).toArray();
     } else if (cursor) {
       rows = this.sql.exec(`
-        SELECT n.id, u.handle, u.color, u.status, n.message, n.created_at
+        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
         FROM notes n JOIN users u ON u.id = n.author_id
         WHERE n.date = ? AND n.created_at < ?
         ORDER BY n.created_at DESC LIMIT ?
       `, today, cursor, limit).toArray();
     } else if (excludeUserId) {
       rows = this.sql.exec(`
-        SELECT n.id, u.handle, u.color, u.status, n.message, n.created_at
+        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
         FROM notes n JOIN users u ON u.id = n.author_id
         WHERE n.date = ? AND n.author_id != ?
         ORDER BY n.created_at DESC LIMIT ?
       `, today, excludeUserId, limit).toArray();
     } else {
       rows = this.sql.exec(`
-        SELECT n.id, u.handle, u.color, u.status, n.message, n.created_at
+        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
         FROM notes n JOIN users u ON u.id = n.author_id
         WHERE n.date = ?
         ORDER BY n.created_at DESC LIMIT ?
       `, today, limit).toArray();
+    }
+
+    // Compute streaks for unique authors in this feed page
+    const authorIds = [...new Set(rows.map(r => r.author_id))];
+    const streakMap = new Map();
+    for (const authorId of authorIds) {
+      streakMap.set(authorId, this.#computeStreak(authorId));
     }
 
     const notes = rows.map(r => ({
@@ -377,6 +384,7 @@ export class DatabaseDO extends DurableObject {
       status: r.status,
       message: r.message,
       created_at: r.created_at,
+      streak: streakMap.get(r.author_id) || 0,
     }));
 
     const nextCursor = notes.length === limit ? notes[notes.length - 1].created_at : null;
@@ -401,6 +409,46 @@ export class DatabaseDO extends DurableObject {
 
     const count = rows[0]?.count || 0;
     return { allowed: count <= maxPerDay, count };
+  }
+
+  // --- Streak & exchange count ---
+
+  #computeStreak(userId) {
+    const rows = this.sql.exec(
+      'SELECT DISTINCT date FROM notes WHERE author_id = ? ORDER BY date DESC',
+      userId
+    ).toArray();
+
+    if (rows.length === 0) return 0;
+
+    let streak = 0;
+    const today = new Date(utcDate() + 'T00:00:00Z');
+    const expected = new Date(today);
+
+    for (const row of rows) {
+      const expectedStr = expected.toISOString().slice(0, 10);
+      if (row.date === expectedStr) {
+        streak++;
+        expected.setUTCDate(expected.getUTCDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  }
+
+  async getStreak(userId) {
+    this.#ensureSchema();
+    return { streak: this.#computeStreak(userId) };
+  }
+
+  async getExchangeCount(userId) {
+    this.#ensureSchema();
+    const rows = this.sql.exec(
+      'SELECT COUNT(*) as count FROM exchanges WHERE recipient_id = ?', userId
+    ).toArray();
+    return { count: rows[0]?.count || 0 };
   }
 
   // --- Stats ---
