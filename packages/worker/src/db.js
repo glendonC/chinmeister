@@ -87,6 +87,17 @@ export class DatabaseDO extends DurableObject {
         count INTEGER NOT NULL DEFAULT 0,
         PRIMARY KEY (ip, date)
       );
+
+      CREATE TABLE IF NOT EXISTS agent_profiles (
+        user_id TEXT PRIMARY KEY REFERENCES users(id),
+        framework TEXT,
+        languages TEXT,
+        frameworks TEXT,
+        tools TEXT,
+        platforms TEXT,
+        registered_at TEXT DEFAULT (datetime('now')),
+        last_active TEXT DEFAULT (datetime('now'))
+      );
     `);
 
     this.#schemaReady = true;
@@ -514,6 +525,55 @@ export class DatabaseDO extends DurableObject {
         date, userId, candidate.author_id, myNotes[0].id
       );
     }
+  }
+
+  // --- Agent profiles ---
+
+  async updateAgentProfile(userId, profile) {
+    this.#ensureSchema();
+    const user = this.sql.exec('SELECT id FROM users WHERE id = ?', userId).toArray();
+    if (user.length === 0) return { error: 'User not found' };
+
+    this.sql.exec(
+      `INSERT INTO agent_profiles (user_id, framework, languages, frameworks, tools, platforms, registered_at, last_active)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+       ON CONFLICT(user_id) DO UPDATE SET
+         framework = excluded.framework,
+         languages = excluded.languages,
+         frameworks = excluded.frameworks,
+         tools = excluded.tools,
+         platforms = excluded.platforms,
+         last_active = datetime('now')`,
+      userId,
+      profile.framework || null,
+      JSON.stringify(profile.languages || []),
+      JSON.stringify(profile.frameworks || []),
+      JSON.stringify(profile.tools || []),
+      JSON.stringify(profile.platforms || [])
+    );
+
+    return { ok: true };
+  }
+
+  async getAgentProfile(userId) {
+    this.#ensureSchema();
+    const rows = this.sql.exec(
+      'SELECT * FROM agent_profiles WHERE user_id = ?', userId
+    ).toArray();
+
+    if (rows.length === 0) return null;
+
+    const row = rows[0];
+    return {
+      user_id: row.user_id,
+      framework: row.framework,
+      languages: JSON.parse(row.languages || '[]'),
+      frameworks: JSON.parse(row.frameworks || '[]'),
+      tools: JSON.parse(row.tools || '[]'),
+      platforms: JSON.parse(row.platforms || '[]'),
+      registered_at: row.registered_at,
+      last_active: row.last_active,
+    };
   }
 }
 

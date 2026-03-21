@@ -3,7 +3,8 @@
   "private": true,
   "workspaces": [
     "packages/cli",
-    "packages/worker"
+    "packages/worker",
+    "packages/mcp"
   ],
   "scripts": {
     "dev:cli": "npm run dev --workspace=packages/cli",

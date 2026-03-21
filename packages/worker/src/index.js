@@ -7,6 +7,7 @@ import { checkContent, isBlocked, checkRateLimit } from './moderation.js';
 export { DatabaseDO } from './db.js';
 export { LobbyDO } from './lobby.js';
 export { RoomDO } from './room.js';
+export { TeamDO } from './team.js';
 
 export default {
   async fetch(request, env) {
@@ -65,6 +66,35 @@ export default {
           response = await handleClearStatus(user, env);
         } else if (method === 'GET' && path === '/ws/chat') {
           return await handleChatUpgrade(request, user, env);
+        }
+        // Agent profile routes
+        else if (method === 'PUT' && path === '/agent/profile') {
+          response = await handleUpdateAgentProfile(request, user, env);
+        } else if (method === 'GET' && path === '/agent/dashboard') {
+          response = await handleAgentDashboard(user, env);
+        }
+        // Team routes
+        else if (method === 'POST' && path === '/teams') {
+          response = await handleCreateTeam(user, env);
+        } else if (path.startsWith('/teams/')) {
+          const parsed = parseTeamPath(path);
+          if (!parsed) {
+            response = json({ error: 'Not found' }, 404);
+          } else if (method === 'POST' && parsed.action === 'join') {
+            response = await handleTeamJoin(user, env, parsed.teamId);
+          } else if (method === 'POST' && parsed.action === 'leave') {
+            response = await handleTeamLeave(user, env, parsed.teamId);
+          } else if (method === 'GET' && parsed.action === 'context') {
+            response = await handleTeamContext(user, env, parsed.teamId);
+          } else if (method === 'PUT' && parsed.action === 'activity') {
+            response = await handleTeamActivity(request, user, env, parsed.teamId);
+          } else if (method === 'POST' && parsed.action === 'conflicts') {
+            response = await handleTeamConflicts(request, user, env, parsed.teamId);
+          } else if (method === 'POST' && parsed.action === 'heartbeat') {
+            response = await handleTeamHeartbeat(user, env, parsed.teamId);
+          } else {
+            response = json({ error: 'Not found' }, 404);
+          }
         } else {
           response = json({ error: 'Not found' }, 404);
         }
@@ -273,6 +303,109 @@ async function handleChatUpgrade(request, user, env) {
   }));
 }
 
+// --- Agent & Team handlers ---
+
+async function handleUpdateAgentProfile(request, user, env) {
+  const body = await request.json();
+
+  // Validate profile shape — only accept known fields, arrays of strings
+  const profile = {
+    framework: typeof body.framework === 'string' ? body.framework.slice(0, 50) : null,
+    languages: sanitizeTags(body.languages),
+    frameworks: sanitizeTags(body.frameworks),
+    tools: sanitizeTags(body.tools),
+    platforms: sanitizeTags(body.platforms),
+  };
+
+  const db = getDB(env);
+  const result = await db.updateAgentProfile(user.id, profile);
+  if (result.error) return json({ error: result.error }, 400);
+  return json(result);
+}
+
+function sanitizeTags(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr
+    .filter(t => typeof t === 'string')
+    .map(t => t.slice(0, 50).toLowerCase().trim())
+    .filter(Boolean)
+    .slice(0, 50);
+}
+
+async function handleAgentDashboard(user, env) {
+  const db = getDB(env);
+  const profile = await db.getAgentProfile(user.id);
+  return json({
+    profile: profile || null,
+    skills_absorbed: 0,
+    skills_contributed: 0,
+    network_resolutions: 0,
+  });
+}
+
+async function handleCreateTeam(user, env) {
+  // Rate limit: 5 teams per user per day (reuses account_limits table pattern)
+  const db = getDB(env);
+  const limit = await db.checkIpLimit(`team:${user.id}`, 5);
+  if (!limit.allowed) {
+    return json({ error: 'Team creation limit reached. Try again tomorrow.' }, 429);
+  }
+
+  const teamId = 't_' + crypto.randomUUID().slice(0, 8);
+  const team = getTeam(env, teamId);
+  await team.join(user.id, user.id, user.handle);
+  return json({ team_id: teamId }, 201);
+}
+
+async function handleTeamJoin(user, env, teamId) {
+  const team = getTeam(env, teamId);
+  const result = await team.join(user.id, user.id, user.handle);
+  if (result.error) return json({ error: result.error }, 400);
+  return json(result);
+}
+
+async function handleTeamLeave(user, env, teamId) {
+  const team = getTeam(env, teamId);
+  const result = await team.leave(user.id);
+  if (result.error) return json({ error: result.error }, 400);
+  return json(result);
+}
+
+async function handleTeamContext(user, env, teamId) {
+  const team = getTeam(env, teamId);
+  const result = await team.getContext(user.id);
+  if (result.error) return json({ error: result.error }, 403);
+  return json(result);
+}
+
+async function handleTeamActivity(request, user, env, teamId) {
+  const { files, summary } = await request.json();
+  if (!Array.isArray(files)) return json({ error: 'files must be an array' }, 400);
+  if (typeof summary !== 'string') return json({ error: 'summary must be a string' }, 400);
+
+  const team = getTeam(env, teamId);
+  const result = await team.updateActivity(user.id, files, summary);
+  if (result.error) return json({ error: result.error }, 400);
+  return json(result);
+}
+
+async function handleTeamConflicts(request, user, env, teamId) {
+  const { files } = await request.json();
+  if (!Array.isArray(files)) return json({ error: 'files must be an array' }, 400);
+
+  const team = getTeam(env, teamId);
+  const result = await team.checkConflicts(user.id, files);
+  if (result.error) return json({ error: result.error }, 403);
+  return json(result);
+}
+
+async function handleTeamHeartbeat(user, env, teamId) {
+  const team = getTeam(env, teamId);
+  const result = await team.heartbeat(user.id);
+  if (result.error) return json({ error: result.error }, 400);
+  return json(result);
+}
+
 // --- Helpers ---
 
 function getDB(env) {
@@ -281,6 +414,16 @@ function getDB(env) {
 
 function getLobby(env) {
   return env.LOBBY.get(env.LOBBY.idFromName('main'));
+}
+
+function getTeam(env, teamId) {
+  return env.TEAM.get(env.TEAM.idFromName(teamId));
+}
+
+function parseTeamPath(path) {
+  const match = path.match(/^\/teams\/([a-zA-Z0-9_]+)\/([a-z]+)$/);
+  if (!match) return null;
+  return { teamId: match[1], action: match[2] };
 }
 
 function json(data, status = 200, extraHeaders = {}) {

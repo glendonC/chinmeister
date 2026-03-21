@@ -24,7 +24,15 @@ class_name = "LobbyDO"
 name = "ROOM"
 class_name = "RoomDO"
 
+[[durable_objects.bindings]]
+name = "TEAM"
+class_name = "TeamDO"
+
 # DO migrations
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["DatabaseDO", "LobbyDO", "RoomDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["TeamDO"]
