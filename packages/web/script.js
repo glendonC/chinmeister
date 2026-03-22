@@ -10,32 +10,7 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
     { c1: '#efe4d7', c2: '#f7f0e6' },
   ];
 
-  const markers = [
-    { location: [37.78, -122.42], size: 0.026, id: 'sf' },
-    { location: [47.61, -122.33], size: 0.018 },
-    { location: [34.05, -118.24], size: 0.02 },
-    { location: [40.71, -74.01], size: 0.026, id: 'nyc' },
-    { location: [42.36, -71.06], size: 0.018 },
-    { location: [43.65, -79.38], size: 0.019 },
-    { location: [51.51, -0.13], size: 0.025, id: 'london' },
-    { location: [52.52, 13.4], size: 0.021, id: 'berlin' },
-    { location: [48.86, 2.35], size: 0.019 },
-    { location: [52.37, 4.9], size: 0.016 },
-    { location: [41.39, 2.17], size: 0.016 },
-    { location: [59.33, 18.07], size: 0.014 },
-    { location: [35.68, 139.76], size: 0.028, id: 'tokyo' },
-    { location: [37.57, 126.98], size: 0.018 },
-    { location: [1.35, 103.82], size: 0.018 },
-    { location: [22.28, 114.16], size: 0.016 },
-    { location: [12.97, 77.59], size: 0.026, id: 'bangalore' },
-    { location: [28.61, 77.21], size: 0.016 },
-    { location: [19.07, 72.88], size: 0.016 },
-    { location: [-23.55, -46.63], size: 0.026, id: 'saopaulo' },
-    { location: [-34.6, -58.38], size: 0.016 },
-    { location: [19.43, -99.13], size: 0.018 },
-    { location: [25.2, 55.27], size: 0.015 },
-    { location: [-33.87, 151.21], size: 0.018 },
-  ];
+  const markers = [];
 
   const body = document.body;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -64,12 +39,12 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
   function deriveTheme(entry) {
     const top = hexToRgb(entry.c1);
     const bottom = hexToRgb(entry.c2);
-    const midpoint = mix(top, bottom, 0.48);
+    const midpoint = mix(top, bottom, 0.52);
 
     return {
-      base: tint(midpoint, 0.07, 0.012),
-      marker: tint(mix(top, bottom, 0.5), 0.14, 0.085),
-      glow: tint(mix(top, bottom, 0.32), 0.18, 0.18),
+      base: mix([0.93, 0.95, 0.97], midpoint, 0.16),
+      marker: mix([0.16, 0.22, 0.34], midpoint, 0.08),
+      glow: mix([0.97, 0.98, 1], midpoint, 0.18),
     };
   }
 
@@ -78,25 +53,25 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
 
     if (sectionId === 'global-chat') {
       return {
-        base: tint(theme.base, 1.02, 0.004),
-        marker: tint(theme.marker, 1.16, 0.01),
-        glow: tint(theme.glow, 1.12, 0.02),
+        base: tint(theme.base, 1.01, 0.004),
+        marker: tint(theme.marker, 1.04, 0.008),
+        glow: tint(theme.glow, 1.02, 0.006),
       };
     }
 
     if (sectionId === 'agent-network') {
       return {
-        base: tint(theme.base, 0.9, 0.018),
-        marker: tint(theme.marker, 1.08, 0.028),
-        glow: tint(theme.glow, 1.18, 0.016),
+        base: tint(theme.base, 0.98, 0.006),
+        marker: tint(theme.marker, 1.08, 0.016),
+        glow: tint(theme.glow, 1.03, 0.01),
       };
     }
 
     if (sectionId === 'privacy') {
       return {
-        base: tint(theme.base, 0.82, 0.02),
-        marker: tint(theme.marker, 0.92, 0.012),
-        glow: tint(theme.glow, 0.9, 0.028),
+        base: tint(theme.base, 0.96, 0.008),
+        marker: tint(theme.marker, 0.94, 0.008),
+        glow: tint(theme.glow, 0.98, 0.006),
       };
     }
 
@@ -108,10 +83,10 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
   }
 
   const sectionMotion = {
-    hero: { theta: -0.12, spin: reduceMotion ? 0 : 0.0008, scale: 1.16, offsetY: 10 },
-    'global-chat': { theta: -0.08, spin: reduceMotion ? 0 : 0.00088, scale: 1.18, offsetY: 2 },
-    'agent-network': { theta: -0.18, spin: reduceMotion ? 0 : 0.0007, scale: 1.12, offsetY: 14 },
-    privacy: { theta: -0.04, spin: reduceMotion ? 0 : 0.00056, scale: 1.06, offsetY: 22 },
+    hero: { theta: -0.14, spin: reduceMotion ? 0 : 0.00048, scale: 1.08, offsetY: 4 },
+    'global-chat': { theta: -0.1, spin: reduceMotion ? 0 : 0.00054, scale: 1.1, offsetY: -2 },
+    'agent-network': { theta: -0.18, spin: reduceMotion ? 0 : 0.00046, scale: 1.06, offsetY: 8 },
+    privacy: { theta: -0.08, spin: reduceMotion ? 0 : 0.00038, scale: 1.01, offsetY: 14 },
   };
 
   let activeSection = 'hero';
@@ -378,14 +353,14 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
   }
 
   const state = {
-    phi: 5.78,
-    theta: -0.12,
-    targetTheta: -0.12,
-    autoSpin: reduceMotion ? 0 : 0.0008,
-    currentScale: 1.16,
-    targetScale: 1.16,
-    currentOffsetY: 10,
-    targetOffsetY: 10,
+    phi: 5.08,
+    theta: -0.14,
+    targetTheta: -0.14,
+    autoSpin: reduceMotion ? 0 : 0.00048,
+    currentScale: 1.08,
+    targetScale: 1.08,
+    currentOffsetY: 4,
+    targetOffsetY: 4,
     dragSpin: 0,
     pointerX: 0,
     pointerY: 0,
@@ -430,9 +405,9 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
     state.pointerX *= 0.96;
     state.pointerY *= 0.94;
     state.dragSpin *= 0.9;
-    state.targetTheta = motion.theta + (state.pointerY * 0.08);
+    state.targetTheta = motion.theta + (state.pointerY * 0.05);
     state.theta += (state.targetTheta - state.theta) * 0.08;
-    state.phi += state.autoSpin + state.dragSpin + (state.pointerX * 0.00024);
+    state.phi += state.autoSpin + state.dragSpin + (state.pointerX * 0.00014);
 
     globe.update({
       phi: state.phi,
@@ -442,7 +417,7 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
       baseColor: currentTheme.base,
       markerColor: currentTheme.marker,
       glowColor: currentTheme.glow,
-      opacity: window.innerWidth < 720 ? 0.4 : 0.56,
+      opacity: window.innerWidth < 720 ? 0.68 : 0.82,
       scale: state.currentScale,
       offset: [0, state.currentOffsetY],
     });
@@ -483,17 +458,17 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
       height: state.height,
       phi: state.phi,
       theta: state.theta,
-      dark: 1,
-      diffuse: 0.7,
-      mapSamples: 12000,
-      mapBrightness: 0.95,
-      mapBaseBrightness: 0.02,
+      dark: 0,
+      diffuse: 0.82,
+      mapSamples: 14000,
+      mapBrightness: 1.16,
+      mapBaseBrightness: 0.34,
       baseColor: currentTheme.base,
       markerColor: currentTheme.marker,
       glowColor: currentTheme.glow,
       markers,
       markerElevation: 0.01,
-      opacity: window.innerWidth < 720 ? 0.4 : 0.56,
+      opacity: window.innerWidth < 720 ? 0.68 : 0.82,
       scale: state.currentScale,
       offset: [0, state.currentOffsetY],
       context: { alpha: true, antialias: true },
@@ -515,8 +490,8 @@ import createGlobe from 'https://esm.sh/cobe?bundle';
     if (state.dragging) {
       const deltaX = event.clientX - state.lastX;
       state.lastX = event.clientX;
-      state.phi -= deltaX * 0.0038;
-      state.dragSpin = -deltaX * 0.00006;
+      state.phi -= deltaX * 0.0031;
+      state.dragSpin = -deltaX * 0.00004;
     }
   }
 

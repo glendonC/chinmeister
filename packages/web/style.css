@@ -35,11 +35,21 @@ body {
   height: 100%;
 }
 
+html {
+  overflow: hidden;
+  overscroll-behavior-y: none;
+  background:
+    radial-gradient(circle at 18% 24%, rgba(255, 255, 255, 0.72), transparent 30%),
+    radial-gradient(circle at 74% 18%, rgba(255, 255, 255, 0.36), transparent 30%),
+    linear-gradient(135deg, var(--c1) 0%, var(--c2) 100%);
+}
+
 body {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100%;
+  min-height: 100%;
   overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior-y: none;
   position: relative;
   font-family: var(--sans);
   color: var(--ink);
@@ -87,12 +97,12 @@ a {
 
 .globe-shell {
   position: absolute;
-  top: 52%;
-  right: clamp(-160px, -7vw, -18px);
-  width: clamp(600px, 58vw, 1020px);
+  top: 50%;
+  right: clamp(12px, 6vw, 88px);
+  width: clamp(460px, 44vw, 760px);
   aspect-ratio: 1;
   transform: translateY(-50%);
-  opacity: 0.94;
+  opacity: 0.96;
   transition: transform 0.8s cubic-bezier(.22, 1, .36, 1), opacity 0.6s ease;
 }
 
@@ -103,31 +113,8 @@ a {
   height: 100%;
   display: block;
   pointer-events: auto;
-  opacity: 0.58;
-  filter: saturate(0.7) contrast(1.08);
-}
-
-.globe-haze,
-.globe-fog {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-}
-
-.globe-haze {
-  background:
-    radial-gradient(circle at 48% 46%, rgba(255, 255, 255, 0.32), rgba(255, 255, 255, 0.12) 28%, transparent 62%),
-    radial-gradient(circle at 62% 36%, rgba(255, 255, 255, 0.16), transparent 34%),
-    radial-gradient(circle at 40% 66%, rgba(255, 255, 255, 0.12), transparent 26%);
-  filter: blur(48px);
-  opacity: 0.42;
-}
-
-.globe-fog {
-  background:
-    radial-gradient(circle at 50% 46%, transparent 0 42%, rgba(255, 255, 255, 0.08) 58%, rgba(255, 255, 255, 0.48) 82%, rgba(255, 255, 255, 0.94) 100%),
-    linear-gradient(180deg, transparent 0%, transparent 58%, rgba(255, 255, 255, 0.42) 80%, rgba(255, 255, 255, 0.96) 100%);
-  mix-blend-mode: screen;
+  opacity: 0.88;
+  filter: saturate(0.88) contrast(1.03);
 }
 
 .floating-ui {
@@ -757,13 +744,13 @@ body[data-active-section='global-chat'] .globe-shell {
 }
 
 body[data-active-section='agent-network'] .globe-shell {
-  opacity: 0.92;
-  transform: translateY(-51%) scale(0.985);
+  opacity: 0.95;
+  transform: translateY(-50.5%) scale(1);
 }
 
 body[data-active-section='privacy'] .globe-shell {
-  opacity: 0.84;
-  transform: translateY(-49%) scale(0.965);
+  opacity: 0.9;
+  transform: translateY(-49.5%) scale(0.985);
 }
 
 @keyframes rise {
@@ -804,8 +791,8 @@ h1 {
 
 @media (max-width: 1100px) {
   .globe-shell {
-    right: clamp(-220px, -15vw, -70px);
-    width: clamp(560px, 64vw, 940px);
+    right: clamp(-10px, 3vw, 28px);
+    width: clamp(430px, 50vw, 640px);
   }
 
   .hero-copy {
@@ -839,14 +826,14 @@ h1 {
   }
 
   .globe-shell {
-    top: 33%;
-    right: -30vw;
-    width: min(112vw, 780px);
-    opacity: 0.9;
+    top: 30%;
+    right: -12vw;
+    width: min(92vw, 620px);
+    opacity: 0.86;
   }
 
   #globe {
-    opacity: 0.5;
+    opacity: 0.76;
   }
 
   .hero-copy {
@@ -1147,9 +1134,9 @@ h1 {
   }
 
   .globe-shell {
-    top: 29%;
-    right: -42vw;
-    width: min(132vw, 740px);
+    top: 27%;
+    right: -18vw;
+    width: min(108vw, 560px);
   }
 
   .hero-copy {
