@@ -22,18 +22,10 @@ chinwag is your dev home in the terminal: an agent dashboard + a developer commu
 - Team coordination (TeamDO) — membership, activity tracking, file conflict detection, heartbeat
 - CLI team commands — `chinwag team create`, `chinwag team join <id>`
 - `.chinwag` file for auto-join on MCP server startup
-- 9 API routes for agent profile, dashboard stub, full team CRUD
-
-### Skill registry (built, not deployed)
-- SkillRegistryDO with FTS5 search, quality signals, ranked matching
-- R2 storage for SKILL.md content
-- 4 API endpoints (publish, discover, get, signal)
-- 4 MCP tools (search, get, publish, report signal)
-- 3-layer moderation (blocklist + AI + injection scan)
-- Rate limiting (60 queries/min, 10 publications/day, 60 signals/min)
+- 8 API routes for agent profile and full team CRUD
 
 ### Landing page (shipped)
-- chinwag.dev with install switcher, globe, section navigation
+- chinwag.dev with install switcher, section navigation, theme toggle
 - Updated messaging: "Your dev home in the terminal"
 
 ---
@@ -81,7 +73,7 @@ These ideas came up during product design but aren't being built now. Kept here 
 Aggregating anonymized signals across all users to produce patterns no individual agent has. Dropped because: privacy model unclear, contribution mechanism unproven, competes with LLM training data for generic patterns. Revisit if chinwag gets enough users that cross-project patterns become feasible.
 
 ### Skill network / ClawHub competitor
-Publishing and discovering SKILL.md instruction files. Infrastructure is built (SkillRegistryDO, R2, FTS5, MCP tools). Not deployed because: static skill registries are commoditized, differentiator unclear vs. ClawHub (13K skills) and Skills.sh (600K installs). Could be repurposed for project memory storage.
+Publishing and discovering SKILL.md instruction files. Was prototyped (SkillRegistryDO, R2, FTS5) but code was removed. Static skill registries are commoditized — differentiator unclear vs. ClawHub and Skills.sh.
 
 ### Passive skill absorption
 Agents automatically finding and applying network patterns without searching. Requires: large skill corpus, profile-aware matching, reliable quality signals. Too many dependencies on unbuilt pieces.
@@ -97,5 +89,4 @@ See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design. Key points fo
 
 - **MCP server** (`packages/mcp/`) runs locally per agent. Each instance connects to the same backend with the same user token. This is how multi-agent coordination works without agents talking to each other directly.
 - **TeamDO** already handles multi-agent coordination (conflict detection, activity sharing). The dashboard is a CLI view on top of this existing infrastructure.
-- **SkillRegistryDO** + R2 could be repurposed for project memory storage (per-project knowledge entries instead of global skills).
 - **All DO communication uses RPC**, not fetch. New features should follow this pattern.

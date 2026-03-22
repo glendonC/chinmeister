@@ -70,8 +70,6 @@ export default {
         // Agent profile routes
         else if (method === 'PUT' && path === '/agent/profile') {
           response = await handleUpdateAgentProfile(request, user, env);
-        } else if (method === 'GET' && path === '/agent/dashboard') {
-          response = await handleAgentDashboard(user, env);
         }
         // Team routes
         else if (method === 'POST' && path === '/teams') {
@@ -330,15 +328,6 @@ function sanitizeTags(arr) {
     .map(t => t.slice(0, 50).toLowerCase().trim())
     .filter(Boolean)
     .slice(0, 50);
-}
-
-async function handleAgentDashboard(user, env) {
-  const db = getDB(env);
-  const profile = await db.getAgentProfile(user.id);
-  return json({
-    profile: profile || null,
-    connected_agents: 0,
-  });
 }
 
 async function handleCreateTeam(user, env) {

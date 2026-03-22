@@ -76,11 +76,10 @@ The monorepo has three deployable units:
 
 | File | Responsibility |
 |---|---|
-| `cli.jsx` | App shell. Manages screen state machine: loading → welcome → home → {post, inbox, feed, chat, customize}. Loads/validates config on startup. |
+| `cli.jsx` | App shell. Manages screen state machine: loading → welcome → home → {post, community, chat, customize}. Loads/validates config on startup. |
 | `lib/home.jsx` | Home screen. Menu with single-key navigation. Displays greeting, status, online count. 30s heartbeat to presence endpoint. |
 | `lib/post.jsx` | Note composition. Text input with 280-char counter. One post per day enforced server-side. |
-| `lib/inbox.jsx` | Inbox viewer. Three states: locked (haven't posted), waiting (no match yet), ready (note received). |
-| `lib/feed.jsx` | Global feed. Cursor-based pagination, arrow-key scrolling, 20 notes per page. |
+| `lib/community.jsx` | Feed + inbox combined. Scrollable daily notes feed with cursor pagination. Shows exchange status (locked/waiting/received). |
 | `lib/chat.jsx` | Live chat. WebSocket connection with exponential backoff reconnect (1s→15s cap). Room shuffle via `[n]` key. Shows last 15 messages. |
 | `lib/customize.jsx` | Profile editor. Change handle, cycle through 12-color palette, set status. |
 | `lib/api.js` | HTTP client. Wraps fetch with Bearer token auth. All API calls go through this. |

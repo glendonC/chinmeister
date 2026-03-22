@@ -5,7 +5,7 @@ import { api } from './lib/api.js';
 import { Welcome } from './lib/init.jsx';
 import { Home } from './lib/home.jsx';
 import { Post } from './lib/post.jsx';
-import { Feed } from './lib/feed.jsx';
+import { Community } from './lib/community.jsx';
 import { Chat } from './lib/chat.jsx';
 import { Customize } from './lib/customize.jsx';
 
@@ -84,14 +84,14 @@ function App() {
     }
     if (screen === 'welcome') return <Welcome onComplete={onSetup} />;
     if (screen === 'home') return <Home user={user} config={config} navigate={navigate} />;
+    if (screen === 'community') return <Community config={config} navigate={navigate} />;
     if (screen === 'post') return <Post config={config} navigate={navigate} refreshUser={refreshUser} />;
-    if (screen === 'feed') return <Feed config={config} navigate={navigate} />;
     if (screen === 'chat') return <Chat config={config} user={user} navigate={navigate} />;
     if (screen === 'customize') return <Customize config={config} user={user} navigate={navigate} refreshUser={refreshUser} />;
     return null;
   })();
 
-  const screenLabel = { post: 'post', feed: 'feed', chat: 'chat', customize: 'settings' }[screen] || null;
+  const screenLabel = { community: 'community', post: 'post', chat: 'chat', customize: 'settings' }[screen] || null;
 
   return (
     <Box flexDirection="column">

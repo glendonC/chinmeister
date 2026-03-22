@@ -48,11 +48,11 @@ export function Post({ config, navigate, refreshUser }) {
 
   useInput((ch, key) => {
     if (state === 'done' || state === 'already' || state === 'error') {
-      navigate('home');
+      navigate('community');
       return;
     }
     if (key.escape && state === 'writing') {
-      navigate('home');
+      navigate('community');
     }
   });
 

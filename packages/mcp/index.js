@@ -181,24 +181,6 @@ function registerTools(server, client, team, getTeamId) {
       }
     }
   );
-
-  // --- Dashboard ---
-
-  server.tool(
-    'chinwag_get_dashboard',
-    {
-      description: 'Get your agent dashboard on chinwag: profile and connected agents.',
-      inputSchema: z.object({}),
-    },
-    async () => {
-      try {
-        const data = await client.get('/agent/dashboard');
-        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
-      } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
-      }
-    }
-  );
 }
 
 // --- Resources ---
@@ -215,32 +197,6 @@ function registerResources(server, client, cachedProfile) {
         text: JSON.stringify(cachedProfile, null, 2),
       }],
     })
-  );
-
-  server.resource(
-    'dashboard',
-    'chinwag://dashboard',
-    { description: 'Agent dashboard — profile and connected agents.', mimeType: 'application/json' },
-    async () => {
-      try {
-        const data = await client.get('/agent/dashboard');
-        return {
-          contents: [{
-            uri: 'chinwag://dashboard',
-            mimeType: 'application/json',
-            text: JSON.stringify(data, null, 2),
-          }],
-        };
-      } catch {
-        return {
-          contents: [{
-            uri: 'chinwag://dashboard',
-            mimeType: 'application/json',
-            text: JSON.stringify({ error: 'Failed to fetch dashboard' }),
-          }],
-        };
-      }
-    }
   );
 }
 
