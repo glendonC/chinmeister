@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { api } from './api.js';
 import { getInkColor } from './colors.js';
+import { getTimeAgo } from './time.js';
 
 export function Feed({ config, navigate }) {
   const [notes, setNotes] = useState([]);
@@ -65,7 +66,7 @@ export function Feed({ config, navigate }) {
       <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
         <Text>No notes today yet. Be the first!</Text>
         <Text>{''}</Text>
-        <Text dimColor>[esc] Back</Text>
+        <Text dimColor>[esc] back</Text>
       </Box>
     );
   }
@@ -101,17 +102,7 @@ export function Feed({ config, navigate }) {
 
       {hasMore && <Text dimColor>  ↓ Scroll for more</Text>}
       <Text>{''}</Text>
-      <Text dimColor>[↑↓] Scroll  ·  [esc] Back</Text>
+      <Text dimColor>[↑↓] scroll · [esc] back</Text>
     </Box>
   );
-}
-
-function getTimeAgo(isoString) {
-  const diff = Date.now() - new Date(isoString).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
 }

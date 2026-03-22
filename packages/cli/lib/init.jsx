@@ -64,15 +64,13 @@ export function Welcome({ onComplete }) {
   return (
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
       <Text bold>Welcome to chinwag</Text>
-      <Text dimColor>The developer community in your terminal.</Text>
       <Text>{''}</Text>
-      <Text>Write a daily note. Get a stranger's back.</Text>
-      <Text>Browse what others are building.</Text>
-      <Text>Drop into live chat.</Text>
+      <Text>Post a daily note, get a stranger's back.</Text>
+      <Text>Chat with devs. All in your terminal.</Text>
       <Text>{''}</Text>
       <Text>You're <Text color={getInkColor(account.color)} bold>{account.handle}</Text></Text>
       <Text>{''}</Text>
-      <Text dimColor>[enter] Jump in</Text>
+      <Text dimColor>[enter] start</Text>
     </Box>
   );
 }

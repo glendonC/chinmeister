@@ -1,46 +1,20 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Box, Text, useInput } from 'ink';
 import { api } from './api.js';
 import { getInkColor } from './colors.js';
+import { getTimeAgo } from './time.js';
 
-export function Home({ user, config, navigate, refreshUser, inboxRead }) {
+export function Home({ user, config, navigate }) {
   const [stats, setStats] = useState({ online: 0, notesToday: 0 });
   const [posted, setPosted] = useState(false);
-  const [hasInbox, setHasInbox] = useState(false);
-  const [cursor, setCursor] = useState(0);
-
-  const menuItems = useMemo(() => {
-    const items = [];
-
-    if (!posted) {
-      items.push({ key: 'p', label: "Write today's note — get a stranger's back", action: 'post', highlight: true });
-    } else {
-      items.push({ key: 'p', label: '✓ Posted today', action: 'post', dim: true });
-    }
-
-    if (posted && hasInbox && !inboxRead) {
-      items.push({ key: 'i', label: 'A note arrived for you', action: 'inbox', highlight: true });
-    } else if (posted && hasInbox) {
-      items.push({ key: 'i', label: '✓ Note received', action: 'inbox', dim: true });
-    } else if (posted) {
-      items.push({ key: 'i', label: "Note sent — one's on the way", action: 'inbox', dim: true });
-    }
-
-    items.push({ key: 'f', label: "What others posted today", action: 'feed' });
-    items.push({ key: 'c', label: 'Chat', action: 'chat' });
-    items.push({ key: 'h', label: 'Customize', action: 'customize', dim: true });
-    items.push({ key: 'q', label: 'Quit', action: 'quit', dim: true });
-
-    return items;
-  }, [posted, hasInbox, inboxRead]);
+  const [inbox, setInbox] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       const client = api(config);
 
-      try {
-        await client.post('/presence/heartbeat', {});
-      } catch {}
+      try { await client.post('/presence/heartbeat', {}); } catch {}
 
       try {
         const s = await client.get('/stats');
@@ -48,18 +22,20 @@ export function Home({ user, config, navigate, refreshUser, inboxRead }) {
       } catch {}
 
       try {
-        const inbox = await client.get('/notes/inbox');
-        if (inbox.locked) {
+        const result = await client.get('/notes/inbox');
+        if (result.locked) {
           setPosted(false);
-          setHasInbox(false);
-        } else if (inbox.waiting) {
+          setInbox(null);
+        } else if (result.waiting) {
           setPosted(true);
-          setHasInbox(false);
+          setInbox('waiting');
         } else {
           setPosted(true);
-          setHasInbox(true);
+          setInbox({ from: result.from, note: result.note });
         }
       } catch {}
+
+      setLoading(false);
     }
     load();
 
@@ -74,89 +50,80 @@ export function Home({ user, config, navigate, refreshUser, inboxRead }) {
     return () => clearInterval(interval);
   }, []);
 
-  useInput((input, key) => {
-    if (key.upArrow) {
-      setCursor(prev => Math.max(0, prev - 1));
-      return;
-    }
-    if (key.downArrow) {
-      setCursor(prev => Math.min(menuItems.length - 1, prev + 1));
-      return;
-    }
-    if (key.return) {
-      const item = menuItems[cursor];
-      if (item) navigate(item.action);
-      return;
-    }
-    const letter = input.toLowerCase();
-    const match = menuItems.find(m => m.key === letter);
-    if (match) navigate(match.action);
+  useInput((ch) => {
+    if (loading) return;
+    if (ch === 'w' && !posted) { navigate('post'); return; }
+    if (ch === 'f') { navigate('feed'); return; }
+    if (ch === 'c') { navigate('chat'); return; }
+    if (ch === 's') { navigate('customize'); return; }
+    if (ch === 'q') { navigate('quit'); return; }
   });
 
-  const handle = user?.handle || config?.handle || 'unknown';
-  const color = user?.color || config?.color || 'white';
-  const status = user?.status;
-  const streak = user?.streak || 0;
-  const exchangeCount = user?.exchangeCount || 0;
+  if (loading) {
+    return (
+      <Box padding={1}>
+        <Text dimColor>Loading...</Text>
+      </Box>
+    );
+  }
 
-  const onlinePart = stats.online >= 10
-    ? `${stats.online} devs online`
-    : stats.online >= 1
-      ? 'a few devs online'
-      : null;
+  const parts = [];
+  if (stats.notesToday) {
+    parts.push(`${stats.notesToday} note${stats.notesToday !== 1 ? 's' : ''} today`);
+  }
+  if (stats.online >= 10) {
+    parts.push(`${stats.online} devs online`);
+  } else if (stats.online >= 1) {
+    parts.push('a few devs online');
+  }
+  const statsLine = parts.join(' · ');
 
-  const statsLine = [
-    onlinePart,
-    stats.notesToday ? `${stats.notesToday} note${stats.notesToday !== 1 ? 's' : ''} today` : null,
-  ].filter(Boolean).join('  ·  ');
+  const hasExchange = inbox && typeof inbox === 'object';
+  const isWaiting = inbox === 'waiting';
+
+  const actions = [];
+  if (!posted) actions.push('[w] write');
+  actions.push('[f] feed');
+  actions.push('[c] chat');
+  actions.push('[s] settings');
+  actions.push('[q] quit');
 
   return (
-    <Box flexDirection="column">
-      <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
-        <Text>Welcome back, <Text color={getInkColor(color)} bold>{handle}</Text>{streak > 0 ? <Text dimColor>  {streak}d streak</Text> : ''}</Text>
-        {status && <Text dimColor>— {status}</Text>}
-        <Text dimColor>{exchangeCount} note{exchangeCount !== 1 ? 's' : ''} exchanged</Text>
-        <Text>{''}</Text>
-        {statsLine && <Text dimColor>{statsLine}</Text>}
-      </Box>
+    <Box flexDirection="column" paddingX={1}>
+      {statsLine && (
+        <>
+          <Text>{''}</Text>
+          <Text dimColor>{statsLine}</Text>
+        </>
+      )}
 
-      <Box flexDirection="column" paddingX={1}>
-        <Text>{''}</Text>
-        {menuItems.map((item, i) => {
-          const isSelected = i === cursor;
-          const prefix = isSelected ? '▸' : ' ';
+      <Text>{''}</Text>
 
-          if (item.highlight) {
-            return (
-              <Text key={item.key}>
-                <Text color={isSelected ? 'white' : undefined}>{prefix} </Text>
-                <Text color="green" bold={isSelected}>[{item.key}]</Text>
-                <Text color={isSelected ? 'white' : undefined} bold={isSelected}> {item.label}</Text>
-              </Text>
-            );
-          }
+      {!posted && (
+        <Text>Write today's note — post one, get one back.</Text>
+      )}
 
-          if (item.dim && !isSelected) {
-            return (
-              <Text key={item.key}>
-                <Text>{prefix} </Text>
-                <Text dimColor>[{item.key}] {item.label}</Text>
-              </Text>
-            );
-          }
+      {isWaiting && (
+        <Text dimColor>Posted. Waiting for a note back.</Text>
+      )}
 
-          return (
-            <Text key={item.key}>
-              <Text color={isSelected ? 'white' : undefined}>{prefix} </Text>
-              <Text bold={isSelected}>[{item.key}]</Text>
-              <Text color={isSelected ? 'white' : undefined} bold={isSelected}> {item.label}</Text>
-            </Text>
-          );
-        })}
+      {hasExchange && (
+        <Box
+          flexDirection="column"
+          paddingX={1}
+          borderStyle="round"
+          borderColor="green"
+        >
+          <Box>
+            <Text color={getInkColor(inbox.from.color)} bold>{inbox.from.handle}</Text>
+            <Text dimColor> · {getTimeAgo(inbox.note.created_at)}</Text>
+          </Box>
+          <Text>{inbox.note.message}</Text>
+        </Box>
+      )}
 
-        <Text>{''}</Text>
-        <Text dimColor>[↑↓] Navigate  ·  [enter] Select  ·  or press a letter</Text>
-      </Box>
+      <Text>{''}</Text>
+      <Text dimColor>{actions.join('  ')}</Text>
     </Box>
   );
 }

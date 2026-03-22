@@ -67,10 +67,10 @@ export function Post({ config, navigate, refreshUser }) {
   if (state === 'done') {
     return (
       <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
-        <Text color="green">✓ Posted! It's on the feed for everyone to see.</Text>
-        <Text dimColor>Check your inbox — a note from another dev is waiting.</Text>
+        <Text color="green">✓ Posted.</Text>
+        <Text dimColor>It's on the feed. Check your inbox for a note back.</Text>
         <Text>{''}</Text>
-        <Text dimColor>Press any key to go back.</Text>
+        <Text dimColor>[any key] back</Text>
       </Box>
     );
   }
@@ -86,9 +86,9 @@ export function Post({ config, navigate, refreshUser }) {
           <Text dimColor>You've already posted today.</Text>
         )}
         <Text>{''}</Text>
-        <Text dimColor>Come back tomorrow for a new one.</Text>
+        <Text dimColor>Come back tomorrow.</Text>
         <Text>{''}</Text>
-        <Text dimColor>Press any key to go back.</Text>
+        <Text dimColor>[any key] back</Text>
       </Box>
     );
   }
@@ -98,7 +98,7 @@ export function Post({ config, navigate, refreshUser }) {
       <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
         <Text color="red">Error: {error}</Text>
         <Text>{''}</Text>
-        <Text dimColor>Press any key to go back.</Text>
+        <Text dimColor>[any key] back</Text>
       </Box>
     );
   }
@@ -128,7 +128,7 @@ export function Post({ config, navigate, refreshUser }) {
       </Box>
       <Text>{''}</Text>
       <Box justifyContent="space-between">
-        <Text dimColor>[enter] Post  ·  [esc] Cancel</Text>
+        <Text dimColor>[enter] post · [esc] back</Text>
         <Text color={overLimit ? 'red' : 'gray'}>{charCount}/280</Text>
       </Box>
     </Box>

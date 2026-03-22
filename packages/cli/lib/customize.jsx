@@ -155,7 +155,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
         {message && (
           <Text color={message.type === 'error' ? 'red' : 'green'}>{message.text}</Text>
         )}
-        <Text dimColor>[enter] Save  ·  [esc] Back</Text>
+        <Text dimColor>[enter] save · [esc] back</Text>
       </Box>
     );
   }
@@ -179,7 +179,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
           );
         })}
         <Text>{''}</Text>
-        <Text dimColor>[↑↓] Select  ·  [enter] Save  ·  [esc] Back</Text>
+        <Text dimColor>[↑↓] select · [enter] save · [esc] back</Text>
       </Box>
     );
   }
@@ -203,14 +203,14 @@ export function Customize({ config, user, navigate, refreshUser }) {
         {message && (
           <Text color={message.type === 'error' ? 'red' : 'green'}>{message.text}</Text>
         )}
-        <Text dimColor>[enter] Save  ·  [esc] Back</Text>
+        <Text dimColor>[enter] save · [esc] back</Text>
       </Box>
     );
   }
 
   return (
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
-      <Text bold>Customize</Text>
+      <Text bold>Settings</Text>
       <Text>{''}</Text>
       <Text>Current: <Text color={getInkColor(color)} bold>{handle}</Text></Text>
       {user?.status && <Text dimColor>— {user.status}</Text>}
@@ -234,7 +234,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
           <Text>{''}</Text>
         </>
       )}
-      <Text dimColor>[↑↓] Navigate  ·  [enter] Select  ·  [esc] Back</Text>
+      <Text dimColor>[↑↓] navigate · [enter] select · [esc] back</Text>
     </Box>
   );
 }

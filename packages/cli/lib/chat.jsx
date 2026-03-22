@@ -168,7 +168,7 @@ export function Chat({ config, user, navigate }) {
           placeholder="Type a message..."
         />
       </Box>
-      <Text dimColor>[enter] Send  ·  [n] Shuffle  ·  [esc] Leave</Text>
+      <Text dimColor>[enter] send · [n] shuffle · [esc] back</Text>
     </Box>
   );
 }
