@@ -65,8 +65,8 @@ export function Welcome({ onComplete }) {
     <Box flexDirection="column" padding={1} borderStyle="round" borderColor="gray">
       <Text bold>Welcome to chinwag</Text>
       <Text>{''}</Text>
-      <Text>Post a daily note, get a stranger's back.</Text>
-      <Text>Chat with devs. All in your terminal.</Text>
+      <Text>The operations layer for your AI agents.</Text>
+      <Text>Shared context, coordination, and chat.</Text>
       <Text>{''}</Text>
       <Text>You're <Text color={getInkColor(account.color)} bold>{account.handle}</Text></Text>
       <Text>{''}</Text>

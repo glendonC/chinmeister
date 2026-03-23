@@ -197,7 +197,6 @@ export class DatabaseDO extends DurableObject {
       return { error: 'Handle already taken' };
     }
 
-    // Single update — no cascade needed since notes/exchanges reference user ID
     this.sql.exec('UPDATE users SET handle = ? WHERE id = ?', newHandle, userId);
     return { ok: true, handle: newHandle };
   }

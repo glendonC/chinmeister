@@ -123,10 +123,9 @@ For context on how chinwag's security works under the hood:
 
 - **Transport:** All connections use TLS. The CLI connects via `wss://` (WebSocket Secure) and `https://`. Cloudflare terminates TLS at the edge.
 - **Authentication:** UUID bearer tokens, generated at account creation, stored in Cloudflare KV for fast lookup. One token per user, no refresh rotation currently.
-- **Isolation:** Each Durable Object (DatabaseDO, RoomDO, LobbyDO) runs in its own single-threaded isolate. Cross-DO access is only possible through explicit stub calls, never shared memory.
-- **Content moderation:** Two-layer system — synchronous blocklist (regex, <1ms) followed by async AI moderation (Llama Guard 3 on Cloudflare Workers AI). Both layers run before content is persisted for notes/status.
+- **Isolation:** Each Durable Object (DatabaseDO, TeamDO, RoomDO, LobbyDO) runs in its own single-threaded isolate. Cross-DO access is only possible through explicit stub calls, never shared memory.
+- **Content moderation:** Two-layer system — synchronous blocklist (regex, <1ms) followed by async AI moderation (Llama Guard 3 on Cloudflare Workers AI). Both layers run before content is persisted for chat and status.
 - **Rate limiting:** Account creation (3/IP/day), chat messages (10/min/user), new account chat cooldown (5 minutes).
-- **Daily reset:** Notes and exchanges reset at 00:00 UTC. This is a design feature, not a security control, but it limits the blast radius of any content-related issue.
 
 ## Acknowledgments
 

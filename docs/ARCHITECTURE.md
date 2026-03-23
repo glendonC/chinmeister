@@ -107,7 +107,7 @@ The monorepo has four packages:
 
 - **Technology:** Node.js 22+, Ink (React for terminals), esbuild
 - **Entry point:** `cli.jsx` — screen router
-- **Responsibility:** Optional human interface. Agent operations dashboard (all agents, costs, conflicts, memory). Also houses community features (chat, daily notes) which are secondary to the agent operations focus.
+- **Responsibility:** Optional human interface. Agent operations dashboard (all agents, costs, conflicts, memory). Also houses chat, which is secondary to the agent operations focus.
 - **Key constraint:** The CLI has no knowledge of Durable Objects, room IDs, or server internals. It speaks only the public HTTP/WebSocket API.
 
 ### `packages/web/` — Landing Page
@@ -124,11 +124,11 @@ The monorepo has four packages:
 | File | Responsibility |
 |---|---|
 | `index.js` | HTTP router. Matches request paths to handlers. Runs Bearer token auth on protected routes via KV lookup. Bridges HTTP/WebSocket to Durable Objects. |
-| `db.js` | `DatabaseDO` — single instance holding all persistent data. Users, notes, exchanges, rate limits. SQLite storage. Implements the note exchange matching algorithm. |
+| `db.js` | `DatabaseDO` — single instance holding all persistent data. Users, agent profiles, rate limits. SQLite storage. |
 | `team.js` | `TeamDO` — one instance per team. The core coordination DO. Manages team membership, agent activity tracking, file conflict detection, and shared project memory. |
 | `lobby.js` | `LobbyDO` — single instance managing chat room assignment and global presence. Tracks active rooms and their sizes. Heartbeat-based presence with 60s TTL. |
 | `room.js` | `RoomDO` — one instance per chat room. Holds WebSocket connections, broadcasts messages, maintains last 50 messages as history. |
-| `moderation.js` | Two-layer content filter. Layer 1: synchronous regex blocklist (<1ms). Layer 2: async AI moderation via Llama Guard 3. Used for community features (chat, notes). |
+| `moderation.js` | Two-layer content filter. Layer 1: synchronous regex blocklist (<1ms). Layer 2: async AI moderation via Llama Guard 3. Used for chat and status text. |
 
 ### MCP Server (`packages/mcp/`)
 
@@ -140,10 +140,8 @@ The monorepo has four packages:
 
 | File | Responsibility |
 |---|---|
-| `cli.jsx` | App shell. Screen state machine: loading → welcome → home → {post, community, chat, customize}. Loads/validates config on startup. |
-| `lib/home.jsx` | Home screen. Menu with single-key navigation. Displays greeting, status, online count. 30s heartbeat to presence endpoint. |
-| `lib/post.jsx` | Note composition. Text input with 280-char counter. One post per day enforced server-side. |
-| `lib/community.jsx` | Feed + inbox combined. Scrollable daily notes feed with cursor pagination. |
+| `cli.jsx` | App shell. Screen state machine: loading → welcome → home → {chat, customize}. Loads/validates config on startup. |
+| `lib/home.jsx` | Home screen. Menu with single-key navigation. Displays online count. 30s heartbeat to presence endpoint. |
 | `lib/chat.jsx` | Live chat. WebSocket connection with exponential backoff reconnect (1s→15s cap). |
 | `lib/customize.jsx` | Profile editor. Change handle, cycle through 12-color palette, set status. |
 | `lib/api.js` | HTTP client. Wraps fetch with Bearer token auth. All API calls go through this. |
@@ -192,12 +190,6 @@ The monorepo has four packages:
 4. Worker forwards WebSocket upgrade to the assigned RoomDO
 5. RoomDO accepts connection, sends message history + room count
 
-#### Daily Notes
-1. User writes note in CLI, hits Enter
-2. CLI calls `POST /notes` with `{message}`
-3. Worker authenticates, runs content through moderation
-4. If clean, DatabaseDO persists note and runs exchange matching
-
 ## Key Design Decisions
 
 **MCP server is the product, not the CLI.** The primary value is delivered invisibly through agent MCP connections. The CLI dashboard is optional — most developers never need to open it. This is like git: you run `git init` once, then git works in the background. You don't "open git" to code.
@@ -238,10 +230,10 @@ No middleware framework — it's a simple `if/else` chain with early returns.
 
 ### Content Moderation
 
-Applies to community features (notes, chat messages, status text). Two layers:
+Applies to chat messages and status text. Two layers:
 
 1. **Blocklist** (`moderation.js:isBlocked`) — synchronous regex scan. Returns immediately. Used inline for chat where latency matters.
-2. **AI** (`moderation.js:moderateWithAI`) — async call to Llama Guard 3 via `env.AI`. Returns category codes (S1-S14). Used before persisting notes/status.
+2. **AI** (`moderation.js:moderateWithAI`) — async call to Llama Guard 3 via `env.AI`. Returns category codes (S1-S14). Used before persisting status.
 
 `checkContent()` runs both layers sequentially and returns `{blocked, reason, categories}`.
 
@@ -273,7 +265,7 @@ chinwag is the operations layer for your team's AI agents. The product has three
 
 **Phase 3 — Optimization intelligence:** Detect overlap between agents. Suggest new agents for uncovered areas. Consolidate redundant work. Agent lifecycle management — auto-provision agents with the right context pre-loaded.
 
-**Community features** (chat, daily notes) remain available but are secondary to the agent operations focus. They may grow organically as the user base develops.
+**Chat** remains available but is secondary to the agent operations focus.
 
 **What this means for contributors:**
 

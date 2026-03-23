@@ -14,14 +14,11 @@ chinwag is the operations layer for your team's AI agents. This doc tracks what'
 - `.chinwag` file for auto-join on MCP server startup
 - 8 API routes for agent profile and full team CRUD
 
-### Community features (shipped, secondary)
+### Chat and accounts (shipped, secondary)
 - Global chat rooms with auto-sizing (~20 users per room)
-- Daily note posting with exchange matching (post → get someone else's note)
-- Feed with cursor-based pagination
 - Presence heartbeat (30s interval, 60s TTL)
 - Handle customization, 12-color palette, status
 - Two-layer content moderation (blocklist + Llama Guard 3)
-- Daily reset at 00:00 UTC
 
 ### Landing page (shipped)
 - chinwag.dev with install switcher, section navigation, theme toggle
@@ -124,7 +121,7 @@ The goal: `npx chinwag init` in a project, and every agent session from that poi
 These ideas came up during product design but aren't being built now. Kept here for reference.
 
 ### Developer community as primary product
-Originally chinwag was positioned as "your dev home in the terminal" — equal parts agent dashboard and developer community. Research showed that bundling social + utility as co-equal products dilutes focus and creates a cold-start problem for the community side. Community features (chat, daily notes) remain built and available but are secondary. They may grow organically as the user base develops. The daily note exchange mechanic (post to unlock) is clever but requires ~500+ DAU to be valuable — revisit when user numbers support it.
+Originally chinwag was positioned as "your dev home in the terminal" — equal parts agent dashboard and developer community. Research showed that bundling social + utility as co-equal products dilutes focus and creates a cold-start problem for the community side. Daily notes and exchange matching were removed in the product pivot. Chat remains available but secondary.
 
 ### Network memory (cross-user patterns)
 Aggregating anonymized signals across all users to produce patterns no individual agent has. Dropped because: privacy model unclear, contribution mechanism unproven, competes with LLM training data for generic patterns.

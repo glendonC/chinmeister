@@ -120,7 +120,7 @@ export function Chat({ config, user, navigate }) {
 
   useInput((ch, key) => {
     if (key.escape) {
-      navigate('community');
+      navigate('home');
       return;
     }
     if (ch === 'n' && !input) {

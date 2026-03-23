@@ -2,7 +2,7 @@
 // Uses DO RPC for all Durable Object communication.
 // Auth flow: Bearer token → KV lookup → user_id → DO.getUser(id)
 
-import { checkContent, isBlocked, checkRateLimit } from './moderation.js';
+import { checkContent } from './moderation.js';
 
 export { DatabaseDO } from './db.js';
 export { LobbyDO } from './lobby.js';

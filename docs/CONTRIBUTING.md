@@ -73,7 +73,7 @@ packages/
   worker/       Cloudflare Workers backend
     src/
       index.js      HTTP router and auth middleware
-      db.js         DatabaseDO — users, notes, exchanges
+      db.js         DatabaseDO — users, agent profiles, rate limits
       lobby.js      LobbyDO — room assignment and presence
       room.js       RoomDO — WebSocket chat rooms
       moderation.js Content moderation (blocklist + AI)
@@ -163,7 +163,7 @@ curl -X POST http://localhost:8787/auth/init
 
 **Worker (`packages/worker/`)**
 
-- Three Durable Object classes: `DatabaseDO`, `LobbyDO`, `RoomDO`
+- Four Durable Object classes: `DatabaseDO`, `TeamDO`, `LobbyDO`, `RoomDO`
 - Single `DatabaseDO` instance holds all persistent data (SQLite)
 - `LobbyDO` manages room assignment — rooms auto-size to ~20 users
 - `RoomDO` handles one chat room each with WebSocket connections

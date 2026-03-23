@@ -29,7 +29,7 @@ Do not solve problems with static lists, hardcoded values, or patterns that requ
 - **Layer 1 (blocklist):** Static regex patterns for obvious slurs. Instant, zero-latency. This is the fallback, not the strategy. Do not grow this list — improve the AI layer instead.
 - **Layer 2 (AI):** Llama Guard 3 (`@cf/meta/llama-guard-3-8b`) on Cloudflare Workers AI. Outperforms OpenAI Moderation API on real-world benchmarks. No external API key, runs on CF edge, customizable taxonomy. Bound as `env.AI` in wrangler.toml.
 - **Why not OpenAI Moderation?** Fixed categories, can't customize, external dependency, over-moderates counter-speech, under-moderates implicit hate. Llama Guard is strictly better for our use case.
-- **Architecture:** Blocklist runs first (sync, <1ms). AI runs second (async). For notes/status, both layers run before persisting. For chat, blocklist runs inline; AI moderation for chat can be added async (broadcast, then retract if flagged) when needed.
+- **Architecture:** Blocklist runs first (sync, <1ms). AI runs second (async). For status, both layers run before persisting. For chat, blocklist runs inline; AI moderation for chat can be added async (broadcast, then retract if flagged) when needed.
 
 This same principle applies everywhere: prefer intelligent systems over growing config files.
 
@@ -44,7 +44,7 @@ chinwag connects all your AI coding agents (Claude Code, Cursor, Codex, VS Code 
 - **Coordination + awareness** — agents know what other agents are doing. On Claude Code: enforced via Channels (push) and Hooks (block conflicting edits). On other tools: MCP instructions and tool descriptions.
 - **Observability** — which agents, what models, what cost, what activity. One view across your whole agent fleet.
 
-**Community features** (chat, daily notes) are shipped and available but secondary to the agent operations focus.
+**Community features** (chat) are available but secondary to the agent operations focus.
 
 ## Commands
 
@@ -97,9 +97,6 @@ Every change must pass these checks. These are not aspirational — they are blo
 - Handle format: 3-20 chars, alphanumeric + underscores, globally unique
 - 12-color palette: red, cyan, yellow, green, magenta, blue, orange, lime, pink, sky, lavender, white
 
-### Community features (secondary)
-- No editing posts — once posted, it's permanent for the day
-- Feed and chat open to lurkers — only inbox gated behind posting
+### Chat (secondary)
 - No "room" jargon exposed to users — chat just says "N devs here"
 - Status shown with em dash, no "Working on:" prefix
-- Daily reset at 00:00 UTC
