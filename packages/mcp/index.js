@@ -71,6 +71,12 @@ async function main() {
   const server = new McpServer({
     name: 'chinwag',
     version: '0.1.0',
+    instructions: `You are connected to chinwag, a team coordination system for AI coding agents.
+
+BEFORE editing any file, call chinwag_check_conflicts to verify no other agent is working on it.
+AFTER starting work on files, call chinwag_update_activity so teammates know what you're doing.
+When you discover an important project fact (setup requirement, pitfall, convention, decision), call chinwag_save_memory to share it with the team.
+Call chinwag_get_team_context at the start of your session to see who else is working and what they're doing.`,
   });
 
   registerTools(server, client, team, () => currentTeamId);
@@ -82,6 +88,23 @@ async function main() {
 }
 
 // --- Tools ---
+
+// Pull-on-any-call: prefix tool responses with brief team state
+async function teamPreamble(team, teamId) {
+  if (!teamId) return '';
+  try {
+    const ctx = await team.getTeamContext(teamId);
+    const active = ctx.members?.filter(m => m.status === 'active') || [];
+    if (active.length === 0) return '';
+    const summary = active.map(m => {
+      const files = m.activity?.files?.join(', ') || 'idle';
+      return `${m.handle}: ${files}`;
+    }).join(' | ');
+    return `[Team: ${summary}]\n\n`;
+  } catch {
+    return '';
+  }
+}
 
 function registerTools(server, client, team, getTeamId) {
   server.tool(
@@ -118,7 +141,8 @@ function registerTools(server, client, team, getTeamId) {
       }
       try {
         await team.updateActivity(teamId, files, summary);
-        return { content: [{ type: 'text', text: `Activity updated: ${summary}` }] };
+        const preamble = await teamPreamble(team, teamId);
+        return { content: [{ type: 'text', text: `${preamble}Activity updated: ${summary}` }] };
       } catch (err) {
         return { content: [{ type: 'text', text: err.message }], isError: true };
       }
@@ -140,13 +164,14 @@ function registerTools(server, client, team, getTeamId) {
       }
       try {
         const result = await team.checkConflicts(teamId, files);
+        const preamble = await teamPreamble(team, teamId);
         if (result.conflicts.length === 0) {
-          return { content: [{ type: 'text', text: 'No conflicts. Safe to proceed.' }] };
+          return { content: [{ type: 'text', text: `${preamble}No conflicts. Safe to proceed.` }] };
         }
         const lines = result.conflicts.map(c =>
           `⚠ ${c.owner_handle} is working on ${c.files.join(', ')} — "${c.summary}"`
         );
-        return { content: [{ type: 'text', text: lines.join('\n') }] };
+        return { content: [{ type: 'text', text: `${preamble}${lines.join('\n')}` }] };
       } catch (err) {
         return { content: [{ type: 'text', text: err.message }], isError: true };
       }
@@ -166,16 +191,52 @@ function registerTools(server, client, team, getTeamId) {
       }
       try {
         const ctx = await team.getTeamContext(teamId);
+        const lines = [];
+
         if (ctx.members.length === 0) {
-          return { content: [{ type: 'text', text: 'Team is empty. No other agents connected.' }] };
+          lines.push('No other agents connected.');
+        } else {
+          lines.push('Agents:');
+          for (const m of ctx.members) {
+            const activity = m.activity
+              ? `working on ${m.activity.files.join(', ')} — "${m.activity.summary}"`
+              : 'idle';
+            lines.push(`  ${m.handle} (${m.status}): ${activity}`);
+          }
         }
-        const lines = ctx.members.map(m => {
-          const activity = m.activity
-            ? `working on ${m.activity.files.join(', ')} — "${m.activity.summary}"`
-            : 'no activity reported';
-          return `${m.handle} (${m.status}): ${activity}`;
-        });
+
+        if (ctx.memories && ctx.memories.length > 0) {
+          lines.push('');
+          lines.push('Project knowledge:');
+          for (const mem of ctx.memories) {
+            lines.push(`  [${mem.category}] ${mem.text}`);
+          }
+        }
+
         return { content: [{ type: 'text', text: lines.join('\n') }] };
+      } catch (err) {
+        return { content: [{ type: 'text', text: err.message }], isError: true };
+      }
+    }
+  );
+  server.tool(
+    'chinwag_save_memory',
+    {
+      description: 'Save a project fact or learning that other agents on the team should know. Use this when you discover something important about the project that would help other agents. Categories: "gotcha" (common pitfalls), "pattern" (code conventions), "config" (environment/setup facts), "decision" (architectural decisions). These persist across sessions and are shared with all team agents.',
+      inputSchema: z.object({
+        text: z.string().describe('The fact or learning to save. Be specific and actionable, e.g. "Tests require Redis running on port 6379" or "Auth middleware must run before CORS headers"'),
+        category: z.enum(['gotcha', 'pattern', 'config', 'decision']).describe('Category of this memory'),
+      }),
+    },
+    async ({ text, category }) => {
+      const teamId = getTeamId();
+      if (!teamId) {
+        return { content: [{ type: 'text', text: 'Not in a team. Join one first with chinwag_join_team.' }], isError: true };
+      }
+      try {
+        await team.saveMemory(teamId, text, category);
+        const preamble = await teamPreamble(team, teamId);
+        return { content: [{ type: 'text', text: `${preamble}Memory saved [${category}]: ${text}` }] };
       } catch (err) {
         return { content: [{ type: 'text', text: err.message }], isError: true };
       }

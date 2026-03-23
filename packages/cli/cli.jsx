@@ -6,11 +6,19 @@ import { Welcome } from './lib/init.jsx';
 import { Home } from './lib/home.jsx';
 import { Chat } from './lib/chat.jsx';
 import { Customize } from './lib/customize.jsx';
+import { Dashboard } from './lib/dashboard.jsx';
 
 // Handle reset command before launching TUI
 if (process.argv[2] === 'reset') {
   deleteConfig();
   console.log('Config cleared. Run chinwag to start fresh.');
+  process.exit(0);
+}
+
+// Handle init command before launching TUI
+if (process.argv[2] === 'init') {
+  const { runInit } = await import('./lib/init-command.js');
+  await runInit();
   process.exit(0);
 }
 
@@ -84,10 +92,11 @@ function App() {
     if (screen === 'home') return <Home user={user} config={config} navigate={navigate} />;
     if (screen === 'chat') return <Chat config={config} user={user} navigate={navigate} />;
     if (screen === 'customize') return <Customize config={config} user={user} navigate={navigate} refreshUser={refreshUser} />;
+    if (screen === 'dashboard') return <Dashboard config={config} navigate={navigate} />;
     return null;
   })();
 
-  const screenLabel = { chat: 'chat', customize: 'settings' }[screen] || null;
+  const screenLabel = { chat: 'chat', customize: 'settings', dashboard: 'dashboard' }[screen] || null;
 
   return (
     <Box flexDirection="column">

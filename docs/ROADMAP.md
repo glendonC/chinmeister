@@ -32,8 +32,8 @@ The goal: `npx chinwag init` in a project, and every agent session from that poi
 ### 1. `chinwag init` command
 **Zero-friction setup.** One command configures everything.
 
-- [ ] Detect installed tools (Claude Code, Cursor, VS Code, Codex CLI)
-- [ ] Write MCP config files for each detected tool (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`)
+- [ ] Detect installed tools via declarative registry (`packages/cli/lib/tools.js`) — Claude Code, Cursor, Windsurf, VS Code, Codex, Aider, JetBrains, Amazon Q
+- [ ] Write MCP config files for each detected tool (`.mcp.json`, `.cursor/mcp.json`, `.windsurf/mcp.json`, `.vscode/mcp.json`, `.idea/mcp.json`)
 - [ ] Create team and write `.chinwag` file (or join existing team if `.chinwag` exists)
 - [ ] For Claude Code: write hooks config to `.claude/settings.json` (PreToolUse on Edit/Write, SessionStart for context injection)
 - [ ] For Claude Code: configure chinwag channel for real-time push
@@ -71,12 +71,12 @@ The goal: `npx chinwag init` in a project, and every agent session from that poi
 - [ ] Poll team endpoint for live updates
 
 ### 5. Cross-tool MCP support
-**Cursor, VS Code, Codex get good (not perfect) awareness.**
+**All non-Claude-Code tools get good (not perfect) awareness.**
 
 - [ ] MCP `instructions` field in server initialize response — tells agents to check chinwag before editing
 - [ ] Well-crafted tool descriptions that guide agents to use chinwag tools reliably
 - [ ] Pull-on-any-call pattern — every tool response includes latest team state as preamble
-- [ ] Test with Cursor, VS Code Copilot, and Codex CLI to verify behavior
+- [ ] Test with Cursor, Windsurf, VS Code Copilot, Codex CLI, Aider, and JetBrains to verify behavior
 
 ---
 

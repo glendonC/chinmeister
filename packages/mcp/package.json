@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "bin": {
-    "chinwag-mcp": "./index.js"
+    "chinwag-mcp": "./index.js",
+    "chinwag-hook": "./hook.js"
   },
   "scripts": {
     "start": "node index.js"

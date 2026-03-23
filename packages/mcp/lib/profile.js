@@ -1,6 +1,15 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 
+// Agent environment detection signals.
+// When an MCP-compatible tool spawns this server, it typically sets
+// environment variables we can use to identify the host. Add entries
+// here as tools document their env vars — no logic changes needed.
+const AGENT_SIGNALS = [
+  { id: 'claude-code', env: 'CLAUDE_CODE' },
+  { id: 'codex', env: 'CODEX_HOME' },
+];
+
 export function scanEnvironment(cwd = process.cwd()) {
   const profile = {
     framework: detectAgentFramework(),
@@ -90,7 +99,8 @@ export function scanEnvironment(cwd = process.cwd()) {
 }
 
 function detectAgentFramework() {
-  if (process.env.CLAUDE_CODE) return 'claude-code';
-  if (process.env.CODEX_HOME) return 'codex';
+  for (const { id, env } of AGENT_SIGNALS) {
+    if (process.env[env]) return id;
+  }
   return 'unknown';
 }

@@ -1,6 +1,6 @@
 # Architecture
 
-chinwag is the operations layer for your team's AI agents. It connects all your AI coding agents (Claude Code, Cursor, Codex, VS Code Copilot — anything MCP-compatible) so they share context, stay aware of each other, and never step on each other's work. One command sets it up. After that, it's invisible — your agents are just smarter.
+chinwag is the operations layer for your team's AI agents. It connects all your MCP-compatible AI coding agents — Claude Code, Cursor, Windsurf, VS Code Copilot, Codex, Aider, JetBrains, Amazon Q, and any future tool that speaks MCP — so they share context, stay aware of each other, and never step on each other's work. One command sets it up. After that, it's invisible — your agents are just smarter.
 
 The backend runs entirely on Cloudflare's edge. The primary interface is the MCP server that runs alongside each agent, not a CLI or GUI.
 
@@ -14,9 +14,9 @@ This document is the map. It explains what each piece does, where it lives, and 
 │                                                                  │
 │  Developer's machine                                             │
 │  ┌────────────┐  ┌────────────┐  ┌────────────┐                │
-│  │ Claude Code │  │   Cursor   │  │  Codex CLI │  ...           │
-│  │   + hooks   │  │            │  │            │                │
-│  │   + channel │  │            │  │            │                │
+│  │ Claude Code │  │   Cursor   │  │  Windsurf  │  ...           │
+│  │   + hooks   │  │            │  │            │  Codex, Aider  │
+│  │   + channel │  │            │  │            │  VS Code, etc  │
 │  └──────┬─────┘  └──────┬─────┘  └──────┬─────┘                │
 │         │               │               │                        │
 │         └───────┬───────┴───────┬───────┘                        │
@@ -66,10 +66,12 @@ npx chinwag init
 This single command:
 1. Creates an account (if first run) — generates token, saves to `~/.chinwag/config.json`
 2. Creates a team for the project (or joins existing if `.chinwag` file exists)
-3. Writes MCP config files for all detected tools:
-   - `.mcp.json` — Claude Code auto-discovers this
-   - `.cursor/mcp.json` — Cursor auto-discovers this
-   - `.vscode/mcp.json` — VS Code auto-discovers this
+3. Writes MCP config files for all detected tools (driven by registry in `packages/cli/lib/tools.js`):
+   - `.mcp.json` — Claude Code, Codex, Aider, Amazon Q
+   - `.cursor/mcp.json` — Cursor
+   - `.windsurf/mcp.json` — Windsurf
+   - `.vscode/mcp.json` — VS Code (Copilot, Cline, Continue)
+   - `.idea/mcp.json` — JetBrains IDEs
 4. For Claude Code: configures hooks (`.claude/settings.json`) and channel
 
 The `.chinwag` file is committed to the repo. When a teammate clones and runs `npx chinwag init`, they auto-join the same team.
@@ -80,10 +82,14 @@ The `.chinwag` file is committed to the repo. When a teammate clones and runs `n
 |------|------------|-----|
 | **Claude Code** | Full — push alerts + enforced conflict prevention | Channels push real-time team state. PreToolUse hooks block conflicting edits. SessionStart hook injects team context. |
 | **Cursor** | Good — pull-based awareness | MCP `instructions` field + tool descriptions guide the agent to check chinwag. |
-| **VS Code Copilot** | Good — pull-based awareness | MCP tools + instructions. Resources when supported. |
+| **Windsurf** | Good — pull-based awareness | MCP tools + instructions. Same integration model as Cursor. |
+| **VS Code Copilot** | Good — pull-based awareness | MCP tools + instructions. Also covers Cline and Continue extensions. |
 | **Codex CLI** | Basic — tool-based | MCP tools available. Agent must opt in to check. |
+| **Aider** | Basic — tool-based | MCP tools available. Shares `.mcp.json` with Claude Code/Codex. |
+| **JetBrains** | Basic — tool-based | MCP tools via `.idea/mcp.json`. IntelliJ, PyCharm, WebStorm, etc. |
+| **Amazon Q** | Basic — tool-based | MCP tools available. Shares `.mcp.json`. |
 
-Claude Code gets the deepest integration because it supports hooks (enforceable system-level interception) and channels (server-initiated push). Other tools improve as their MCP implementations mature.
+Claude Code gets the deepest integration because it supports hooks (enforceable system-level interception) and channels (server-initiated push). Other tools improve as their MCP implementations mature. Tool detection is driven by a declarative registry (`packages/cli/lib/tools.js`) — adding a new tool means adding one entry, not modifying detection logic.
 
 ## Containers
 
@@ -163,7 +169,7 @@ The monorepo has four packages:
 
 ### Agent Session Lifecycle
 
-1. Developer opens Claude Code (or Cursor, Codex, etc.) in the project
+1. Developer opens any MCP-compatible tool (Claude Code, Cursor, Windsurf, etc.) in the project
 2. Tool discovers MCP config, starts chinwag MCP server subprocess
 3. MCP server reads `~/.chinwag/config.json` for auth token, `.chinwag` for team ID
 4. MCP server joins team via backend API, reports agent type and session start
@@ -248,7 +254,7 @@ Workers return structured JSON errors: `{error: "message"}` with appropriate HTT
 | Cloudflare Workers | HTTP API, coordination backend | Edge compute, no cold starts, native WebSocket support, free tier |
 | Durable Objects (SQLite) | Persistent state, team coordination | Colocated state+compute, transactional, no external DB needed |
 | Cloudflare KV | Auth token lookups | Global low-latency reads, perfect for read-heavy/write-once data |
-| MCP (Model Context Protocol) | Agent integration | Industry standard (97M+ monthly SDK downloads), supported by Claude Code, Cursor, VS Code, Codex |
+| MCP (Model Context Protocol) | Agent integration | Industry standard (97M+ monthly SDK downloads), supported by Claude Code, Cursor, Windsurf, VS Code, Codex, Aider, JetBrains, Amazon Q, and growing |
 | Claude Code Hooks | Enforceable conflict prevention | System-level interception before file edits, cannot be bypassed by agent |
 | Claude Code Channels | Real-time push to agents | Server-initiated context injection into running sessions |
 | Ink (React for terminals) | CLI dashboard rendering | Component model for terminal UIs, hooks, familiar React patterns |

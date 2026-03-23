@@ -31,6 +31,7 @@ export function Home({ user, config, navigate }) {
 
   useInput((ch) => {
     if (loading) return;
+    if (ch === 'd') { navigate('dashboard'); return; }
     if (ch === 'c') { navigate('chat'); return; }
     if (ch === 's') { navigate('customize'); return; }
     if (ch === 'q') { navigate('quit'); return; }
@@ -75,7 +76,7 @@ export function Home({ user, config, navigate }) {
       )}
 
       <Box paddingX={1} paddingTop={1}>
-        <Text dimColor>[c] chat  [s] settings  [q] quit</Text>
+        <Text dimColor>[d] dashboard  [c] chat  [s] settings  [q] quit</Text>
       </Box>
     </Box>
   );

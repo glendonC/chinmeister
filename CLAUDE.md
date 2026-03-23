@@ -35,9 +35,9 @@ This same principle applies everywhere: prefer intelligent systems over growing 
 
 ### Vision: The operations layer for your team's AI agents
 
-chinwag connects all your AI coding agents (Claude Code, Cursor, Codex, VS Code Copilot — anything MCP-compatible) so they share context, stay aware of each other, and never step on each other's work.
+chinwag connects all your MCP-compatible AI coding agents — Claude Code, Cursor, Windsurf, VS Code Copilot, Codex, Aider, JetBrains, Amazon Q, and any future tool that speaks MCP — so they share context, stay aware of each other, and never step on each other's work.
 
-**How it works:** `npx chinwag init` in a project writes MCP config files for all detected tools. From that point, every agent session auto-connects. The MCP server is the core product — it runs invisibly alongside each agent. The CLI dashboard is optional, for humans who want the overview.
+**How it works:** `npx chinwag init` in a project detects installed tools via a declarative registry (`packages/cli/lib/tools.js`) and writes MCP config files for each. From that point, every agent session auto-connects. Adding support for a new tool means adding one entry to the registry — no logic changes. The MCP server is the core product — it runs invisibly alongside each agent. The CLI dashboard is optional, for humans who want the overview.
 
 **Three pillars:**
 - **Shared persistent context** — knowledge and external references discovered by any agent are available to every agent on the team, across sessions and tools.

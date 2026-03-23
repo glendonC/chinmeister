@@ -40,5 +40,13 @@ export function teamHandlers(client) {
     async heartbeat(teamId) {
       return client.post(`/teams/${teamId}/heartbeat`, {});
     },
+
+    async reportFile(teamId, file) {
+      return client.post(`/teams/${teamId}/file`, { file });
+    },
+
+    async saveMemory(teamId, text, category) {
+      return client.post(`/teams/${teamId}/memory`, { text, category });
+    },
   };
 }

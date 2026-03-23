@@ -30,6 +30,16 @@ export class TeamDO extends DurableObject {
         summary TEXT NOT NULL DEFAULT '',
         updated_at TEXT DEFAULT (datetime('now'))
       );
+
+      CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        category TEXT NOT NULL CHECK(category IN ('gotcha', 'pattern', 'config', 'decision')),
+        source_agent TEXT NOT NULL,
+        source_handle TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        relevance_score REAL DEFAULT 1.0
+      );
     `);
 
     this.#schemaReady = true;
@@ -140,6 +150,15 @@ export class TeamDO extends DurableObject {
        LEFT JOIN activities a ON a.agent_id = m.agent_id`
     ).toArray();
 
+    // Include memories in context
+    const memories = this.sql.exec(
+      `SELECT text, category, source_handle, created_at
+       FROM memories
+       WHERE relevance_score > 0.1
+       ORDER BY relevance_score DESC, created_at DESC
+       LIMIT 10`
+    ).toArray();
+
     return {
       members: members.map(m => ({
         handle: m.owner_handle,
@@ -150,7 +169,100 @@ export class TeamDO extends DurableObject {
           updated_at: m.updated_at,
         } : null,
       })),
+      memories,
     };
+  }
+
+  async reportFile(agentId, filePath) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    const normalized = normalizePath(filePath);
+
+    // Get existing files and append
+    const existing = this.sql.exec(
+      'SELECT files FROM activities WHERE agent_id = ?', agentId
+    ).toArray();
+
+    let files = [];
+    if (existing.length > 0 && existing[0].files) {
+      files = JSON.parse(existing[0].files);
+    }
+
+    if (!files.includes(normalized)) {
+      files.push(normalized);
+      if (files.length > 50) files = files.slice(-50);
+    }
+
+    this.sql.exec(
+      `INSERT INTO activities (agent_id, files, summary, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(agent_id) DO UPDATE SET
+         files = excluded.files,
+         updated_at = datetime('now')`,
+      agentId, JSON.stringify(files), `Editing ${normalized}`
+    );
+    this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", agentId);
+    return { ok: true };
+  }
+
+  async saveMemory(agentId, text, category, handle) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    // Deduplication: check for similar existing memory
+    const normalized = text.trim().toLowerCase();
+    const existing = this.sql.exec('SELECT id, text FROM memories').toArray();
+
+    for (const mem of existing) {
+      const existingNorm = mem.text.trim().toLowerCase();
+      if (existingNorm.includes(normalized) || normalized.includes(existingNorm)) {
+        const keepText = text.length >= mem.text.length ? text : mem.text;
+        this.sql.exec(
+          `UPDATE memories SET text = ?, relevance_score = 1.0, created_at = datetime('now') WHERE id = ?`,
+          keepText, mem.id
+        );
+        return { ok: true, deduplicated: true };
+      }
+    }
+
+    const id = crypto.randomUUID();
+    this.sql.exec(
+      `INSERT INTO memories (id, text, category, source_agent, source_handle, created_at, relevance_score)
+       VALUES (?, ?, ?, ?, ?, datetime('now'), 1.0)`,
+      id, text, category, agentId, handle || 'unknown'
+    );
+
+    // Prune: keep at most 100 memories
+    this.sql.exec(`
+      DELETE FROM memories WHERE id NOT IN (
+        SELECT id FROM memories ORDER BY relevance_score DESC, created_at DESC LIMIT 100
+      )
+    `);
+
+    return { ok: true, id };
+  }
+
+  async getMemories(agentId) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    // Time-based decay: reduce relevance for old memories (0.1/day after 7 days)
+    this.sql.exec(`
+      UPDATE memories SET relevance_score = MAX(0.1,
+        1.0 - (MAX(0, julianday('now') - julianday(created_at) - 7) * 0.1)
+      )
+    `);
+
+    const memories = this.sql.exec(
+      `SELECT id, text, category, source_handle, created_at, relevance_score
+       FROM memories
+       WHERE relevance_score > 0.1
+       ORDER BY relevance_score DESC, created_at DESC
+       LIMIT 20`
+    ).toArray();
+
+    return { memories };
   }
 }
 
