@@ -1,20 +1,10 @@
 # Roadmap
 
-chinwag is your dev home in the terminal: an agent dashboard + a developer community. This doc tracks what's built, what's next, and what's deferred.
+chinwag is the operations layer for your team's AI agents. This doc tracks what's built, what's next, and what's deferred.
 
 ---
 
 ## What's built
-
-### Developer community (shipped)
-- Global chat rooms with auto-sizing (~20 users per room)
-- Daily note posting with exchange matching (post → get someone else's note)
-- Feed with cursor-based pagination
-- Inbox gated behind daily note (must post to unlock)
-- Presence heartbeat (30s interval, 60s TTL)
-- Handle customization, 12-color palette, status
-- Two-layer content moderation (blocklist + Llama Guard 3)
-- Daily reset at 00:00 UTC
 
 ### Agent infrastructure (shipped)
 - MCP server (`packages/mcp/`) — connects AI agents via stdio transport
@@ -24,44 +14,108 @@ chinwag is your dev home in the terminal: an agent dashboard + a developer commu
 - `.chinwag` file for auto-join on MCP server startup
 - 8 API routes for agent profile and full team CRUD
 
+### Community features (shipped, secondary)
+- Global chat rooms with auto-sizing (~20 users per room)
+- Daily note posting with exchange matching (post → get someone else's note)
+- Feed with cursor-based pagination
+- Presence heartbeat (30s interval, 60s TTL)
+- Handle customization, 12-color palette, status
+- Two-layer content moderation (blocklist + Llama Guard 3)
+- Daily reset at 00:00 UTC
+
 ### Landing page (shipped)
 - chinwag.dev with install switcher, section navigation, theme toggle
-- Updated messaging: "Your dev home in the terminal"
 
 ---
 
-## What's next
+## Phase 1 — Shared context + coordination (current)
 
-### 1. Agent dashboard (CLI)
-**The primary interface.** Make the agent dashboard the home screen of chinwag.
+The goal: `npx chinwag init` in a project, and every agent session from that point forward is smarter because it shares context with the team.
 
-- [ ] New `lib/dashboard.jsx` screen showing all connected agent sessions
-- [ ] Display: agent type (claude-code, cursor, codex), files being edited, task summary
-- [ ] Conflict warnings inline when agents touch the same files
-- [ ] Make dashboard the default screen (above chat/notes in the menu)
+### 1. `chinwag init` command
+**Zero-friction setup.** One command configures everything.
+
+- [ ] Detect installed tools (Claude Code, Cursor, VS Code, Codex CLI)
+- [ ] Write MCP config files for each detected tool (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`)
+- [ ] Create team and write `.chinwag` file (or join existing team if `.chinwag` exists)
+- [ ] For Claude Code: write hooks config to `.claude/settings.json` (PreToolUse on Edit/Write, SessionStart for context injection)
+- [ ] For Claude Code: configure chinwag channel for real-time push
+- [ ] Clear output showing what was configured and what happens next
+
+### 2. Claude Code deep integration
+**Enforced conflict prevention + real-time awareness.** The best experience on the best tool.
+
+- [ ] **Channel server:** Build chinwag channel that pushes team state changes into running Claude Code sessions ("Agent @sarah started editing src/auth.js")
+- [ ] **PreToolUse hook:** `chinwag-hook check-conflict` — checks backend before every Edit/Write, blocks if another agent is in the file, returns reason
+- [ ] **PostToolUse hook:** `chinwag-hook report-edit` — reports file edit to backend after every Edit/Write, keeps team state current
+- [ ] **SessionStart hook:** `chinwag-hook session-start` — injects full team context at session start (active agents, what they're editing, recent memory)
+- [ ] Graceful degradation when backend is unreachable (allow edit, log warning)
+
+### 3. Shared project memory
+**Knowledge persists across sessions and across people.** Your agents stop re-discovering the same things.
+
+- [ ] `chinwag_save_memory` MCP tool — agent saves a project fact with category (gotcha, pattern, config, decision)
+- [ ] `chinwag_get_team_context` MCP tool — returns relevant memories for the current session
+- [ ] Storage in TeamDO SQLite — memory text, source agent, timestamp, category, relevance score
+- [ ] Deduplication on write (don't store "tests need Redis" twice)
+- [ ] Staleness decay — memories lose relevance score over time, eventually pruned
+- [ ] Memory surfaced via MCP `instructions` field at session start
+
+**Open question:** How much should be auto-captured vs. explicit? Start with explicit (`chinwag_save_memory` tool), add auto-capture in Phase 2 based on what people actually save.
+
+### 4. Agent operations dashboard (CLI)
+**Optional human view.** See your whole agent fleet at a glance.
+
+- [ ] New `lib/dashboard.jsx` screen — default view when running `npx chinwag`
+- [ ] Display per agent: tool type, active files, task summary, model, session duration
+- [ ] Display per team member: their agents and what they're working on
+- [ ] Conflict warnings inline
+- [ ] Project memory view — what the team's knowledge base contains
 - [ ] Poll team endpoint for live updates
 
-**How it works:** Each agent runs a chinwag MCP server instance. All instances report to the same backend with the same user token. The CLI dashboard polls the team endpoint to show all connected agents.
+### 5. Cross-tool MCP support
+**Cursor, VS Code, Codex get good (not perfect) awareness.**
 
-### 2. Project memory
-**Knowledge persists across agent sessions.** Automated CLAUDE.md — your agents stop re-discovering the same things.
+- [ ] MCP `instructions` field in server initialize response — tells agents to check chinwag before editing
+- [ ] Well-crafted tool descriptions that guide agents to use chinwag tools reliably
+- [ ] Pull-on-any-call pattern — every tool response includes latest team state as preamble
+- [ ] Test with Cursor, VS Code Copilot, and Codex CLI to verify behavior
 
-- [ ] Define what "project knowledge" looks like (gotchas, patterns, project-specific context)
-- [ ] Mechanism for capturing knowledge from agent sessions (MCP tool? automatic extraction?)
-- [ ] Storage: per-project entries in a DO or R2
-- [ ] MCP resource that injects relevant project knowledge into new agent sessions automatically
-- [ ] Dashboard view: what your project's knowledge base contains
+---
 
-**Open question:** How does knowledge get captured? Options:
-- Agent calls a `chinwag_save_learning` MCP tool when it discovers something
-- Developer manually saves via CLI
-- Start with manual, automate later based on what people actually save
+## Phase 2 — Full observability
 
-### 3. Chat with note gate
-**Already built.** Chat unlocked by posting a daily note. No changes needed — this works.
+### 6. Cost and usage tracking
+- [ ] Track tokens consumed per agent session (reported by MCP server)
+- [ ] Track model used per session
+- [ ] Aggregate cost per developer, per tool, per day
+- [ ] Dashboard view: "You've spent $X today across N agents"
+- [ ] Team-level cost breakdown
 
-- [ ] Verify note gate still works correctly with dashboard as new home screen
-- [ ] Consider: should chat be accessible from the dashboard view directly?
+### 7. Persistent external references
+- [ ] Store non-code references (images, designs, links, docs) that agents need across sessions
+- [ ] When context window compresses and drops a reference design, chinwag still has it
+- [ ] MCP resource that serves stored references to agents
+- [ ] Storage: R2 for binary assets, TeamDO for metadata and links
+
+### 8. Activity history
+- [ ] Log of all agent sessions: what was done, what files were touched, what was learned
+- [ ] Searchable from dashboard
+- [ ] Useful for understanding what agents have been doing overnight or while you were away
+
+---
+
+## Phase 3 — Optimization intelligence
+
+### 9. Overlap and efficiency detection
+- [ ] Detect when two agents are doing redundant work
+- [ ] Suggest consolidation ("Agents A and B are both refactoring auth — consider merging")
+- [ ] Detect coverage gaps ("No agent has touched tests in 3 days — test/code ratio dropped 15%")
+
+### 10. Agent lifecycle management
+- [ ] Suggest spinning up new agents for uncovered areas
+- [ ] Auto-provision agents with the right context pre-loaded from team memory
+- [ ] Suggest killing agents that aren't producing value
 
 ---
 
@@ -69,17 +123,17 @@ chinwag is your dev home in the terminal: an agent dashboard + a developer commu
 
 These ideas came up during product design but aren't being built now. Kept here for reference.
 
+### Developer community as primary product
+Originally chinwag was positioned as "your dev home in the terminal" — equal parts agent dashboard and developer community. Research showed that bundling social + utility as co-equal products dilutes focus and creates a cold-start problem for the community side. Community features (chat, daily notes) remain built and available but are secondary. They may grow organically as the user base develops. The daily note exchange mechanic (post to unlock) is clever but requires ~500+ DAU to be valuable — revisit when user numbers support it.
+
 ### Network memory (cross-user patterns)
-Aggregating anonymized signals across all users to produce patterns no individual agent has. Dropped because: privacy model unclear, contribution mechanism unproven, competes with LLM training data for generic patterns. Revisit if chinwag gets enough users that cross-project patterns become feasible.
+Aggregating anonymized signals across all users to produce patterns no individual agent has. Dropped because: privacy model unclear, contribution mechanism unproven, competes with LLM training data for generic patterns.
 
 ### Skill network / ClawHub competitor
-Publishing and discovering SKILL.md instruction files. Was prototyped (SkillRegistryDO, R2, FTS5) but code was removed. Static skill registries are commoditized — differentiator unclear vs. ClawHub and Skills.sh.
+Publishing and discovering SKILL.md instruction files. Was prototyped but code was removed. Static skill registries are commoditized.
 
 ### Passive skill absorption
-Agents automatically finding and applying network patterns without searching. Requires: large skill corpus, profile-aware matching, reliable quality signals. Too many dependencies on unbuilt pieces.
-
-### Tech news / project discovery
-Expanding the community into curated developer content. Dropped because: content curation is a full-time job, scope creep from the core product.
+Agents automatically finding and applying network patterns. Too many dependencies on unbuilt pieces.
 
 ---
 
@@ -87,6 +141,8 @@ Expanding the community into curated developer content. Dropped because: content
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design. Key points for roadmap work:
 
-- **MCP server** (`packages/mcp/`) runs locally per agent. Each instance connects to the same backend with the same user token. This is how multi-agent coordination works without agents talking to each other directly.
-- **TeamDO** already handles multi-agent coordination (conflict detection, activity sharing). The dashboard is a CLI view on top of this existing infrastructure.
+- **MCP server** (`packages/mcp/`) is the primary product interface. It runs locally per agent session, connecting to the backend with the user's auth token.
+- **TeamDO** is the coordination hub — membership, activity, conflicts, and shared memory all live here.
+- **Claude Code hooks** enable enforced conflict prevention (PreToolUse blocks edits) and context injection (SessionStart injects team state). These are the highest-value integration points.
+- **Claude Code channels** enable real-time push — the backend can notify a running Claude Code session about team state changes without the agent calling any tool.
 - **All DO communication uses RPC**, not fetch. New features should follow this pattern.

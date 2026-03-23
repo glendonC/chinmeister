@@ -11,9 +11,9 @@
 
 Monorepo with four packages:
 
-- **`packages/cli/`** — Node.js CLI built with Ink (React for terminals). Entry: `cli.jsx`, screens in `lib/`. Built with esbuild → `dist/cli.js`. Requires Node 22+ (native WebSocket).
-- **`packages/worker/`** — Cloudflare Workers backend. Durable Objects for data (DatabaseDO), chat rooms (RoomDO), presence (LobbyDO), and team coordination (TeamDO). KV for auth token lookups only.
-- **`packages/mcp/`** — MCP server for agent connection. Runs locally on the developer's machine, wraps the REST API. Reads `~/.chinwag/config.json` for auth (same token as CLI).
+- **`packages/mcp/`** — MCP server (the core product). Runs locally alongside each AI agent. Reports activity, checks conflicts, reads/writes shared memory. Stdio transport. Never `console.log`.
+- **`packages/worker/`** — Cloudflare Workers backend. Durable Objects for team coordination (TeamDO), data (DatabaseDO), chat rooms (RoomDO), presence (LobbyDO). KV for auth token lookups only.
+- **`packages/cli/`** — Optional dashboard + community features. Node.js CLI built with Ink (React for terminals). Entry: `cli.jsx`, screens in `lib/`. Built with esbuild → `dist/cli.js`. Requires Node 22+ (native WebSocket).
 - **`packages/web/`** — Landing page at chinwag.dev. Static HTML/CSS/JS on Cloudflare Pages.
 
 **Live API:** `https://chinwag-api.glendonchin.workers.dev`
@@ -33,13 +33,18 @@ Do not solve problems with static lists, hardcoded values, or patterns that requ
 
 This same principle applies everywhere: prefer intelligent systems over growing config files.
 
-### Vision: Your dev home in the terminal
+### Vision: The operations layer for your team's AI agents
 
-chinwag is two things in one terminal: an agent dashboard and a developer community.
+chinwag connects all your AI coding agents (Claude Code, Cursor, Codex, VS Code Copilot — anything MCP-compatible) so they share context, stay aware of each other, and never step on each other's work.
 
-**Agent dashboard:** Connect all your AI agents (Claude Code, Codex, Cursor — anything that speaks MCP). See what each is doing, prevent conflicts when they touch the same files, and build up project knowledge across sessions so agents stop re-discovering the same things. Works solo. Works with your team.
+**How it works:** `npx chinwag init` in a project writes MCP config files for all detected tools. From that point, every agent session auto-connects. The MCP server is the core product — it runs invisibly alongside each agent. The CLI dashboard is optional, for humans who want the overview.
 
-**Developer community:** Chat with other developers without leaving your terminal. Post a daily note about what you're building to unlock chat and get someone else's note back. No doomscrolling, no algorithms.
+**Three pillars:**
+- **Shared persistent context** — knowledge and external references discovered by any agent are available to every agent on the team, across sessions and tools.
+- **Coordination + awareness** — agents know what other agents are doing. On Claude Code: enforced via Channels (push) and Hooks (block conflicting edits). On other tools: MCP instructions and tool descriptions.
+- **Observability** — which agents, what models, what cost, what activity. One view across your whole agent fleet.
+
+**Community features** (chat, daily notes) are shipped and available but secondary to the agent operations focus.
 
 ## Commands
 
@@ -85,10 +90,16 @@ Every change must pass these checks. These are not aspirational — they are blo
 
 ## Key Design Decisions
 
+- MCP server is the product, not the CLI — value delivered invisibly through agent connections
+- `chinwag init` writes config for all detected tools — zero-friction, one command setup
+- Claude Code gets deepest integration (hooks + channels = enforceable). Other tools get MCP-based awareness.
+- TeamDO is the coordination hub — one instance per team, single-writer for conflict detection
+- Handle format: 3-20 chars, alphanumeric + underscores, globally unique
+- 12-color palette: red, cyan, yellow, green, magenta, blue, orange, lime, pink, sky, lavender, white
+
+### Community features (secondary)
 - No editing posts — once posted, it's permanent for the day
 - Feed and chat open to lurkers — only inbox gated behind posting
 - No "room" jargon exposed to users — chat just says "N devs here"
 - Status shown with em dash, no "Working on:" prefix
-- 12-color palette: red, cyan, yellow, green, magenta, blue, orange, lime, pink, sky, lavender, white
-- Handle format: 3-20 chars, alphanumeric + underscores, globally unique
 - Daily reset at 00:00 UTC
