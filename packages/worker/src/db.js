@@ -62,25 +62,6 @@ export class DatabaseDO extends DurableObject {
         last_active TEXT NOT NULL
       );
 
-      CREATE TABLE IF NOT EXISTS notes (
-        id TEXT PRIMARY KEY,
-        author_id TEXT NOT NULL,
-        message TEXT NOT NULL,
-        date TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_notes_date ON notes(date, created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_notes_author ON notes(author_id, date);
-
-      CREATE TABLE IF NOT EXISTS exchanges (
-        date TEXT NOT NULL,
-        sender_id TEXT NOT NULL,
-        recipient_id TEXT NOT NULL,
-        note_id TEXT NOT NULL,
-        PRIMARY KEY (date, recipient_id)
-      );
-
       CREATE TABLE IF NOT EXISTS account_limits (
         ip TEXT NOT NULL,
         date TEXT NOT NULL,
@@ -100,35 +81,29 @@ export class DatabaseDO extends DurableObject {
       );
     `);
 
+    // Drop legacy tables if they exist (removed in product pivot)
+    this.sql.exec('DROP TABLE IF EXISTS exchanges');
+    this.sql.exec('DROP TABLE IF EXISTS notes');
+
     this.#schemaReady = true;
   }
 
   #migrateV1ToV2() {
     // Migrate from handle-as-PK to UUID-as-PK schema.
-    // Load old data, generate IDs, recreate tables.
     const oldUsers = this.sql.exec('SELECT * FROM users').toArray();
-    const oldNotes = this.sql.exec('SELECT * FROM notes').toArray();
 
-    let oldExchanges = [];
-    try {
-      oldExchanges = this.sql.exec('SELECT * FROM exchanges').toArray();
-    } catch { /* table might not exist */ }
-
-    // Build handle → new UUID mapping
     const handleToId = new Map();
     for (const u of oldUsers) {
       handleToId.set(u.handle, crypto.randomUUID());
     }
 
-    // Drop old tables
+    // Drop all old tables
     this.sql.exec('DROP TABLE IF EXISTS exchanges');
     this.sql.exec('DROP TABLE IF EXISTS notes');
     this.sql.exec('DROP TABLE IF EXISTS users');
     this.sql.exec('DROP TABLE IF EXISTS account_limits');
-    this.sql.exec('DROP INDEX IF EXISTS idx_notes_date');
-    this.sql.exec('DROP INDEX IF EXISTS idx_notes_author_date');
 
-    // Create new schema
+    // Create users table with UUID PK
     this.sql.exec(`
       CREATE TABLE users (
         id TEXT PRIMARY KEY,
@@ -140,25 +115,6 @@ export class DatabaseDO extends DurableObject {
         last_active TEXT NOT NULL
       );
 
-      CREATE TABLE notes (
-        id TEXT PRIMARY KEY,
-        author_id TEXT NOT NULL,
-        message TEXT NOT NULL,
-        date TEXT NOT NULL,
-        created_at TEXT NOT NULL
-      );
-
-      CREATE INDEX idx_notes_date ON notes(date, created_at DESC);
-      CREATE INDEX idx_notes_author ON notes(author_id, date);
-
-      CREATE TABLE exchanges (
-        date TEXT NOT NULL,
-        sender_id TEXT NOT NULL,
-        recipient_id TEXT NOT NULL,
-        note_id TEXT NOT NULL,
-        PRIMARY KEY (date, recipient_id)
-      );
-
       CREATE TABLE account_limits (
         ip TEXT NOT NULL,
         date TEXT NOT NULL,
@@ -167,35 +123,11 @@ export class DatabaseDO extends DurableObject {
       );
     `);
 
-    // Re-insert users with new IDs
     for (const u of oldUsers) {
       this.sql.exec(
         `INSERT INTO users (id, handle, color, token, status, created_at, last_active)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         handleToId.get(u.handle), u.handle, u.color, u.token, u.status, u.created_at, u.last_active
-      );
-    }
-
-    // Re-insert notes with author_id
-    for (const n of oldNotes) {
-      const authorId = handleToId.get(n.author_handle);
-      if (!authorId) continue;
-      this.sql.exec(
-        `INSERT INTO notes (id, author_id, message, date, created_at)
-         VALUES (?, ?, ?, ?, ?)`,
-        n.id, authorId, n.message, n.date, n.created_at
-      );
-    }
-
-    // Re-insert exchanges with sender_id/recipient_id
-    for (const e of oldExchanges) {
-      const senderId = handleToId.get(e.sender_handle);
-      const recipientId = handleToId.get(e.recipient_handle);
-      if (!senderId || !recipientId) continue;
-      this.sql.exec(
-        `INSERT INTO exchanges (date, sender_id, recipient_id, note_id)
-         VALUES (?, ?, ?, ?)`,
-        e.date, senderId, recipientId, e.note_id
       );
     }
   }
@@ -287,121 +219,6 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
-  // --- Note operations ---
-
-  async postNote(userId, message) {
-    this.#ensureSchema();
-    const today = utcDate();
-
-    const existing = this.sql.exec(
-      'SELECT id FROM notes WHERE author_id = ? AND date = ?', userId, today
-    ).toArray();
-
-    if (existing.length > 0) {
-      return { error: 'Already posted today. Come back tomorrow!' };
-    }
-
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-
-    this.sql.exec(
-      `INSERT INTO notes (id, author_id, message, date, created_at) VALUES (?, ?, ?, ?, ?)`,
-      id, userId, message, today, now
-    );
-
-    this.sql.exec('UPDATE users SET last_active = ? WHERE id = ?', now, userId);
-    this.#matchExchange(userId, today);
-
-    return { id, message, date: today };
-  }
-
-  async getInbox(userId) {
-    this.#ensureSchema();
-    const today = utcDate();
-
-    const posted = this.sql.exec(
-      'SELECT id FROM notes WHERE author_id = ? AND date = ?', userId, today
-    ).toArray();
-
-    if (posted.length === 0) {
-      return { locked: true, message: 'Post your daily note first to unlock your inbox.' };
-    }
-
-    const rows = this.sql.exec(`
-      SELECT e.note_id, u.handle, u.color, u.status, n.message, n.created_at
-      FROM exchanges e
-      JOIN notes n ON n.id = e.note_id
-      JOIN users u ON u.id = e.sender_id
-      WHERE e.date = ? AND e.recipient_id = ?
-    `, today, userId).toArray();
-
-    if (rows.length === 0) {
-      return { waiting: true, message: 'No match yet — check back soon.' };
-    }
-
-    const row = rows[0];
-    return {
-      from: { handle: row.handle, color: row.color, status: row.status },
-      note: { message: row.message, created_at: row.created_at },
-    };
-  }
-
-  async getFeed(limit = 20, cursor = null, excludeUserId = null) {
-    this.#ensureSchema();
-    const today = utcDate();
-
-    let rows;
-    if (cursor && excludeUserId) {
-      rows = this.sql.exec(`
-        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
-        FROM notes n JOIN users u ON u.id = n.author_id
-        WHERE n.date = ? AND n.created_at < ? AND n.author_id != ?
-        ORDER BY n.created_at DESC LIMIT ?
-      `, today, cursor, excludeUserId, limit).toArray();
-    } else if (cursor) {
-      rows = this.sql.exec(`
-        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
-        FROM notes n JOIN users u ON u.id = n.author_id
-        WHERE n.date = ? AND n.created_at < ?
-        ORDER BY n.created_at DESC LIMIT ?
-      `, today, cursor, limit).toArray();
-    } else if (excludeUserId) {
-      rows = this.sql.exec(`
-        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
-        FROM notes n JOIN users u ON u.id = n.author_id
-        WHERE n.date = ? AND n.author_id != ?
-        ORDER BY n.created_at DESC LIMIT ?
-      `, today, excludeUserId, limit).toArray();
-    } else {
-      rows = this.sql.exec(`
-        SELECT n.id, n.author_id, u.handle, u.color, u.status, n.message, n.created_at
-        FROM notes n JOIN users u ON u.id = n.author_id
-        WHERE n.date = ?
-        ORDER BY n.created_at DESC LIMIT ?
-      `, today, limit).toArray();
-    }
-
-    // Compute streaks for unique authors in this feed page
-    const authorIds = [...new Set(rows.map(r => r.author_id))];
-    const streakMap = new Map();
-    for (const authorId of authorIds) {
-      streakMap.set(authorId, this.#computeStreak(authorId));
-    }
-
-    const notes = rows.map(r => ({
-      id: r.id,
-      handle: r.handle,
-      color: r.color,
-      status: r.status,
-      message: r.message,
-      created_at: r.created_at,
-      streak: streakMap.get(r.author_id) || 0,
-    }));
-
-    const nextCursor = notes.length === limit ? notes[notes.length - 1].created_at : null;
-    return { notes, cursor: nextCursor };
-  }
-
   // --- Rate limiting ---
 
   async checkIpLimit(ip, maxPerDay = 3) {
@@ -422,59 +239,15 @@ export class DatabaseDO extends DurableObject {
     return { allowed: count <= maxPerDay, count };
   }
 
-  // --- Streak & exchange count ---
-
-  #computeStreak(userId) {
-    const rows = this.sql.exec(
-      'SELECT DISTINCT date FROM notes WHERE author_id = ? ORDER BY date DESC',
-      userId
-    ).toArray();
-
-    if (rows.length === 0) return 0;
-
-    let streak = 0;
-    const today = new Date(utcDate() + 'T00:00:00Z');
-    const expected = new Date(today);
-
-    for (const row of rows) {
-      const expectedStr = expected.toISOString().slice(0, 10);
-      if (row.date === expectedStr) {
-        streak++;
-        expected.setUTCDate(expected.getUTCDate() - 1);
-      } else {
-        break;
-      }
-    }
-
-    return streak;
-  }
-
-  async getStreak(userId) {
-    this.#ensureSchema();
-    return { streak: this.#computeStreak(userId) };
-  }
-
-  async getExchangeCount(userId) {
-    this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT COUNT(*) as count FROM exchanges WHERE recipient_id = ?', userId
-    ).toArray();
-    return { count: rows[0]?.count || 0 };
-  }
-
   // --- Stats ---
 
   async getStats() {
     this.#ensureSchema();
 
     const users = this.sql.exec('SELECT COUNT(*) as count FROM users').toArray();
-    const notes = this.sql.exec(
-      'SELECT COUNT(*) as count FROM notes WHERE date = ?', utcDate()
-    ).toArray();
 
     return {
       totalUsers: users[0]?.count || 0,
-      notesToday: notes[0]?.count || 0,
     };
   }
 
@@ -488,43 +261,6 @@ export class DatabaseDO extends DurableObject {
 
   #handleExists(handle) {
     return this.sql.exec('SELECT 1 FROM users WHERE handle = ?', handle).toArray().length > 0;
-  }
-
-  #matchExchange(userId, date) {
-    const candidates = this.sql.exec(`
-      SELECT n.id, n.author_id FROM notes n
-      WHERE n.date = ? AND n.author_id != ?
-        AND n.author_id NOT IN (
-          SELECT e.sender_id FROM exchanges e
-          WHERE e.date = ? AND e.recipient_id = ?
-        )
-        AND ? NOT IN (
-          SELECT e.sender_id FROM exchanges e
-          WHERE e.date = ? AND e.recipient_id = n.author_id
-        )
-      ORDER BY RANDOM() LIMIT 1
-    `, date, userId, date, userId, userId, date).toArray();
-
-    if (candidates.length === 0) return;
-    const candidate = candidates[0];
-
-    // This user receives the candidate's note
-    this.sql.exec(
-      `INSERT OR IGNORE INTO exchanges (date, sender_id, recipient_id, note_id) VALUES (?, ?, ?, ?)`,
-      date, candidate.author_id, userId, candidate.id
-    );
-
-    // The candidate receives this user's note
-    const myNotes = this.sql.exec(
-      'SELECT id FROM notes WHERE author_id = ? AND date = ?', userId, date
-    ).toArray();
-
-    if (myNotes.length > 0) {
-      this.sql.exec(
-        `INSERT OR IGNORE INTO exchanges (date, sender_id, recipient_id, note_id) VALUES (?, ?, ?, ?)`,
-        date, userId, candidate.author_id, myNotes[0].id
-      );
-    }
   }
 
   // --- Agent profiles ---

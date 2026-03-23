@@ -3,7 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import { api } from './api.js';
 
 export function Home({ user, config, navigate }) {
-  const [stats, setStats] = useState({ online: 0, notesToday: 0 });
+  const [stats, setStats] = useState({ online: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export function Home({ user, config, navigate }) {
 
   useInput((ch) => {
     if (loading) return;
-    if (ch === 'c') { navigate('community'); return; }
+    if (ch === 'c') { navigate('chat'); return; }
     if (ch === 's') { navigate('customize'); return; }
     if (ch === 'q') { navigate('quit'); return; }
   });
@@ -44,16 +44,11 @@ export function Home({ user, config, navigate }) {
     );
   }
 
-  const parts = [];
-  if (stats.online >= 10) {
-    parts.push(`${stats.online} devs online`);
-  } else if (stats.online >= 1) {
-    parts.push('a few devs online');
-  }
-  if (stats.notesToday) {
-    parts.push(`${stats.notesToday} note${stats.notesToday !== 1 ? 's' : ''} today`);
-  }
-  const statsLine = parts.join(' · ');
+  const statsLine = stats.online >= 10
+    ? `${stats.online} devs online`
+    : stats.online >= 1
+      ? 'a few devs online'
+      : '';
 
   return (
     <Box flexDirection="column">
@@ -64,7 +59,7 @@ export function Home({ user, config, navigate }) {
         borderColor="gray"
       >
         <Text bold>chinwag</Text>
-        <Text dimColor>your dev home in the terminal</Text>
+        <Text dimColor>the operations layer for your AI agents</Text>
         {statsLine && (
           <>
             <Text>{''}</Text>
@@ -80,7 +75,7 @@ export function Home({ user, config, navigate }) {
       )}
 
       <Box paddingX={1} paddingTop={1}>
-        <Text dimColor>[c] community  [s] settings  [q] quit</Text>
+        <Text dimColor>[c] chat  [s] settings  [q] quit</Text>
       </Box>
     </Box>
   );

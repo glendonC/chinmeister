@@ -42,18 +42,7 @@ export default {
         }
 
         if (method === 'GET' && path === '/me') {
-          const db = getDB(env);
-          const [streakData, exchangeData] = await Promise.all([
-            db.getStreak(user.id),
-            db.getExchangeCount(user.id),
-          ]);
-          response = json({ ...user, streak: streakData.streak, exchangeCount: exchangeData.count });
-        } else if (method === 'POST' && path === '/notes') {
-          response = await handlePostNote(request, user, env);
-        } else if (method === 'GET' && path === '/notes/inbox') {
-          response = await handleInbox(user, env);
-        } else if (method === 'GET' && path === '/notes/today') {
-          response = await handleFeed(url, user, env);
+          response = json(user);
         } else if (method === 'POST' && path === '/presence/heartbeat') {
           response = await handleHeartbeat(user, env);
         } else if (method === 'PUT' && path === '/me/handle') {
@@ -190,43 +179,6 @@ async function handleUpdateColor(request, user, env) {
     return json({ error: result.error }, 400);
   }
   return json(result);
-}
-
-async function handlePostNote(request, user, env) {
-  const { message } = await request.json();
-  if (!message || typeof message !== 'string') {
-    return json({ error: 'Message is required' }, 400);
-  }
-  if (message.length > 280) {
-    return json({ error: 'Message must be 280 characters or less' }, 400);
-  }
-
-  // Two-layer content check: blocklist (instant) + AI (async)
-  const modResult = await checkContent(message, env);
-  if (modResult.blocked) {
-    return json({ error: 'Message could not be posted. Please revise.' }, 400);
-  }
-
-  const db = getDB(env);
-  const result = await db.postNote(user.id, message);
-
-  if (result.error) {
-    return json({ error: result.error }, 400);
-  }
-  return json(result, 201);
-}
-
-async function handleInbox(user, env) {
-  const db = getDB(env);
-  return json(await db.getInbox(user.id));
-}
-
-async function handleFeed(url, user, env) {
-  const cursor = url.searchParams.get('cursor') || null;
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '20'), 50);
-
-  const db = getDB(env);
-  return json(await db.getFeed(limit, cursor, user.id));
 }
 
 async function handleSetStatus(request, user, env) {
