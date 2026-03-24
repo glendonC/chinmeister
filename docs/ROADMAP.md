@@ -1,14 +1,28 @@
 # Roadmap
 
-chinwag is the operations layer for your team's AI agents. This doc tracks what's built, what's next, and what's deferred.
+chinwag is the control layer for agentic development. Connect your AI tools, share a brain across all of them, coordinate across teammates, and see your entire workflow in one place. This doc tracks what's built, what's next, and what's deferred.
+
+## The five pillars
+
+1. **Connect** — Detect tools, write configs, hook everything up. One command.
+2. **Remember** — Shared memory across tools, sessions, and teammates.
+3. **Coordinate** — Live awareness, conflict prevention, cross-tool and cross-teammate.
+4. **Discover** — Browse AI dev tools, see what fits, add with one action.
+5. **Observe** — See what agents are doing across all tools and projects.
+
+## Who it's for
+
+- **Solo devs with multiple AI tools** across 1-3 active projects
+- **Small teams (2-5 devs)** sharing a repo, each using their preferred tools
+- **Team leads** who need visibility into their team's AI workflow
 
 ---
 
 ## What's shipped
 
-### Phase 1 — Shared context + coordination (complete)
+### Phase 1 — Shared memory + coordination (complete)
 
-The goal: `npx chinwag init` in a project, and every agent session from that point forward is smarter because it shares context with the team. **Done.**
+The goal: `npx chinwag init` in a project, and every agent session from that point forward shares a brain with the team. **Done.**
 
 #### `chinwag init` command
 - [x] Detect installed tools via declarative registry (`packages/cli/lib/tools.js`) — Claude Code, Cursor, Windsurf, VS Code, Codex, Aider, JetBrains, Amazon Q
@@ -95,43 +109,63 @@ The goal: `npx chinwag init` in a project, and every agent session from that poi
 
 ## What's next
 
-### Testing and CI
+### Discover — Tool discovery + catalog (Pillar 4)
+- [x] Expand tool catalog to ~25 AI dev tools with rich metadata (description, category, website, install command, MCP compatibility)
+- [x] Split registry: `MCP_TOOLS` (CLI, config writing) + tool catalog API (`GET /tools/catalog`, single source of truth)
+- [x] TUI discover screen: shows your configured tools, recommends tools you're missing, browse by category
+- [x] `chinwag add <tool>` command: add a specific tool's MCP config without opening the TUI, fetches catalog from API
+- [ ] Enhance dashboard with "Your Workflow" section showing configured tools
+
+### Observe — Web dashboard (Pillar 5)
+The web app evolves from a landing page into a real workflow dashboard. This is how you see everything across all projects and teammates.
+- [ ] Authenticated web dashboard (login via chinwag token or OAuth)
+- [ ] Cross-project view: see all your projects, which agents are running, what they're working on
+- [ ] Per-project view: team members, their agents, file activity, conflicts, shared memory
+- [ ] Tool discovery in the browser: browse catalog, one-click add, see what teammates use
+- [ ] Session history and stuckness visibility across all projects
+
+### Coordinate — Multi-project support (Pillar 3)
+Solo devs work on multiple projects. Teams work across repos. chinwag should give a unified view.
+- [ ] User-level API: list all teams/projects a user belongs to
+- [ ] Cross-project dashboard: see all agents across all projects in one view
+- [ ] User-level memory: preferences and patterns that span projects (e.g., "always use vitest")
+- [ ] Project switching in TUI: navigate between projects without restarting
+
+### Connect — Deeper integrations (Pillar 1)
+- [ ] Test MCP integration with Cursor, Windsurf, VS Code Copilot, Codex CLI, Aider, JetBrains
+- [ ] Document tool-specific quirks or limitations
+- [ ] As tools add hook-like capabilities, deepen integration beyond MCP advisory
+
+### Ship — Testing, CI, npm
 - [ ] Unit tests for MCP server tools (vitest)
 - [ ] Integration tests for `chinwag init` → config generation → tool detection
 - [ ] Hook simulation tests (fake stdin, verify output)
 - [ ] Worker API endpoint tests
 - [ ] GitHub Actions workflow: lint, test, build
 - [ ] Linting setup (eslint)
-
-### npm publishing
 - [ ] Publish `chinwag` CLI package
 - [ ] Publish `chinwag-mcp` package (MCP server + hooks + channel)
 - [ ] End-to-end test: `npm install -g chinwag` → `npx chinwag init` → agent connection
 - [ ] CI-triggered publish workflow
 
-### Cross-tool validation
-- [ ] Test MCP integration with Cursor, Windsurf, VS Code Copilot, Codex CLI, Aider, JetBrains
-- [ ] Document tool-specific quirks or limitations
-
 ---
 
-## Phase 3 — Optimization intelligence
+## Explore later
 
-### Overlap and efficiency detection
-- [ ] Detect when two agents are doing redundant work
-- [ ] Suggest consolidation ("Agents A and B are both refactoring auth — consider merging")
-- [ ] Detect coverage gaps ("No agent has touched tests in 3 days — test/code ratio dropped 15%")
+These ideas follow naturally from the data chinwag collects. Revisit once the five pillars are solid and adoption signals are clear.
 
-### Agent lifecycle management
-- [ ] Suggest spinning up new agents for uncovered areas
-- [ ] Auto-provision agents with the right context pre-loaded from team memory
-- [ ] Suggest killing agents that aren't producing value
+### Workflow intelligence
+- [ ] Detect when two agents are doing redundant work, suggest consolidation
+- [ ] Detect uncovered areas ("No agent has touched tests in 3 days")
+- [ ] Cross-team insights: "Teams using Tool X with your stack see fewer conflicts"
+- [ ] Smart memory suggestions: surface relevant memories from other projects when patterns match
+- [ ] Stuckness resolution: "A teammate's agent solved something similar — here's the memory"
 
 ---
 
 ## What's deferred
 
-These ideas came up during product design but aren't being built now. Kept here for reference.
+These ideas came up during product design but aren't being built now. Kept here for reference. The principle: make the core experience (shared memory + coordination) flawless before adding surface area.
 
 ### Cost and usage tracking
 Originally Phase 2. Deferred because MCP does not currently expose token consumption or model identity from agent sessions — there is no way for the MCP server to know how many tokens an agent used or which model it ran on. Revisit when the MCP protocol adds usage reporting, or when individual tools (Claude Code, Cursor) expose this data through their own APIs.
@@ -151,14 +185,26 @@ Publishing and discovering SKILL.md instruction files. Was prototyped but code w
 ### Passive skill absorption
 Agents automatically finding and applying network patterns. Too many dependencies on unbuilt pieces.
 
+### Agent lifecycle management
+Auto-provisioning agents, suggesting new agents for uncovered areas, killing unproductive agents. This is agent orchestration — a different product from agent coordination. The orchestration space is crowded (ComposioHQ, Claude Squad, Overstory, etc.). chinwag's value is the neutral cross-tool layer, not managing agent lifecycles.
+
 ---
 
 ## Architecture notes
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for the full system design. Key points for roadmap work:
 
-- **MCP server** (`packages/mcp/`) is the primary product interface. It runs locally per agent session, connecting to the backend with the user's auth token.
+- **MCP server** (`packages/mcp/`) is the product. It runs locally per agent session, connecting to the backend with the user's auth token. Every feature should be MCP-first.
 - **TeamDO** is the coordination hub — membership, activity, conflicts, shared memory, and sessions all live here.
-- **Claude Code hooks** enable enforced conflict prevention (PreToolUse blocks edits) and context injection (SessionStart injects team state). These are the highest-value integration points.
-- **Claude Code channels** enable real-time push — the channel server polls for team state changes and pushes diffs into running sessions.
+- **Claude Code hooks** enable enforced conflict prevention (PreToolUse blocks edits) and context injection (SessionStart injects team state). This is the deepest integration — other tools get softer MCP-based awareness.
 - **All DO communication uses RPC**, not fetch. New features should follow this pattern.
+
+## Non-goals
+
+Things chinwag is explicitly **not**:
+
+- **Not an agent orchestrator.** chinwag doesn't spawn, assign, or manage agent processes. Tools like ComposioHQ, Claude Squad, and Overstory do that. chinwag connects and coordinates agents that are already running independently in their native tools.
+- **Not an APM / standalone observability platform.** Observation exists to support the workflow — stuckness detection, activity awareness, team visibility. It's a pillar of the product, not a separate monitoring product.
+- **Not a community platform.** Chat exists but is secondary. chinwag's value is the five pillars, not developer social features.
+- **Not a replacement for CLAUDE.md or AGENTS.md.** Those are per-tool static instructions. chinwag is dynamic shared memory and real-time coordination across tools.
+- **Not an MCP server registry.** Smithery, Glama, and PulseMCP are MCP server marketplaces. chinwag's discover pillar is about AI dev tools for your workflow, not arbitrary MCP servers.

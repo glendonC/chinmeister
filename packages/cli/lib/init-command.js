@@ -5,12 +5,11 @@
 // Tool detection and config paths are driven by the registry in tools.js.
 // Adding a new tool = adding one entry there. No logic changes here.
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { execSync } from 'child_process';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
 import { configExists, loadConfig, saveConfig } from './config.js';
 import { api, initAccount } from './api.js';
-import { TOOL_REGISTRY } from './tools.js';
+import { detectTools, writeMcpConfig, writeHooksConfig } from './mcp-config.js';
 
 export async function runInit() {
   const cwd = process.cwd();
@@ -61,7 +60,7 @@ export async function runInit() {
   // Step 3: Detect tools — iterate the registry, not hardcoded checks
   const detected = detectTools(cwd);
   if (detected.length === 0) {
-    log('tools', 'none detected — you can manually add MCP configs later');
+    log('tools', 'none detected — run `chinwag add --list` to see available tools');
   }
 
   // Step 4: Write MCP configs — deduplicate by config path (multiple tools may share one)
@@ -70,8 +69,6 @@ export async function runInit() {
 
   for (const tool of detected) {
     if (!configsWritten.has(tool.mcpConfig)) {
-      const dir = dirname(tool.mcpConfig);
-      if (dir !== '.') mkdirSync(join(cwd, dir), { recursive: true });
       writeMcpConfig(cwd, tool.mcpConfig, { channel: tool.channel });
       configsWritten.add(tool.mcpConfig);
     }
@@ -114,87 +111,4 @@ async function createAccount() {
 
 function log(label, msg) {
   console.log(`  ${label}: ${msg}`);
-}
-
-// --- Tool detection (registry-driven) ---
-
-function detectTools(cwd) {
-  return TOOL_REGISTRY.filter(tool => {
-    const { dirs = [], cmds = [] } = tool.detect;
-    return dirs.some(d => existsSync(join(cwd, d))) ||
-           cmds.some(c => commandExists(c));
-  });
-}
-
-function commandExists(cmd) {
-  try {
-    execSync(`which ${cmd}`, { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// --- Config writers ---
-
-function writeMcpConfig(cwd, relativePath, { channel = false } = {}) {
-  const filePath = join(cwd, relativePath);
-
-  let existing = {};
-  if (existsSync(filePath)) {
-    try {
-      existing = JSON.parse(readFileSync(filePath, 'utf-8'));
-    } catch {
-      // Corrupted file — overwrite
-    }
-  }
-
-  if (!existing.mcpServers) existing.mcpServers = {};
-  existing.mcpServers.chinwag = { command: 'npx', args: ['chinwag-mcp'] };
-
-  if (channel) {
-    existing.mcpServers['chinwag-channel'] = { command: 'npx', args: ['chinwag-channel'] };
-  }
-
-  writeFileSync(filePath, JSON.stringify(existing, null, 2) + '\n');
-}
-
-function writeHooksConfig(cwd) {
-  const claudeDir = join(cwd, '.claude');
-  mkdirSync(claudeDir, { recursive: true });
-
-  const filePath = join(claudeDir, 'settings.json');
-
-  let existing = {};
-  if (existsSync(filePath)) {
-    try {
-      existing = JSON.parse(readFileSync(filePath, 'utf-8'));
-    } catch {
-      // Corrupted — overwrite
-    }
-  }
-
-  if (!existing.hooks) existing.hooks = {};
-
-  const chinwagHooks = {
-    PreToolUse: [{ matcher: 'Edit|Write', command: 'chinwag-hook check-conflict' }],
-    PostToolUse: [{ matcher: 'Edit|Write', command: 'chinwag-hook report-edit' }],
-    SessionStart: [{ command: 'chinwag-hook session-start' }],
-  };
-
-  for (const [event, entries] of Object.entries(chinwagHooks)) {
-    if (!existing.hooks[event]) existing.hooks[event] = [];
-
-    for (const entry of entries) {
-      // Deduplicate: skip if a chinwag-hook entry already exists for this event
-      const hasChinwag = existing.hooks[event].some(h =>
-        h.command && h.command.includes('chinwag-hook')
-      );
-      if (!hasChinwag) {
-        existing.hooks[event].push(entry);
-      }
-    }
-  }
-
-  writeFileSync(filePath, JSON.stringify(existing, null, 2) + '\n');
 }

@@ -1,22 +1,17 @@
-// Tool registry — declarative definitions for every MCP-compatible tool.
-// Adding a new tool = adding one entry here. No logic changes anywhere else.
+// Tool registry — declarative definitions for MCP-configurable tools.
 //
-// Fields:
-//   id          — internal identifier, used in code and API
-//   name        — display name shown to users
-//   detect.dirs — project-level directories that indicate the tool is present
-//   detect.cmds — CLI commands to check via `which`
-//   detect.env  — env vars the tool sets when it spawns an MCP subprocess
-//   mcpConfig   — relative path where the tool reads MCP server config
-//   hooks       — whether this tool supports pre/post hooks (enforceable interception)
-//   channel     — whether this tool supports channel push (server-initiated events)
+// MCP_TOOLS: Tools that chinwag writes MCP config for. Each entry defines
+// detection rules (dirs/cmds), config file path, and integration depth.
+// Adding a new tool = adding one entry here. No logic changes elsewhere.
+//
+// The full discovery catalog (30+ tools) lives in the worker API at
+// GET /tools/catalog — CLI and web fetch it dynamically.
 
-export const TOOL_REGISTRY = [
+export const MCP_TOOLS = [
   {
     id: 'claude-code',
     name: 'Claude Code',
     detect: { dirs: ['.claude'], cmds: ['claude'] },
-    env: ['CLAUDE_CODE'],
     mcpConfig: '.mcp.json',
     hooks: true,
     channel: true,
@@ -43,7 +38,6 @@ export const TOOL_REGISTRY = [
     id: 'codex',
     name: 'Codex',
     detect: { cmds: ['codex'] },
-    env: ['CODEX_HOME'],
     mcpConfig: '.mcp.json',
   },
   {

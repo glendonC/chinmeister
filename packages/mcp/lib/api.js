@@ -10,7 +10,7 @@ export function api(config) {
     headers['Authorization'] = `Bearer ${config.token}`;
   }
 
-  async function request(method, path, body = null) {
+  async function request(method, path, body = null, attempt = 0) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 10_000);
 
@@ -21,6 +21,13 @@ export function api(config) {
       }
 
       const res = await fetch(`${API_URL}${path}`, opts);
+
+      // Retry on server errors (up to 2 retries with backoff)
+      if (res.status >= 500 && attempt < 2) {
+        await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)));
+        return request(method, path, body, attempt + 1);
+      }
+
       const data = await res.json();
 
       if (!res.ok) {
@@ -35,6 +42,11 @@ export function api(config) {
         const timeoutErr = new Error(`Request timed out: ${method} ${path}`);
         timeoutErr.status = 408;
         throw timeoutErr;
+      }
+      // Retry on network errors
+      if (err.code === 'ECONNREFUSED' && attempt < 2) {
+        await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)));
+        return request(method, path, body, attempt + 1);
       }
       throw err;
     } finally {

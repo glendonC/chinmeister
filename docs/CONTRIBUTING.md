@@ -1,6 +1,6 @@
 # Contributing to chinwag
 
-We welcome contributions from everyone. Whether you're fixing a typo, reporting a bug, improving documentation, or building a feature — thank you.
+chinwag is the control layer for agentic development — one command connects all your AI coding tools into a unified system with shared memory, live coordination, and conflict prevention. The MCP server is the product; after `chinwag init`, it runs invisibly alongside each agent. We welcome contributions from everyone. Whether you're fixing a typo, reporting a bug, improving documentation, or building a feature — thank you.
 
 This guide covers everything you need to contribute effectively. If something is unclear, open an issue and ask. Questions are contributions too.
 
@@ -65,18 +65,21 @@ chinwag is a monorepo with four packages:
 
 ```
 packages/
-  mcp/          MCP server (the core product)
+  mcp/          MCP server (the product — shared brain for agents)
     index.js      Server entry — 5 tools, 1 resource, stdio transport
     hook.js       Claude Code hook handler (check-conflict, report-edit, session-start)
     channel.js    Claude Code channel server (real-time push via state diffing)
     lib/          API client, team operations, config, profile detection
 
-  cli/          Node.js terminal UI (Ink/React)
+  cli/          Node.js terminal UI (Ink/React, optional)
     cli.jsx       Entry point, screen router, error boundary
     lib/
       init-command.js   chinwag init — account, team, tool detection, config writing
-      tools.js          Declarative tool registry (8 tools)
-      dashboard.jsx     Agent operations dashboard
+      add-command.js    chinwag add — adds MCP config, fetches catalog from API
+      tools.js          MCP tool registry (8 tools chinwag configures)
+      mcp-config.js     Tool detection and config file writing
+      dashboard.jsx     Agent activity dashboard
+      discover.jsx      Tool discovery screen (fetches catalog from API)
       home.jsx, chat.jsx, customize.jsx   Other screens
       api.js            HTTP client with timeout + retry
     dist/         Build output (gitignored)

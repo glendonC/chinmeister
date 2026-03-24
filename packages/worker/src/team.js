@@ -13,7 +13,7 @@ const MEMORY_MIN_SCORE = 0.1;           // Floor — memories below this are exc
 const MEMORY_MAX_COUNT = 100;           // Max memories per team before pruning
 const ACTIVITY_MAX_FILES = 50;          // Max files tracked per agent activity
 const SESSION_RETENTION_DAYS = 30;      // How long session history is kept
-const VALID_CATEGORIES = ['gotcha', 'pattern', 'config', 'decision', 'reference'];
+export const VALID_CATEGORIES = ['gotcha', 'pattern', 'config', 'decision', 'reference'];
 
 export class TeamDO extends DurableObject {
   #schemaReady = false;
@@ -25,35 +25,6 @@ export class TeamDO extends DurableObject {
 
   #ensureSchema() {
     if (this.#schemaReady) return;
-
-    // Migration: remove CHECK constraint from memories table.
-    // Old schema had CHECK(category IN ('gotcha','pattern','config','decision')).
-    // DOs are single-threaded so no concurrent access during migration.
-    // We rename → recreate → copy → drop in a safe sequence.
-    const memCols = this.sql.exec('PRAGMA table_info(memories)').toArray();
-    if (memCols.length > 0) {
-      // Check if old CHECK constraint is present by inspecting sqlite_master
-      const tableInfo = this.sql.exec(
-        "SELECT sql FROM sqlite_master WHERE type='table' AND name='memories'"
-      ).toArray();
-      const hasCategoryCheck = tableInfo.length > 0 && tableInfo[0].sql?.includes('CHECK');
-      if (hasCategoryCheck) {
-        this.sql.exec('ALTER TABLE memories RENAME TO memories_old');
-        this.sql.exec(`
-          CREATE TABLE memories (
-            id TEXT PRIMARY KEY,
-            text TEXT NOT NULL,
-            category TEXT NOT NULL,
-            source_agent TEXT NOT NULL,
-            source_handle TEXT,
-            created_at TEXT DEFAULT (datetime('now')),
-            relevance_score REAL DEFAULT 1.0
-          )
-        `);
-        this.sql.exec('INSERT INTO memories SELECT * FROM memories_old');
-        this.sql.exec('DROP TABLE memories_old');
-      }
-    }
 
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS members (

@@ -1,7 +1,7 @@
 {
   "name": "chinwag",
   "version": "0.1.0",
-  "description": "The developer community that lives in your terminal",
+  "description": "Vendor-neutral control layer for agentic development — shared memory, coordination, MCP-first",
   "type": "module",
   "bin": {
     "chinwag": "./dist/cli.js"
@@ -20,11 +20,14 @@
     "node": ">=22.0.0"
   },
   "keywords": [
+    "mcp",
     "cli",
-    "developer",
-    "community",
-    "terminal",
-    "social"
+    "ai",
+    "agents",
+    "cursor",
+    "claude",
+    "coordination",
+    "developer-tools"
   ],
   "license": "MIT",
   "devDependencies": {

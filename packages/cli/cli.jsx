@@ -7,6 +7,7 @@ import { Home } from './lib/home.jsx';
 import { Chat } from './lib/chat.jsx';
 import { Customize } from './lib/customize.jsx';
 import { Dashboard } from './lib/dashboard.jsx';
+import { Discover } from './lib/discover.jsx';
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -44,6 +45,13 @@ if (process.argv[2] === 'reset') {
 if (process.argv[2] === 'init') {
   const { runInit } = await import('./lib/init-command.js');
   await runInit();
+  process.exit(0);
+}
+
+// Handle add command before launching TUI
+if (process.argv[2] === 'add') {
+  const { runAdd } = await import('./lib/add-command.js');
+  await runAdd(process.argv[3]);
   process.exit(0);
 }
 
@@ -118,10 +126,11 @@ function App() {
     if (screen === 'chat') return <Chat config={config} user={user} navigate={navigate} />;
     if (screen === 'customize') return <Customize config={config} user={user} navigate={navigate} refreshUser={refreshUser} />;
     if (screen === 'dashboard') return <Dashboard config={config} navigate={navigate} />;
+    if (screen === 'discover') return <Discover config={config} navigate={navigate} />;
     return null;
   })();
 
-  const screenLabel = { chat: 'chat', customize: 'settings', dashboard: 'dashboard' }[screen] || null;
+  const screenLabel = { chat: 'chat', customize: 'settings', dashboard: 'dashboard', discover: 'discover' }[screen] || null;
 
   return (
     <Box flexDirection="column">

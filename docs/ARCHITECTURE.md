@@ -1,10 +1,46 @@
 # Architecture
 
-chinwag is the operations layer for your team's AI agents. It connects all your MCP-compatible AI coding agents — Claude Code, Cursor, Windsurf, VS Code Copilot, Codex, Aider, JetBrains, Amazon Q, and any future tool that speaks MCP — so they share context, stay aware of each other, and never step on each other's work. One command sets it up. After that, it's invisible — your agents are just smarter.
+## Positioning
 
-The backend runs entirely on Cloudflare's edge. The primary interface is the MCP server that runs alongside each agent, not a CLI or GUI.
+<!-- Canonical copy: keep in sync with packages/web/index.html (#positioning) and packages/cli/README.md -->
 
-This document is the map. It explains what each piece does, where it lives, and why we made the choices we did. Read this before diving into the code.
+**Problem.** Every AI coding tool keeps its own memory and coordinates only with itself—sessions in different tools diverge, duplicate work, and collide on files. No vendor ships neutral cross-tool coordination; doing so would help their competitors.
+
+**Who.** chinwag is for solo developers using several AI tools across a few active projects; small teams (2–5) on the same repo with different preferred tools; and team leads who need visibility into agent activity and coordination.
+
+**Promise.** chinwag is the vendor-neutral control layer for agentic development: connect your stack with `npx chinwag init`, share project memory across tools and teammates, get live coordination and conflict prevention where the tool allows it, and see your workflow in one place. Agents are the primary user—value is delivered through the MCP server that runs beside each session.
+
+**Non-goals.** chinwag is not an agent orchestrator, not a standalone APM or observability product, not a community or social product, not a replacement for static project instructions like CLAUDE.md or AGENTS.md, and not a marketplace for arbitrary MCP servers—Discover is about AI dev tools for your workflow.
+
+## The five pillars
+
+1. **Connect** — `npx chinwag init` detects tools, writes configs, hooks everything up. `chinwag add <tool>` expands. One command, all tools unified.
+2. **Remember** — Agents share a brain. Knowledge compounds across tools, sessions, and teammates. What one agent learns, every agent knows next session.
+3. **Coordinate** — Live awareness of every agent across every tool. Conflict prevention enforced on Claude Code, advisory everywhere else. No platform does cross-tool coordination — only chinwag.
+4. **Discover** — See your full AI workflow. Browse 30+ AI dev tools. See what fits your stack. Add with one action from TUI or web.
+5. **Observe** — See what agents are doing, how long they've been at it, where they're stuck, what they've accomplished. Across all tools and projects.
+
+## Who this is for
+
+### Solo developers with multiple AI tools
+
+You run Claude Code and Cursor on the same project, maybe Aider for quick fixes, across 2-3 active projects. Each tool keeps its own memory. When your Claude Code session discovers that tests need Redis on port 6379, your Cursor session doesn't know. You switch between projects and lose context. chinwag gives your tools a shared brain and gives you one place to see your AI workflow across everything.
+
+### Small teams (2-5 devs) sharing a repo
+
+Everyone has their preferred tools. Agents collide on files, duplicate discoveries, and waste time. The `.chinwag` file gets committed to git — when a teammate runs `chinwag init`, they auto-join the same team. From that point, every agent across every teammate shares memory, sees who's editing what, and gets conflict prevention. No one changes how they work.
+
+### Team leads who need visibility
+
+You want to see which AI tools your team is using, where agents are getting stuck, whether coordination is working. chinwag gives you the dashboard — what's running, what's been accomplished, where things need attention.
+
+### The structural gap
+
+Each platform builds coordination for its own agents only. Claude Code Agent Teams coordinates Claude Code sessions. Cursor Background Agents coordinates Cursor sessions. GitHub Agent HQ coordinates GitHub agents. No platform is incentivized to coordinate across tools — it helps their competitors. chinwag is the vendor-neutral layer that connects everything.
+
+## How to read this doc
+
+The backend runs entirely on Cloudflare's edge. The primary interface is the MCP server that runs alongside each agent, not a CLI or GUI. This document explains what each piece does, where it lives, and why we made the choices we did.
 
 ## System Context
 
@@ -51,9 +87,9 @@ This document is the map. It explains what each piece does, where it lives, and 
 
 **AI agents** are the primary users. They interact with chinwag through the MCP server that runs alongside each agent session. Developers interact with chinwag indirectly — their agents are smarter because chinwag is connected.
 
-**The CLI dashboard** is optional. It gives developers a birds-eye view of all agents, costs, and activity. But the core value is delivered invisibly through the MCP connection.
+**The CLI dashboard** is optional. It gives developers a view of agent activity and shared memory. The core value is delivered invisibly through the MCP connection.
 
-**External dependencies** are limited to Cloudflare's platform: Workers (compute), Durable Objects (state), KV (auth lookups), and Pages (static hosting). There are no external databases, no Redis, no third-party APIs.
+**External dependencies** are limited to Cloudflare's platform: Workers (compute), Durable Objects (state), KV (auth lookups), and Pages (static hosting). No external databases, no Redis, no third-party APIs.
 
 ## How Agents Connect
 
@@ -109,19 +145,19 @@ The monorepo has four packages:
 - **Responsibility:** Authentication, team coordination, shared memory storage, conflict detection, agent activity tracking. All business logic lives here.
 - **Key constraint:** Stateless at the Worker level. All persistent state lives in Durable Objects. The Worker is a router that authenticates requests and forwards them to the appropriate DO.
 
-### `packages/cli/` — Dashboard + Community (optional)
+### `packages/cli/` — TUI Dashboard + Setup (optional)
 
 - **Technology:** Node.js 22+, Ink (React for terminals), esbuild
 - **Entry point:** `cli.jsx` — screen router
-- **Responsibility:** Optional human interface. Agent operations dashboard (all agents, costs, conflicts, memory). Also houses chat, which is secondary to the agent operations focus.
+- **Responsibility:** Optional human interface. Handles `chinwag init` and `chinwag add` setup. Agent operations dashboard (active agents, conflicts, shared memory, session history). Tool discovery screen. Chat is available but secondary.
 - **Key constraint:** The CLI has no knowledge of Durable Objects, room IDs, or server internals. It speaks only the public HTTP/WebSocket API.
 
-### `packages/web/` — Landing Page
+### `packages/web/` — Web Dashboard + Landing Page
 
-- **Technology:** Static HTML/CSS/JS on Cloudflare Pages
+- **Technology:** Static HTML/CSS/JS on Cloudflare Pages (evolving toward authenticated dashboard)
 - **Entry point:** `index.html`
-- **Responsibility:** Marketing, install instructions. Fetches from the public `/stats` endpoint.
-- **Key constraint:** No build step, no framework. Intentionally simple.
+- **Responsibility:** Currently: marketing, install instructions. Evolving into: cross-project workflow dashboard, visual tool discovery, team management. The web surface gives solo devs a unified view across all projects and gives team leads visibility into their team's AI workflow.
+- **Key constraint:** Same API as TUI and MCP server. No special backend endpoints — the web dashboard is a client of the same public API.
 
 ## Code Map
 
@@ -129,9 +165,9 @@ The monorepo has four packages:
 
 | File | Responsibility |
 |---|---|
-| `index.js` | HTTP router. Matches request paths to handlers. Runs Bearer token auth on protected routes via KV lookup. Bridges HTTP/WebSocket to Durable Objects. |
-| `db.js` | `DatabaseDO` — single instance holding all persistent data. Users, agent profiles, rate limits. SQLite storage. |
-| `team.js` | `TeamDO` — one instance per team. The core coordination DO. Manages team membership, agent activity tracking, file conflict detection, shared project memory, and session observability (start, end, edit recording, history). |
+| `index.js` | HTTP router. Matches request paths to handlers. Runs Bearer token auth on protected routes via KV lookup. Bridges HTTP/WebSocket to Durable Objects. Hosts the tool catalog (`GET /tools/catalog`). |
+| `db.js` | `DatabaseDO` — single instance holding all persistent data. Users, agent profiles, rate limits (`checkRateLimit`). SQLite storage. |
+| `team.js` | `TeamDO` — one instance per team. The core coordination DO. Manages team membership, agent activity tracking, file conflict detection, shared project memory, and session observability (start, end, edit recording, history). Exports `VALID_CATEGORIES`. |
 | `lobby.js` | `LobbyDO` — single instance managing chat room assignment and global presence. Tracks active rooms and their sizes. Heartbeat-based presence with 60s TTL. |
 | `room.js` | `RoomDO` — one instance per chat room. Holds WebSocket connections, broadcasts messages, maintains last 50 messages as history. |
 | `moderation.js` | Two-layer content filter. Layer 1: synchronous regex blocklist (<1ms). Layer 2: async AI moderation via Llama Guard 3. Used for chat and status text. |
@@ -143,7 +179,7 @@ The monorepo has four packages:
 | `index.js` | MCP server entry point. Registers 5 tools (`chinwag_join_team`, `chinwag_update_activity`, `chinwag_check_conflicts`, `chinwag_get_team_context`, `chinwag_save_memory`) and 1 resource (profile). Stdio transport. Pull-on-any-call preamble. |
 | `hook.js` | Claude Code hook handler. Three modes: `check-conflict` (PreToolUse — blocks conflicting edits), `report-edit` (PostToolUse — reports file edits + session tracking), `session-start` (SessionStart — injects team context with stuckness insights). |
 | `channel.js` | Claude Code channel server. Polls team context every 10s, diffs against previous state, pushes notifications for joins, leaves, file activity, conflicts, stuckness (15min threshold), and new memories. |
-| `lib/api.js` | HTTP client with Bearer token auth, 10s fetch timeout (AbortController). |
+| `lib/api.js` | HTTP client with Bearer token auth, 10s fetch timeout, retry with exponential backoff on 5xx/network errors. |
 | `lib/team.js` | Team operation wrappers — delegates to backend API for all 12 team endpoints. |
 | `lib/config.js` | Reads `~/.chinwag/config.json` and `.chinwag` team file. |
 | `lib/profile.js` | Auto-detects languages, frameworks, tools, and platforms from project files and environment variables. |
@@ -152,11 +188,13 @@ The monorepo has four packages:
 
 | File | Responsibility |
 |---|---|
-| `cli.jsx` | App shell with error boundary. Screen state machine: loading → welcome → home → {chat, customize, dashboard}. Loads/validates config on startup. |
+| `cli.jsx` | App shell with error boundary. Screen state machine: loading → welcome → home → {chat, customize, dashboard, discover}. Loads/validates config on startup. Also handles pre-TUI commands (`init`, `add`). |
 | `lib/home.jsx` | Home screen. Menu with single-key navigation. Displays online count. 30s heartbeat to presence endpoint. |
-| `lib/dashboard.jsx` | Agent operations dashboard. Shows active/offline agents (with framework, session duration), file conflicts, recent sessions, and team knowledge. 5s polling. |
+| `lib/dashboard.jsx` | Agent activity dashboard. Shows configured tools, active/offline agents, file conflicts, recent sessions, and team knowledge. 5s polling. |
+| `lib/discover.jsx` | Tool discovery screen. Shows your configured tools, recommends new tools from the catalog, browse by category, one-key add. |
 | `lib/init-command.js` | `chinwag init` — account setup, team creation/join, tool detection via registry, MCP config + hooks writing. |
-| `lib/tools.js` | Declarative tool registry. 8 tools: Claude Code, Cursor, Windsurf, VS Code, Codex, Aider, JetBrains, Amazon Q. |
+| `lib/add-command.js` | `chinwag add <tool>` — adds a specific tool's MCP config. Fetches discovery catalog from API. |
+| `lib/tools.js` | MCP tool registry. `MCP_TOOLS` (8 tools chinwag writes config for). Discovery catalog lives in the worker API (`GET /tools/catalog`). |
 | `lib/chat.jsx` | Live chat. WebSocket connection with exponential backoff reconnect (1s→15s cap). |
 | `lib/customize.jsx` | Profile editor. Change handle, cycle through 12-color palette, set status. |
 | `lib/api.js` | HTTP client. Wraps fetch with Bearer token auth, 10s timeout, retry with exponential backoff on 5xx/network errors. |
@@ -196,7 +234,9 @@ The monorepo has four packages:
 4. Future agent sessions on the same team receive relevant memories via `chinwag_get_team_context`
 5. Stale memories decay based on age and relevance signals
 
-### Community Features (Secondary)
+### Chat (Secondary)
+
+Chat is available but secondary to the agent coordination focus. It exists because the infrastructure supports it, not because it's core to the product.
 
 #### Chat (WebSocket)
 1. CLI calls `GET /ws/chat` with Bearer token
@@ -207,9 +247,13 @@ The monorepo has four packages:
 
 ## Key Design Decisions
 
-**MCP server is the product, not the CLI.** The primary value is delivered invisibly through agent MCP connections. The CLI dashboard is optional — most developers never need to open it. This is like git: you run `git init` once, then git works in the background. You don't "open git" to code.
+**MCP server is the product, not the CLI.** The primary value is delivered invisibly through agent MCP connections. This is like git: you run `git init` once, then git works in the background. chinwag works the same way — init once, then your agents are smarter.
 
-**Claude Code gets the deepest integration.** Claude Code supports hooks (enforceable interception before file edits) and channels (server-initiated push). This enables conflict prevention that the agent cannot bypass. Other tools get softer integration via MCP instructions and tool descriptions. This is a deliberate tradeoff — Claude Code is the #1 most-loved AI coding tool and the most terminal-native.
+**Three surfaces, one backend.** MCP server (for agents), TUI (for terminal users), web dashboard (for visual workflow management). All hit the same API. No surface gets special backend endpoints. This means features built for one surface are automatically available to the others.
+
+**One team per project, one account across projects.** The `.chinwag` file (committed to git) scopes a team to a repo. `~/.chinwag/config.json` gives the user a cross-project identity. This enables both team coordination within a repo and solo multi-project visibility across repos. Multi-project is a Coordinate concern (unified identity, user-level API) and an Observe concern (cross-project dashboard to see all agents across all projects).
+
+**Claude Code gets the deepest integration.** Claude Code supports hooks (enforceable interception before file edits) and channels (server-initiated push). This enables conflict prevention that the agent cannot bypass. Other tools get softer integration via MCP instructions and tool descriptions. As tools add hook-like capabilities, their integration deepens.
 
 **Durable Objects over external databases.** Each DO provides single-threaded coordination with embedded SQLite, eliminating the need for external database connections, connection pooling, or cache invalidation. State and compute are colocated at the edge. Trade-off: single-instance bottleneck for DatabaseDO, but adequate for our scale.
 
@@ -223,8 +267,8 @@ The monorepo has four packages:
 
 These are constraints that should be preserved as the codebase evolves:
 
-- **MCP server is the primary interface.** The MCP server is how agents interact with chinwag. The CLI and web are secondary interfaces for humans. Features should be MCP-first.
-- **CLI ↔ Worker boundary is the public API.** The CLI and MCP server must never depend on server internals (DO class names, room IDs, internal data formats). If a client needs something, it should be a documented API endpoint.
+- **MCP server is the primary interface.** The MCP server is how agents interact with chinwag. The TUI and web dashboard are human-facing surfaces. Features should be MCP-first, then surfaced in TUI and web.
+- **All surfaces share one API.** The MCP server, TUI, and web dashboard must never depend on server internals (DO class names, room IDs, internal data formats). If a client needs something, it should be a documented API endpoint. No surface gets special backend treatment.
 - **Durable Objects own their data.** No external system reads DO storage directly. All access goes through the DO's RPC methods. This preserves the single-writer guarantee.
 - **Worker is stateless.** No request-scoped state in module-level variables. Workers reuse V8 isolates across requests — global state causes cross-request data leaks.
 - **KV is append-only for auth.** Token mappings are written once at account creation and never updated.
@@ -272,26 +316,27 @@ Workers return structured JSON errors: `{error: "message"}` with appropriate HTT
 
 ## Current State and Future Direction
 
-chinwag is the operations layer for your team's AI agents. Phases 1 and 2 are shipped.
+Phases 1 and 2 are shipped. The core experience works: `npx chinwag init`, and your agents share a brain.
 
-**Phase 1 — Shared context + coordination (shipped):** `chinwag init` sets everything up. Agents share project knowledge and stay aware of each other. Claude Code gets enforced conflict prevention via hooks and real-time push via channels. Other tools get MCP-based awareness via instructions and tool descriptions. Dashboard shows agent fleet, conflicts, memories, and recent sessions.
+**Shipped — Connect + Remember + Coordinate:** `chinwag init` detects tools, writes configs. Agents share project memory across tools and sessions. Conflict prevention enforced on Claude Code (hooks), advisory on others (MCP). Session tracking, stuckness detection, real-time push via channels.
 
-**Phase 2 — Observability (shipped):** Session tracking (start, end, edits, duration, conflicts, memories saved). Stuckness detection (15-min threshold). Activity history (configurable day range). Channel server pushes state diffs in real-time. Security hardening (membership checks, rate limits, fetch timeouts, input validation).
+**Shipped — Observe (foundation):** Session lifecycle, activity history, stuckness detection, agent dashboard with 5s polling. The data layer is there.
+
+**Building — Discover:** Tool catalog (~30 tools), TUI discover screen, `chinwag add`. Browse what's out there, see what you're missing, add with one action.
+
+**Next — Multi-project + web dashboard:** User-level view across all projects. Web app evolves from landing page to a real workflow dashboard. See all agents across all projects, discover and add tools visually, manage teams.
+
+**Next — Polish + ship:** Testing, CI/CD, npm publishing, cross-tool validation. Make the core bulletproof.
 
 **Cost tracking deferred:** MCP does not currently expose token consumption or model identity from agent sessions. Revisit when the protocol or individual tools add usage reporting.
-
-**Phase 3 — Optimization intelligence (next):** Detect overlap between agents. Suggest new agents for uncovered areas. Consolidate redundant work. Agent lifecycle management — auto-provision agents with the right context pre-loaded.
-
-**Near-term focus:** Testing infrastructure, CI/CD, npm publishing, cross-tool validation.
-
-**Chat** remains available but is secondary to the agent operations focus.
 
 **What this means for contributors:**
 
 - The MCP server is the primary interface — build features that make agents smarter and more coordinated
-- The CLI dashboard is the human window into agent operations — keep it informative and optional
-- All DO communication uses RPC, not fetch. New features should follow this pattern.
-- Maintain the MCP server ↔ Worker API boundary (agents use the same API as the CLI)
+- Surfaces (TUI, web) are windows into the same backend — keep them in sync
+- The web dashboard is becoming a first-class surface, not just a landing page
+- All DO communication uses RPC, not fetch. New features should follow this pattern
+- Maintain the MCP server ↔ Worker API boundary (agents use the same API as the CLI and web)
 
 ---
 

@@ -8,10 +8,13 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
+import { readFileSync } from 'fs';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
+
+const PKG = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 
 async function main() {
   if (!configExists()) {
@@ -88,13 +91,13 @@ async function main() {
   // Create MCP server
   const server = new McpServer({
     name: 'chinwag',
-    version: '0.1.0',
-    instructions: `You are connected to chinwag, a team coordination system for AI coding agents.
+    version: PKG.version,
+    instructions: `You are connected to chinwag — a shared brain for your team's AI coding agents. Every agent on this project shares memory and stays coordinated through chinwag.
 
 BEFORE editing any file, call chinwag_check_conflicts to verify no other agent is working on it.
-AFTER starting work on files, call chinwag_update_activity so teammates know what you're doing.
-When you discover an important project fact (setup requirement, pitfall, convention, decision), call chinwag_save_memory to share it with the team.
-Call chinwag_get_team_context at the start of your session to see who else is working and what they're doing.`,
+AFTER starting work on files, call chinwag_update_activity so other agents know what you're doing.
+When you discover an important project fact (setup requirement, pitfall, convention, decision), call chinwag_save_memory so every future session across every tool starts with that knowledge.
+Call chinwag_get_team_context at the start of your session to see shared project knowledge and who else is working.`,
   });
 
   registerTools(server, client, team, () => currentTeamId);

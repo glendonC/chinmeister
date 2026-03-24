@@ -42,15 +42,6 @@ export class DatabaseDO extends DurableObject {
   #ensureSchema() {
     if (this.#schemaReady) return;
 
-    // Check if old v1 schema exists (handle as PK, no id column)
-    const cols = this.sql.exec('PRAGMA table_info(users)').toArray();
-    const hasTable = cols.length > 0;
-    const hasId = cols.some(c => c.name === 'id');
-
-    if (hasTable && !hasId) {
-      this.#migrateV1ToV2();
-    }
-
     this.sql.exec(`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
@@ -81,55 +72,7 @@ export class DatabaseDO extends DurableObject {
       );
     `);
 
-    // Drop legacy tables if they exist (removed in product pivot)
-    this.sql.exec('DROP TABLE IF EXISTS exchanges');
-    this.sql.exec('DROP TABLE IF EXISTS notes');
-
     this.#schemaReady = true;
-  }
-
-  #migrateV1ToV2() {
-    // Migrate from handle-as-PK to UUID-as-PK schema.
-    const oldUsers = this.sql.exec('SELECT * FROM users').toArray();
-
-    const handleToId = new Map();
-    for (const u of oldUsers) {
-      handleToId.set(u.handle, crypto.randomUUID());
-    }
-
-    // Drop all old tables
-    this.sql.exec('DROP TABLE IF EXISTS exchanges');
-    this.sql.exec('DROP TABLE IF EXISTS notes');
-    this.sql.exec('DROP TABLE IF EXISTS users');
-    this.sql.exec('DROP TABLE IF EXISTS account_limits');
-
-    // Create users table with UUID PK
-    this.sql.exec(`
-      CREATE TABLE users (
-        id TEXT PRIMARY KEY,
-        handle TEXT UNIQUE NOT NULL,
-        color TEXT NOT NULL,
-        token TEXT UNIQUE NOT NULL,
-        status TEXT,
-        created_at TEXT NOT NULL,
-        last_active TEXT NOT NULL
-      );
-
-      CREATE TABLE account_limits (
-        ip TEXT NOT NULL,
-        date TEXT NOT NULL,
-        count INTEGER NOT NULL DEFAULT 0,
-        PRIMARY KEY (ip, date)
-      );
-    `);
-
-    for (const u of oldUsers) {
-      this.sql.exec(
-        `INSERT INTO users (id, handle, color, token, status, created_at, last_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        handleToId.get(u.handle), u.handle, u.color, u.token, u.status, u.created_at, u.last_active
-      );
-    }
   }
 
   // --- User operations ---
@@ -178,14 +121,6 @@ export class DatabaseDO extends DurableObject {
     return rows[0] || null;
   }
 
-  async getUserByToken(token) {
-    this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT id, handle, color, status, created_at, last_active FROM users WHERE token = ?', token
-    ).toArray();
-    return rows[0] || null;
-  }
-
   async updateHandle(userId, newHandle) {
     this.#ensureSchema();
 
@@ -219,19 +154,21 @@ export class DatabaseDO extends DurableObject {
   }
 
   // --- Rate limiting ---
+  // Uses account_limits table for all per-day rate limits.
+  // The `ip` column is the rate limit key — may be an IP, user ID prefix, or other key.
 
-  async checkIpLimit(ip, maxPerDay = 3) {
+  async checkRateLimit(key, maxPerDay = 3) {
     this.#ensureSchema();
     const today = utcDate();
 
     this.sql.exec(
       `INSERT INTO account_limits (ip, date, count) VALUES (?, ?, 1)
        ON CONFLICT(ip, date) DO UPDATE SET count = count + 1`,
-      ip, today
+      key, today
     );
 
     const rows = this.sql.exec(
-      'SELECT count FROM account_limits WHERE ip = ? AND date = ?', ip, today
+      'SELECT count FROM account_limits WHERE ip = ? AND date = ?', key, today
     ).toArray();
 
     const count = rows[0]?.count || 0;
@@ -290,26 +227,6 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
-  async getAgentProfile(userId) {
-    this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT * FROM agent_profiles WHERE user_id = ?', userId
-    ).toArray();
-
-    if (rows.length === 0) return null;
-
-    const row = rows[0];
-    return {
-      user_id: row.user_id,
-      framework: row.framework,
-      languages: JSON.parse(row.languages || '[]'),
-      frameworks: JSON.parse(row.frameworks || '[]'),
-      tools: JSON.parse(row.tools || '[]'),
-      platforms: JSON.parse(row.platforms || '[]'),
-      registered_at: row.registered_at,
-      last_active: row.last_active,
-    };
-  }
 }
 
 function utcDate() {

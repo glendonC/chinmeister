@@ -8,11 +8,14 @@
 // Unlike the main MCP server, the channel server has no tools — it only pushes.
 // CRITICAL: Never console.log — stdio transport. Use console.error for logging.
 
+import { readFileSync } from 'fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile } from './lib/team.js';
+
+const PKG = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 
 const POLL_INTERVAL_MS = 10_000;
 
@@ -37,7 +40,7 @@ async function main() {
   const client = api(config);
 
   const server = new Server(
-    { name: 'chinwag-channel', version: '0.1.0' },
+    { name: 'chinwag-channel', version: PKG.version },
     {
       capabilities: {
         experimental: { 'claude/channel': {} },
