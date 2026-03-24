@@ -343,7 +343,7 @@ export class TeamDO extends DurableObject {
       agentId
     ).toArray();
 
-    if (sessions.length === 0) return { ok: true }; // No active session — silently skip
+    if (sessions.length === 0) return { ok: true, skipped: true }; // No active session — caller can log if needed
 
     const session = sessions[0];
     let files = JSON.parse(session.files_touched || '[]');

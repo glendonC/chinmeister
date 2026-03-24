@@ -61,27 +61,39 @@ CHINWAG_API_URL=http://localhost:8787 CHINWAG_WS_URL=ws://localhost:8787/ws/chat
 
 ## Project Structure
 
-chinwag is a monorepo with three packages:
+chinwag is a monorepo with four packages:
 
 ```
 packages/
+  mcp/          MCP server (the core product)
+    index.js      Server entry — 5 tools, 1 resource, stdio transport
+    hook.js       Claude Code hook handler (check-conflict, report-edit, session-start)
+    channel.js    Claude Code channel server (real-time push via state diffing)
+    lib/          API client, team operations, config, profile detection
+
   cli/          Node.js terminal UI (Ink/React)
-    cli.jsx       Entry point and screen router
-    lib/          Screen components and utilities
+    cli.jsx       Entry point, screen router, error boundary
+    lib/
+      init-command.js   chinwag init — account, team, tool detection, config writing
+      tools.js          Declarative tool registry (8 tools)
+      dashboard.jsx     Agent operations dashboard
+      home.jsx, chat.jsx, customize.jsx   Other screens
+      api.js            HTTP client with timeout + retry
     dist/         Build output (gitignored)
 
   worker/       Cloudflare Workers backend
     src/
-      index.js      HTTP router and auth middleware
+      index.js      HTTP router, auth middleware, rate limiting
       db.js         DatabaseDO — users, agent profiles, rate limits
+      team.js       TeamDO — coordination, activity, conflicts, memory, sessions
       lobby.js      LobbyDO — room assignment and presence
       room.js       RoomDO — WebSocket chat rooms
-      moderation.js Content moderation (blocklist + AI)
+      moderation.js Content moderation (blocklist + Llama Guard 3)
 
   web/          Static landing page (Cloudflare Pages)
-    index.html    Single-page site
-    script.js     Stats fetching
-    style.css     Styling
+    index.html    Single-page site with OpenGraph meta tags
+    script.js     Scroll journey, section navigation
+    styles/       CSS split into foundation, header, landing, responsive
 ```
 
 If you're unsure which package your change belongs in, look at where the behavior lives: user-facing display is CLI, server logic is worker, marketing/landing is web.

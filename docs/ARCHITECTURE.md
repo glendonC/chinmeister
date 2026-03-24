@@ -131,7 +131,7 @@ The monorepo has four packages:
 |---|---|
 | `index.js` | HTTP router. Matches request paths to handlers. Runs Bearer token auth on protected routes via KV lookup. Bridges HTTP/WebSocket to Durable Objects. |
 | `db.js` | `DatabaseDO` — single instance holding all persistent data. Users, agent profiles, rate limits. SQLite storage. |
-| `team.js` | `TeamDO` — one instance per team. The core coordination DO. Manages team membership, agent activity tracking, file conflict detection, and shared project memory. |
+| `team.js` | `TeamDO` — one instance per team. The core coordination DO. Manages team membership, agent activity tracking, file conflict detection, shared project memory, and session observability (start, end, edit recording, history). |
 | `lobby.js` | `LobbyDO` — single instance managing chat room assignment and global presence. Tracks active rooms and their sizes. Heartbeat-based presence with 60s TTL. |
 | `room.js` | `RoomDO` — one instance per chat room. Holds WebSocket connections, broadcasts messages, maintains last 50 messages as history. |
 | `moderation.js` | Two-layer content filter. Layer 1: synchronous regex blocklist (<1ms). Layer 2: async AI moderation via Llama Guard 3. Used for chat and status text. |
@@ -140,17 +140,26 @@ The monorepo has four packages:
 
 | File | Responsibility |
 |---|---|
-| `index.js` | MCP server entry point. Registers tools for team coordination: `chinwag_join_team`, `chinwag_update_activity`, `chinwag_check_conflicts`, `chinwag_get_team_context`. Stdio transport. |
+| `index.js` | MCP server entry point. Registers 5 tools (`chinwag_join_team`, `chinwag_update_activity`, `chinwag_check_conflicts`, `chinwag_get_team_context`, `chinwag_save_memory`) and 1 resource (profile). Stdio transport. Pull-on-any-call preamble. |
+| `hook.js` | Claude Code hook handler. Three modes: `check-conflict` (PreToolUse — blocks conflicting edits), `report-edit` (PostToolUse — reports file edits + session tracking), `session-start` (SessionStart — injects team context with stuckness insights). |
+| `channel.js` | Claude Code channel server. Polls team context every 10s, diffs against previous state, pushes notifications for joins, leaves, file activity, conflicts, stuckness (15min threshold), and new memories. |
+| `lib/api.js` | HTTP client with Bearer token auth, 10s fetch timeout (AbortController). |
+| `lib/team.js` | Team operation wrappers — delegates to backend API for all 12 team endpoints. |
+| `lib/config.js` | Reads `~/.chinwag/config.json` and `.chinwag` team file. |
+| `lib/profile.js` | Auto-detects languages, frameworks, tools, and platforms from project files and environment variables. |
 
 ### CLI (`packages/cli/`)
 
 | File | Responsibility |
 |---|---|
-| `cli.jsx` | App shell. Screen state machine: loading → welcome → home → {chat, customize}. Loads/validates config on startup. |
+| `cli.jsx` | App shell with error boundary. Screen state machine: loading → welcome → home → {chat, customize, dashboard}. Loads/validates config on startup. |
 | `lib/home.jsx` | Home screen. Menu with single-key navigation. Displays online count. 30s heartbeat to presence endpoint. |
+| `lib/dashboard.jsx` | Agent operations dashboard. Shows active/offline agents (with framework, session duration), file conflicts, recent sessions, and team knowledge. 5s polling. |
+| `lib/init-command.js` | `chinwag init` — account setup, team creation/join, tool detection via registry, MCP config + hooks writing. |
+| `lib/tools.js` | Declarative tool registry. 8 tools: Claude Code, Cursor, Windsurf, VS Code, Codex, Aider, JetBrains, Amazon Q. |
 | `lib/chat.jsx` | Live chat. WebSocket connection with exponential backoff reconnect (1s→15s cap). |
 | `lib/customize.jsx` | Profile editor. Change handle, cycle through 12-color palette, set status. |
-| `lib/api.js` | HTTP client. Wraps fetch with Bearer token auth. All API calls go through this. |
+| `lib/api.js` | HTTP client. Wraps fetch with Bearer token auth, 10s timeout, retry with exponential backoff on 5xx/network errors. |
 | `lib/colors.js` | Maps chinwag's 12 colors to ANSI terminal colors for Ink rendering. |
 | `lib/config.js` | Reads/writes `~/.chinwag/config.json`. Token, handle, color. |
 
@@ -261,15 +270,19 @@ Workers return structured JSON errors: `{error: "message"}` with appropriate HTT
 | esbuild | CLI bundling | Fast, zero-config ESM bundling |
 | Cloudflare Pages | Landing page hosting | Static hosting with global CDN, same platform as backend |
 
-## Future Direction
+## Current State and Future Direction
 
-chinwag is the operations layer for your team's AI agents. The product has three phases:
+chinwag is the operations layer for your team's AI agents. Phases 1 and 2 are shipped.
 
-**Phase 1 — Shared context + coordination (current focus):** Agents share project knowledge and stay aware of each other. `chinwag init` sets everything up. Claude Code gets enforced conflict prevention via hooks/channels. Other tools get MCP-based awareness. Basic dashboard shows agent fleet.
+**Phase 1 — Shared context + coordination (shipped):** `chinwag init` sets everything up. Agents share project knowledge and stay aware of each other. Claude Code gets enforced conflict prevention via hooks and real-time push via channels. Other tools get MCP-based awareness via instructions and tool descriptions. Dashboard shows agent fleet, conflicts, memories, and recent sessions.
 
-**Phase 2 — Full observability:** Cost tracking across all agents and tools. Model usage monitoring. Activity history. Persistent external references (images, designs, links, docs) that survive context window compression.
+**Phase 2 — Observability (shipped):** Session tracking (start, end, edits, duration, conflicts, memories saved). Stuckness detection (15-min threshold). Activity history (configurable day range). Channel server pushes state diffs in real-time. Security hardening (membership checks, rate limits, fetch timeouts, input validation).
 
-**Phase 3 — Optimization intelligence:** Detect overlap between agents. Suggest new agents for uncovered areas. Consolidate redundant work. Agent lifecycle management — auto-provision agents with the right context pre-loaded.
+**Cost tracking deferred:** MCP does not currently expose token consumption or model identity from agent sessions. Revisit when the protocol or individual tools add usage reporting.
+
+**Phase 3 — Optimization intelligence (next):** Detect overlap between agents. Suggest new agents for uncovered areas. Consolidate redundant work. Agent lifecycle management — auto-provision agents with the right context pre-loaded.
+
+**Near-term focus:** Testing infrastructure, CI/CD, npm publishing, cross-tool validation.
 
 **Chat** remains available but is secondary to the agent operations focus.
 
