@@ -79,15 +79,15 @@ export default {
           } else if (method === 'POST' && parsed.action === 'join') {
             response = await handleTeamJoin(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'leave') {
-            response = await handleTeamLeave(user, env, parsed.teamId);
+            response = await handleTeamLeave(request, user, env, parsed.teamId);
           } else if (method === 'GET' && parsed.action === 'context') {
-            response = await handleTeamContext(user, env, parsed.teamId);
+            response = await handleTeamContext(request, user, env, parsed.teamId);
           } else if (method === 'PUT' && parsed.action === 'activity') {
             response = await handleTeamActivity(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'conflicts') {
             response = await handleTeamConflicts(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'heartbeat') {
-            response = await handleTeamHeartbeat(user, env, parsed.teamId);
+            response = await handleTeamHeartbeat(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'file') {
             response = await handleTeamFile(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'memory') {
@@ -280,6 +280,23 @@ async function handleChatUpgrade(request, user, env) {
   }));
 }
 
+// --- Agent identity helpers ---
+
+// Extract agent_id from X-Agent-Id header; fall back to user.id for backward compat.
+function getAgentId(request, user) {
+  const agentId = request.headers.get('X-Agent-Id');
+  if (agentId && typeof agentId === 'string' && agentId.length > 0 && agentId.length <= 60) {
+    return agentId;
+  }
+  return user.id;
+}
+
+// Parse tool name from agent_id format "tool:hash". Returns 'unknown' for bare UUIDs.
+function getToolFromAgentId(agentId) {
+  const idx = agentId.indexOf(':');
+  return idx > 0 ? agentId.slice(0, idx) : 'unknown';
+}
+
 // --- Agent & Team handlers ---
 
 async function handleUpdateAgentProfile(request, user, env) {
@@ -367,9 +384,11 @@ async function handleCreateTeam(request, user, env) {
     return json({ error: 'Team creation limit reached. Try again tomorrow.' }, 429);
   }
 
+  const agentId = getAgentId(request, user);
+  const tool = getToolFromAgentId(agentId);
   const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
   const team = getTeam(env, teamId);
-  await team.join(user.id, user.id, user.handle);
+  await team.join(agentId, user.id, user.handle, tool);
 
   // user_teams is a denormalized index — TeamDO membership is authoritative.
   // If this fails, lazy backfill in getContext will catch it.
@@ -386,8 +405,10 @@ async function handleTeamJoin(request, user, env, teamId) {
     name = typeof body.name === 'string' ? body.name.slice(0, 100).trim() || null : null;
   } catch { /* no body is fine */ }
 
+  const agentId = getAgentId(request, user);
+  const tool = getToolFromAgentId(agentId);
   const team = getTeam(env, teamId);
-  const result = await team.join(user.id, user.id, user.handle);
+  const result = await team.join(agentId, user.id, user.handle, tool);
   if (result.error) return json({ error: result.error }, 400);
 
   // Sync denormalized index — TeamDO is authoritative, so don't fail on this.
@@ -397,9 +418,10 @@ async function handleTeamJoin(request, user, env, teamId) {
   return json(result);
 }
 
-async function handleTeamLeave(user, env, teamId) {
+async function handleTeamLeave(request, user, env, teamId) {
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.leave(user.id);
+  const result = await team.leave(agentId);
   if (result.error) return json({ error: result.error }, 400);
 
   const db = getDB(env);
@@ -408,9 +430,10 @@ async function handleTeamLeave(user, env, teamId) {
   return json(result);
 }
 
-async function handleTeamContext(user, env, teamId) {
+async function handleTeamContext(request, user, env, teamId) {
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.getContext(user.id);
+  const result = await team.getContext(agentId);
   if (result.error) return json({ error: result.error }, 403);
 
   // Lazy backfill: if user is a member (getContext succeeded), ensure user_teams
@@ -431,8 +454,9 @@ async function handleTeamActivity(request, user, env, teamId) {
   if (typeof summary !== 'string') return json({ error: 'summary must be a string' }, 400);
   if (summary.length > 280) return json({ error: 'summary must be 280 characters or less' }, 400);
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.updateActivity(user.id, files, summary);
+  const result = await team.updateActivity(agentId, files, summary);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
@@ -445,15 +469,17 @@ async function handleTeamConflicts(request, user, env, teamId) {
   if (files.length > 50) return json({ error: 'too many files (max 50)' }, 400);
   if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.checkConflicts(user.id, files);
+  const result = await team.checkConflicts(agentId, files);
   if (result.error) return json({ error: result.error }, 403);
   return json(result);
 }
 
-async function handleTeamHeartbeat(user, env, teamId) {
+async function handleTeamHeartbeat(request, user, env, teamId) {
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.heartbeat(user.id);
+  const result = await team.heartbeat(agentId);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
@@ -469,8 +495,9 @@ async function handleTeamFile(request, user, env, teamId) {
     return json({ error: 'file path too long' }, 400);
   }
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.reportFile(user.id, file);
+  const result = await team.reportFile(agentId, file);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
@@ -497,8 +524,9 @@ async function handleTeamSaveMemory(request, user, env, teamId) {
     return json({ error: 'Memory save limit reached (20/day). Try again tomorrow.' }, 429);
   }
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.saveMemory(user.id, text.trim(), category, user.handle);
+  const result = await team.saveMemory(agentId, text.trim(), category, user.handle);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
 
   await db.consumeRateLimit(`memory:${user.id}`);
@@ -514,8 +542,9 @@ async function handleTeamStartSession(request, user, env, teamId) {
   const limit = await db.checkRateLimit(`session:${user.id}`, 50);
   if (!limit.allowed) return json({ error: 'Session limit reached. Try again tomorrow.' }, 429);
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.startSession(user.id, user.handle, framework);
+  const result = await team.startSession(agentId, user.handle, framework);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
 
   await db.consumeRateLimit(`session:${user.id}`);
@@ -530,8 +559,9 @@ async function handleTeamEndSession(request, user, env, teamId) {
     return json({ error: 'session_id is required' }, 400);
   }
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.endSession(user.id, session_id);
+  const result = await team.endSession(agentId, session_id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
@@ -545,8 +575,9 @@ async function handleTeamSessionEdit(request, user, env, teamId) {
   }
   if (file.length > 500) return json({ error: 'file path too long' }, 400);
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.recordEdit(user.id, file);
+  const result = await team.recordEdit(agentId, file);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
@@ -556,8 +587,9 @@ async function handleTeamHistory(request, user, env, teamId) {
   const parsed = parseInt(url.searchParams.get('days') || '7', 10);
   const days = Math.max(1, Math.min(isNaN(parsed) ? 7 : parsed, 30));
 
+  const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.getHistory(user.id, days);
+  const result = await team.getHistory(agentId, days);
   if (result.error) return json({ error: result.error }, 403);
   return json(result);
 }

@@ -8,12 +8,25 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 
+import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { basename } from 'path';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
+
+function detectToolName() {
+  const idx = process.argv.indexOf('--tool');
+  if (idx !== -1 && process.argv[idx + 1]) return process.argv[idx + 1];
+  if (process.env.CHINWAG_TOOL) return process.env.CHINWAG_TOOL;
+  return 'unknown';
+}
+
+function generateAgentId(token, toolName) {
+  const hash = createHash('sha256').update(token).digest('hex').slice(0, 12);
+  return `${toolName}:${hash}`;
+}
 
 let PKG = { version: '0.0.0' };
 try {
@@ -32,7 +45,10 @@ async function main() {
     process.exit(1);
   }
 
-  const client = api(config);
+  const toolName = detectToolName();
+  const agentId = generateAgentId(config.token, toolName);
+  const client = api(config, { agentId });
+  console.error(`[chinwag] Tool: ${toolName}, Agent ID: ${agentId}`);
 
   // Scan environment and register profile
   const profile = scanEnvironment();
@@ -227,9 +243,10 @@ function registerTools(server, client, team, getTeamId) {
         if (result.conflicts.length === 0) {
           return { content: [{ type: 'text', text: `${preamble}No conflicts. Safe to proceed.` }] };
         }
-        const lines = result.conflicts.map(c =>
-          `⚠ ${c.owner_handle} is working on ${c.files.join(', ')} — "${c.summary}"`
-        );
+        const lines = result.conflicts.map(c => {
+          const who = c.tool && c.tool !== 'unknown' ? `${c.owner_handle} (${c.tool})` : c.owner_handle;
+          return `⚠ ${who} is working on ${c.files.join(', ')} — "${c.summary}"`;
+        });
         return { content: [{ type: 'text', text: `${preamble}${lines.join('\n')}` }] };
       } catch (err) {
         const msg = err.status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : err.message;
@@ -258,10 +275,11 @@ function registerTools(server, client, team, getTeamId) {
         } else {
           lines.push('Agents:');
           for (const m of ctx.members) {
+            const toolInfo = m.tool && m.tool !== 'unknown' ? `, ${m.tool}` : '';
             const activity = m.activity
               ? `working on ${m.activity.files.join(', ')} — "${m.activity.summary}"`
               : 'idle';
-            lines.push(`  ${m.handle} (${m.status}): ${activity}`);
+            lines.push(`  ${m.handle} (${m.status}${toolInfo}): ${activity}`);
           }
         }
 

@@ -1,6 +1,6 @@
 const API_URL = process.env.CHINWAG_API_URL || 'https://chinwag-api.glendonchin.workers.dev';
 
-export function api(config) {
+export function api(config, { agentId } = {}) {
   const headers = {
     'Content-Type': 'application/json',
     'User-Agent': 'chinwag-mcp/1.0',
@@ -8,6 +8,9 @@ export function api(config) {
 
   if (config?.token) {
     headers['Authorization'] = `Bearer ${config.token}`;
+  }
+  if (agentId) {
+    headers['X-Agent-Id'] = agentId;
   }
 
   async function request(method, path, body = null, attempt = 0) {

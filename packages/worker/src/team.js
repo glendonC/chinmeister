@@ -32,6 +32,7 @@ export class TeamDO extends DurableObject {
         agent_id TEXT PRIMARY KEY,
         owner_id TEXT NOT NULL,
         owner_handle TEXT NOT NULL,
+        tool TEXT DEFAULT 'unknown',
         joined_at TEXT DEFAULT (datetime('now')),
         last_heartbeat TEXT DEFAULT (datetime('now'))
       );
@@ -69,6 +70,9 @@ export class TeamDO extends DurableObject {
 
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
+
+    // Additive migration: add tool column if missing (safe for existing DOs)
+    try { this.sql.exec("ALTER TABLE members ADD COLUMN tool TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
 
     this.#schemaReady = true;
   }
@@ -108,21 +112,27 @@ export class TeamDO extends DurableObject {
   }
 
   #isMember(agentId) {
-    return this.sql.exec('SELECT 1 FROM members WHERE agent_id = ?', agentId).toArray().length > 0;
+    // Direct match by agent_id (new tool-specific IDs like "cursor:abc123")
+    if (this.sql.exec('SELECT 1 FROM members WHERE agent_id = ?', agentId).toArray().length > 0) {
+      return true;
+    }
+    // Fallback: check by owner_id (backward compat for CLI/old clients sending user UUID)
+    return this.sql.exec('SELECT 1 FROM members WHERE owner_id = ?', agentId).toArray().length > 0;
   }
 
   // --- Membership ---
 
-  async join(agentId, ownerId, ownerHandle) {
+  async join(agentId, ownerId, ownerHandle, tool = 'unknown') {
     this.#ensureSchema();
     this.sql.exec(
-      `INSERT INTO members (agent_id, owner_id, owner_handle, joined_at, last_heartbeat)
-       VALUES (?, ?, ?, datetime('now'), datetime('now'))
+      `INSERT INTO members (agent_id, owner_id, owner_handle, tool, joined_at, last_heartbeat)
+       VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
        ON CONFLICT(agent_id) DO UPDATE SET
          owner_id = excluded.owner_id,
          owner_handle = excluded.owner_handle,
+         tool = excluded.tool,
          last_heartbeat = datetime('now')`,
-      agentId, ownerId, ownerHandle
+      agentId, ownerId, ownerHandle, tool
     );
     return { ok: true };
   }
@@ -131,6 +141,13 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     this.sql.exec('DELETE FROM activities WHERE agent_id = ?', agentId);
     this.sql.exec('DELETE FROM members WHERE agent_id = ?', agentId);
+    const changed = this.sql.exec('SELECT changes() as c').toArray();
+    // Fallback: if specific agent_id not found, remove all agents for this owner
+    // (handles legacy callers sending user UUID as agentId)
+    if (changed[0].c === 0) {
+      this.sql.exec('DELETE FROM activities WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)', agentId);
+      this.sql.exec('DELETE FROM members WHERE owner_id = ?', agentId);
+    }
     return { ok: true };
   }
 
@@ -168,7 +185,7 @@ export class TeamDO extends DurableObject {
     if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
 
     const others = this.sql.exec(
-      `SELECT m.agent_id, m.owner_handle, a.files, a.summary
+      `SELECT m.agent_id, m.owner_handle, m.tool, a.files, a.summary
        FROM members m
        LEFT JOIN activities a ON a.agent_id = m.agent_id
        WHERE m.agent_id != ?
@@ -186,6 +203,7 @@ export class TeamDO extends DurableObject {
       if (overlap.length > 0) {
         conflicts.push({
           owner_handle: row.owner_handle,
+          tool: row.tool || 'unknown',
           files: overlap,
           summary: row.summary || '',
         });
@@ -245,7 +263,7 @@ export class TeamDO extends DurableObject {
     this.#maybeCleanup();
 
     const members = this.sql.exec(
-      `SELECT m.owner_handle, a.files, a.summary, a.updated_at,
+      `SELECT m.agent_id, m.owner_handle, m.tool, a.files, a.summary, a.updated_at,
               s.framework, s.started_at as session_started,
               ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
               ROUND((julianday('now') - julianday(a.updated_at)) * 1440) as minutes_since_update,
@@ -284,7 +302,9 @@ export class TeamDO extends DurableObject {
     `).toArray();
 
     const memberList = members.map(m => ({
+      agent_id: m.agent_id,
       handle: m.owner_handle,
+      tool: m.tool || 'unknown',
       status: m.status,
       framework: m.framework || null,
       session_minutes: m.session_minutes || null,
@@ -303,11 +323,16 @@ export class TeamDO extends DurableObject {
       if (m.status !== 'active' || !m.activity?.files) continue;
       for (const f of m.activity.files) {
         if (!fileOwners.has(f)) fileOwners.set(f, []);
-        fileOwners.get(f).push(m.handle);
+        fileOwners.get(f).push({ handle: m.handle, tool: m.tool });
       }
     }
     for (const [file, owners] of fileOwners) {
-      if (owners.length > 1) conflicts.push({ file, agents: owners });
+      if (owners.length > 1) {
+        conflicts.push({
+          file,
+          agents: owners.map(o => o.tool !== 'unknown' ? `${o.handle} (${o.tool})` : o.handle),
+        });
+      }
     }
 
     return {

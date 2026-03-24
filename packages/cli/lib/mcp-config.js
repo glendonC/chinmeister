@@ -24,7 +24,7 @@ export function commandExists(cmd) {
   }
 }
 
-export function writeMcpConfig(cwd, relativePath, { channel = false } = {}) {
+export function writeMcpConfig(cwd, relativePath, { channel = false, toolId = null } = {}) {
   const filePath = join(cwd, relativePath);
 
   let existing = {};
@@ -37,10 +37,14 @@ export function writeMcpConfig(cwd, relativePath, { channel = false } = {}) {
   }
 
   if (!existing.mcpServers) existing.mcpServers = {};
-  existing.mcpServers.chinwag = { command: 'npx', args: ['chinwag-mcp'] };
+  existing.mcpServers.chinwag = toolId
+    ? { command: 'npx', args: ['chinwag-mcp', '--tool', toolId] }
+    : { command: 'npx', args: ['chinwag-mcp'] };
 
   if (channel) {
-    existing.mcpServers['chinwag-channel'] = { command: 'npx', args: ['chinwag-channel'] };
+    existing.mcpServers['chinwag-channel'] = toolId
+      ? { command: 'npx', args: ['chinwag-channel', '--tool', toolId] }
+      : { command: 'npx', args: ['chinwag-channel'] };
   }
 
   try {
@@ -107,7 +111,7 @@ export function configureTool(cwd, toolId) {
   const tool = MCP_TOOLS.find(t => t.id === toolId);
   if (!tool) return { error: `Unknown MCP tool: ${toolId}` };
 
-  const mcpResult = writeMcpConfig(cwd, tool.mcpConfig, { channel: tool.channel });
+  const mcpResult = writeMcpConfig(cwd, tool.mcpConfig, { channel: tool.channel, toolId: tool.id });
   if (mcpResult.error) return mcpResult;
 
   if (tool.hooks) {

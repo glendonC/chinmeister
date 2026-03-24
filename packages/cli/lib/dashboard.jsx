@@ -83,13 +83,14 @@ export function Dashboard({ config, navigate }) {
   const activeMembers = context.members?.filter(m => m.status === 'active') || [];
   const offlineMembers = context.members?.filter(m => m.status === 'offline') || [];
 
-  // Detect conflicts
+  // Detect conflicts — include tool name when available
   const fileOwners = new Map();
   for (const m of activeMembers) {
     if (!m.activity?.files) continue;
+    const label = m.tool && m.tool !== 'unknown' ? `${m.handle} (${m.tool})` : m.handle;
     for (const f of m.activity.files) {
       if (!fileOwners.has(f)) fileOwners.set(f, []);
-      fileOwners.get(f).push(m.handle);
+      fileOwners.get(f).push(label);
     }
   }
   const conflicts = [...fileOwners.entries()].filter(([, owners]) => owners.length > 1);
@@ -106,14 +107,14 @@ export function Dashboard({ config, navigate }) {
         )}
 
         {activeMembers.map((m) => {
-          const tool = m.framework ? ` (${m.framework})` : '';
+          const tool = m.tool && m.tool !== 'unknown' ? ` (${m.tool})` : m.framework ? ` (${m.framework})` : '';
           const duration = m.session_minutes != null
             ? m.session_minutes >= 60
               ? ` ${Math.floor(m.session_minutes / 60)}h${Math.round(m.session_minutes % 60)}m`
               : ` ${Math.round(m.session_minutes)}m`
             : '';
           return (
-            <Box key={m.handle}>
+            <Box key={m.agent_id || m.handle}>
               <Text color="green">  {m.handle}</Text>
               <Text dimColor>{tool}{duration}</Text>
               {m.activity ? (
@@ -130,7 +131,7 @@ export function Dashboard({ config, navigate }) {
         })}
 
         {offlineMembers.map((m) => (
-          <Box key={m.handle}>
+          <Box key={m.agent_id || m.handle}>
             <Text dimColor>  {m.handle} (offline)</Text>
           </Box>
         ))}

@@ -8,10 +8,16 @@
 // stdout text becomes user-visible in the Claude Code session.
 // Exit code 0 = allow, non-zero = block (for PreToolUse).
 
+import { createHash } from 'crypto';
 import { basename } from 'path';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile } from './lib/team.js';
+
+function generateAgentId(token) {
+  const hash = createHash('sha256').update(token).digest('hex').slice(0, 12);
+  return `claude-code:${hash}`; // Hooks are always Claude Code
+}
 
 const subcommand = process.argv[2];
 
@@ -26,7 +32,8 @@ async function main() {
   const teamId = findTeamFile();
   if (!teamId) process.exit(0);
 
-  const client = api(config);
+  const agentId = generateAgentId(config.token);
+  const client = api(config, { agentId });
 
   switch (subcommand) {
     case 'check-conflict':
@@ -56,9 +63,10 @@ async function checkConflict(client, teamId, input) {
     });
 
     if (result.conflicts && result.conflicts.length > 0) {
-      const lines = result.conflicts.map(c =>
-        `${c.owner_handle} is editing ${c.files.join(', ')} — "${c.summary}"`
-      );
+      const lines = result.conflicts.map(c => {
+        const who = c.tool && c.tool !== 'unknown' ? `${c.owner_handle} (${c.tool})` : c.owner_handle;
+        return `${who} is editing ${c.files.join(', ')} — "${c.summary}"`;
+      });
       console.log(`CONFLICT: ${lines.join('; ')}`);
       process.exit(1);
     }
@@ -98,10 +106,11 @@ async function sessionStart(client, teamId) {
     if (ctx.members && ctx.members.length > 0) {
       console.log('=== chinwag team context ===');
       for (const m of ctx.members) {
+        const toolInfo = m.tool && m.tool !== 'unknown' ? `, ${m.tool}` : '';
         const activity = m.activity
           ? `working on ${m.activity.files.join(', ')} — "${m.activity.summary}"`
           : 'idle';
-        console.log(`  ${m.handle} (${m.status}): ${activity}`);
+        console.log(`  ${m.handle} (${m.status}${toolInfo}): ${activity}`);
       }
 
       if (ctx.memories && ctx.memories.length > 0) {

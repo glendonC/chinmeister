@@ -70,7 +70,7 @@ export async function runInit() {
 
   for (const tool of detected) {
     if (!configsWritten.has(tool.mcpConfig)) {
-      writeMcpConfig(cwd, tool.mcpConfig, { channel: tool.channel });
+      writeMcpConfig(cwd, tool.mcpConfig, { channel: tool.channel, toolId: tool.id });
       configsWritten.add(tool.mcpConfig);
     }
 
