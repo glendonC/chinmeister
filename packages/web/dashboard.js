@@ -11,6 +11,10 @@ let teams = [];
 let activeTeamId = null;
 let allProjectsMode = false;
 let pollTimer = null;
+let prevContextJson = '';
+let prevSummaryJson = '';
+let consecutiveFailures = 0;
+const MEMORY_CATEGORIES = new Set(['gotcha', 'config', 'decision', 'pattern', 'reference']);
 
 const $ = (s) => document.querySelector(s);
 const connectScreen = $('#connect-screen');
@@ -34,21 +38,39 @@ const lastUpdate = $('#last-update');
 
 // ── API ──
 
-async function api(method, path) {
-  const res = await fetch(`${API_URL}${path}`, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`,
-    },
-  });
-  const data = await res.json();
-  if (!res.ok) {
-    const err = new Error(data.error || `HTTP ${res.status}`);
-    err.status = res.status;
+async function api(method, path, body = null) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const opts = {
+      method,
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+      signal: controller.signal,
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(`${API_URL}${path}`, opts);
+    let data;
+    try { data = await res.json(); } catch {
+      const parseErr = new Error(`HTTP ${res.status} (server error)`);
+      parseErr.status = res.status;
+      throw parseErr;
+    }
+    if (!res.ok) {
+      const err = new Error(data.error || `HTTP ${res.status}`);
+      err.status = res.status;
+      throw err;
+    }
+    return data;
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      const timeoutErr = new Error('Request timed out');
+      timeoutErr.status = 408;
+      throw timeoutErr;
+    }
     throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-  return data;
 }
 
 // ── Auth ──
@@ -66,12 +88,14 @@ async function authenticate(t) {
   token = t;
   try {
     user = await api('GET', '/me');
-    localStorage.setItem(TOKEN_KEY, token);
+    sessionStorage.setItem(TOKEN_KEY, token);
     return true;
-  } catch {
+  } catch (err) {
+    console.error('[chinwag] Auth failed:', err);
     token = null;
-    localStorage.removeItem(TOKEN_KEY);
-    return false;
+    sessionStorage.removeItem(TOKEN_KEY);
+    // Re-throw so caller can show the actual error
+    throw err;
   }
 }
 
@@ -80,22 +104,35 @@ function logout() {
   user = null;
   teams = [];
   activeTeamId = null;
-  localStorage.removeItem(TOKEN_KEY);
-  if (pollTimer) clearInterval(pollTimer);
+  prevContextJson = '';
+  prevSummaryJson = '';
+  consecutiveFailures = 0;
+  sessionStorage.removeItem(TOKEN_KEY);
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   appScreen.hidden = true;
   connectScreen.hidden = false;
   connectError.hidden = true;
   tokenInput.value = '';
+  agentsList.innerHTML = '';
+  memoryList.innerHTML = '';
+  sessionsList.innerHTML = '';
+  conflictsList.innerHTML = '';
+  allProjectsView.innerHTML = '';
+  userBadge.textContent = '';
 }
 
 // ── Boot ──
 
 async function boot() {
-  const hashToken = readTokenFromHash();
-  if (hashToken && await authenticate(hashToken)) return startApp();
+  try {
+    const hashToken = readTokenFromHash();
+    if (hashToken) { await authenticate(hashToken); return startApp(); }
 
-  const stored = localStorage.getItem(TOKEN_KEY);
-  if (stored && await authenticate(stored)) return startApp();
+    const stored = sessionStorage.getItem(TOKEN_KEY);
+    if (stored) { await authenticate(stored); return startApp(); }
+  } catch (err) {
+    console.error('[chinwag] Boot auth failed:', err);
+  }
 
   connectScreen.hidden = false;
 }
@@ -108,16 +145,31 @@ logoutBtn.addEventListener('click', logout);
 
 async function tryConnect() {
   const t = tokenInput.value.trim();
-  if (!t) return;
+  if (!t) {
+    connectError.textContent = 'Paste your token from ~/.chinwag/config.json';
+    connectError.hidden = false;
+    return;
+  }
+
+  tokenSubmit.textContent = 'Connecting...';
   tokenSubmit.disabled = true;
   connectError.hidden = true;
 
-  if (await authenticate(t)) {
-    startApp();
-  } else {
-    connectError.textContent = 'Invalid token.';
+  try {
+    await authenticate(t);
+    console.log('[chinwag] Auth OK, user:', user.handle);
+    await startApp();
+    console.log('[chinwag] App started');
+  } catch (err) {
+    console.error('[chinwag] tryConnect error:', err);
+    const msg = err.message || 'Connection failed';
+    connectError.textContent = msg.includes('Failed to fetch')
+      ? 'Cannot reach server. Check your connection.'
+      : `Failed: ${msg}`;
     connectError.hidden = false;
   }
+
+  tokenSubmit.textContent = 'Connect';
   tokenSubmit.disabled = false;
 }
 
@@ -127,7 +179,12 @@ async function startApp() {
   connectScreen.hidden = true;
   appScreen.hidden = false;
   userBadge.textContent = user.handle;
-  await loadTeams();
+  try {
+    await loadTeams();
+  } catch (err) {
+    console.error('[chinwag] loadTeams error:', err);
+    statusText.textContent = err.message || 'Failed to load projects';
+  }
   startPolling();
 }
 
@@ -182,6 +239,8 @@ async function loadTeams() {
 }
 
 projectSelect.addEventListener('change', () => {
+  prevContextJson = '';
+  prevSummaryJson = '';
   const val = projectSelect.value;
   if (val === '__all__') {
     allProjectsMode = true;
@@ -208,17 +267,34 @@ function showAllProjectsView() {
 
 function startPolling() {
   if (pollTimer) clearInterval(pollTimer);
+  const delay = consecutiveFailures >= 3 ? 30000 : POLL_MS;
   pollTimer = setInterval(() => {
     if (allProjectsMode) fetchDashboardSummary();
     else fetchContext();
-  }, POLL_MS);
+  }, delay);
 }
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+  } else if (token && user) {
+    if (allProjectsMode) fetchDashboardSummary();
+    else fetchContext();
+    startPolling();
+  }
+});
 
 // ── All Projects ──
 
 async function fetchDashboardSummary() {
+  const wasAllMode = allProjectsMode;
   try {
     const data = await api('GET', '/me/dashboard');
+    if (!allProjectsMode || allProjectsMode !== wasAllMode) return;
+    const sumJson = JSON.stringify(data);
+    if (sumJson === prevSummaryJson) return;
+    prevSummaryJson = sumJson;
+
     const summaries = data.teams || [];
     renderAllProjects(summaries);
 
@@ -228,8 +304,11 @@ async function fetchDashboardSummary() {
     if (conflicts) status += ` · ${conflicts} conflict${conflicts !== 1 ? 's' : ''}`;
     statusText.textContent = status;
     lastUpdate.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (consecutiveFailures > 0) { consecutiveFailures = 0; startPolling(); }
   } catch (err) {
     if (err.status === 401) { logout(); return; }
+    consecutiveFailures++;
+    if (consecutiveFailures >= 3) startPolling();
     statusText.textContent = err.message;
   }
 }
@@ -291,8 +370,15 @@ function renderAllProjects(summaries) {
 
 async function fetchContext() {
   if (!activeTeamId) return;
+  const teamId = activeTeamId;
   try {
-    const ctx = await api('GET', `/teams/${activeTeamId}/context`);
+    try { await api('POST', `/teams/${teamId}/join`, {}); } catch {}
+    const ctx = await api('GET', `/teams/${teamId}/context`);
+    if (activeTeamId !== teamId) return;
+    const ctxJson = JSON.stringify(ctx);
+    if (ctxJson === prevContextJson) return;
+    prevContextJson = ctxJson;
+
     renderAgents(ctx.members || []);
     renderConflicts(ctx.members || []);
     renderMemory(ctx.memories || []);
@@ -300,8 +386,11 @@ async function fetchContext() {
     const active = (ctx.members || []).filter(m => m.status === 'active').length;
     statusText.textContent = active ? `${active} active` : 'No active agents';
     lastUpdate.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    if (consecutiveFailures > 0) { consecutiveFailures = 0; startPolling(); }
   } catch (err) {
     if (err.status === 401) { logout(); return; }
+    consecutiveFailures++;
+    if (consecutiveFailures >= 3) startPolling();
     statusText.textContent = err.message;
   }
 }
@@ -362,7 +451,7 @@ function renderMemory(memories) {
   }
   memoryList.innerHTML = memories.map(m =>
     `<div class="memory-row">
-      <span class="memory-tag memory-tag--${esc(m.category)}">${esc(m.category)}</span>
+      <span class="memory-tag memory-tag--${MEMORY_CATEGORIES.has(m.category) ? m.category : 'reference'}">${esc(m.category)}</span>
       <span class="memory-text">${esc(m.text)}</span>
     </div>`
   ).join('');
@@ -389,14 +478,14 @@ function renderSessions(sessions) {
 // ── Helpers ──
 
 function formatDuration(m) {
-  if (m == null) return '';
+  if (m == null || typeof m !== 'number' || m <= 0) return '<1m';
   if (m >= 60) return `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
   return `${Math.round(m)}m`;
 }
 
 function esc(s) {
   if (!s) return '';
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
 boot();

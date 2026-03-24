@@ -67,6 +67,9 @@ export class TeamDO extends DurableObject {
       );
     `);
 
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
+
     this.#schemaReady = true;
   }
 
@@ -77,15 +80,30 @@ export class TeamDO extends DurableObject {
     if (now - this.#lastCleanup < 60_000) return;
     this.#lastCleanup = now;
 
-    this.sql.exec(`DELETE FROM activities WHERE agent_id IN (
-      SELECT agent_id FROM members
-      WHERE last_heartbeat < datetime('now', '-${HEARTBEAT_STALE_SECONDS} seconds')
-    )`);
     this.sql.exec(
-      `DELETE FROM members WHERE last_heartbeat < datetime('now', '-${HEARTBEAT_STALE_SECONDS} seconds')`
+      `DELETE FROM activities WHERE agent_id IN (
+        SELECT agent_id FROM members
+        WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
+      )`,
+      HEARTBEAT_STALE_SECONDS
     );
     this.sql.exec(
-      `DELETE FROM sessions WHERE started_at < datetime('now', '-${SESSION_RETENTION_DAYS} days')`
+      `DELETE FROM members WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_STALE_SECONDS
+    );
+    this.sql.exec(
+      `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
+      SESSION_RETENTION_DAYS
+    );
+    // Auto-close orphaned sessions (agent stopped heartbeating)
+    this.sql.exec(
+      `UPDATE sessions SET ended_at = datetime('now')
+       WHERE ended_at IS NULL
+       AND agent_id NOT IN (
+         SELECT agent_id FROM members
+         WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+       )`,
+      HEARTBEAT_STALE_SECONDS
     );
   }
 
@@ -154,8 +172,8 @@ export class TeamDO extends DurableObject {
        FROM members m
        LEFT JOIN activities a ON a.agent_id = m.agent_id
        WHERE m.agent_id != ?
-         AND m.last_heartbeat > datetime('now', '-${HEARTBEAT_ACTIVE_SECONDS} seconds')`,
-      agentId
+         AND m.last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      agentId, HEARTBEAT_ACTIVE_SECONDS
     ).toArray();
 
     const myFiles = new Set(files.map(normalizePath));
@@ -230,24 +248,29 @@ export class TeamDO extends DurableObject {
       `SELECT m.owner_handle, a.files, a.summary, a.updated_at,
               s.framework, s.started_at as session_started,
               ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
-              CASE WHEN m.last_heartbeat > datetime('now', '-${HEARTBEAT_ACTIVE_SECONDS} seconds')
+              ROUND((julianday('now') - julianday(a.updated_at)) * 1440) as minutes_since_update,
+              CASE WHEN m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
                 THEN 'active' ELSE 'offline' END as status
        FROM members m
        LEFT JOIN activities a ON a.agent_id = m.agent_id
-       LEFT JOIN sessions s ON s.agent_id = m.agent_id AND s.ended_at IS NULL`
+       LEFT JOIN sessions s ON s.agent_id = m.agent_id AND s.ended_at IS NULL`,
+      HEARTBEAT_ACTIVE_SECONDS
     ).toArray();
 
     const memories = this.sql.exec(
-      `SELECT text, category, source_handle, created_at,
-              MAX(${MEMORY_MIN_SCORE},
-                1.0 - (MAX(0, julianday('now') - julianday(created_at) - ${MEMORY_DECAY_GRACE_DAYS}) * ${MEMORY_DECAY_RATE})
+      `SELECT id, text, category, source_handle, created_at,
+              MAX(?,
+                1.0 - (MAX(0, julianday('now') - julianday(created_at) - ?) * ?)
               ) as relevance
        FROM memories
-       WHERE MAX(${MEMORY_MIN_SCORE},
-               1.0 - (MAX(0, julianday('now') - julianday(created_at) - ${MEMORY_DECAY_GRACE_DAYS}) * ${MEMORY_DECAY_RATE})
-             ) > ${MEMORY_MIN_SCORE}
+       WHERE MAX(?,
+               1.0 - (MAX(0, julianday('now') - julianday(created_at) - ?) * ?)
+             ) > ?
        ORDER BY relevance DESC, created_at DESC
-       LIMIT 10`
+       LIMIT 10`,
+      MEMORY_MIN_SCORE, MEMORY_DECAY_GRACE_DAYS, MEMORY_DECAY_RATE,
+      MEMORY_MIN_SCORE, MEMORY_DECAY_GRACE_DAYS, MEMORY_DECAY_RATE,
+      MEMORY_MIN_SCORE
     ).toArray();
 
     const recentSessions = this.sql.exec(`
@@ -260,18 +283,36 @@ export class TeamDO extends DurableObject {
       LIMIT 20
     `).toArray();
 
+    const memberList = members.map(m => ({
+      handle: m.owner_handle,
+      status: m.status,
+      framework: m.framework || null,
+      session_minutes: m.session_minutes || null,
+      minutes_since_update: m.minutes_since_update ?? null,
+      activity: m.files ? {
+        files: JSON.parse(m.files),
+        summary: m.summary,
+        updated_at: m.updated_at,
+      } : null,
+    }));
+
+    // Server-side conflict detection — single source of truth
+    const conflicts = [];
+    const fileOwners = new Map();
+    for (const m of memberList) {
+      if (m.status !== 'active' || !m.activity?.files) continue;
+      for (const f of m.activity.files) {
+        if (!fileOwners.has(f)) fileOwners.set(f, []);
+        fileOwners.get(f).push(m.handle);
+      }
+    }
+    for (const [file, owners] of fileOwners) {
+      if (owners.length > 1) conflicts.push({ file, agents: owners });
+    }
+
     return {
-      members: members.map(m => ({
-        handle: m.owner_handle,
-        status: m.status,
-        framework: m.framework || null,
-        session_minutes: m.session_minutes || null,
-        activity: m.files ? {
-          files: JSON.parse(m.files),
-          summary: m.summary,
-          updated_at: m.updated_at,
-        } : null,
-      })),
+      members: memberList,
+      conflicts,
       memories,
       recentSessions: recentSessions.map(s => ({
         ...s,
@@ -390,11 +431,12 @@ export class TeamDO extends DurableObject {
       id, text, category, agentId, handle || 'unknown'
     );
 
-    this.sql.exec(`
-      DELETE FROM memories WHERE id NOT IN (
-        SELECT id FROM memories ORDER BY relevance_score DESC, created_at DESC LIMIT ${MEMORY_MAX_COUNT}
-      )
-    `);
+    this.sql.exec(
+      `DELETE FROM memories WHERE id NOT IN (
+        SELECT id FROM memories ORDER BY relevance_score DESC, created_at DESC LIMIT ?
+      )`,
+      MEMORY_MAX_COUNT
+    );
 
     // Record in active session
     this.sql.exec(
@@ -415,7 +457,8 @@ export class TeamDO extends DurableObject {
 
     const active = this.sql.exec(
       `SELECT COUNT(*) as c FROM members
-       WHERE last_heartbeat > datetime('now', '-${HEARTBEAT_ACTIVE_SECONDS} seconds')`
+       WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_ACTIVE_SECONDS
     ).toArray();
 
     const total = this.sql.exec('SELECT COUNT(*) as c FROM members').toArray();
@@ -424,7 +467,8 @@ export class TeamDO extends DurableObject {
     const activities = this.sql.exec(
       `SELECT a.files FROM activities a
        JOIN members m ON m.agent_id = a.agent_id
-       WHERE m.last_heartbeat > datetime('now', '-${HEARTBEAT_ACTIVE_SECONDS} seconds')`
+       WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_ACTIVE_SECONDS
     ).toArray();
 
     const fileCounts = new Map();

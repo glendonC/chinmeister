@@ -46,7 +46,7 @@ async function main() {
   // Check for .chinwag team file
   let currentTeamId = findTeamFile();
   let heartbeatInterval = null;
-  let sessionId = null;
+  let currentSessionId = null;
   const team = teamHandlers(client);
 
   const projectName = basename(process.cwd());
@@ -59,8 +59,8 @@ async function main() {
       // Start observability session
       try {
         const session = await team.startSession(currentTeamId, profile.framework);
-        sessionId = session.session_id;
-        console.error(`[chinwag] Session started: ${sessionId}`);
+        currentSessionId = session.session_id;
+        console.error(`[chinwag] Session started: ${currentSessionId}`);
       } catch (err) {
         console.error('[chinwag] Failed to start session:', err.message);
       }
@@ -88,8 +88,8 @@ async function main() {
     const forceExit = setTimeout(() => process.exit(0), 3000);
     forceExit.unref();
     const done = () => { clearTimeout(forceExit); process.exit(0); };
-    if (sessionId && currentTeamId) {
-      team.endSession(currentTeamId, sessionId).catch(() => {}).finally(done);
+    if (currentSessionId && currentTeamId) {
+      team.endSession(currentTeamId, currentSessionId).catch(() => {}).finally(done);
     } else {
       done();
     }
@@ -124,15 +124,17 @@ Call chinwag_get_team_context at the start of your session to see shared project
 // Cached to avoid doubling backend calls on every tool invocation.
 let cachedContext = null;
 let cachedContextAt = 0;
+let cachedContextTeam = null;
 const CONTEXT_TTL_MS = 30_000;
 
 async function teamPreamble(team, teamId) {
   if (!teamId) return '';
   const now = Date.now();
-  if (!cachedContext || now - cachedContextAt >= CONTEXT_TTL_MS) {
+  if (!cachedContext || cachedContextTeam !== teamId || now - cachedContextAt >= CONTEXT_TTL_MS) {
     try {
       cachedContext = await team.getTeamContext(teamId);
       cachedContextAt = now;
+      cachedContextTeam = teamId;
     } catch {
       return '';
     }
@@ -152,15 +154,31 @@ function registerTools(server, client, team, getTeamId) {
     {
       description: 'Join a chinwag team for multi-agent coordination. Agents on the same team can see what each other is working on and detect file conflicts before they happen.',
       inputSchema: z.object({
-        team_id: z.string().max(30).describe('Team ID (e.g., t_a7x9k2m). Found in the .chinwag file at the repo root.'),
+        team_id: z.string().max(30).regex(/^[a-zA-Z0-9_-]+$/).describe('Team ID (e.g., t_a7x9k2m). Found in the .chinwag file at the repo root.'),
       }),
     },
     async ({ team_id }) => {
       try {
         await team.joinTeam(team_id);
-        return { content: [{ type: 'text', text: `Joined team ${team_id}` }] };
+        currentTeamId = team_id;
+        cachedContext = null;
+
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
+        heartbeatInterval = setInterval(async () => {
+          try { await team.heartbeat(currentTeamId); } catch (err) {
+            console.error('[chinwag] Heartbeat failed:', err.message);
+          }
+        }, 30_000);
+
+        try {
+          const session = await team.startSession(currentTeamId, profile.framework);
+          if (session?.session_id) currentSessionId = session.session_id;
+        } catch {}
+
+        return { content: [{ type: 'text', text: `Joined team ${team_id}. Session started.` }] };
       } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
+        const msg = err.status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : err.message;
+        return { content: [{ type: 'text', text: msg }], isError: true };
       }
     }
   );
@@ -170,7 +188,7 @@ function registerTools(server, client, team, getTeamId) {
     {
       description: 'Report what files you are currently working on. Call this when you start editing files so teammates can see your activity and avoid conflicts.',
       inputSchema: z.object({
-        files: z.array(z.string().max(500)).describe('File paths being modified'),
+        files: z.array(z.string().max(500)).max(100).describe('File paths being modified'),
         summary: z.string().max(280).describe('Brief description, e.g. "Refactoring auth middleware"'),
       }),
     },
@@ -184,7 +202,8 @@ function registerTools(server, client, team, getTeamId) {
         const preamble = await teamPreamble(team, teamId);
         return { content: [{ type: 'text', text: `${preamble}Activity updated: ${summary}` }] };
       } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
+        const msg = err.status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : err.message;
+        return { content: [{ type: 'text', text: msg }], isError: true };
       }
     }
   );
@@ -194,7 +213,7 @@ function registerTools(server, client, team, getTeamId) {
     {
       description: 'Check if any teammate agents are working on the same files you plan to edit. Call this BEFORE starting edits on shared code to avoid merge conflicts.',
       inputSchema: z.object({
-        files: z.array(z.string().max(500)).describe('File paths you plan to modify'),
+        files: z.array(z.string().max(500)).max(100).describe('File paths you plan to modify'),
       }),
     },
     async ({ files }) => {
@@ -213,7 +232,8 @@ function registerTools(server, client, team, getTeamId) {
         );
         return { content: [{ type: 'text', text: `${preamble}${lines.join('\n')}` }] };
       } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
+        const msg = err.status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : err.message;
+        return { content: [{ type: 'text', text: msg }], isError: true };
       }
     }
   );
@@ -255,7 +275,8 @@ function registerTools(server, client, team, getTeamId) {
 
         return { content: [{ type: 'text', text: lines.join('\n') }] };
       } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
+        const msg = err.status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : err.message;
+        return { content: [{ type: 'text', text: msg }], isError: true };
       }
     }
   );
@@ -278,7 +299,8 @@ function registerTools(server, client, team, getTeamId) {
         const preamble = await teamPreamble(team, teamId);
         return { content: [{ type: 'text', text: `${preamble}Memory saved [${category}]: ${text}` }] };
       } catch (err) {
-        return { content: [{ type: 'text', text: err.message }], isError: true };
+        const msg = err.status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : err.message;
+        return { content: [{ type: 'text', text: msg }], isError: true };
       }
     }
   );

@@ -10,8 +10,14 @@ export function configExists() {
 }
 
 export function loadConfig() {
-  const raw = readFileSync(CONFIG_FILE, 'utf-8');
-  return JSON.parse(raw);
+  if (!existsSync(CONFIG_FILE)) return null;
+  try {
+    const raw = readFileSync(CONFIG_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    console.error('Warning: ~/.chinwag/config.json is corrupted. Run `chinwag init` to reset.');
+    return null;
+  }
 }
 
 export function saveConfig(config) {

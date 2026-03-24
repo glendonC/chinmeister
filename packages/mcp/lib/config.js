@@ -11,6 +11,11 @@ export function configExists() {
 
 export function loadConfig() {
   if (!existsSync(CONFIG_FILE)) return null;
-  const raw = readFileSync(CONFIG_FILE, 'utf-8');
-  return JSON.parse(raw);
+  try {
+    const raw = readFileSync(CONFIG_FILE, 'utf-8');
+    return JSON.parse(raw);
+  } catch {
+    console.error('[chinwag] Warning: config file corrupted, ignoring');
+    return null;
+  }
 }

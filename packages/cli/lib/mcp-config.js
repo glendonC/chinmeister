@@ -16,7 +16,8 @@ export function detectTools(cwd) {
 
 export function commandExists(cmd) {
   try {
-    execFileSync('which', [cmd], { stdio: 'ignore' });
+    const bin = process.platform === 'win32' ? 'where' : 'which';
+    execFileSync(bin, [cmd], { stdio: 'ignore' });
     return true;
   } catch {
     return false;

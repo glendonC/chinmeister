@@ -36,11 +36,13 @@ export function Chat({ config, user, navigate }) {
 
     ws.addEventListener('open', () => {
       setConnected(true);
-      retryRef.current = 0; // Reset backoff on successful connection
+      retryRef.current = 0;
+      intentionalCloseRef.current = false;
     });
 
     ws.addEventListener('message', (event) => {
-      const data = JSON.parse(event.data);
+      let data;
+      try { data = JSON.parse(event.data); } catch { return; }
 
       if (data.type === 'history') {
         setMessages(data.messages || []);
@@ -111,10 +113,10 @@ export function Chat({ config, user, navigate }) {
     clearTimeout(retryTimerRef.current);
     if (wsRef.current) {
       wsRef.current.close();
+      wsRef.current = null;
     }
     setMessages([]);
     setConnected(false);
-    intentionalCloseRef.current = false;
     connect(true);
   }
 

@@ -25,11 +25,17 @@ export function api(config) {
 
       // Retry on server errors (up to 2 retries with backoff)
       if (res.status >= 500 && attempt < 2) {
+        clearTimeout(timeout);
         await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)));
         return request(method, path, body, attempt + 1);
       }
 
-      const data = await res.json();
+      let data;
+      try { data = await res.json(); } catch {
+        const parseErr = new Error(`HTTP ${res.status} (non-JSON response)`);
+        parseErr.status = res.status;
+        throw parseErr;
+      }
 
       if (!res.ok) {
         const err = new Error(data.error || `${method} ${path} → HTTP ${res.status}`);
@@ -40,12 +46,17 @@ export function api(config) {
       return data;
     } catch (err) {
       if (err.name === 'AbortError') {
+        if (attempt < 1) {
+          await new Promise(r => setTimeout(r, 1000));
+          return request(method, path, body, attempt + 1);
+        }
         const timeoutErr = new Error(`Request timed out: ${method} ${path}`);
         timeoutErr.status = 408;
         throw timeoutErr;
       }
-      // Retry on network errors
-      if (err.code === 'ECONNREFUSED' && attempt < 2) {
+      // Retry on transient network errors
+      const RETRYABLE = ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'ETIMEDOUT'];
+      if (RETRYABLE.includes(err.code) && attempt < 2) {
         await new Promise(r => setTimeout(r, 200 * Math.pow(2, attempt)));
         return request(method, path, body, attempt + 1);
       }

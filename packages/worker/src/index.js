@@ -16,8 +16,10 @@ export default {
     const method = request.method;
     const path = url.pathname;
 
+    const ALLOWED_ORIGINS = ['https://chinwag.dev', 'https://www.chinwag.dev', 'http://localhost:8788', 'http://localhost:3000', 'http://127.0.0.1:8788'];
+    const origin = request.headers.get('Origin') || '';
     const corsHeaders = {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : 'https://chinwag.dev',
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
     };
@@ -172,7 +174,9 @@ async function handleInit(request, env) {
 }
 
 async function handleUpdateHandle(request, user, env) {
-  const { handle } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { handle } = body;
   if (!handle || typeof handle !== 'string') {
     return json({ error: 'Handle is required' }, 400);
   }
@@ -189,7 +193,9 @@ async function handleUpdateHandle(request, user, env) {
 }
 
 async function handleUpdateColor(request, user, env) {
-  const { color } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { color } = body;
   if (!color || typeof color !== 'string') {
     return json({ error: 'Color is required' }, 400);
   }
@@ -204,7 +210,9 @@ async function handleUpdateColor(request, user, env) {
 }
 
 async function handleSetStatus(request, user, env) {
-  const { status } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { status } = body;
   if (!status || typeof status !== 'string') {
     return json({ error: 'Status is required' }, 400);
   }
@@ -250,11 +258,7 @@ async function handleChatUpgrade(request, user, env) {
     const secsLeft = Math.ceil((CHAT_COOLDOWN_MS - accountAge) / 1000);
     return json(
       { error: `New accounts must wait before joining chat. ${secsLeft}s remaining.` },
-      429,
-      {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      }
+      429
     );
   }
 
@@ -269,6 +273,7 @@ async function handleChatUpgrade(request, user, env) {
   roomUrl.pathname = '/ws';
   roomUrl.searchParams.set('handle', user.handle);
   roomUrl.searchParams.set('color', user.color);
+  roomUrl.searchParams.set('roomId', roomId);
 
   return roomStub.fetch(new Request(roomUrl.toString(), {
     headers: { ...Object.fromEntries(request.headers), 'X-Chinwag-Verified': '1' },
@@ -278,7 +283,8 @@ async function handleChatUpgrade(request, user, env) {
 // --- Agent & Team handlers ---
 
 async function handleUpdateAgentProfile(request, user, env) {
-  const body = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
 
   // Validate profile shape — only accept known fields, arrays of strings
   const profile = {
@@ -318,13 +324,18 @@ async function handleDashboardSummary(user, env) {
     return json({ teams: [] });
   }
 
-  // Fan out to all TeamDOs in parallel — getSummary is lightweight (scalar counts only)
+  // Fan out to TeamDOs in parallel — cap at 25 to limit subrequest count
+  const capped = teams.slice(0, 25);
   const results = await Promise.allSettled(
-    teams.map(async (t) => {
+    capped.map(async (t) => {
       const team = getTeam(env, t.team_id);
       try {
         const summary = await team.getSummary(user.id);
-        if (summary.error) return null;
+        if (summary.error) {
+          // Reconcile: remove stale user_teams entries for teams where membership was lost
+          try { await db.removeUserTeam(user.id, t.team_id); } catch {}
+          return null;
+        }
         return {
           team_id: t.team_id,
           team_name: t.team_name,
@@ -411,20 +422,25 @@ async function handleTeamContext(user, env, teamId) {
 }
 
 async function handleTeamActivity(request, user, env, teamId) {
-  const { files, summary } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { files, summary } = body;
   if (!Array.isArray(files) || files.length === 0) return json({ error: 'files must be a non-empty array' }, 400);
+  if (files.length > 50) return json({ error: 'too many files (max 50)' }, 400);
   if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
   if (typeof summary !== 'string') return json({ error: 'summary must be a string' }, 400);
   if (summary.length > 280) return json({ error: 'summary must be 280 characters or less' }, 400);
 
   const team = getTeam(env, teamId);
   const result = await team.updateActivity(user.id, files, summary);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
 
 async function handleTeamConflicts(request, user, env, teamId) {
-  const { files } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { files } = body;
   if (!Array.isArray(files) || files.length === 0) return json({ error: 'files must be a non-empty array' }, 400);
   if (files.length > 50) return json({ error: 'too many files (max 50)' }, 400);
   if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
@@ -438,12 +454,14 @@ async function handleTeamConflicts(request, user, env, teamId) {
 async function handleTeamHeartbeat(user, env, teamId) {
   const team = getTeam(env, teamId);
   const result = await team.heartbeat(user.id);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
 
 async function handleTeamFile(request, user, env, teamId) {
-  const { file } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
     return json({ error: 'file must be a non-empty string' }, 400);
   }
@@ -453,12 +471,14 @@ async function handleTeamFile(request, user, env, teamId) {
 
   const team = getTeam(env, teamId);
   const result = await team.reportFile(user.id, file);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
 
 async function handleTeamSaveMemory(request, user, env, teamId) {
-  const { text, category } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { text, category } = body;
   if (typeof text !== 'string' || !text.trim()) {
     return json({ error: 'text is required' }, 400);
   }
@@ -479,43 +499,55 @@ async function handleTeamSaveMemory(request, user, env, teamId) {
 
   const team = getTeam(env, teamId);
   const result = await team.saveMemory(user.id, text.trim(), category, user.handle);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
 
   await db.consumeRateLimit(`memory:${user.id}`);
   return json(result, 201);
 }
 
 async function handleTeamStartSession(request, user, env, teamId) {
-  const body = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
   const framework = typeof body.framework === 'string' ? body.framework.slice(0, 50) : 'unknown';
+
+  const db = getDB(env);
+  const limit = await db.checkRateLimit(`session:${user.id}`, 50);
+  if (!limit.allowed) return json({ error: 'Session limit reached. Try again tomorrow.' }, 429);
 
   const team = getTeam(env, teamId);
   const result = await team.startSession(user.id, user.handle, framework);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+
+  await db.consumeRateLimit(`session:${user.id}`);
   return json(result, 201);
 }
 
 async function handleTeamEndSession(request, user, env, teamId) {
-  const { session_id } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { session_id } = body;
   if (typeof session_id !== 'string') {
     return json({ error: 'session_id is required' }, 400);
   }
 
   const team = getTeam(env, teamId);
   const result = await team.endSession(user.id, session_id);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
 
 async function handleTeamSessionEdit(request, user, env, teamId) {
-  const { file } = await request.json();
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
     return json({ error: 'file is required' }, 400);
   }
+  if (file.length > 500) return json({ error: 'file path too long' }, 400);
 
   const team = getTeam(env, teamId);
   const result = await team.recordEdit(user.id, file);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
 
@@ -613,4 +645,16 @@ function json(data, status = 200, extraHeaders = {}) {
     status,
     headers: { 'Content-Type': 'application/json', ...extraHeaders },
   });
+}
+
+const MAX_BODY_SIZE = 50_000;
+
+async function parseBody(request) {
+  const len = parseInt(request.headers.get('content-length') || '0');
+  if (len > MAX_BODY_SIZE) return { _parseError: 'Request body too large' };
+  try { return await request.json(); } catch { return { _parseError: 'Invalid JSON body' }; }
+}
+
+function teamErrorStatus(msg) {
+  return msg?.includes('Not a member') ? 403 : 400;
 }

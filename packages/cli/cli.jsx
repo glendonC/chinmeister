@@ -27,7 +27,7 @@ class ErrorBoundary extends Component {
     if (this.state.error) {
       return React.createElement(Box, { flexDirection: 'column', padding: 1 },
         React.createElement(Text, { color: 'red' }, `Something went wrong: ${this.state.error.message}`),
-        React.createElement(Text, { dimColor: true }, 'Press any key to go back, or [q] to quit.')
+        React.createElement(Text, { dimColor: true }, 'Press Ctrl+C to exit and restart.')
       );
     }
     return this.props.children;
@@ -59,6 +59,13 @@ if (process.argv[2] === 'add') {
 if (process.argv[2] === 'team') {
   const { handleTeamCommand } = await import('./lib/team.js');
   await handleTeamCommand(process.argv[3], process.argv[4]);
+  process.exit(0);
+}
+
+// Handle dashboard command — open web dashboard in browser
+if (process.argv[2] === 'dashboard') {
+  const { openDashboard } = await import('./lib/open-dashboard.js');
+  await openDashboard();
   process.exit(0);
 }
 

@@ -11,7 +11,7 @@
 
   --ink: #181411;
   --muted: rgba(24, 20, 17, 0.58);
-  --soft: rgba(24, 20, 17, 0.30);
+  --soft: rgba(24, 20, 17, 0.55);
   --faint: rgba(24, 20, 17, 0.10);
   --ghost: rgba(24, 20, 17, 0.05);
 
@@ -39,6 +39,9 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* hidden attribute must win over display declarations */
+[hidden] { display: none !important; }
 
 html, body {
   height: 100%;
@@ -226,8 +229,12 @@ details[open] > .connect-alt-toggle::before {
 
 .connect-error {
   color: var(--danger);
-  font-size: 12px;
-  margin-top: 10px;
+  font-size: 13px;
+  font-weight: 400;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--danger-bg);
+  border-radius: var(--radius-xs);
 }
 
 /* ═══ App Shell ═══ */
@@ -733,6 +740,14 @@ details[open] > .connect-alt-toggle::before {
 }
 
 /* ═══ Accessibility ═══ */
+
+.project-card:focus-visible,
+.topbar-action:focus-visible,
+.project-select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
 
 .sr-only {
   position: absolute;

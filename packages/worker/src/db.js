@@ -83,6 +83,9 @@ export class DatabaseDO extends DurableObject {
     // Migrate: add team_name column for tables created before this column existed
     try { this.sql.exec('ALTER TABLE user_teams ADD COLUMN team_name TEXT'); } catch {}
 
+    // Prune stale rate limit rows
+    this.sql.exec("DELETE FROM account_limits WHERE date < date('now', '-7 days')");
+
     this.#schemaReady = true;
   }
 
@@ -94,7 +97,7 @@ export class DatabaseDO extends DurableObject {
     const id = crypto.randomUUID();
     const token = crypto.randomUUID();
     const color = COLORS[Math.floor(Math.random() * COLORS.length)];
-    const now = new Date().toISOString();
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
 
     let handle = this.#generateHandle();
     let attempts = 0;
@@ -121,7 +124,14 @@ export class DatabaseDO extends DurableObject {
     const rows = this.sql.exec(
       'SELECT id, handle, color, status, created_at, last_active FROM users WHERE id = ?', id
     ).toArray();
-    return rows[0] || null;
+    const user = rows[0] || null;
+    if (user) {
+      const lastActive = new Date(user.last_active).getTime();
+      if (Date.now() - lastActive > 300_000) {
+        this.sql.exec("UPDATE users SET last_active = datetime('now') WHERE id = ?", id);
+      }
+    }
+    return user;
   }
 
   async getUserByHandle(handle) {
@@ -231,7 +241,7 @@ export class DatabaseDO extends DurableObject {
   async getUserTeams(userId) {
     this.#ensureSchema();
     return this.sql.exec(
-      'SELECT team_id, team_name, joined_at FROM user_teams WHERE user_id = ? ORDER BY joined_at DESC',
+      'SELECT team_id, team_name, joined_at FROM user_teams WHERE user_id = ? ORDER BY joined_at DESC LIMIT 50',
       userId
     ).toArray();
   }

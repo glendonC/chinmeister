@@ -116,7 +116,9 @@ async function sessionStart(client, teamId) {
       const insights = [];
       for (const m of ctx.members) {
         if (m.activity?.updated_at) {
-          const mins = (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
+          const mins = m.minutes_since_update != null
+            ? m.minutes_since_update
+            : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
           if (mins > 15) {
             insights.push(`${m.handle} has been on ${m.activity.files[0]} for ${Math.round(mins)} min — may need help`);
           }
@@ -144,17 +146,28 @@ async function sessionStart(client, teamId) {
 function readStdin() {
   return new Promise((resolve) => {
     let data = '';
-    const timeout = setTimeout(() => resolve({}), 3000);
+    let resolved = false;
+    const done = (value) => { if (!resolved) { resolved = true; resolve(value); } };
+
+    const timeout = setTimeout(() => {
+      process.stdin.removeAllListeners('data');
+      process.stdin.removeAllListeners('end');
+      done({});
+    }, 3000);
 
     process.stdin.setEncoding('utf-8');
-    process.stdin.on('data', chunk => { data += chunk; });
+    process.stdin.on('data', chunk => {
+      data += chunk;
+      if (data.length > 1_000_000) {
+        clearTimeout(timeout);
+        process.stdin.removeAllListeners('data');
+        process.stdin.removeAllListeners('end');
+        done({});
+      }
+    });
     process.stdin.on('end', () => {
       clearTimeout(timeout);
-      try {
-        resolve(JSON.parse(data));
-      } catch {
-        resolve({});
-      }
+      try { done(JSON.parse(data)); } catch { done({}); }
     });
   });
 }

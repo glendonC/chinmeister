@@ -9,7 +9,6 @@
 // CRITICAL: Never console.log — stdio transport. Use console.error for logging.
 
 import { readFileSync } from 'fs';
-import { basename } from 'path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, configExists } from './lib/config.js';
@@ -56,12 +55,7 @@ async function main() {
   await server.connect(transport);
   console.error('[chinwag-channel] Channel server running');
 
-  // Join team to keep heartbeat active
-  try {
-    await client.post(`/teams/${teamId}/join`, { name: basename(process.cwd()) });
-  } catch (err) {
-    console.error(`[chinwag-channel] Failed to join team: ${err.message}`);
-  }
+  // MCP server handles joining. Channel only reads context + heartbeats.
 
   // State diffing + stuckness tracking
   let prevState = null;
@@ -137,13 +131,13 @@ function diffState(prev, curr, stucknessAlerted) {
 
   // File activity changes
   for (const handle of currHandles) {
-    if (!prevHandles.has(handle)) continue; // Already reported as "joined"
-    const prev = prevByHandle.get(handle);
-    const curr = currByHandle.get(handle);
-    if (!prev || !curr) continue;
+    if (!prevHandles.has(handle)) continue;
+    const prevMember = prevByHandle.get(handle);
+    const currMember = currByHandle.get(handle);
+    if (!prevMember || !currMember) continue;
 
-    const prevFiles = new Set(prev.activity?.files || []);
-    const currFiles = curr.activity?.files || [];
+    const prevFiles = new Set(prevMember.activity?.files || []);
+    const currFiles = currMember.activity?.files || [];
     const newFiles = currFiles.filter(f => !prevFiles.has(f));
 
     if (newFiles.length > 0) {
@@ -151,34 +145,48 @@ function diffState(prev, curr, stucknessAlerted) {
     }
   }
 
-  // Conflict detection
-  const fileOwners = new Map();
+  // Conflict detection — only emit NEW conflicts (not in prev state)
+  const prevConflictFiles = new Set();
+  const prevFileOwners = new Map();
+  for (const m of (prev.members || [])) {
+    if (m.status !== 'active' || !m.activity?.files) continue;
+    for (const f of m.activity.files) {
+      if (!prevFileOwners.has(f)) prevFileOwners.set(f, []);
+      prevFileOwners.get(f).push(m.handle);
+    }
+  }
+  for (const [file, owners] of prevFileOwners) {
+    if (owners.length > 1) prevConflictFiles.add(file);
+  }
+
+  const currFileOwners = new Map();
   for (const m of (curr.members || [])) {
     if (m.status !== 'active' || !m.activity?.files) continue;
     for (const f of m.activity.files) {
-      if (!fileOwners.has(f)) fileOwners.set(f, []);
-      fileOwners.get(f).push(m.handle);
+      if (!currFileOwners.has(f)) currFileOwners.set(f, []);
+      currFileOwners.get(f).push(m.handle);
     }
   }
-  for (const [file, owners] of fileOwners) {
-    if (owners.length > 1) {
+  for (const [file, owners] of currFileOwners) {
+    if (owners.length > 1 && !prevConflictFiles.has(file)) {
       events.push(`CONFLICT: ${owners.join(' and ')} are both editing ${file}`);
     }
   }
 
-  // Stuckness detection: agent on same task too long
+  // Stuckness detection — prefer server-computed minutes_since_update
   for (const handle of currHandles) {
     const m = currByHandle.get(handle);
     if (!m?.activity?.updated_at || m.status !== 'active') continue;
 
     const alertedAt = stucknessAlerted.get(handle);
     if (alertedAt && alertedAt !== m.activity.updated_at) {
-      // Activity changed since alert — clear it
       stucknessAlerted.delete(handle);
     }
 
     if (!stucknessAlerted.has(handle)) {
-      const minutesOnSameActivity = (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
+      const minutesOnSameActivity = m.minutes_since_update != null
+        ? m.minutes_since_update
+        : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
       if (minutesOnSameActivity > STUCKNESS_THRESHOLD_MINUTES) {
         events.push(`Agent ${handle} has been on the same task for ${Math.round(minutesOnSameActivity)} min — may be stuck`);
         stucknessAlerted.set(handle, m.activity.updated_at);
@@ -193,10 +201,11 @@ function diffState(prev, curr, stucknessAlerted) {
     }
   }
 
-  // New memories
-  const prevMemTexts = new Set((prev.memories || []).map(m => m.text));
+  // New memories — compare by id (preferred) or text
+  const prevMemKeys = new Set((prev.memories || []).map(m => m.id || m.text));
   for (const mem of (curr.memories || [])) {
-    if (!prevMemTexts.has(mem.text)) {
+    const key = mem.id || mem.text;
+    if (!prevMemKeys.has(key)) {
       events.push(`New team knowledge: [${mem.category}] ${mem.text}`);
     }
   }
