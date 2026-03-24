@@ -174,26 +174,6 @@ if (revealNodes.length) {
   revealNodes.forEach((node) => revealObserver.observe(node));
 }
 
-const footerCopy = document.getElementById('footer-copy');
-if (footerCopy) {
-  footerCopy.addEventListener('click', async () => {
-    try {
-      await navigator.clipboard.writeText('npx chinwag init');
-    } catch {
-      const textarea = document.createElement('textarea');
-      textarea.value = 'npx chinwag init';
-      textarea.style.cssText = 'position:fixed;opacity:0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textarea);
-    }
-
-    footerCopy.classList.add('ok');
-    window.setTimeout(() => footerCopy.classList.remove('ok'), 1500);
-  });
-}
-
 headerUi.initialize();
 heroAtmosphere.initialize();
 scrollJourney.initialize();
