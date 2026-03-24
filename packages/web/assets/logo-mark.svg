@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true">
+  <title>chinwag</title>
+  <!-- Gaps between slabs let the chip show through (readable layers, one ink). Vertically centered in frame. -->
+  <style>
+    .chip { fill: #faf8f5; }
+    .g { fill: #181411; }
+    @media (prefers-color-scheme: dark) {
+      .chip { fill: #252220; }
+      .g { fill: #f4f2ee; }
+    }
+  </style>
+  <rect class="chip" width="32" height="32" rx="9" />
+  <path class="g" d="M4 24 20 24 24 20 8 20z"/>
+  <path class="g" d="M6 18 22 18 26 14 10 14z"/>
+  <path class="g" d="M8 12 24 12 28 8 12 8z"/>
+</svg>

@@ -316,25 +316,19 @@ Workers return structured JSON errors: `{error: "message"}` with appropriate HTT
 
 ## Current State and Future Direction
 
-Phases 1 and 2 are shipped. The core experience works: `npx chinwag init`, and your agents share a brain.
+The core experience is shipped: `npx chinwag init`, and your agents share a brain.
 
-**Shipped — Connect + Remember + Coordinate:** `chinwag init` detects tools, writes configs. Agents share project memory across tools and sessions. Conflict prevention enforced on Claude Code (hooks), advisory on others (MCP). Session tracking, stuckness detection, real-time push via channels.
+**Shipped:** Connect, Remember, Coordinate, Discover. `chinwag init` detects tools, writes configs. Agents share project memory across tools and sessions. Conflict prevention enforced on Claude Code (hooks), advisory on others (MCP). Session tracking, stuckness detection, real-time push via channels. Tool catalog API, TUI discover screen, `chinwag add`.
 
-**Shipped — Observe (foundation):** Session lifecycle, activity history, stuckness detection, agent dashboard with 5s polling. The data layer is there.
+**Next — Web dashboard:** Authenticated web dashboard that works standalone and embeds inside IDEs (Cursor's Open Browser, VS Code Simple Browser). Per-project and cross-project agent visibility.
 
-**Building — Discover:** Tool catalog (~30 tools), TUI discover screen, `chinwag add`. Browse what's out there, see what you're missing, add with one action.
-
-**Next — Multi-project + web dashboard:** User-level view across all projects. Web app evolves from landing page to a real workflow dashboard. See all agents across all projects, discover and add tools visually, manage teams.
-
-**Next — Polish + ship:** Testing, CI/CD, npm publishing, cross-tool validation. Make the core bulletproof.
-
-**Cost tracking deferred:** MCP does not currently expose token consumption or model identity from agent sessions. Revisit when the protocol or individual tools add usage reporting.
+**Next — Polish + ship:** Testing, CI/CD, npm publishing, cross-tool validation.
 
 **What this means for contributors:**
 
 - The MCP server is the primary interface — build features that make agents smarter and more coordinated
-- Surfaces (TUI, web) are windows into the same backend — keep them in sync
-- The web dashboard is becoming a first-class surface, not just a landing page
+- Three surfaces, one backend — TUI, web dashboard, and MCP all hit the same API
+- The web dashboard is designed to work both in a browser and embedded in IDE panels
 - All DO communication uses RPC, not fetch. New features should follow this pattern
 - Maintain the MCP server ↔ Worker API boundary (agents use the same API as the CLI and web)
 

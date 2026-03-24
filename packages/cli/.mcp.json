@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "chinwag": {
+      "command": "npx",
+      "args": [
+        "chinwag-mcp"
+      ]
+    },
+    "chinwag-channel": {
+      "command": "npx",
+      "args": [
+        "chinwag-channel"
+      ]
+    }
+  }
+}

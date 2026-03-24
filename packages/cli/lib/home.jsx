@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import { readFileSync } from 'fs';
 import { api } from './api.js';
 import { getInkColor } from './colors.js';
+import { openDashboard } from './open-dashboard.js';
 
 // Read version from package.json at import time (bundled by esbuild)
 let PKG_VERSION = '0.1.0';
@@ -42,6 +43,7 @@ export function Home({ user, config, navigate }) {
   useInput((ch) => {
     if (loading) return;
     if (ch === 'd') { navigate('dashboard'); return; }
+    if (ch === 'w') { openDashboard(); return; }
     if (ch === 'f') { navigate('discover'); return; }
     if (ch === 'c') { navigate('chat'); return; }
     if (ch === 's') { navigate('customize'); return; }
@@ -105,6 +107,7 @@ export function Home({ user, config, navigate }) {
       <Box paddingX={1} paddingTop={1}>
         <Text>
           <Text color="cyan" bold>[d]</Text><Text dimColor> dashboard  </Text>
+          <Text color="cyan" bold>[w]</Text><Text dimColor> web  </Text>
           <Text color="cyan" bold>[f]</Text><Text dimColor> discover  </Text>
           <Text color="cyan" bold>[c]</Text><Text dimColor> chat  </Text>
           <Text color="cyan" bold>[s]</Text><Text dimColor> settings  </Text>
