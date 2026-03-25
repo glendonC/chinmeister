@@ -196,8 +196,8 @@ The monorepo has four packages:
 
 ### `packages/web/`: Web Dashboard + Landing Page
 
-- **Technology:** Static HTML/CSS/JS on Cloudflare Pages (evolving toward authenticated dashboard)
-- **Entry point:** `index.html`
+- **Technology:** React 19, Zustand, CSS Modules, Vite on Cloudflare Pages
+- **Entry point:** `dashboard.html` (SPA), `index.html` (static landing page)
 - **Responsibility:** Marketing and install instructions; authenticated dashboard at `/dashboard` for cross-project workflow, tool discovery, and team visibility. The web surface gives solo devs a unified view across all projects and gives team leads visibility into their team's AI workflow.
 - **Key constraint:** Same API as TUI and MCP server. No special backend endpoints. The web dashboard is a client of the same public API.
 
@@ -355,7 +355,9 @@ Workers return structured JSON errors: `{error: "message"}` with appropriate HTT
 | Claude Code Channels | Real-time push to agents | Server-initiated context injection into running sessions |
 | Ink (React for terminals) | CLI dashboard rendering | Component model for terminal UIs, hooks, familiar React patterns |
 | esbuild | CLI bundling | Fast, zero-config ESM bundling |
-| Cloudflare Pages | Landing page hosting | Static hosting with global CDN, same platform as backend |
+| React 19 + Zustand | Web dashboard | Same framework as CLI (Ink), monorepo coherence, best AI code generation, zustand for lightweight state |
+| CSS Modules | Dashboard styling | Scoped styles from Vite built-in support, works with existing CSS custom property design system |
+| Cloudflare Pages | Landing page + dashboard hosting | Static hosting with global CDN, same platform as backend |
 
 ## Current state and future direction
 

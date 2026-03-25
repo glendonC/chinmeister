@@ -1,0 +1,20 @@
+.messageRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+
+.messageFrom {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--info);
+  flex-shrink: 0;
+}
+
+.messageText {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 300;
+}

@@ -1,0 +1,26 @@
+.lockRow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 7px 0;
+  font-size: 13px;
+}
+
+.lockFile {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.lockOwner {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 300;
+}
+
+.lockTime {
+  font-size: 12px;
+  color: var(--soft);
+  margin-left: auto;
+}

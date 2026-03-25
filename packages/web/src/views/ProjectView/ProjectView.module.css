@@ -1,0 +1,20 @@
+.projectDetail {
+  animation: fadeSlideIn 0.4s var(--motion) both;
+}
+
+.statsRow {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 28px 32px 0;
+}
+
+@media (max-width: 768px) {
+  .statsRow {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    padding: 20px 20px 0;
+  }
+}

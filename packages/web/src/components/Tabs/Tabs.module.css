@@ -1,0 +1,80 @@
+.tabsContainer {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 20px 32px 40px;
+}
+
+.tabsNav {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--faint);
+  margin-bottom: 0;
+}
+
+.tabBtn {
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-family: var(--sans);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--soft);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tabBtn:hover {
+  color: var(--muted);
+}
+
+.tabBtn.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+.tabBadge {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  background: var(--accent-bg);
+  color: var(--accent);
+  padding: 1px 7px;
+  border-radius: 4px;
+}
+
+.tabsPanel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-top: none;
+  border-radius: 0 0 var(--radius) var(--radius);
+  padding: 20px 24px;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 2px 10px var(--glass-shadow);
+  min-height: 120px;
+}
+
+@media (max-width: 768px) {
+  .tabsContainer {
+    padding: 16px 20px 32px;
+  }
+
+  .tabsNav {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tabBtn {
+    white-space: nowrap;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  .tabsPanel {
+    padding: 16px 18px;
+  }
+}

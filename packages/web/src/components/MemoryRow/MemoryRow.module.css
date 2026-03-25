@@ -1,0 +1,53 @@
+.memoryRow {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--ghost);
+  line-height: 1.55;
+}
+
+.memoryRow:last-child {
+  border-bottom: none;
+}
+
+.tag {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  margin-right: 8px;
+  vertical-align: 1px;
+}
+
+.tag_gotcha {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.tag_config {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.tag_decision {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tag_pattern {
+  background: var(--purple-bg);
+  color: var(--purple);
+}
+
+.tag_reference {
+  background: var(--ghost);
+  color: var(--muted);
+}
+
+.memoryText {
+  font-size: 13.5px;
+  font-weight: 400;
+  color: var(--ink);
+}

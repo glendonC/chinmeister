@@ -1,0 +1,242 @@
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: rgba(255, 255, 255, 0.88);
+  border-right: 1px solid var(--faint);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  overflow-y: auto;
+}
+
+/* Logo */
+.sidebarLogo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 20px 24px;
+}
+
+.sidebarLogoText {
+  font-family: var(--display);
+  font-size: 1.1rem;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* Navigation */
+.sidebarNav {
+  padding: 0 12px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  transition: all 0.15s ease;
+  user-select: none;
+  border-left: 2px solid transparent;
+  margin-left: -2px;
+}
+
+.navItem:hover {
+  color: var(--ink);
+  background: var(--ghost);
+}
+
+.navItemActive {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+
+.navItemActive:hover {
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.navIcon {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+.navItemActive .navIcon {
+  opacity: 1;
+}
+
+.navLabel {
+  line-height: 1;
+}
+
+/* Sections */
+.sidebarSection {
+  padding: 20px 12px 0;
+}
+
+.sectionHeader {
+  display: block;
+  padding: 0 12px 8px;
+  font-size: var(--text-2xs);
+  font-weight: 600;
+  color: var(--soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sectionEmpty {
+  padding: 8px 12px;
+  font-size: var(--text-xs);
+  color: var(--soft);
+  font-style: italic;
+}
+
+/* Project items */
+.projectList {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.navItemProject {
+  gap: 8px;
+}
+
+.projectDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--faint);
+  flex-shrink: 0;
+}
+
+.navItemActive .projectDot {
+  background: var(--accent);
+}
+
+.projectName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+/* Spacer */
+.sidebarSpacer {
+  flex: 1;
+}
+
+/* Bottom */
+.sidebarBottom {
+  padding: 16px 20px 20px;
+  border-top: 1px solid var(--faint);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.userDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #3dab63;
+  flex-shrink: 0;
+}
+
+.userHandle {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--ink);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.signoutBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  padding: 0;
+  text-align: left;
+  transition: color 0.15s ease;
+}
+
+.signoutBtn:hover {
+  color: var(--danger);
+}
+
+/* Mobile toggle */
+.mobileToggle {
+  display: none;
+  position: fixed;
+  top: 14px;
+  left: 14px;
+  z-index: 30;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-xs);
+  padding: 8px;
+  cursor: pointer;
+  color: var(--ink);
+  box-shadow: 0 2px 8px var(--glass-shadow);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.mobileToggle:hover {
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.mobileBackdrop {
+  display: none;
+}
+
+/* Mobile responsive */
+@media (max-width: 767px) {
+  .mobileToggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .mobileBackdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.2);
+    z-index: 18;
+    backdrop-filter: blur(2px);
+    -webkit-backdrop-filter: blur(2px);
+  }
+
+  .sidebar {
+    position: fixed;
+    left: 0;
+    top: 0;
+    transform: translateX(-100%);
+    transition: transform 0.3s var(--motion);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  }
+
+  .sidebarOpen {
+    transform: translateX(0);
+  }
+}

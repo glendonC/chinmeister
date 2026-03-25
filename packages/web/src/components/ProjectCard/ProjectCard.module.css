@@ -1,0 +1,140 @@
+.card {
+  position: relative;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  box-shadow: 0 2px 8px var(--glass-shadow);
+  padding: 24px;
+  cursor: pointer;
+  outline: none;
+  overflow: hidden;
+  transition:
+    transform 0.25s var(--motion),
+    box-shadow 0.25s var(--motion);
+  animation: cardFadeIn 0.5s var(--motion) both;
+}
+
+/* Staggered fade-in per card position */
+.card:nth-child(1) { animation-delay: 0ms; }
+.card:nth-child(2) { animation-delay: 60ms; }
+.card:nth-child(3) { animation-delay: 120ms; }
+.card:nth-child(4) { animation-delay: 180ms; }
+.card:nth-child(5) { animation-delay: 240ms; }
+.card:nth-child(6) { animation-delay: 300ms; }
+.card:nth-child(n+7) { animation-delay: 350ms; }
+
+/* Gradient top accent bar */
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.card:nth-child(4n+1)::before {
+  background: linear-gradient(90deg, #f0c4a0, #e8c8a0);
+}
+
+.card:nth-child(4n+2)::before {
+  background: linear-gradient(90deg, #c4b0e8, #d4a8d0);
+}
+
+.card:nth-child(4n+3)::before {
+  background: linear-gradient(90deg, #a8d4b8, #8cc8a0);
+}
+
+.card:nth-child(4n+4)::before {
+  background: linear-gradient(90deg, #e8c87c, #d4b060);
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 8px 24px var(--glass-shadow),
+    0 2px 8px var(--glass-shadow);
+}
+
+.card:focus-visible {
+  box-shadow:
+    0 0 0 2px var(--accent),
+    0 2px 8px var(--glass-shadow);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.cardName {
+  font-family: var(--sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cardIndicators {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.indicatorActive {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--accent);
+}
+
+.indicatorDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.indicatorConflict {
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--danger);
+  background: var(--danger-bg);
+  padding: 2px 8px;
+  border-radius: 20px;
+}
+
+.cardStats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+@keyframes cardFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

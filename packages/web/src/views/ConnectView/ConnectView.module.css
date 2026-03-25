@@ -1,0 +1,244 @@
+.connectScreen {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.connectCard {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: fadeSlideIn 0.5s var(--motion) both;
+}
+
+/* Logo */
+.connectLogo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 36px;
+}
+
+.connectBrand {
+  font-family: var(--display);
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+/* Title */
+.connectTitle {
+  font-family: var(--display);
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: var(--ink);
+  line-height: 1.2;
+  margin-bottom: 10px;
+  letter-spacing: -0.02em;
+}
+
+.connectSubtitle {
+  font-size: var(--text-md);
+  color: var(--muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+/* Command box */
+.commandBox {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 12px var(--glass-shadow);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: left;
+}
+
+.commandBox:hover {
+  box-shadow: 0 4px 20px var(--glass-shadow);
+  border-color: var(--faint);
+}
+
+.commandText {
+  font-family: var(--mono);
+  font-size: var(--text-md);
+  color: var(--ink);
+  background: none;
+  padding: 0;
+  font-weight: 500;
+}
+
+.commandPrompt {
+  color: var(--soft);
+  margin-right: 2px;
+}
+
+.commandCopy {
+  color: var(--soft);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s ease;
+}
+
+.commandBox:hover .commandCopy {
+  color: var(--muted);
+}
+
+/* Note */
+.connectNote {
+  font-size: var(--text-xs);
+  color: var(--soft);
+  margin-top: 14px;
+  line-height: 1.5;
+  max-width: 340px;
+}
+
+.connectNote code {
+  font-size: 0.9em;
+}
+
+/* Token section */
+.tokenSection {
+  width: 100%;
+  margin-top: 32px;
+}
+
+.tokenToggle {
+  font-size: var(--text-xs);
+  color: var(--soft);
+  cursor: pointer;
+  transition: color 0.15s ease;
+  list-style: none;
+  user-select: none;
+}
+
+.tokenToggle::-webkit-details-marker {
+  display: none;
+}
+
+.tokenToggle::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid var(--soft);
+  border-bottom: 1.5px solid var(--soft);
+  transform: rotate(-45deg);
+  margin-right: 6px;
+  transition: transform 0.2s ease;
+  vertical-align: middle;
+}
+
+.tokenSection[open] .tokenToggle::before {
+  transform: rotate(45deg);
+}
+
+.tokenToggle:hover {
+  color: var(--muted);
+}
+
+.tokenForm {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+  animation: fadeSlideIn 0.3s var(--motion) both;
+}
+
+.tokenInput {
+  width: 100%;
+  padding: 10px 14px;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  background: var(--glass);
+  border: 1px solid var(--faint);
+  border-radius: var(--radius-xs);
+  outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.tokenInput:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.tokenInput::placeholder {
+  color: var(--soft);
+  font-family: var(--sans);
+}
+
+.tokenSubmit {
+  width: 100%;
+  padding: 10px 20px;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: #fff;
+  background: var(--ink);
+  border: none;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.tokenSubmit:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.tokenSubmit:active:not(:disabled) {
+  transform: scale(0.98);
+}
+
+.tokenSubmit:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.tokenError {
+  font-size: var(--text-xs);
+  color: var(--danger);
+  text-align: left;
+  line-height: 1.4;
+}
+
+/* Privacy */
+.connectPrivacy {
+  margin-top: 36px;
+  font-size: var(--text-xs);
+  color: var(--soft);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+
+.connectPrivacy:hover {
+  color: var(--muted);
+}
+
+/* Mobile */
+@media (max-width: 767px) {
+  .connectTitle {
+    font-size: 1.5rem;
+  }
+
+  .connectCard {
+    max-width: 360px;
+  }
+}
