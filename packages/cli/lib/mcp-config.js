@@ -80,18 +80,21 @@ export function writeHooksConfig(cwd) {
   if (!existing.hooks) existing.hooks = {};
 
   const chinwagHooks = {
-    PreToolUse: [{ matcher: 'Edit|Write', command: 'chinwag-hook check-conflict' }],
-    PostToolUse: [{ matcher: 'Edit|Write', command: 'chinwag-hook report-edit' }],
-    SessionStart: [{ command: 'chinwag-hook session-start' }],
+    PreToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook check-conflict' }] }],
+    PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook report-edit' }] }],
+    SessionStart: [{ hooks: [{ type: 'command', command: 'chinwag-hook session-start' }] }],
   };
 
   for (const [event, entries] of Object.entries(chinwagHooks)) {
     if (!existing.hooks[event]) existing.hooks[event] = [];
 
     for (const entry of entries) {
-      const hasChinwag = existing.hooks[event].some(h =>
-        h.command === entry.command || h.command?.startsWith('chinwag-hook ')
-      );
+      const cmd = entry.hooks[0]?.command;
+      const hasChinwag = existing.hooks[event].some(h => {
+        // Check both new format (hooks array) and old format (command directly)
+        const existingCmd = h.hooks?.[0]?.command || h.command;
+        return existingCmd === cmd || existingCmd?.startsWith('chinwag-hook ');
+      });
       if (!hasChinwag) {
         existing.hooks[event].push(entry);
       }
