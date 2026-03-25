@@ -13,7 +13,9 @@
     "test": "npm run test --workspaces --if-present",
     "test:worker": "npm run test --workspace=packages/worker",
     "test:mcp": "npm run test --workspace=packages/mcp",
-    "test:cli": "npm run test --workspace=packages/cli"
+    "test:cli": "npm run test --workspace=packages/cli",
+    "dev:web": "node packages/web/dev-server.mjs",
+    "dev:web:py": "python3 packages/web/serve.py"
   },
   "devDependencies": {
     "vitest": "^3.2.4"
