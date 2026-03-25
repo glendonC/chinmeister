@@ -75,6 +75,57 @@ export function teamHandlers(client) {
       return client.post(`/teams/${teamId}/memory`, { text, category });
     },
 
+    async searchMemories(teamId, query, category, limit) {
+      validateTeam(teamId);
+      const params = new URLSearchParams();
+      if (query) params.set('q', query);
+      if (category) params.set('category', category);
+      if (limit) params.set('limit', String(limit));
+      const qs = params.toString();
+      return client.get(`/teams/${teamId}/memory${qs ? '?' + qs : ''}`);
+    },
+
+    async updateMemory(teamId, id, text, category) {
+      validateTeam(teamId);
+      const body = { id };
+      if (text !== undefined) body.text = text;
+      if (category !== undefined) body.category = category;
+      return client.put(`/teams/${teamId}/memory`, body);
+    },
+
+    async deleteMemory(teamId, id) {
+      validateTeam(teamId);
+      return client.del(`/teams/${teamId}/memory`, { id });
+    },
+
+    async claimFiles(teamId, files) {
+      validateTeam(teamId);
+      return client.post(`/teams/${teamId}/locks`, { files });
+    },
+
+    async releaseFiles(teamId, files) {
+      validateTeam(teamId);
+      return client.del(`/teams/${teamId}/locks`, files ? { files } : {});
+    },
+
+    async getLockedFiles(teamId) {
+      validateTeam(teamId);
+      return client.get(`/teams/${teamId}/locks`);
+    },
+
+    async sendMessage(teamId, text, target) {
+      validateTeam(teamId);
+      const body = { text };
+      if (target) body.target = target;
+      return client.post(`/teams/${teamId}/messages`, body);
+    },
+
+    async getMessages(teamId, since) {
+      validateTeam(teamId);
+      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
+      return client.get(`/teams/${teamId}/messages${qs}`);
+    },
+
     async startSession(teamId, framework) {
       validateTeam(teamId);
       return client.post(`/teams/${teamId}/sessions`, { framework });

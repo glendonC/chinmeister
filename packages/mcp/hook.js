@@ -62,12 +62,24 @@ async function checkConflict(client, teamId, input) {
       files: [filePath],
     });
 
+    const issues = [];
+
     if (result.conflicts && result.conflicts.length > 0) {
-      const lines = result.conflicts.map(c => {
+      for (const c of result.conflicts) {
         const who = c.tool && c.tool !== 'unknown' ? `${c.owner_handle} (${c.tool})` : c.owner_handle;
-        return `${who} is editing ${c.files.join(', ')} — "${c.summary}"`;
-      });
-      console.log(`CONFLICT: ${lines.join('; ')}`);
+        issues.push(`${who} is editing ${c.files.join(', ')} — "${c.summary}"`);
+      }
+    }
+
+    if (result.locked && result.locked.length > 0) {
+      for (const l of result.locked) {
+        const who = l.tool && l.tool !== 'unknown' ? `${l.held_by} (${l.tool})` : l.held_by;
+        issues.push(`${l.file} is locked by ${who}`);
+      }
+    }
+
+    if (issues.length > 0) {
+      console.log(`CONFLICT: ${issues.join('; ')}`);
       process.exit(1);
     }
 
@@ -111,6 +123,15 @@ async function sessionStart(client, teamId) {
           ? `working on ${m.activity.files.join(', ')} — "${m.activity.summary}"`
           : 'idle';
         console.log(`  ${m.handle} (${m.status}${toolInfo}): ${activity}`);
+      }
+
+      if (ctx.locks && ctx.locks.length > 0) {
+        console.log('');
+        console.log('Locked files:');
+        for (const l of ctx.locks) {
+          const who = l.tool && l.tool !== 'unknown' ? `${l.owner_handle} (${l.tool})` : l.owner_handle;
+          console.log(`  ${l.file_path} — ${who} (${Math.round(l.minutes_held)}m)`);
+        }
       }
 
       if (ctx.memories && ctx.memories.length > 0) {

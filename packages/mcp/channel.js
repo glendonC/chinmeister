@@ -236,6 +236,32 @@ function diffState(prev, curr, stucknessAlerted) {
     }
   }
 
+  // Lock changes — new locks and released locks
+  const prevLocks = new Map((prev.locks || []).map(l => [l.file_path, l]));
+  const currLocks = new Map((curr.locks || []).map(l => [l.file_path, l]));
+  for (const [file, lock] of currLocks) {
+    if (!prevLocks.has(file)) {
+      const who = lock.tool && lock.tool !== 'unknown' ? `${lock.owner_handle} (${lock.tool})` : lock.owner_handle;
+      events.push(`${who} locked ${file}`);
+    }
+  }
+  for (const [file, lock] of prevLocks) {
+    if (!currLocks.has(file)) {
+      const who = lock.tool && lock.tool !== 'unknown' ? `${lock.owner_handle} (${lock.tool})` : lock.owner_handle;
+      events.push(`${who} released lock on ${file}`);
+    }
+  }
+
+  // New messages
+  const prevMsgIds = new Set((prev.messages || []).map(m => m.created_at + m.from_handle));
+  for (const msg of (curr.messages || [])) {
+    const key = msg.created_at + msg.from_handle;
+    if (!prevMsgIds.has(key)) {
+      const from = msg.from_tool && msg.from_tool !== 'unknown' ? `${msg.from_handle} (${msg.from_tool})` : msg.from_handle;
+      events.push(`Message from ${from}: ${msg.text}`);
+    }
+  }
+
   return events;
 }
 

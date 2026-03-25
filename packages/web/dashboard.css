@@ -518,6 +518,58 @@ details[open] > .connect-alt-toggle::before {
   font-weight: 300;
 }
 
+/* ── Lock rows ── */
+
+.lock-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 12.5px;
+}
+
+.lock-file {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--warn);
+  font-weight: 500;
+}
+
+.lock-owner {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 300;
+}
+
+.lock-time {
+  font-size: 12px;
+  color: var(--soft);
+  margin-left: auto;
+}
+
+/* ── Message rows ── */
+
+.message-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  font-size: 12.5px;
+}
+
+.message-from {
+  font-weight: 500;
+  font-size: 13px;
+  color: var(--info);
+  flex-shrink: 0;
+}
+
+.message-text {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 300;
+}
+
 /* ── Memory rows ── */
 
 .memory-row {

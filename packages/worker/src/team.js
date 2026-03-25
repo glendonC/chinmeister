@@ -68,8 +68,39 @@ export class TeamDO extends DurableObject {
       );
     `);
 
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS locks (
+        file_path TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        owner_handle TEXT NOT NULL,
+        tool TEXT DEFAULT 'unknown',
+        claimed_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        from_agent TEXT NOT NULL,
+        from_handle TEXT NOT NULL,
+        from_tool TEXT DEFAULT 'unknown',
+        target_agent TEXT,
+        text TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS telemetry (
+        metric TEXT PRIMARY KEY,
+        count INTEGER DEFAULT 0,
+        last_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)');
 
     // Additive migration: add tool column if missing (safe for existing DOs)
     try { this.sql.exec("ALTER TABLE members ADD COLUMN tool TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
@@ -99,6 +130,16 @@ export class TeamDO extends DurableObject {
       `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
       SESSION_RETENTION_DAYS
     );
+    // Expire messages older than 1 hour
+    this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')");
+    // Auto-release locks for stale agents
+    this.sql.exec(
+      `DELETE FROM locks WHERE agent_id NOT IN (
+        SELECT agent_id FROM members
+        WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+      )`,
+      HEARTBEAT_STALE_SECONDS
+    );
     // Auto-close orphaned sessions (agent stopped heartbeating)
     this.sql.exec(
       `UPDATE sessions SET ended_at = datetime('now')
@@ -108,6 +149,14 @@ export class TeamDO extends DurableObject {
          WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
        )`,
       HEARTBEAT_STALE_SECONDS
+    );
+  }
+
+  #recordMetric(metric) {
+    this.sql.exec(
+      `INSERT INTO telemetry (metric, count, last_at) VALUES (?, 1, datetime('now'))
+       ON CONFLICT(metric) DO UPDATE SET count = count + 1, last_at = datetime('now')`,
+      metric
     );
   }
 
@@ -134,17 +183,21 @@ export class TeamDO extends DurableObject {
          last_heartbeat = datetime('now')`,
       agentId, ownerId, ownerHandle, tool
     );
+    this.#recordMetric('joins');
+    this.#recordMetric(`tool:${tool}`);
     return { ok: true };
   }
 
   async leave(agentId) {
     this.#ensureSchema();
+    this.sql.exec('DELETE FROM locks WHERE agent_id = ?', agentId);
     this.sql.exec('DELETE FROM activities WHERE agent_id = ?', agentId);
     this.sql.exec('DELETE FROM members WHERE agent_id = ?', agentId);
     const changed = this.sql.exec('SELECT changes() as c').toArray();
     // Fallback: if specific agent_id not found, remove all agents for this owner
     // (handles legacy callers sending user UUID as agentId)
     if (changed[0].c === 0) {
+      this.sql.exec('DELETE FROM locks WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)', agentId);
       this.sql.exec('DELETE FROM activities WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)', agentId);
       this.sql.exec('DELETE FROM members WHERE owner_id = ?', agentId);
     }
@@ -210,8 +263,27 @@ export class TeamDO extends DurableObject {
       }
     }
 
+    // Check file locks — files locked by other agents are also conflicts
+    const lockedFiles = [];
+    for (const file of myFiles) {
+      const lock = this.sql.exec(
+        'SELECT agent_id, owner_handle, tool, claimed_at FROM locks WHERE file_path = ? AND agent_id != ?',
+        file, agentId
+      ).toArray();
+      if (lock.length > 0) {
+        lockedFiles.push({
+          file,
+          held_by: lock[0].owner_handle,
+          tool: lock[0].tool || 'unknown',
+          claimed_at: lock[0].claimed_at,
+        });
+      }
+    }
+
+    this.#recordMetric('conflict_checks');
     // Record conflicts in active session for the requesting agent
-    if (conflicts.length > 0) {
+    if (conflicts.length > 0 || lockedFiles.length > 0) {
+      this.#recordMetric('conflicts_found');
       this.sql.exec(
         `UPDATE sessions SET conflicts_hit = conflicts_hit + 1
          WHERE agent_id = ? AND ended_at IS NULL`,
@@ -219,7 +291,7 @@ export class TeamDO extends DurableObject {
       );
     }
 
-    return { conflicts };
+    return { conflicts, locked: lockedFiles };
   }
 
   async reportFile(agentId, filePath) {
@@ -335,10 +407,32 @@ export class TeamDO extends DurableObject {
       }
     }
 
+    // Active file locks
+    const locks = this.sql.exec(
+      `SELECT l.file_path, l.owner_handle, l.tool,
+              ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
+       FROM locks l
+       JOIN members m ON m.agent_id = l.agent_id
+       WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_ACTIVE_SECONDS
+    ).toArray();
+
+    // Recent messages (last 10 within the hour, visible to this agent)
+    const messages = this.sql.exec(
+      `SELECT from_handle, from_tool, text, created_at
+       FROM messages
+       WHERE created_at > datetime('now', '-1 hour')
+         AND (target_agent IS NULL OR target_agent = ?)
+       ORDER BY created_at DESC LIMIT 10`,
+      agentId
+    ).toArray();
+
     return {
       members: memberList,
       conflicts,
+      locks,
       memories,
+      messages,
       recentSessions: recentSessions.map(s => ({
         ...s,
         files_touched: JSON.parse(s.files_touched || '[]'),
@@ -436,17 +530,22 @@ export class TeamDO extends DurableObject {
       return { error: `Category must be one of: ${VALID_CATEGORIES.join(', ')}` };
     }
 
-    const normalized = text.trim().toLowerCase();
-    const existing = this.sql.exec(
-      'SELECT id FROM memories WHERE LOWER(TRIM(text)) = ?', normalized
+    // Fuzzy dedup: check word-level similarity against recent memories
+    const newWords = extractWords(text);
+    const candidates = this.sql.exec(
+      'SELECT id, text FROM memories ORDER BY created_at DESC LIMIT 50'
     ).toArray();
 
-    if (existing.length > 0) {
-      this.sql.exec(
-        `UPDATE memories SET relevance_score = 1.0, created_at = datetime('now') WHERE id = ?`,
-        existing[0].id
-      );
-      return { ok: true, deduplicated: true };
+    for (const candidate of candidates) {
+      const candidateWords = extractWords(candidate.text);
+      if (wordSimilarity(newWords, candidateWords) > 0.7) {
+        // High similarity — boost existing memory instead of creating duplicate
+        this.sql.exec(
+          `UPDATE memories SET relevance_score = MIN(relevance_score + 0.5, 2.0), created_at = datetime('now') WHERE id = ?`,
+          candidate.id
+        );
+        return { ok: true, deduplicated: true, matched_id: candidate.id };
+      }
     }
 
     const id = crypto.randomUUID();
@@ -469,8 +568,190 @@ export class TeamDO extends DurableObject {
        WHERE agent_id = ? AND ended_at IS NULL`,
       agentId
     );
+    this.#recordMetric('memories_saved');
 
     return { ok: true, id };
+  }
+
+  async searchMemories(agentId, query, category, limit = 20) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    const cappedLimit = Math.min(Math.max(1, limit), 50);
+    let sql, params;
+
+    if (query && category) {
+      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
+             FROM memories WHERE text LIKE ? AND category = ?
+             ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
+      params = [`%${query}%`, category, cappedLimit];
+    } else if (query) {
+      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
+             FROM memories WHERE text LIKE ?
+             ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
+      params = [`%${query}%`, cappedLimit];
+    } else if (category) {
+      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
+             FROM memories WHERE category = ?
+             ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
+      params = [category, cappedLimit];
+    } else {
+      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
+             FROM memories ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
+      params = [cappedLimit];
+    }
+
+    const rows = this.sql.exec(sql, ...params).toArray();
+    return { memories: rows };
+  }
+
+  async updateMemory(agentId, memoryId, text, category) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    if (text !== undefined && (typeof text !== 'string' || !text.trim())) {
+      return { error: 'text must be a non-empty string' };
+    }
+    if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
+      return { error: `Category must be one of: ${VALID_CATEGORIES.join(', ')}` };
+    }
+
+    // Verify memory exists
+    const existing = this.sql.exec('SELECT id FROM memories WHERE id = ?', memoryId).toArray();
+    if (existing.length === 0) return { error: 'Memory not found' };
+
+    if (text !== undefined && category !== undefined) {
+      this.sql.exec('UPDATE memories SET text = ?, category = ?, relevance_score = 1.0 WHERE id = ?',
+        text.trim(), category, memoryId);
+    } else if (text !== undefined) {
+      this.sql.exec('UPDATE memories SET text = ?, relevance_score = 1.0 WHERE id = ?',
+        text.trim(), memoryId);
+    } else if (category !== undefined) {
+      this.sql.exec('UPDATE memories SET category = ? WHERE id = ?', category, memoryId);
+    }
+
+    return { ok: true };
+  }
+
+  async deleteMemory(agentId, memoryId) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    this.sql.exec('DELETE FROM memories WHERE id = ?', memoryId);
+    const changed = this.sql.exec('SELECT changes() as c').toArray();
+    if (changed[0].c === 0) return { error: 'Memory not found' };
+    return { ok: true };
+  }
+
+  // --- File Locks (advisory locking for conflict resolution) ---
+
+  async claimFiles(agentId, files, handle, tool) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    const normalized = files.map(normalizePath);
+    const claimed = [];
+    const blocked = [];
+
+    for (const file of normalized) {
+      // Check if already locked by another agent
+      const existing = this.sql.exec(
+        'SELECT agent_id, owner_handle, tool, claimed_at FROM locks WHERE file_path = ?', file
+      ).toArray();
+
+      if (existing.length > 0 && existing[0].agent_id !== agentId) {
+        const lock = existing[0];
+        blocked.push({
+          file,
+          held_by: lock.owner_handle,
+          tool: lock.tool || 'unknown',
+          claimed_at: lock.claimed_at,
+        });
+        continue;
+      }
+
+      // Claim or refresh the lock
+      this.sql.exec(
+        `INSERT INTO locks (file_path, agent_id, owner_handle, tool, claimed_at)
+         VALUES (?, ?, ?, ?, datetime('now'))
+         ON CONFLICT(file_path) DO UPDATE SET
+           agent_id = excluded.agent_id,
+           owner_handle = excluded.owner_handle,
+           tool = excluded.tool,
+           claimed_at = datetime('now')`,
+        file, agentId, handle || 'unknown', tool || 'unknown'
+      );
+      claimed.push(file);
+    }
+
+    return { ok: true, claimed, blocked };
+  }
+
+  async releaseFiles(agentId, files) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    if (!files || files.length === 0) {
+      // Release all locks for this agent
+      this.sql.exec('DELETE FROM locks WHERE agent_id = ?', agentId);
+    } else {
+      const normalized = files.map(normalizePath);
+      for (const file of normalized) {
+        this.sql.exec('DELETE FROM locks WHERE file_path = ? AND agent_id = ?', file, agentId);
+      }
+    }
+    return { ok: true };
+  }
+
+  async getLockedFiles(agentId) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    const locks = this.sql.exec(
+      `SELECT l.file_path, l.agent_id, l.owner_handle, l.tool, l.claimed_at,
+              ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
+       FROM locks l
+       JOIN members m ON m.agent_id = l.agent_id
+       WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
+       ORDER BY l.claimed_at DESC`,
+      HEARTBEAT_ACTIVE_SECONDS
+    ).toArray();
+
+    return { locks };
+  }
+
+  // --- Agent Messages (ephemeral coordination, auto-expire after 1 hour) ---
+
+  async sendMessage(agentId, handle, tool, text, targetAgent) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    const id = crypto.randomUUID();
+    this.sql.exec(
+      `INSERT INTO messages (id, from_agent, from_handle, from_tool, target_agent, text, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+      id, agentId, handle || 'unknown', tool || 'unknown', targetAgent || null, text
+    );
+    this.#recordMetric('messages_sent');
+    return { ok: true, id };
+  }
+
+  async getMessages(agentId, since) {
+    this.#ensureSchema();
+    if (!this.#isMember(agentId)) return { error: 'Not a member of this team' };
+
+    const sinceTime = since || "datetime('now', '-1 hour')";
+    const messages = this.sql.exec(
+      `SELECT id, from_handle, from_tool, target_agent, text, created_at
+       FROM messages
+       WHERE created_at > ${since ? '?' : "datetime('now', '-1 hour')"}
+         AND (target_agent IS NULL OR target_agent = ?)
+       ORDER BY created_at DESC
+       LIMIT 50`,
+      ...(since ? [since, agentId] : [agentId])
+    ).toArray();
+
+    return { messages };
   }
 
   // --- Summary (lightweight, for cross-project dashboard) ---
@@ -511,6 +792,21 @@ export class TeamDO extends DurableObject {
       "SELECT COUNT(*) as c FROM sessions WHERE started_at > datetime('now', '-24 hours')"
     ).toArray();
 
+    // Telemetry — tool usage breakdown
+    const toolMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const tools_configured = toolMetrics.map(t => ({
+      tool: t.metric.replace('tool:', ''),
+      joins: t.count,
+    }));
+
+    const keyMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
+    ).toArray();
+    const usage = {};
+    for (const m of keyMetrics) usage[m.metric] = m.count;
+
     return {
       active_agents: active[0]?.c || 0,
       total_members: total[0]?.c || 0,
@@ -518,6 +814,8 @@ export class TeamDO extends DurableObject {
       memory_count: memories[0]?.c || 0,
       live_sessions: live[0]?.c || 0,
       recent_sessions_24h: recent[0]?.c || 0,
+      tools_configured,
+      usage,
     };
   }
 }
@@ -525,4 +823,23 @@ export class TeamDO extends DurableObject {
 // Strip leading ./ and trailing /, collapse // — so "src/index.js" and "./src/index.js" match
 function normalizePath(p) {
   return p.replace(/^\.\//, '').replace(/\/+/g, '/').replace(/\/$/, '');
+}
+
+// Extract significant words for fuzzy dedup (lowercase, >2 chars, no stop words)
+const STOP_WORDS = new Set(['the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'has', 'have', 'been', 'this', 'that', 'with', 'from', 'they', 'will', 'when', 'make', 'use', 'used', 'uses', 'using', 'must', 'need', 'needs']);
+
+function extractWords(text) {
+  return new Set(
+    text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/)
+      .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+  );
+}
+
+// Jaccard similarity between two word sets
+function wordSimilarity(a, b) {
+  if (a.size === 0 && b.size === 0) return 1;
+  if (a.size === 0 || b.size === 0) return 0;
+  let intersection = 0;
+  for (const w of a) { if (b.has(w)) intersection++; }
+  return intersection / (a.size + b.size - intersection);
 }

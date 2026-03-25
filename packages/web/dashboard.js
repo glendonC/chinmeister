@@ -381,6 +381,8 @@ async function fetchContext() {
 
     renderAgents(ctx.members || []);
     renderConflicts(ctx.members || []);
+    renderLocks(ctx.locks || []);
+    renderMessages(ctx.messages || []);
     renderMemory(ctx.memories || []);
     renderSessions(ctx.recentSessions || []);
     const active = (ctx.members || []).filter(m => m.status === 'active').length;
@@ -408,13 +410,13 @@ function renderAgents(members) {
 
   agentsList.innerHTML = [...active, ...offline].map(m => {
     const cls = m.status === 'active' ? 'agent-indicator--active' : 'agent-indicator--offline';
-    const fw = m.framework || '';
+    const toolLabel = m.tool && m.tool !== 'unknown' ? m.tool : m.framework || '';
     const files = m.activity?.files?.join(', ') || '';
     const dur = formatDuration(m.session_minutes);
     return `<div class="agent-row">
       <span class="agent-indicator ${cls}"></span>
       <span class="agent-name">${esc(m.handle)}</span>
-      ${fw ? `<span class="agent-framework">${esc(fw)}</span>` : ''}
+      ${toolLabel ? `<span class="agent-framework">${esc(toolLabel)}</span>` : ''}
       <div class="agent-meta">
         ${files ? `<span class="agent-files" title="${esc(files)}">${esc(files)}</span>` : ''}
         ${dur ? `<span class="agent-time">${dur}</span>` : ''}
@@ -427,9 +429,10 @@ function renderConflicts(members) {
   const owners = new Map();
   for (const m of members) {
     if (m.status !== 'active' || !m.activity?.files) continue;
+    const label = m.tool && m.tool !== 'unknown' ? `${m.handle} (${m.tool})` : m.handle;
     for (const f of m.activity.files) {
       if (!owners.has(f)) owners.set(f, []);
-      owners.get(f).push(m.handle);
+      owners.get(f).push(label);
     }
   }
   const conflicts = [...owners.entries()].filter(([, o]) => o.length > 1);
@@ -471,6 +474,38 @@ function renderSessions(sessions) {
       <span class="session-framework">${esc(s.framework)}</span>
       ${live ? '<span class="session-live">live</span>' : ''}
       <span class="session-stats">${dur} &middot; ${s.edit_count} edits &middot; ${files} files</span>
+    </div>`;
+  }).join('');
+}
+
+function renderLocks(locks) {
+  const locksCard = $('#locks-card');
+  const locksList = $('#locks-list');
+  if (!locksCard || !locksList) return;
+  if (!locks || !locks.length) { locksCard.hidden = true; return; }
+  locksCard.hidden = false;
+  locksList.innerHTML = locks.map(l => {
+    const who = l.tool && l.tool !== 'unknown' ? `${esc(l.owner_handle)} (${esc(l.tool)})` : esc(l.owner_handle);
+    const dur = l.minutes_held != null ? formatDuration(l.minutes_held) : '';
+    return `<div class="lock-row">
+      <span class="lock-file">${esc(l.file_path)}</span>
+      <span class="lock-owner">${who}</span>
+      ${dur ? `<span class="lock-time">${dur}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderMessages(messages) {
+  const messagesCard = $('#messages-card');
+  const messagesList = $('#messages-list');
+  if (!messagesCard || !messagesList) return;
+  if (!messages || !messages.length) { messagesCard.hidden = true; return; }
+  messagesCard.hidden = false;
+  messagesList.innerHTML = messages.map(m => {
+    const from = m.from_tool && m.from_tool !== 'unknown' ? `${esc(m.from_handle)} (${esc(m.from_tool)})` : esc(m.from_handle);
+    return `<div class="message-row">
+      <span class="message-from">${from}</span>
+      <span class="message-text">${esc(m.text)}</span>
     </div>`;
   }).join('');
 }

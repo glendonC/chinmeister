@@ -92,6 +92,22 @@ export default {
             response = await handleTeamFile(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'memory') {
             response = await handleTeamSaveMemory(request, user, env, parsed.teamId);
+          } else if (method === 'GET' && parsed.action === 'memory') {
+            response = await handleTeamSearchMemory(request, user, env, parsed.teamId);
+          } else if (method === 'PUT' && parsed.action === 'memory') {
+            response = await handleTeamUpdateMemory(request, user, env, parsed.teamId);
+          } else if (method === 'DELETE' && parsed.action === 'memory') {
+            response = await handleTeamDeleteMemory(request, user, env, parsed.teamId);
+          } else if (method === 'POST' && parsed.action === 'locks') {
+            response = await handleTeamClaimFiles(request, user, env, parsed.teamId);
+          } else if (method === 'DELETE' && parsed.action === 'locks') {
+            response = await handleTeamReleaseFiles(request, user, env, parsed.teamId);
+          } else if (method === 'GET' && parsed.action === 'locks') {
+            response = await handleTeamGetLocks(request, user, env, parsed.teamId);
+          } else if (method === 'POST' && parsed.action === 'messages') {
+            response = await handleTeamSendMessage(request, user, env, parsed.teamId);
+          } else if (method === 'GET' && parsed.action === 'messages') {
+            response = await handleTeamGetMessages(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'sessions') {
             response = await handleTeamStartSession(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'sessionend') {
@@ -531,6 +547,131 @@ async function handleTeamSaveMemory(request, user, env, teamId) {
 
   await db.consumeRateLimit(`memory:${user.id}`);
   return json(result, 201);
+}
+
+async function handleTeamSearchMemory(request, user, env, teamId) {
+  const url = new URL(request.url);
+  const query = url.searchParams.get('q') || null;
+  const category = url.searchParams.get('category') || null;
+  const parsedLimit = parseInt(url.searchParams.get('limit') || '20', 10);
+  const limit = Math.max(1, Math.min(isNaN(parsedLimit) ? 20 : parsedLimit, 50));
+
+  if (category && !VALID_CATEGORIES.includes(category)) {
+    return json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` }, 400);
+  }
+
+  const agentId = getAgentId(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.searchMemories(agentId, query, category, limit);
+  if (result.error) return json({ error: result.error }, 403);
+  return json(result);
+}
+
+async function handleTeamUpdateMemory(request, user, env, teamId) {
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { id, text, category } = body;
+  if (typeof id !== 'string' || !id.trim()) {
+    return json({ error: 'id is required' }, 400);
+  }
+  if (text !== undefined && (typeof text !== 'string' || !text.trim())) {
+    return json({ error: 'text must be a non-empty string' }, 400);
+  }
+  if (text !== undefined && text.length > 2000) {
+    return json({ error: 'text must be 2000 characters or less' }, 400);
+  }
+  if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
+    return json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` }, 400);
+  }
+  if (text === undefined && category === undefined) {
+    return json({ error: 'text or category required' }, 400);
+  }
+
+  const agentId = getAgentId(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.updateMemory(agentId, id, text, category);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  return json(result);
+}
+
+async function handleTeamDeleteMemory(request, user, env, teamId) {
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { id } = body;
+  if (typeof id !== 'string' || !id.trim()) {
+    return json({ error: 'id is required' }, 400);
+  }
+
+  const agentId = getAgentId(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.deleteMemory(agentId, id);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  return json(result);
+}
+
+async function handleTeamClaimFiles(request, user, env, teamId) {
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { files } = body;
+  if (!Array.isArray(files) || files.length === 0) return json({ error: 'files must be a non-empty array' }, 400);
+  if (files.length > 20) return json({ error: 'too many files (max 20)' }, 400);
+  if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
+
+  const agentId = getAgentId(request, user);
+  const tool = getToolFromAgentId(agentId);
+  const team = getTeam(env, teamId);
+  const result = await team.claimFiles(agentId, files, user.handle, tool);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  return json(result);
+}
+
+async function handleTeamReleaseFiles(request, user, env, teamId) {
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const files = body.files || null;
+  if (files !== null && !Array.isArray(files)) return json({ error: 'files must be an array' }, 400);
+  if (files && files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
+
+  const agentId = getAgentId(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.releaseFiles(agentId, files);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  return json(result);
+}
+
+async function handleTeamGetLocks(request, user, env, teamId) {
+  const agentId = getAgentId(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.getLockedFiles(agentId);
+  if (result.error) return json({ error: result.error }, 403);
+  return json(result);
+}
+
+async function handleTeamSendMessage(request, user, env, teamId) {
+  const body = await parseBody(request);
+  if (body._parseError) return json({ error: body._parseError }, 400);
+  const { text, target } = body;
+  if (typeof text !== 'string' || !text.trim()) return json({ error: 'text is required' }, 400);
+  if (text.length > 500) return json({ error: 'text must be 500 characters or less' }, 400);
+  if (target !== undefined && typeof target !== 'string') return json({ error: 'target must be a string' }, 400);
+
+  const agentId = getAgentId(request, user);
+  const tool = getToolFromAgentId(agentId);
+  const team = getTeam(env, teamId);
+  const result = await team.sendMessage(agentId, user.handle, tool, text.trim(), target || null);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  return json(result, 201);
+}
+
+async function handleTeamGetMessages(request, user, env, teamId) {
+  const url = new URL(request.url);
+  const since = url.searchParams.get('since') || null;
+
+  const agentId = getAgentId(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.getMessages(agentId, since);
+  if (result.error) return json({ error: result.error }, 403);
+  return json(result);
 }
 
 async function handleTeamStartSession(request, user, env, teamId) {
