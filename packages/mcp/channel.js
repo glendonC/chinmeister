@@ -8,25 +8,13 @@
 // Unlike the main MCP server, the channel server has no tools — it only pushes.
 // CRITICAL: Never console.log — stdio transport. Use console.error for logging.
 
-import { createHash } from 'crypto';
 import { readFileSync } from 'fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile } from './lib/team.js';
-
-function detectToolName() {
-  const idx = process.argv.indexOf('--tool');
-  if (idx !== -1 && process.argv[idx + 1]) return process.argv[idx + 1];
-  if (process.env.CHINWAG_TOOL) return process.env.CHINWAG_TOOL;
-  return 'claude-code'; // Channel is Claude Code-only
-}
-
-function generateAgentId(token, toolName) {
-  const hash = createHash('sha256').update(token).digest('hex').slice(0, 12);
-  return `${toolName}:${hash}`;
-}
+import { detectToolName, generateAgentId } from './lib/identity.js';
 
 let PKG = { version: '0.0.0' };
 try {
@@ -53,7 +41,7 @@ async function main() {
     process.exit(0);
   }
 
-  const toolName = detectToolName();
+  const toolName = detectToolName('claude-code');
   const agentId = generateAgentId(config.token, toolName);
   const client = api(config, { agentId });
   console.error(`[chinwag-channel] Tool: ${toolName}, Agent ID: ${agentId}`);

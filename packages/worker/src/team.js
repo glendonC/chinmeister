@@ -101,6 +101,7 @@ export class TeamDO extends DurableObject {
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_locks_agent ON locks(agent_id)');
 
     // Additive migration: add tool column if missing (safe for existing DOs)
     try { this.sql.exec("ALTER TABLE members ADD COLUMN tool TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
@@ -265,17 +266,20 @@ export class TeamDO extends DurableObject {
 
     // Check file locks — files locked by other agents are also conflicts
     const lockedFiles = [];
-    for (const file of myFiles) {
-      const lock = this.sql.exec(
-        'SELECT agent_id, owner_handle, tool, claimed_at FROM locks WHERE file_path = ? AND agent_id != ?',
-        file, agentId
+    const fileList = [...myFiles];
+    if (fileList.length > 0) {
+      const placeholders = fileList.map(() => '?').join(',');
+      const lockRows = this.sql.exec(
+        `SELECT file_path, owner_handle, tool, claimed_at FROM locks
+         WHERE file_path IN (${placeholders}) AND agent_id != ?`,
+        ...fileList, agentId
       ).toArray();
-      if (lock.length > 0) {
+      for (const lock of lockRows) {
         lockedFiles.push({
-          file,
-          held_by: lock[0].owner_handle,
-          tool: lock[0].tool || 'unknown',
-          claimed_at: lock[0].claimed_at,
+          file: lock.file_path,
+          held_by: lock.owner_handle,
+          tool: lock.tool || 'unknown',
+          claimed_at: lock.claimed_at,
         });
       }
     }

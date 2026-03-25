@@ -8,16 +8,11 @@
 // stdout text becomes user-visible in the Claude Code session.
 // Exit code 0 = allow, non-zero = block (for PreToolUse).
 
-import { createHash } from 'crypto';
 import { basename } from 'path';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile } from './lib/team.js';
-
-function generateAgentId(token) {
-  const hash = createHash('sha256').update(token).digest('hex').slice(0, 12);
-  return `claude-code:${hash}`; // Hooks are always Claude Code
-}
+import { generateAgentId } from './lib/identity.js';
 
 const subcommand = process.argv[2];
 
@@ -32,7 +27,8 @@ async function main() {
   const teamId = findTeamFile();
   if (!teamId) process.exit(0);
 
-  const agentId = generateAgentId(config.token);
+  // Hooks are always Claude Code
+  const agentId = generateAgentId(config.token, 'claude-code');
   const client = api(config, { agentId });
 
   switch (subcommand) {
