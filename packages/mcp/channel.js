@@ -15,6 +15,7 @@ import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile } from './lib/team.js';
 import { detectToolName, generateAgentId } from './lib/identity.js';
+import { resolveSessionAgentId } from '../shared/session-registry.js';
 
 let PKG = { version: '0.0.0' };
 try {
@@ -42,7 +43,10 @@ async function main() {
   }
 
   const toolName = detectToolName('claude-code');
-  const agentId = generateAgentId(config.token, toolName);
+  const agentId = resolveSessionAgentId({
+    tool: toolName,
+    fallbackAgentId: generateAgentId(config.token, toolName),
+  });
   const client = api(config, { agentId });
   console.error(`[chinwag-channel] Tool: ${toolName}, Agent ID: ${agentId}`);
 

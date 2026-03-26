@@ -12,8 +12,14 @@ import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
-import { detectToolName, generateAgentId } from './lib/identity.js';
+import { detectToolName, generateSessionAgentId } from './lib/identity.js';
 import { registerTools, registerResources } from './lib/register-tools.js';
+import {
+  deleteSessionRecord,
+  getCurrentTtyPath,
+  SESSION_COMMAND_MARKER,
+  writeSessionRecord,
+} from '../shared/session-registry.js';
 
 let PKG = { version: '0.0.0' };
 try {
@@ -33,9 +39,23 @@ async function main() {
   }
 
   const toolName = detectToolName();
-  const agentId = generateAgentId(config.token, toolName);
+  const agentId = generateSessionAgentId(config.token, toolName);
   const client = api(config, { agentId });
   console.error(`[chinwag] Tool: ${toolName}, Agent ID: ${agentId}`);
+
+  // Detect parent TTY and write session file for terminal identification
+  const parentTty = getCurrentTtyPath();
+  try {
+    writeSessionRecord(agentId, {
+      tty: parentTty,
+      tool: toolName,
+      pid: process.pid,
+      cwd: process.cwd(),
+      createdAt: Date.now(),
+      commandMarker: SESSION_COMMAND_MARKER,
+    });
+    if (parentTty) console.error(`[chinwag] Terminal: ${parentTty}`);
+  } catch {}
 
   // Scan environment and register profile
   const profile = scanEnvironment();
@@ -89,15 +109,19 @@ async function main() {
   const cleanup = () => {
     if (cleaning) { process.exit(0); return; }
     cleaning = true;
+    deleteSessionRecord(agentId);
     if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
     const forceExit = setTimeout(() => process.exit(0), 3000);
     forceExit.unref();
     const done = () => { clearTimeout(forceExit); process.exit(0); };
-    if (state.sessionId && state.teamId) {
-      team.endSession(state.teamId, state.sessionId).catch(() => {}).finally(done);
-    } else {
-      done();
-    }
+    (async () => {
+      if (state.sessionId && state.teamId) {
+        await team.endSession(state.teamId, state.sessionId).catch(() => {});
+      }
+      if (state.teamId) {
+        await team.leaveTeam(state.teamId).catch(() => {});
+      }
+    })().finally(done);
   };
   process.on('SIGINT', cleanup);
   process.on('SIGTERM', cleanup);

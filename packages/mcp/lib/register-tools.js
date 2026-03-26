@@ -1,5 +1,5 @@
 // MCP tool and resource registration.
-// All 10 chinwag tools + 1 resource, extracted from index.js.
+// All 11 chinwag tools + 1 resource, extracted from index.js.
 
 import { basename } from 'path';
 import * as z from 'zod/v4';
@@ -45,9 +45,12 @@ export function registerTools(server, { team, state, profile }) {
       }),
     },
     async ({ team_id }) => {
+      const previousTeamId = state.teamId;
+      const previousSessionId = state.sessionId;
       try {
         await team.joinTeam(team_id, basename(process.cwd()));
         state.teamId = team_id;
+        state.sessionId = null;
         clearContextCache();
 
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
@@ -66,6 +69,17 @@ export function registerTools(server, { team, state, profile }) {
           }
         } catch (err) {
           console.error('[chinwag] Failed to start session after join:', err.message);
+        }
+
+        if (previousTeamId && previousTeamId !== team_id) {
+          if (previousSessionId) {
+            await team.endSession(previousTeamId, previousSessionId).catch((err) => {
+              console.error('[chinwag] Failed to end previous session:', err.message);
+            });
+          }
+          await team.leaveTeam(previousTeamId).catch((err) => {
+            console.error('[chinwag] Failed to leave previous team:', err.message);
+          });
         }
 
         const text = sessionStarted
@@ -237,6 +251,37 @@ export function registerTools(server, { team, state, profile }) {
         await team.saveMemory(state.teamId, text, category);
         const preamble = await teamPreamble(team, state.teamId);
         return { content: [{ type: 'text', text: `${preamble}Memory saved [${category}]: ${text}` }] };
+      } catch (err) {
+        return errorResult(err);
+      }
+    }
+  );
+
+  addTool(
+    'chinwag_update_memory',
+    {
+      description: 'Update an existing team memory. Use chinwag_search_memory first to find the ID. Only the original author can update a memory. Use this to correct or improve knowledge without creating duplicates.',
+      inputSchema: z.object({
+        id: z.string().describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
+        text: z.string().max(2000).optional().describe('Updated text content'),
+        category: z.enum(['gotcha', 'pattern', 'config', 'decision', 'reference']).optional().describe('Updated category'),
+      }),
+    },
+    async ({ id, text, category }) => {
+      if (!state.teamId) return noTeam();
+      if (!text && !category) {
+        return { content: [{ type: 'text', text: 'Provide at least one of text or category to update.' }], isError: true };
+      }
+      try {
+        const result = await team.updateMemory(state.teamId, id, text, category);
+        if (result.error) {
+          return { content: [{ type: 'text', text: `Failed to update memory ${id}: ${result.error}` }], isError: true };
+        }
+        const preamble = await teamPreamble(team, state.teamId);
+        const parts = [];
+        if (text) parts.push(`text updated`);
+        if (category) parts.push(`category → ${category}`);
+        return { content: [{ type: 'text', text: `${preamble}Memory ${id} updated (${parts.join(', ')}).` }] };
       } catch (err) {
         return errorResult(err);
       }

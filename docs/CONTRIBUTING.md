@@ -174,6 +174,15 @@ curl http://localhost:8787/stats
 curl -X POST http://localhost:8787/auth/init
 ```
 
+Current automated test commands:
+
+```bash
+npm run test:cli
+npm run test:mcp
+npm run test:worker
+npm run test:web
+```
+
 ### Per-package notes
 
 **CLI (`packages/cli/`)**

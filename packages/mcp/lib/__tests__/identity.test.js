@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateAgentId, detectToolName } from '../identity.js';
+import { generateAgentId, generateSessionAgentId, detectToolName } from '../identity.js';
 
 describe('generateAgentId', () => {
   it('is deterministic — same input produces same output', () => {
@@ -29,6 +29,25 @@ describe('generateAgentId', () => {
     // Different tool prefix
     expect(a.split(':')[0]).toBe('cursor');
     expect(b.split(':')[0]).toBe('aider');
+  });
+});
+
+describe('generateSessionAgentId', () => {
+  it('keeps the deterministic base id as a prefix', () => {
+    const base = generateAgentId('tok_abc123', 'cursor');
+    const sessionId = generateSessionAgentId('tok_abc123', 'cursor');
+    expect(sessionId.startsWith(`${base}:`)).toBe(true);
+  });
+
+  it('adds an 8-hex random suffix', () => {
+    const sessionId = generateSessionAgentId('tok_abc123', 'claude-code');
+    expect(sessionId).toMatch(/^claude-code:[0-9a-f]{12}:[0-9a-f]{8}$/);
+  });
+
+  it('returns different ids for separate sessions', () => {
+    const a = generateSessionAgentId('same-token', 'cursor');
+    const b = generateSessionAgentId('same-token', 'cursor');
+    expect(a).not.toBe(b);
   });
 });
 

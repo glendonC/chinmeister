@@ -39,12 +39,15 @@ function createFakeServer() {
 function createFakeTeam() {
   return {
     joinTeam: vi.fn().mockResolvedValue({ ok: true }),
+    leaveTeam: vi.fn().mockResolvedValue({ ok: true }),
     heartbeat: vi.fn().mockResolvedValue({ ok: true }),
     startSession: vi.fn().mockResolvedValue({ session_id: 'sess_123' }),
+    endSession: vi.fn().mockResolvedValue({ ok: true }),
     updateActivity: vi.fn().mockResolvedValue({ ok: true }),
     checkConflicts: vi.fn().mockResolvedValue({ conflicts: [], locked: [] }),
     getTeamContext: vi.fn().mockResolvedValue({ members: [] }),
     saveMemory: vi.fn().mockResolvedValue({ ok: true }),
+    updateMemory: vi.fn().mockResolvedValue({ ok: true }),
     searchMemories: vi.fn().mockResolvedValue({ memories: [] }),
     deleteMemory: vi.fn().mockResolvedValue({ ok: true }),
     claimFiles: vi.fn().mockResolvedValue({ claimed: [], blocked: [] }),
@@ -68,11 +71,11 @@ describe('registerTools', () => {
     registerTools(server, { team, state, profile });
   });
 
-  it('registers all 10 tools', () => {
-    expect(server._tools.size).toBe(10);
+  it('registers all 11 tools', () => {
+    expect(server._tools.size).toBe(11);
     const expected = [
       'chinwag_join_team', 'chinwag_update_activity', 'chinwag_check_conflicts',
-      'chinwag_get_team_context', 'chinwag_save_memory', 'chinwag_search_memory',
+      'chinwag_get_team_context', 'chinwag_save_memory', 'chinwag_update_memory', 'chinwag_search_memory',
       'chinwag_delete_memory', 'chinwag_claim_files', 'chinwag_release_files',
       'chinwag_send_message',
     ];
@@ -89,6 +92,7 @@ describe('registerTools', () => {
       'chinwag_check_conflicts',
       'chinwag_get_team_context',
       'chinwag_save_memory',
+      'chinwag_update_memory',
       'chinwag_search_memory',
       'chinwag_delete_memory',
       'chinwag_claim_files',
@@ -134,6 +138,16 @@ describe('registerTools', () => {
       expect(state.heartbeatInterval).not.toBe(oldInterval);
       clearInterval(state.heartbeatInterval);
       clearInterval(oldInterval);
+    });
+
+    it('leaves the previous team when switching teams', async () => {
+      state.teamId = 't_old';
+      state.sessionId = 'sess_old';
+
+      await server.callTool('chinwag_join_team', { team_id: 't_new' });
+
+      expect(team.endSession).toHaveBeenCalledWith('t_old', 'sess_old');
+      expect(team.leaveTeam).toHaveBeenCalledWith('t_old');
     });
 
     it('returns auth error message on 401', async () => {
@@ -392,6 +406,18 @@ describe('registerTools', () => {
   });
 
   // --- chinwag_search_memory ---
+
+  describe('chinwag_update_memory', () => {
+    it('updates memory text and category', async () => {
+      const result = await server.callTool('chinwag_update_memory', {
+        id: 'mem_123',
+        text: 'Updated memory',
+        category: 'decision',
+      });
+      expect(team.updateMemory).toHaveBeenCalledWith('t_test123', 'mem_123', 'Updated memory', 'decision');
+      expect(result.content[0].text).toMatch(/Memory mem_123 updated/);
+    });
+  });
 
   describe('chinwag_search_memory', () => {
     it('returns formatted results when memories found', async () => {

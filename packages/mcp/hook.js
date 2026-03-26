@@ -13,6 +13,7 @@ import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile } from './lib/team.js';
 import { generateAgentId } from './lib/identity.js';
+import { resolveSessionAgentId } from '../shared/session-registry.js';
 
 const subcommand = process.argv[2];
 
@@ -28,8 +29,13 @@ async function main() {
   if (!teamId) process.exit(0);
 
   // Hooks are always Claude Code
-  const agentId = generateAgentId(config.token, 'claude-code');
+  const fallbackAgentId = generateAgentId(config.token, 'claude-code');
+  const agentId = resolveSessionAgentId({
+    tool: 'claude-code',
+    fallbackAgentId,
+  });
   const client = api(config, { agentId });
+  const hasExactSession = agentId !== fallbackAgentId;
 
   switch (subcommand) {
     case 'check-conflict':
@@ -39,7 +45,7 @@ async function main() {
       await reportEdit(client, teamId, input);
       break;
     case 'session-start':
-      await sessionStart(client, teamId);
+      await sessionStart(client, teamId, hasExactSession);
       break;
     default:
       console.error(`[chinwag] Unknown hook subcommand: ${subcommand}`);
@@ -104,10 +110,13 @@ async function reportEdit(client, teamId, input) {
   process.exit(0);
 }
 
-async function sessionStart(client, teamId) {
+async function sessionStart(client, teamId, hasExactSession) {
   try {
-    // Join team (idempotent) to ensure heartbeat is current
-    await client.post(`/teams/${teamId}/join`, { name: basename(process.cwd()) });
+    // Avoid creating duplicate base-ID memberships when the exact MCP session
+    // has not registered its per-process agent id yet.
+    if (hasExactSession) {
+      await client.post(`/teams/${teamId}/join`, { name: basename(process.cwd()) });
+    }
 
     const ctx = await client.get(`/teams/${teamId}/context`);
 
