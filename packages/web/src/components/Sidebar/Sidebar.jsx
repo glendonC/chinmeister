@@ -1,33 +1,37 @@
 import { useState } from 'react';
-import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
-import { stopPolling } from '../../lib/stores/polling.js';
 import styles from './Sidebar.module.css';
 
-export default function Sidebar() {
-  const user = useAuthStore((s) => s.user);
-  const logout = useAuthStore((s) => s.logout);
+export default function Sidebar({ activeNav, onNavigate }) {
   const teams = useTeamStore((s) => s.teams);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const selectTeam = useTeamStore((s) => s.selectTeam);
-
-  const overviewMode = activeTeamId === null;
+  const overviewActive = activeNav === null && activeTeamId === null;
+  const toolsActive = activeNav === 'tools';
+  const settingsActive = activeNav === 'settings';
 
   const [mobileOpen, setMobileOpen] = useState(false);
 
   function goOverview() {
     selectTeam(null);
+    onNavigate(null);
     setMobileOpen(false);
   }
 
   function goTeam(teamId) {
     selectTeam(teamId);
+    onNavigate(null);
     setMobileOpen(false);
   }
 
-  function handleLogout() {
-    stopPolling();
-    logout();
+  function goTools() {
+    onNavigate('tools');
+    setMobileOpen(false);
+  }
+
+  function goSettings() {
+    onNavigate('settings');
+    setMobileOpen(false);
   }
 
   function handleKeydown(e, callback) {
@@ -39,7 +43,6 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile toggle button */}
       <button className={styles.mobileToggle} onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle sidebar">
         <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
           {mobileOpen ? (
@@ -50,26 +53,22 @@ export default function Sidebar() {
         </svg>
       </button>
 
-      {/* Backdrop for mobile */}
       {mobileOpen && (
         <div className={styles.mobileBackdrop} onClick={() => setMobileOpen(false)} role="presentation" />
       )}
 
       <aside className={`${styles.sidebar} ${mobileOpen ? styles.sidebarOpen : ''}`}>
-        {/* Logo */}
         <div className={styles.sidebarLogo}>
-          <svg width="20" height="20" viewBox="0 0 32 32">
+          <svg width="36" height="36" viewBox="0 0 32 32">
             <path fill="#d49aae" d="M4 24 20 24 24 20 8 20z" />
             <path fill="#a896d4" d="M6 18 22 18 26 14 10 14z" />
             <path fill="#8ec0a4" d="M8 12 24 12 28 8 12 8z" />
           </svg>
-          <span className={styles.sidebarLogoText}>chinwag</span>
         </div>
 
-        {/* Navigation */}
         <nav className={styles.sidebarNav}>
           <div
-            className={`${styles.navItem} ${overviewMode ? styles.navItemActive : ''}`}
+            className={`${styles.navItem} ${overviewActive ? styles.navItemActive : ''}`}
             role="button"
             tabIndex={0}
             onClick={goOverview}
@@ -83,17 +82,44 @@ export default function Sidebar() {
             </svg>
             <span className={styles.navLabel}>Overview</span>
           </div>
+
+          <div
+            className={`${styles.navItem} ${toolsActive ? styles.navItemActive : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={goTools}
+            onKeyDown={(e) => handleKeydown(e, goTools)}
+          >
+            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
+              <polygon points="6,10 7,7 10,6 9,9" fill="currentColor" />
+            </svg>
+            <span className={styles.navLabel}>Tools</span>
+          </div>
+
+          <div
+            className={`${styles.navItem} ${settingsActive ? styles.navItemActive : ''}`}
+            role="button"
+            tabIndex={0}
+            onClick={goSettings}
+            onKeyDown={(e) => handleKeydown(e, goSettings)}
+          >
+            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            <span className={styles.navLabel}>Settings</span>
+          </div>
         </nav>
 
-        {/* Projects */}
         <div className={styles.sidebarSection}>
-          <span className={styles.sectionHeader}>PROJECTS</span>
+          <span className={styles.sectionHeader}>Projects</span>
           <div className={styles.projectList}>
             {teams.length > 0 ? (
               teams.map((team) => (
                 <div
                   key={team.team_id}
-                  className={`${styles.navItem} ${styles.navItemProject} ${activeTeamId === team.team_id ? styles.navItemActive : ''}`}
+                  className={`${styles.navItem} ${styles.navItemProject} ${activeTeamId === team.team_id && !activeNav ? styles.navItemActive : ''}`}
                   role="button"
                   tabIndex={0}
                   onClick={() => goTeam(team.team_id)}
@@ -109,19 +135,7 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Spacer */}
         <div className={styles.sidebarSpacer} />
-
-        {/* Bottom: user + sign out */}
-        <div className={styles.sidebarBottom}>
-          {user && (
-            <div className={styles.userInfo}>
-              <span className={styles.userDot} />
-              <span className={styles.userHandle}>{user.handle}</span>
-            </div>
-          )}
-          <button className={styles.signoutBtn} onClick={handleLogout}>Sign out</button>
-        </div>
       </aside>
     </>
   );

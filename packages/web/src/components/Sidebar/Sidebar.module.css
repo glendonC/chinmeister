@@ -1,8 +1,7 @@
 .sidebar {
   width: var(--sidebar-width);
   height: 100vh;
-  background: rgba(255, 255, 255, 0.88);
-  border-right: 1px solid var(--faint);
+  background: transparent;
   display: flex;
   flex-direction: column;
   position: sticky;
@@ -11,62 +10,47 @@
   overflow-y: auto;
 }
 
-/* Logo */
+/* Logo — mark only */
 .sidebarLogo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 20px 20px 24px;
-}
-
-.sidebarLogoText {
-  font-family: var(--display);
-  font-size: 1.1rem;
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.01em;
+  padding: 20px 16px 28px;
 }
 
 /* Navigation */
 .sidebarNav {
-  padding: 0 12px;
+  padding: 0 8px;
 }
 
 .navItem {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  gap: 8px;
+  padding: 6px 10px;
   border-radius: var(--radius-xs);
   cursor: pointer;
   font-size: var(--text-sm);
   color: var(--muted);
-  transition: all 0.15s ease;
+  transition: color 0.15s ease;
   user-select: none;
-  border-left: 2px solid transparent;
-  margin-left: -2px;
 }
 
 .navItem:hover {
   color: var(--ink);
-  background: var(--ghost);
 }
 
 .navItemActive {
   color: var(--accent);
-  background: var(--accent-bg);
-  border-left-color: var(--accent);
-  font-weight: 500;
+  font-weight: 400;
 }
 
 .navItemActive:hover {
   color: var(--accent);
-  background: var(--accent-bg);
 }
 
 .navIcon {
   flex-shrink: 0;
-  opacity: 0.7;
+  opacity: 0.5;
 }
 
 .navItemActive .navIcon {
@@ -79,21 +63,20 @@
 
 /* Sections */
 .sidebarSection {
-  padding: 20px 12px 0;
+  padding: 16px 8px 0;
 }
 
 .sectionHeader {
   display: block;
-  padding: 0 12px 8px;
+  padding: 0 10px 6px;
   font-size: var(--text-2xs);
-  font-weight: 600;
+  font-weight: 400;
   color: var(--soft);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 .sectionEmpty {
-  padding: 8px 12px;
+  padding: 6px 10px;
   font-size: var(--text-xs);
   color: var(--soft);
   font-style: italic;
@@ -103,7 +86,6 @@
 .projectList {
   display: flex;
   flex-direction: column;
-  gap: 1px;
 }
 
 .navItemProject {
@@ -111,11 +93,12 @@
 }
 
 .projectDot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: var(--faint);
+  background: var(--soft);
   flex-shrink: 0;
+  transition: background 0.15s ease;
 }
 
 .navItemActive .projectDot {
@@ -134,55 +117,6 @@
   flex: 1;
 }
 
-/* Bottom */
-.sidebarBottom {
-  padding: 16px 20px 20px;
-  border-top: 1px solid var(--faint);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.userInfo {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.userDot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #3dab63;
-  flex-shrink: 0;
-}
-
-.userHandle {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: var(--ink);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.signoutBtn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: var(--sans);
-  font-size: var(--text-xs);
-  color: var(--soft);
-  padding: 0;
-  text-align: left;
-  transition: color 0.15s ease;
-}
-
-.signoutBtn:hover {
-  color: var(--danger);
-}
-
 /* Mobile toggle */
 .mobileToggle {
   display: none;
@@ -190,26 +124,20 @@
   top: 14px;
   left: 14px;
   z-index: 30;
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
+  background: rgba(255, 255, 255, 0.8);
+  border: none;
   border-radius: var(--radius-xs);
   padding: 8px;
   cursor: pointer;
   color: var(--ink);
-  box-shadow: 0 2px 8px var(--glass-shadow);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-}
-
-.mobileToggle:hover {
-  background: rgba(255, 255, 255, 0.9);
 }
 
 .mobileBackdrop {
   display: none;
 }
 
-/* Mobile responsive */
 @media (max-width: 767px) {
   .mobileToggle {
     display: flex;
@@ -221,7 +149,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.15);
     z-index: 18;
     backdrop-filter: blur(2px);
     -webkit-backdrop-filter: blur(2px);
@@ -231,9 +159,11 @@
     position: fixed;
     left: 0;
     top: 0;
+    background: rgba(250, 250, 250, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     transform: translateX(-100%);
     transition: transform 0.3s var(--motion);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
   }
 
   .sidebarOpen {

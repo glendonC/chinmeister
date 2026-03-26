@@ -1,0 +1,206 @@
+.page {
+  animation: viewFadeIn 0.25s var(--motion) both;
+}
+
+.loadingText {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+}
+
+.section {
+  margin-bottom: 56px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+  letter-spacing: -0.01em;
+}
+
+.sectionCount {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+}
+
+.yourTools {
+  display: flex;
+  flex-direction: column;
+}
+
+.yourToolRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.yourToolDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #34c759;
+  flex-shrink: 0;
+}
+
+.yourToolName {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-primary);
+}
+
+.yourToolProjects {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.yourToolJoins {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.categoryTabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.categoryTab {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+  background: none;
+  border: none;
+  border-radius: 20px;
+  padding: 5px 14px;
+  cursor: pointer;
+  transition: opacity 0.15s, color 0.15s, background 0.15s;
+}
+
+.categoryTab:hover {
+  opacity: var(--opacity-secondary);
+}
+
+.categoryTabActive {
+  opacity: var(--opacity-primary);
+  color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.toolList {
+  display: flex;
+  flex-direction: column;
+}
+
+.toolItem {
+  padding: 16px 0;
+}
+
+.toolTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toolName {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-primary);
+}
+
+.toolConfigured {
+  font-size: 10px;
+  font-weight: 400;
+  color: #34c759;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.toolFeatured {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.toolLink {
+  color: var(--soft);
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  transition: color 0.15s;
+}
+
+.toolLink:hover {
+  color: var(--accent);
+}
+
+.toolDesc {
+  font-size: 13px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+  margin-top: 4px;
+  line-height: 1.5;
+}
+
+.toolInstall {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+  margin-top: 6px;
+  background: var(--ghost);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.emptyHint {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 300;
+  opacity: var(--opacity-secondary);
+}
+
+.emptyHint code {
+  font-family: var(--mono);
+  font-size: 0.9em;
+  background: var(--ghost);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}

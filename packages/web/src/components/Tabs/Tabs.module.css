@@ -1,68 +1,56 @@
 .tabsContainer {
   max-width: 1100px;
   margin: 0 auto;
-  padding: 20px 32px 40px;
 }
 
 .tabsNav {
   display: flex;
   gap: 4px;
-  border-bottom: 1px solid var(--faint);
   margin-bottom: 0;
 }
 
 .tabBtn {
-  padding: 10px 16px;
+  padding: 8px 14px;
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
   font-family: var(--sans);
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--soft);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
   cursor: pointer;
-  transition: color 0.2s, border-color 0.2s;
+  transition: opacity 0.2s, color 0.2s;
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
 .tabBtn:hover {
-  color: var(--muted);
+  opacity: var(--opacity-secondary);
 }
 
 .tabBtn.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--ink);
+  opacity: var(--opacity-primary);
 }
 
 .tabBadge {
   font-family: var(--mono);
   font-size: 10.5px;
-  font-weight: 500;
-  background: var(--accent-bg);
+  font-weight: 400;
   color: var(--accent);
-  padding: 1px 7px;
-  border-radius: 4px;
+  opacity: 0.7;
+}
+
+.tabBtn.active .tabBadge {
+  opacity: 1;
 }
 
 .tabsPanel {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-top: none;
-  border-radius: 0 0 var(--radius) var(--radius);
-  padding: 20px 24px;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 2px 10px var(--glass-shadow);
-  min-height: 120px;
+  padding: 10px 0 32px;
 }
 
 @media (max-width: 768px) {
-  .tabsContainer {
-    padding: 16px 20px 32px;
-  }
-
   .tabsNav {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
@@ -71,10 +59,6 @@
   .tabBtn {
     white-space: nowrap;
     padding: 8px 12px;
-    font-size: 12px;
-  }
-
-  .tabsPanel {
-    padding: 16px 18px;
+    font-size: var(--text-xs);
   }
 }

@@ -1,0 +1,63 @@
+.composer {
+  margin-bottom: 8px;
+}
+
+.inputRow {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.input {
+  flex: 1;
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--ghost);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  outline: none;
+  transition: box-shadow 0.1s;
+}
+
+.input::placeholder { color: var(--soft); }
+.input:focus { box-shadow: 0 0 0 2px var(--accent); }
+.input:disabled { opacity: 0.5; }
+
+.sendBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.1s;
+}
+
+.sendBtn:hover:not(:disabled) { opacity: 0.85; }
+.sendBtn:disabled { opacity: 0.3; cursor: default; }
+
+.sendingDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #fff;
+  animation: blink 1s infinite;
+}
+
+.error {
+  font-size: 11px;
+  color: var(--danger);
+  margin-top: 3px;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}

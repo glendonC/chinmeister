@@ -82,17 +82,26 @@ async function loadAppModule(options = {}) {
     },
   }));
 
+  vi.doMock('./views/ToolsView/ToolsView.jsx', () => ({
+    default: function MockToolsView() {
+      return <div data-testid="tools-view">tools-view</div>;
+    },
+  }));
+
   vi.doMock('./components/Sidebar/Sidebar.jsx', () => ({
-    default: function MockSidebar({ showSettings, onSelectSettings }) {
+    default: function MockSidebar({ activeNav, onNavigate }) {
       return (
         <div data-testid="sidebar">
-          <button data-testid="show-settings" onClick={() => onSelectSettings(true)}>
+          <button data-testid="show-settings" onClick={() => onNavigate('settings')}>
             show settings
           </button>
-          <button data-testid="hide-settings" onClick={() => onSelectSettings(false)}>
+          <button data-testid="hide-settings" onClick={() => onNavigate(null)}>
             hide settings
           </button>
-          <span data-testid="sidebar-state">{String(showSettings)}</span>
+          <button data-testid="show-tools" onClick={() => onNavigate('tools')}>
+            show tools
+          </button>
+          <span data-testid="sidebar-state">{String(activeNav)}</span>
         </div>
       );
     },

@@ -1,44 +1,78 @@
 .overview {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 32px;
-  animation: viewFadeIn 0.4s var(--motion) both;
+  animation: viewFadeIn 0.25s var(--motion) both;
 }
 
-.overviewHeader {
-  margin-bottom: 28px;
+.hero {
+  display: flex;
+  gap: 56px;
+  padding: 0 0 48px;
+  margin-bottom: 32px;
 }
 
-.overviewTitle {
-  font-family: var(--display);
-  font-size: 2rem;
-  font-weight: 400;
-  letter-spacing: -0.02em;
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.heroLabel {
+  font-size: 12px;
+  font-weight: 300;
   color: var(--ink);
-  line-height: 1.15;
+  opacity: var(--opacity-secondary);
+  letter-spacing: 0.01em;
 }
 
-.overviewSummary {
-  font-family: var(--sans);
+.heroValue {
+  font-size: 56px;
+  font-weight: 200;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.heroActive {
+  color: var(--accent);
+}
+
+.heroDanger {
+  color: var(--danger);
+}
+
+.gridHeader {
+  margin-bottom: 16px;
+}
+
+.gridTitle {
   font-size: 14px;
   font-weight: 400;
-  color: var(--muted);
-  margin-top: 6px;
-  line-height: 1.4;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+  letter-spacing: -0.01em;
 }
 
 .overviewGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 24px;
 }
 
-/* Remove listitem styling artifacts */
 .overviewGrid [role="listitem"] {
   display: contents;
 }
 
 @keyframes viewFadeIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .heroValue {
+    font-size: 40px;
+  }
 }

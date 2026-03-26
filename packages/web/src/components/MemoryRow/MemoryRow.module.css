@@ -1,53 +1,159 @@
 .memoryRow {
   padding: 8px 0;
-  border-bottom: 1px solid var(--ghost);
-  line-height: 1.55;
 }
 
-.memoryRow:last-child {
-  border-bottom: none;
+.memoryContent {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .tag {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: 10px;
+  font-weight: 400;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
-  padding: 2px 8px;
+  letter-spacing: 0.03em;
+  flex-shrink: 0;
+}
+
+.tag_gotcha  { color: var(--warn); }
+.tag_config  { color: var(--info); }
+.tag_decision { color: var(--accent); }
+.tag_pattern { color: var(--purple); }
+.tag_reference { color: var(--soft); }
+
+.memoryText {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--ink);
+  flex: 1;
+  min-width: 0;
+}
+
+.memoryAuthor {
+  font-size: 11px;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+  flex-shrink: 0;
+}
+
+.memoryActions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.1s;
+  margin-top: 3px;
+}
+
+.memoryRow:hover .memoryActions { opacity: 1; }
+
+.btnAction {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
   border-radius: 4px;
-  margin-right: 8px;
-  vertical-align: 1px;
+  color: var(--soft);
+  cursor: pointer;
+  padding: 2px 5px;
+  font-size: 11px;
+  transition: color 0.1s;
 }
 
-.tag_gotcha {
-  background: var(--warn-bg);
-  color: var(--warn);
+.btnAction:hover {
+  color: var(--ink);
 }
 
-.tag_config {
-  background: var(--info-bg);
-  color: var(--info);
+.btnConfirmDelete {
+  color: var(--danger);
 }
 
-.tag_decision {
-  background: var(--accent-bg);
-  color: var(--accent);
+.confirmText {
+  font-size: 11px;
+  font-weight: 400;
 }
 
-.tag_pattern {
-  background: var(--purple-bg);
-  color: var(--purple);
+/* Edit form */
+.editForm {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.tag_reference {
+.editTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.editSelect {
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 2px 6px;
+  border: none;
+  border-radius: 4px;
   background: var(--ghost);
+  color: var(--ink);
+  outline: none;
+}
+
+.editSelect:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+.editAuthor {
+  font-size: 11px;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+}
+
+.editTextarea {
+  font-family: var(--sans);
+  font-size: 13px;
+  color: var(--ink);
+  background: var(--ghost);
+  border: none;
+  border-radius: 4px;
+  padding: 6px 8px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.5;
+}
+
+.editTextarea:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+.editError {
+  font-size: 11px;
+  color: var(--danger);
+}
+
+.editActions {
+  display: flex;
+  gap: 4px;
+}
+
+.btnSave, .btnCancel {
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 400;
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+}
+
+.btnSave {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btnSave:disabled { opacity: 0.4; cursor: default; }
+
+.btnCancel {
+  background: none;
   color: var(--muted);
 }
 
-.memoryText {
-  font-size: 13.5px;
-  font-weight: 400;
-  color: var(--ink);
-}
+.btnCancel:hover { color: var(--ink); }
+.btnCancel:disabled { opacity: 0.4; cursor: default; }

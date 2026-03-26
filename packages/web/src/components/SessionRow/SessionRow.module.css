@@ -1,47 +1,30 @@
-.sessionRow {
+.row {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
   padding: 8px 0;
-  border-bottom: 1px solid var(--ghost);
 }
 
-.sessionRow:last-child {
-  border-bottom: none;
-}
-
-.sessionHandle {
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.sessionTool {
-  font-size: 11.5px;
+.tool {
+  font-size: 13px;
   font-weight: 400;
-  color: var(--soft);
-  background: var(--ghost);
-  padding: 1px 7px;
-  border-radius: 4px;
+  color: var(--ink);
+  opacity: var(--opacity-primary);
 }
 
-.sessionLive {
-  font-size: 10.5px;
-  font-weight: 500;
-  color: var(--accent);
+.live {
+  font-size: 10px;
+  font-weight: 400;
+  color: #34c759;
   text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: 0.03em;
 }
 
-.sessionMeta {
+.meta {
   font-family: var(--mono);
-  font-size: 11.5px;
-  color: var(--muted);
+  font-size: 12px;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
   margin-left: auto;
-}
-
-@media (max-width: 480px) {
-  .sessionMeta {
-    display: none;
-  }
+  font-variant-numeric: tabular-nums;
 }

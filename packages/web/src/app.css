@@ -1,14 +1,13 @@
 /* ═══════════════════════════════════════════
    chinwag dashboard — global styles
-   Variables, reset, typography, background.
-   Component styles live in CSS modules.
+   Clean, minimal, Apple-inspired.
    ═══════════════════════════════════════════ */
 
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400&display=swap');
+
 :root {
-  /* Typography */
-  --sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-  --display: 'Newsreader', Georgia, serif;
-  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --mono: 'SF Mono', 'IBM Plex Mono', ui-monospace, monospace;
 
   --text-2xs: 0.625rem;
   --text-xs: 0.6875rem;
@@ -16,43 +15,39 @@
   --text-base: 0.8125rem;
   --text-md: 0.875rem;
   --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
 
-  /* Ink & surface */
-  --ink: #181411;
-  --muted: rgba(24, 20, 17, 0.64);
-  --soft: rgba(24, 20, 17, 0.34);
-  --faint: rgba(24, 20, 17, 0.10);
-  --ghost: rgba(24, 20, 17, 0.05);
-  --page-bg: #fafafa;
+  --opacity-primary: 0.92;
+  --opacity-secondary: 0.45;
+  --opacity-tertiary: 0.28;
 
-  /* Glass surfaces */
-  --glass: rgba(255, 255, 255, 0.72);
-  --glass-border: rgba(255, 255, 255, 0.85);
-  --glass-shadow: rgba(70, 61, 52, 0.05);
+  --ink: #1d1d1f;
+  --muted: rgba(0, 0, 0, 0.55);
+  --soft: rgba(0, 0, 0, 0.3);
+  --faint: rgba(0, 0, 0, 0.08);
+  --ghost: rgba(0, 0, 0, 0.04);
+  --page-bg: #ffffff;
 
-  /* Semantic */
-  --accent: #2a6f5a;
-  --accent-bg: rgba(42, 111, 90, 0.07);
-  --warn: #a85d1c;
-  --warn-bg: rgba(168, 93, 28, 0.07);
-  --danger: #b33a3a;
-  --danger-bg: rgba(179, 58, 58, 0.06);
-  --info: #3168a8;
-  --info-bg: rgba(49, 104, 168, 0.06);
-  --purple: #6d44a8;
-  --purple-bg: rgba(109, 68, 168, 0.06);
+  --accent: #007aff;
+  --accent-bg: rgba(0, 122, 255, 0.06);
+  --warn: #ff9500;
+  --warn-bg: rgba(255, 149, 0, 0.06);
+  --danger: #ff3b30;
+  --danger-bg: rgba(255, 59, 48, 0.06);
+  --info: #5856d6;
+  --info-bg: rgba(88, 86, 214, 0.06);
+  --purple: #af52de;
+  --purple-bg: rgba(175, 82, 222, 0.06);
 
-  /* Radii */
-  --radius: 14px;
-  --radius-sm: 10px;
+  --radius: 12px;
+  --radius-sm: 8px;
   --radius-xs: 6px;
 
-  /* Motion */
-  --motion: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion: cubic-bezier(0.25, 0.1, 0.25, 1);
 
-  /* Layout */
   --sidebar-width: 240px;
-  --topbar-height: 56px;
+  --content-max-width: 920px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -68,7 +63,7 @@ body {
   font-family: var(--sans);
   font-size: var(--text-md);
   font-weight: 400;
-  line-height: 1.55;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -79,61 +74,23 @@ body {
 
 code {
   font-family: var(--mono);
-  font-size: 0.92em;
+  font-size: 0.9em;
   font-weight: 400;
   background: var(--ghost);
   padding: 2px 6px;
   border-radius: 4px;
 }
 
-/* Background gradient blobs (matching landing page, lower opacity) */
+/* Kill all gradient blobs */
 .page-gradients {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
+  display: none;
 }
 
-.gradient-blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-}
-
-.gradient-blob--peach {
-  width: 800px;
-  height: 700px;
-  top: -25%;
-  right: -15%;
-  background: #f0c4a0;
-  opacity: 0.18;
-}
-
-.gradient-blob--lavender {
-  width: 700px;
-  height: 800px;
-  top: 15%;
-  left: -20%;
-  background: #c4b0e8;
-  opacity: 0.15;
-}
-
-.gradient-blob--sage {
-  width: 600px;
-  height: 600px;
-  bottom: -10%;
-  right: 10%;
-  background: #a8d4b8;
-  opacity: 0.15;
-}
-
-/* Animations */
 @keyframes fadeSlideIn {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 
-/* Accessibility */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;

@@ -1,20 +1,170 @@
-.projectDetail {
-  animation: fadeSlideIn 0.4s var(--motion) both;
+.page {
+  animation: viewFadeIn 0.25s var(--motion) both;
 }
 
-.statsRow {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 28px 32px 0;
+/* ── Hero: large thin numbers ── */
+.hero {
+  display: flex;
+  gap: 56px;
+  padding: 0 0 48px;
+  margin-bottom: 32px;
 }
 
-@media (max-width: 768px) {
-  .statsRow {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-    padding: 20px 20px 0;
+.heroStat {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.heroLabel {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+  letter-spacing: 0.01em;
+}
+
+.heroValue {
+  font-size: 56px;
+  font-weight: 200;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.heroActive {
+  color: var(--accent);
+}
+
+.heroDanger {
+  color: var(--danger);
+}
+
+/* ── Sections ── */
+.section {
+  padding: 32px 0 8px;
+}
+
+.sectionHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+  letter-spacing: -0.01em;
+}
+
+.sectionCount {
+  font-size: 12px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-tertiary);
+}
+
+.sectionBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.emptyHint {
+  font-size: 13px;
+  color: var(--ink);
+  font-weight: 300;
+  opacity: var(--opacity-secondary);
+}
+
+/* ── Usage ── */
+.usageGrid {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.usageStat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.usageStatLabel {
+  font-size: 11px;
+  font-weight: 300;
+  color: var(--ink);
+  opacity: var(--opacity-secondary);
+}
+
+.usageStatValue {
+  font-size: 24px;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink);
+}
+
+.toolBreakdown {
+  max-width: 320px;
+}
+
+.toolRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+
+.toolName {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  width: 90px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolBar {
+  flex: 1;
+  height: 2px;
+  background: var(--ghost);
+  border-radius: 1px;
+  overflow: hidden;
+}
+
+.toolBarFill {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.toolCount {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  min-width: 16px;
+  text-align: right;
+}
+
+@keyframes viewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 600px) {
+  .hero {
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .heroValue {
+    font-size: 40px;
   }
 }

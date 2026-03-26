@@ -1,15 +1,14 @@
 .messageRow {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  padding: 7px 0;
-  font-size: 13px;
+  gap: 8px;
+  padding: 8px 0;
 }
 
 .messageFrom {
-  font-weight: 500;
   font-size: 13px;
-  color: var(--info);
+  font-weight: 400;
+  color: var(--accent);
   flex-shrink: 0;
 }
 

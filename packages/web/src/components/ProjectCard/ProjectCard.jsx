@@ -1,5 +1,4 @@
 import { useTeamStore } from '../../lib/stores/teams.js';
-import StatCard from '../StatCard/StatCard.jsx';
 import styles from './ProjectCard.module.css';
 
 export default function ProjectCard({ team }) {
@@ -29,13 +28,13 @@ export default function ProjectCard({ team }) {
         <h3 className={styles.cardName}>{team.team_name}</h3>
         <div className={styles.cardIndicators}>
           {team.active_agents > 0 && (
-            <span className={styles.indicatorActive} aria-label={`${team.active_agents} active agents`}>
+            <span className={styles.indicatorActive}>
               <span className={styles.indicatorDot} />
               {team.active_agents} active
             </span>
           )}
           {team.conflict_count > 0 && (
-            <span className={styles.indicatorConflict} aria-label={`${team.conflict_count} conflicts`}>
+            <span className={styles.indicatorConflict}>
               {team.conflict_count} conflict{team.conflict_count !== 1 ? 's' : ''}
             </span>
           )}
@@ -43,11 +42,31 @@ export default function ProjectCard({ team }) {
       </div>
 
       <div className={styles.cardStats}>
-        <StatCard value={team.active_agents} label="agents" variant={team.active_agents > 0 ? 'active' : 'default'} />
-        <StatCard value={team.live_sessions} label="sessions" />
-        <StatCard value={team.memory_count} label="memories" />
-        <StatCard value={team.recent_sessions_24h} label="24h" />
+        <div className={styles.cardStat}>
+          <span className={styles.cardStatValue}>{team.active_agents}</span>
+          <span className={styles.cardStatLabel}>agents</span>
+        </div>
+        <div className={styles.cardStat}>
+          <span className={styles.cardStatValue}>{team.live_sessions}</span>
+          <span className={styles.cardStatLabel}>sessions</span>
+        </div>
+        <div className={styles.cardStat}>
+          <span className={styles.cardStatValue}>{team.memory_count}</span>
+          <span className={styles.cardStatLabel}>memories</span>
+        </div>
+        <div className={styles.cardStat}>
+          <span className={styles.cardStatValue}>{team.recent_sessions_24h}</span>
+          <span className={styles.cardStatLabel}>24h</span>
+        </div>
       </div>
+
+      {team.tools_configured?.length > 0 && (
+        <div className={styles.cardTools}>
+          {team.tools_configured.map((t) => (
+            <span key={t.tool} className={styles.toolChip}>{t.tool}</span>
+          ))}
+        </div>
+      )}
     </article>
   );
 }

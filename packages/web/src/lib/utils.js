@@ -1,13 +1,26 @@
-/**
- * Format a duration in minutes to a human-readable string.
- * @param {number|null} m - minutes
- * @returns {string}
- */
 export function formatDuration(m) {
   if (m == null || typeof m !== 'number' || m <= 0) return '<1m';
   if (m >= 60) return `${Math.floor(m / 60)}h ${Math.round(m % 60)}m`;
   return `${Math.round(m)}m`;
 }
 
-/** Known memory categories for styling */
 export const MEMORY_CATEGORIES = new Set(['gotcha', 'config', 'decision', 'pattern', 'reference']);
+
+export const COLOR_PALETTE = [
+  { name: 'red', hex: '#ff3b30' },
+  { name: 'cyan', hex: '#32ced6' },
+  { name: 'yellow', hex: '#ffc600' },
+  { name: 'green', hex: '#28cd41' },
+  { name: 'magenta', hex: '#c44dff' },
+  { name: 'blue', hex: '#0a84ff' },
+  { name: 'orange', hex: '#ff9f0a' },
+  { name: 'lime', hex: '#30d158' },
+  { name: 'pink', hex: '#ff375f' },
+  { name: 'sky', hex: '#64d2ff' },
+  { name: 'lavender', hex: '#7d7aff' },
+  { name: 'white', hex: '#98989d' },
+];
+
+export function getColorHex(name) {
+  return COLOR_PALETTE.find(c => c.name === name)?.hex;
+}

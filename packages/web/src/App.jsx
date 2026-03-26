@@ -6,6 +6,7 @@ import { usePollingStore, startPolling, stopPolling } from './lib/stores/polling
 import ConnectView from './views/ConnectView/ConnectView.jsx';
 import OverviewView from './views/OverviewView/OverviewView.jsx';
 import ProjectView from './views/ProjectView/ProjectView.jsx';
+import ToolsView from './views/ToolsView/ToolsView.jsx';
 import SettingsView from './views/SettingsView/SettingsView.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
 
@@ -15,7 +16,7 @@ export default function App() {
   const [bootState, setBootState] = useState('loading');
   const [bootError, setBootError] = useState(null);
   const [errorDismissed, setErrorDismissed] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
+  const [activeNav, setActiveNav] = useState(null);
 
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
@@ -64,7 +65,6 @@ export default function App() {
     return () => stopPolling();
   }, []);
 
-  // ── Boot / unauth states ──
   if (bootState === 'loading') {
     return (
       <div className={styles.bootScreen}>
@@ -84,13 +84,11 @@ export default function App() {
     return <ConnectView error={bootError} />;
   }
 
-  // ── Derive active view ──
-  const activeView = showSettings ? 'settings' : activeTeamId === null ? 'overview' : 'project';
+  const activeView = activeNav || (activeTeamId !== null ? 'project' : 'overview');
 
-  // ── Authenticated layout ──
   return (
     <div className={styles.layout}>
-      <Sidebar showSettings={showSettings} onSelectSettings={setShowSettings} />
+      <Sidebar activeNav={activeNav} onNavigate={setActiveNav} />
 
       <div className={styles.main}>
         {showError && (
@@ -105,9 +103,10 @@ export default function App() {
         )}
 
         <div className={styles.content}>
-          {activeView === 'settings' && <SettingsView />}
           {activeView === 'overview' && <OverviewView />}
           {activeView === 'project' && <ProjectView />}
+          {activeView === 'tools' && <ToolsView />}
+          {activeView === 'settings' && <SettingsView />}
         </div>
       </div>
     </div>
