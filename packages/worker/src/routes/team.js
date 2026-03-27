@@ -1,5 +1,4 @@
 import { isBlocked } from '../moderation.js';
-import { VALID_CATEGORIES } from '../team.js';
 import { getDB, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
 import { getAgentId, getToolFromAgentId, teamErrorStatus } from '../lib/request-utils.js';
@@ -126,7 +125,8 @@ export async function handleTeamFile(request, user, env, teamId) {
 export async function handleTeamSaveMemory(request, user, env, teamId) {
   const body = await parseBody(request);
   if (body._parseError) return json({ error: body._parseError }, 400);
-  const { text, category } = body;
+  const { text } = body;
+  let tags = body.tags;
   if (typeof text !== 'string' || !text.trim()) {
     return json({ error: 'text is required' }, 400);
   }
@@ -134,8 +134,16 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
     return json({ error: 'text must be 2000 characters or less' }, 400);
   }
   if (isBlocked(text)) return json({ error: 'Content blocked' }, 400);
-  if (!VALID_CATEGORIES.includes(category)) {
-    return json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` }, 400);
+  // Validate tags shape
+  if (tags !== undefined && tags !== null) {
+    if (!Array.isArray(tags)) return json({ error: 'tags must be an array of strings' }, 400);
+    if (tags.length > 10) return json({ error: 'max 10 tags' }, 400);
+    if (tags.some(t => typeof t !== 'string' || t.length > 50)) {
+      return json({ error: 'each tag must be a string of 50 chars or less' }, 400);
+    }
+    tags = tags.map(t => t.toLowerCase().trim()).filter(Boolean);
+  } else {
+    tags = [];
   }
 
   const db = getDB(env);
@@ -146,7 +154,7 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
 
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.saveMemory(agentId, text.trim(), category, user.handle, user.id);
+  const result = await team.saveMemory(agentId, text.trim(), tags, user.handle, user.id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
 
   await db.consumeRateLimit(`memory:${user.id}`);
@@ -156,17 +164,17 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
 export async function handleTeamSearchMemory(request, user, env, teamId) {
   const url = new URL(request.url);
   const query = url.searchParams.get('q') || null;
-  const category = url.searchParams.get('category') || null;
   const parsedLimit = parseInt(url.searchParams.get('limit') || '20', 10);
   const limit = Math.max(1, Math.min(isNaN(parsedLimit) ? 20 : parsedLimit, 50));
 
-  if (category && !VALID_CATEGORIES.includes(category)) {
-    return json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` }, 400);
-  }
+  const tagsParam = url.searchParams.get('tags');
+  const tags = tagsParam
+    ? tagsParam.split(',').map(t => t.trim().toLowerCase()).filter(Boolean)
+    : null;
 
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.searchMemories(agentId, query, category, limit, user.id);
+  const result = await team.searchMemories(agentId, query, tags, limit, user.id);
   if (result.error) return json({ error: result.error }, 403);
   return json(result);
 }
@@ -174,7 +182,8 @@ export async function handleTeamSearchMemory(request, user, env, teamId) {
 export async function handleTeamUpdateMemory(request, user, env, teamId) {
   const body = await parseBody(request);
   if (body._parseError) return json({ error: body._parseError }, 400);
-  const { id, text, category } = body;
+  const { id, text } = body;
+  let tags = body.tags;
   if (typeof id !== 'string' || !id.trim()) {
     return json({ error: 'id is required' }, 400);
   }
@@ -184,16 +193,21 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
   if (text !== undefined && text.length > 2000) {
     return json({ error: 'text must be 2000 characters or less' }, 400);
   }
-  if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
-    return json({ error: `category must be one of: ${VALID_CATEGORIES.join(', ')}` }, 400);
+  if (tags !== undefined) {
+    if (!Array.isArray(tags)) return json({ error: 'tags must be an array of strings' }, 400);
+    if (tags.length > 10) return json({ error: 'max 10 tags' }, 400);
+    if (tags.some(t => typeof t !== 'string' || t.length > 50)) {
+      return json({ error: 'each tag must be a string of 50 chars or less' }, 400);
+    }
+    tags = tags.map(t => t.toLowerCase().trim()).filter(Boolean);
   }
-  if (text === undefined && category === undefined) {
-    return json({ error: 'text or category required' }, 400);
+  if (text === undefined && tags === undefined) {
+    return json({ error: 'text or tags required' }, 400);
   }
 
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.updateMemory(agentId, id, text, category, user.id);
+  const result = await team.updateMemory(agentId, id, text, tags, user.id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }

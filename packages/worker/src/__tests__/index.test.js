@@ -577,7 +577,7 @@ describe('Team memory endpoints', () => {
       headers,
       body: JSON.stringify({
         text: 'Always run tests before deploying',
-        category: 'pattern',
+        tags: ['pattern'],
       }),
     });
     expect(res.status).toBe(201);
@@ -602,24 +602,12 @@ describe('Team memory endpoints', () => {
       headers,
       body: JSON.stringify({
         text: 'kill yourself note',
-        category: 'pattern',
+        tags: ['pattern'],
       }),
     });
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error).toBe('Content blocked');
-  });
-
-  it('rejects memory with invalid category', async () => {
-    const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        text: 'Some valid text',
-        category: 'invalid',
-      }),
-    });
-    expect(res.status).toBe(400);
   });
 
   it('rejects memory text over 2000 characters', async () => {
@@ -628,7 +616,7 @@ describe('Team memory endpoints', () => {
       headers,
       body: JSON.stringify({
         text: 'x'.repeat(2001),
-        category: 'config',
+        tags: ['config'],
       }),
     });
     expect(res.status).toBe(400);
@@ -642,7 +630,7 @@ describe('Team memory endpoints', () => {
       headers,
       body: JSON.stringify({
         text: '   ',
-        category: 'config',
+        tags: ['config'],
       }),
     });
     expect(res.status).toBe(400);

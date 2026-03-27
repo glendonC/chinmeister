@@ -150,7 +150,7 @@ describe('Memory', () => {
   });
 
   it('saveMemory returns ok with id', async () => {
-    const res = await team().saveMemory(agentId, 'Always run tests before deploying', 'pattern', 'alice', ownerId);
+    const res = await team().saveMemory(agentId, 'Always run tests before deploying', ['pattern'], 'alice', ownerId);
     expect(res.ok).toBe(true);
     expect(res.id).toBeDefined();
     savedMemoryId = res.id;
@@ -162,10 +162,10 @@ describe('Memory', () => {
     expect(res.memories[0].text).toContain('Always run tests before deploying');
   });
 
-  it('searchMemories filters by category', async () => {
-    const res = await team().searchMemories(agentId, null, 'pattern', 10, ownerId);
+  it('searchMemories filters by tags', async () => {
+    const res = await team().searchMemories(agentId, null, ['pattern'], 10, ownerId);
     expect(res.memories.length).toBeGreaterThan(0);
-    expect(res.memories.every(m => m.category === 'pattern')).toBe(true);
+    expect(res.memories.every(m => m.tags.includes('pattern'))).toBe(true);
   });
 
   it('deleteMemory removes memory', async () => {
@@ -177,17 +177,17 @@ describe('Memory', () => {
     expect(search.memories.length).toBe(0);
   });
 
-  it('fuzzy dedup: saving similar text returns matched_id', async () => {
+  it('saves similar text as separate entries (no dedup)', async () => {
     // Save original
-    const first = await team().saveMemory(agentId, 'The database connection pool should be sized at 10', 'config', 'alice', ownerId);
+    const first = await team().saveMemory(agentId, 'The database connection pool should be sized at 10', ['config'], 'alice', ownerId);
     expect(first.ok).toBe(true);
     expect(first.id).toBeDefined();
 
-    // Save very similar text (>70% word overlap)
-    const second = await team().saveMemory(agentId, 'The database connection pool should be sized at 10 connections', 'config', 'alice', ownerId);
+    // Save very similar text — both should succeed as separate entries
+    const second = await team().saveMemory(agentId, 'The database connection pool should be sized at 10 connections', ['config'], 'alice', ownerId);
     expect(second.ok).toBe(true);
-    expect(second.deduplicated).toBe(true);
-    expect(second.matched_id).toBe(first.id);
+    expect(second.id).toBeDefined();
+    expect(second.id).not.toBe(first.id);
   });
 });
 

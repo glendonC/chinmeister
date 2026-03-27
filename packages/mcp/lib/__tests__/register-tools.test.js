@@ -364,12 +364,12 @@ describe('registerTools', () => {
     it('includes memories section when present', async () => {
       refreshContext.mockResolvedValue({
         members: [],
-        memories: [{ category: 'gotcha', text: 'Redis required on port 6379' }],
+        memories: [{ tags: ['gotcha'], text: 'Redis required on port 6379' }],
       });
       const result = await server.callTool('chinwag_get_team_context');
       const text = result.content[0].text;
       expect(text).toMatch(/Project knowledge:/);
-      expect(text).toMatch(/\[gotcha\] Redis required on port 6379/);
+      expect(text).toMatch(/Redis required on port 6379 \[gotcha\]/);
     });
 
     it('omits tool info when tool is "unknown"', async () => {
@@ -388,17 +388,24 @@ describe('registerTools', () => {
     it('saves memory and returns confirmation', async () => {
       const result = await server.callTool('chinwag_save_memory', {
         text: 'Tests need Redis',
-        category: 'config',
+        tags: ['config', 'redis'],
       });
-      expect(team.saveMemory).toHaveBeenCalledWith('t_test123', 'Tests need Redis', 'config');
-      expect(result.content[0].text).toMatch(/Memory saved \[config\]: Tests need Redis/);
+      expect(team.saveMemory).toHaveBeenCalledWith('t_test123', 'Tests need Redis', ['config', 'redis']);
+      expect(result.content[0].text).toMatch(/Memory saved \[config, redis\]: Tests need Redis/);
+    });
+
+    it('saves memory without tags', async () => {
+      const result = await server.callTool('chinwag_save_memory', {
+        text: 'Important fact',
+      });
+      expect(team.saveMemory).toHaveBeenCalledWith('t_test123', 'Important fact', undefined);
+      expect(result.content[0].text).toMatch(/Memory saved: Important fact/);
     });
 
     it('returns error on failure', async () => {
       team.saveMemory.mockRejectedValue(new Error('Rate limit exceeded'));
       const result = await server.callTool('chinwag_save_memory', {
         text: 'test',
-        category: 'gotcha',
       });
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toBe('Rate limit exceeded');
@@ -408,13 +415,13 @@ describe('registerTools', () => {
   // --- chinwag_search_memory ---
 
   describe('chinwag_update_memory', () => {
-    it('updates memory text and category', async () => {
+    it('updates memory text and tags', async () => {
       const result = await server.callTool('chinwag_update_memory', {
         id: 'mem_123',
         text: 'Updated memory',
-        category: 'decision',
+        tags: ['decision', 'api'],
       });
-      expect(team.updateMemory).toHaveBeenCalledWith('t_test123', 'mem_123', 'Updated memory', 'decision');
+      expect(team.updateMemory).toHaveBeenCalledWith('t_test123', 'mem_123', 'Updated memory', ['decision', 'api']);
       expect(result.content[0].text).toMatch(/Memory mem_123 updated/);
     });
   });
@@ -423,14 +430,14 @@ describe('registerTools', () => {
     it('returns formatted results when memories found', async () => {
       team.searchMemories.mockResolvedValue({
         memories: [
-          { id: 'mem1', text: 'Use port 6379', category: 'config', source_handle: 'alice' },
-          { id: 'mem2', text: 'No console.log in MCP', category: 'gotcha', source_handle: 'bob' },
+          { id: 'mem1', text: 'Use port 6379', tags: ['config'], source_handle: 'alice' },
+          { id: 'mem2', text: 'No console.log in MCP', tags: ['gotcha'], source_handle: 'bob' },
         ],
       });
       const result = await server.callTool('chinwag_search_memory', { query: 'port' });
       const text = result.content[0].text;
-      expect(text).toMatch(/\[config\] Use port 6379.*mem1.*alice/);
-      expect(text).toMatch(/\[gotcha\] No console\.log in MCP.*mem2.*bob/);
+      expect(text).toMatch(/Use port 6379 \[config\].*mem1.*alice/);
+      expect(text).toMatch(/No console\.log in MCP \[gotcha\].*mem2.*bob/);
     });
 
     it('returns "no memories" when none found', async () => {
@@ -439,14 +446,14 @@ describe('registerTools', () => {
       expect(result.content[0].text).toMatch(/No memories found/);
     });
 
-    it('passes query, category, and limit to handler', async () => {
+    it('passes query, tags, and limit to handler', async () => {
       team.searchMemories.mockResolvedValue({ memories: [] });
       await server.callTool('chinwag_search_memory', {
         query: 'redis',
-        category: 'config',
+        tags: ['config'],
         limit: 5,
       });
-      expect(team.searchMemories).toHaveBeenCalledWith('t_test123', 'redis', 'config', 5);
+      expect(team.searchMemories).toHaveBeenCalledWith('t_test123', 'redis', ['config'], 5);
     });
 
     it('works with no parameters (empty search)', async () => {

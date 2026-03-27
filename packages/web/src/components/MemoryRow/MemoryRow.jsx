@@ -1,24 +1,19 @@
 import { useState } from 'react';
-import { MEMORY_CATEGORIES } from '../../lib/utils.js';
 import styles from './MemoryRow.module.css';
-
-const CATEGORIES = [...MEMORY_CATEGORIES];
 
 export default function MemoryRow({ memory, onUpdate, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(memory.text);
-  const [editCategory, setEditCategory] = useState(memory.category);
+  const [editTags, setEditTags] = useState((memory.tags || []).join(', '));
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
-  const tagStyle = MEMORY_CATEGORIES.has(memory.category)
-    ? styles[`tag_${memory.category}`]
-    : styles.tag_reference;
+  const tags = memory.tags || [];
 
   function handleEdit() {
     setEditText(memory.text);
-    setEditCategory(memory.category);
+    setEditTags((memory.tags || []).join(', '));
     setError(null);
     setIsEditing(true);
   }
@@ -30,9 +25,17 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
 
   async function handleSave() {
     if (!editText.trim()) return;
+    const newTags = editTags
+      .split(',')
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
     const textChanged = editText !== memory.text;
-    const catChanged = editCategory !== memory.category;
-    if (!textChanged && !catChanged) { setIsEditing(false); return; }
+    const tagsChanged =
+      JSON.stringify(newTags) !== JSON.stringify(memory.tags || []);
+    if (!textChanged && !tagsChanged) {
+      setIsEditing(false);
+      return;
+    }
 
     setSaving(true);
     setError(null);
@@ -40,7 +43,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
       await onUpdate(
         memory.id,
         textChanged ? editText.trim() : undefined,
-        catChanged ? editCategory : undefined,
+        tagsChanged ? newTags : undefined,
       );
       setIsEditing(false);
     } catch (err) {
@@ -73,16 +76,14 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
       <div className={styles.memoryRow} onKeyDown={handleKeyDown}>
         <div className={styles.editForm}>
           <div className={styles.editTop}>
-            <select
-              className={styles.editSelect}
-              value={editCategory}
-              onChange={(e) => setEditCategory(e.target.value)}
+            <input
+              className={styles.editTagsInput}
+              type="text"
+              value={editTags}
+              onChange={(e) => setEditTags(e.target.value)}
+              placeholder="Tags (comma-separated)"
               disabled={saving}
-            >
-              {CATEGORIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+            />
             <span className={styles.editAuthor}>{memory.source_handle}</span>
           </div>
           <textarea
@@ -111,7 +112,13 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
   return (
     <div className={styles.memoryRow}>
       <div className={styles.memoryContent}>
-        <span className={`${styles.tag} ${tagStyle}`}>{memory.category}</span>
+        {tags.length > 0 && (
+          <span className={styles.tagGroup}>
+            {tags.map((t) => (
+              <span key={t} className={styles.tag}>{t}</span>
+            ))}
+          </span>
+        )}
         <span className={styles.memoryText}>{memory.text}</span>
       </div>
       {(onUpdate || onDelete) && (

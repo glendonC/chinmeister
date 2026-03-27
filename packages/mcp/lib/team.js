@@ -74,26 +74,26 @@ export function teamHandlers(client) {
       return client.post(`/teams/${teamId}/file`, { file });
     },
 
-    async saveMemory(teamId, text, category) {
+    async saveMemory(teamId, text, tags) {
       validateTeam(teamId);
-      return client.post(`/teams/${teamId}/memory`, { text, category });
+      return client.post(`/teams/${teamId}/memory`, { text, tags: tags || [] });
     },
 
-    async searchMemories(teamId, query, category, limit) {
+    async searchMemories(teamId, query, tags, limit) {
       validateTeam(teamId);
       const params = new URLSearchParams();
       if (query) params.set('q', query);
-      if (category) params.set('category', category);
+      if (tags?.length) params.set('tags', tags.join(','));
       if (limit) params.set('limit', String(limit));
       const qs = params.toString();
       return client.get(`/teams/${teamId}/memory${qs ? '?' + qs : ''}`);
     },
 
-    async updateMemory(teamId, id, text, category) {
+    async updateMemory(teamId, id, text, tags) {
       validateTeam(teamId);
       const body = { id };
       if (text !== undefined) body.text = text;
-      if (category !== undefined) body.category = category;
+      if (tags !== undefined) body.tags = tags;
       return client.put(`/teams/${teamId}/memory`, body);
     },
 

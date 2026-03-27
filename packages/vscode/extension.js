@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, basename, isAbsolute } from 'path';
 import { homedir } from 'os';
 import https from 'https';
@@ -8,7 +8,6 @@ import {
   formatDuration,
   smartSummary,
   shortAgentId,
-  MEMORY_CATEGORIES,
 } from '../cli/lib/dashboard-view.js';
 
 const API_BASE = 'https://chinwag-api.glendonchin.workers.dev';
@@ -16,11 +15,17 @@ const API_BASE = 'https://chinwag-api.glendonchin.workers.dev';
 let panel = null;
 let pollInterval = null;
 let extensionDir = null;
+let devMode = false;
 
 // ─── Activation ──────────────────────────────────────────────
 
 export function activate(context) {
   extensionDir = context.extensionPath;
+
+  // Dev mode: load webview HTML/CSS/JS from disk files so "Developer: Reload Webviews"
+  // picks up changes instantly — no window reload needed.
+  const webviewDir = join(extensionDir, 'webview');
+  devMode = existsSync(webviewDir);
 
   const statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusItem.text = '$(radio-tower) chinwag';
@@ -142,7 +147,7 @@ async function refresh(token, teamId) {
         })),
         memories: vm.memories.map(m => ({
           id: m.id,
-          category: m.category,
+          tags: m.tags || [],
           text: m.text,
           source_handle: m.source_handle,
         })),
@@ -375,6 +380,27 @@ function webviewMain() {
     // Memory
     renderMemory();
 
+    // Stats (usage telemetry + tools configured — matches TUI)
+    var usage = state.usage || {};
+    var toolsConfigured = state.toolsConfigured || [];
+    var hasStats = toolsConfigured.length > 0 || Object.keys(usage).length > 0;
+    var statsSec = document.getElementById('stats-section');
+    if (hasStats) {
+      statsSec.style.display = 'block';
+      var statsHtml = '<div class="stats-row">';
+      if (usage.conflict_checks > 0) statsHtml += '<span class="dim">Checks: ' + usage.conflict_checks + '</span>';
+      if (usage.conflicts_found > 0) statsHtml += '<span class="stat-warn">Found: ' + usage.conflicts_found + '</span>';
+      if (usage.memories_saved > 0) statsHtml += '<span class="dim">Saved: ' + usage.memories_saved + '</span>';
+      if (usage.messages_sent > 0) statsHtml += '<span class="dim">Msgs: ' + usage.messages_sent + '</span>';
+      statsHtml += '</div>';
+      if (toolsConfigured.length > 0) {
+        statsHtml += '<div class="dim">Tools: ' + toolsConfigured.map(function (t) {
+          return esc(t.tool) + ' (' + t.joins + ')';
+        }).join(', ') + '</div>';
+      }
+      document.getElementById('stats-body').innerHTML = statsHtml;
+    } else { statsSec.style.display = 'none'; }
+
     // Sessions (shown when no agents running, matches TUI)
     var sessions = state.sessions || [];
     var ss = document.getElementById('sessions-section');
@@ -418,9 +444,25 @@ function webviewMain() {
 
   function renderMemory() {
     var memories = state ? (state.memories || []) : [];
+
+    // Dynamically populate filter dropdown from tags in data
+    var allTags = {};
+    memories.forEach(function (m) {
+      (m.tags || []).forEach(function (t) { allTags[t] = true; });
+    });
+    var tagList = Object.keys(allTags).sort();
+    var filterEl = document.getElementById('mem-filter');
+    if (filterEl) {
+      var prev = filterEl.value;
+      filterEl.innerHTML = '<option value="">All</option>' +
+        tagList.map(function (t) { return '<option value="' + escA(t) + '">' + esc(t) + '</option>'; }).join('');
+      filterEl.value = prev;
+      memFilter = filterEl.value; // reset if previous tag no longer exists
+    }
+
     // Local filtering for responsive search UX
     var filtered = memories.filter(function (m) {
-      if (memFilter && m.category !== memFilter) return false;
+      if (memFilter && (m.tags || []).indexOf(memFilter) === -1) return false;
       if (memSearch && m.text.toLowerCase().indexOf(memSearch.toLowerCase()) === -1) return false;
       return true;
     });
@@ -436,8 +478,11 @@ function webviewMain() {
 
     document.getElementById('memory-body').innerHTML = filtered.map(function (m) {
       var isConfirm = confirmDeleteId === m.id;
+      var tagsHtml = (m.tags || []).length
+        ? m.tags.map(function (t) { return '<span class="mem-tag">' + esc(t) + '</span>'; }).join(' ')
+        : '';
       return '<div class="mem-row">' +
-        '<span class="mem-tag tag-' + esc(m.category) + '">' + esc(m.category) + '</span>' +
+        '<span class="mem-tags">' + tagsHtml + '</span>' +
         '<span class="mem-text">' + esc(m.text) + '</span>' +
         '<span class="mem-author dim">' + esc(m.source_handle) + '</span>' +
         '<span class="mem-actions">' +
@@ -616,21 +661,23 @@ body {
   padding: 6px 0;
 }
 
+.mem-tags {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  margin-top: 3px;
+}
+
 .mem-tag {
   font-size: 10px;
   font-weight: 500;
   padding: 2px 7px;
   border-radius: 3px;
   white-space: nowrap;
-  flex-shrink: 0;
-  margin-top: 3px;
+  color: #abb2bf;
+  background: rgba(171,178,191,0.1);
 }
-
-.tag-gotcha    { color: #e5c07b; background: rgba(229,192,123,0.1); }
-.tag-pattern   { color: #c678dd; background: rgba(198,120,221,0.1); }
-.tag-config    { color: #61afef; background: rgba(97,175,239,0.1); }
-.tag-decision  { color: #8ec0a4; background: rgba(142,192,164,0.1); }
-.tag-reference { color: #abb2bf; background: rgba(171,178,191,0.1); }
 
 .mem-text {
   flex: 1;
@@ -697,6 +744,16 @@ body {
   opacity: 1;
   border-color: var(--vscode-focusBorder, #007fd4);
 }
+
+/* ── Stats ── */
+
+.stats-row {
+  display: flex;
+  gap: 16px;
+  margin: 6px 0;
+}
+
+.stat-warn { color: var(--vscode-errorForeground, #e06c75); }
 
 /* ── Sessions ── */
 
@@ -786,11 +843,18 @@ const PAGE_HTML = `
         <input id="mem-search" type="text" placeholder="Search memories..." spellcheck="false">
         <select id="mem-filter">
           <option value="">All</option>
-          {{CATEGORY_OPTIONS}}
         </select>
       </div>
     </div>
     <div class="section-body" id="memory-body"></div>
+  </div>
+
+  <div class="section" id="stats-section" style="display:none">
+    <div class="section-header" data-action="toggle" data-section="stats">
+      <span class="chevron">&#9656;</span>
+      STATS
+    </div>
+    <div class="section-body" id="stats-body"></div>
   </div>
 
   <div class="section" id="sessions-section" style="display:none">
@@ -805,15 +869,23 @@ const PAGE_HTML = `
 `;
 
 function buildPage() {
-  // Generate category options from shared constant
-  const catOptions = MEMORY_CATEGORIES
-    .filter(c => c !== null)
-    .map(c => '<option value="' + c + '">' + c + '</option>')
-    .join('\n          ');
+  if (devMode) {
+    // Dev mode: read from disk files — edit webview/, then Cmd+Shift+P → "Developer: Reload Webviews"
+    const webviewDir = join(extensionDir, 'webview');
+    const css = readFileSync(join(webviewDir, 'styles.css'), 'utf-8');
+    const html = readFileSync(join(webviewDir, 'body.html'), 'utf-8');
+    const js = readFileSync(join(webviewDir, 'main.js'), 'utf-8');
+
+    return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
+      + css + '</style></head><body>'
+      + html
+      + '<script>' + js + '</script>'
+      + '</body></html>';
+  }
 
   return '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>'
     + PAGE_CSS + '</style></head><body>'
-    + PAGE_HTML.replace('{{CATEGORY_OPTIONS}}', catOptions)
+    + PAGE_HTML
     + '<script>(' + webviewMain.toString() + ')()</script>'
     + '</body></html>';
 }

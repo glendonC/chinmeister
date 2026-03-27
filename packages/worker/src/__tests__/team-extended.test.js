@@ -130,7 +130,7 @@ describe('updateMemory', () => {
 
   it('setup: join and create memory', async () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
-    const res = await team().saveMemory(agentId, 'Original text about the config', 'config', 'alice', ownerId);
+    const res = await team().saveMemory(agentId, 'Original text about the config', ['config'], 'alice', ownerId);
     expect(res.ok).toBe(true);
     memoryId = res.id;
   });
@@ -144,26 +144,20 @@ describe('updateMemory', () => {
     expect(search.memories[0].text).toBe('Updated text about the config');
   });
 
-  it('updates category', async () => {
-    const res = await team().updateMemory(agentId, memoryId, undefined, 'decision', ownerId);
+  it('updates tags', async () => {
+    const res = await team().updateMemory(agentId, memoryId, undefined, ['decision'], ownerId);
     expect(res.ok).toBe(true);
 
-    const search = await team().searchMemories(agentId, null, 'decision', 10, ownerId);
+    const search = await team().searchMemories(agentId, null, ['decision'], 10, ownerId);
     expect(search.memories.some(m => m.id === memoryId)).toBe(true);
   });
 
-  it('updates both text and category', async () => {
-    const res = await team().updateMemory(agentId, memoryId, 'Both updated', 'pattern', ownerId);
+  it('updates both text and tags', async () => {
+    const res = await team().updateMemory(agentId, memoryId, 'Both updated', ['pattern'], ownerId);
     expect(res.ok).toBe(true);
 
-    const search = await team().searchMemories(agentId, 'Both updated', 'pattern', 10, ownerId);
+    const search = await team().searchMemories(agentId, 'Both updated', ['pattern'], 10, ownerId);
     expect(search.memories.length).toBeGreaterThan(0);
-  });
-
-  it('rejects invalid category', async () => {
-    const res = await team().updateMemory(agentId, memoryId, undefined, 'invalid', ownerId);
-    expect(res.error).toBeDefined();
-    expect(res.error).toContain('Category must be one of');
   });
 
   it('rejects empty text', async () => {
@@ -182,7 +176,7 @@ describe('updateMemory', () => {
   });
 });
 
-describe('memory ownership', () => {
+describe('memory team access', () => {
   const team = () => getTeam('memory-ownership-tests');
   const authorAgent = 'cursor:authorhash:aaaa';
   const authorOwner = 'user-author-mem';
@@ -193,19 +187,19 @@ describe('memory ownership', () => {
   it('setup: join author and peer, create memory', async () => {
     await team().join(authorAgent, authorOwner, 'alice', 'cursor');
     await team().join(peerAgent, peerOwner, 'bob', 'claude');
-    const res = await team().saveMemory(authorAgent, 'Author-owned memory', 'config', 'alice', authorOwner);
+    const res = await team().saveMemory(authorAgent, 'Author-owned memory', ['config'], 'alice', authorOwner);
     expect(res.ok).toBe(true);
     memoryId = res.id;
   });
 
-  it('rejects updates from another team member', async () => {
-    const res = await team().updateMemory(peerAgent, memoryId, 'Hijacked text', undefined, peerOwner);
-    expect(res.error).toBe('Only the author can update this memory');
+  it('allows any team member to update memory', async () => {
+    const res = await team().updateMemory(peerAgent, memoryId, 'Peer updated text', undefined, peerOwner);
+    expect(res.ok).toBe(true);
   });
 
-  it('rejects deletes from another team member', async () => {
+  it('allows any team member to delete memory', async () => {
     const res = await team().deleteMemory(peerAgent, memoryId, peerOwner);
-    expect(res.error).toBe('Only the author can delete this memory');
+    expect(res.ok).toBe(true);
   });
 });
 
@@ -219,7 +213,7 @@ describe('memory ownership across tool sessions', () => {
   it('setup: join same owner from two tools and create memory', async () => {
     await team().join(cursorAgent, ownerId, 'alice', 'cursor');
     await team().join(claudeAgent, ownerId, 'alice', 'claude');
-    const res = await team().saveMemory(cursorAgent, 'Shared owner memory', 'pattern', 'alice', ownerId);
+    const res = await team().saveMemory(cursorAgent, 'Shared owner memory', ['pattern'], 'alice', ownerId);
     expect(res.ok).toBe(true);
     memoryId = res.id;
   });
@@ -242,7 +236,7 @@ describe('getSummary', () => {
   it('setup: join two agents and add data', async () => {
     await team().join(agent1, owner1, 'alice', 'cursor');
     await team().join(agent2, owner2, 'bob', 'claude');
-    await team().saveMemory(agent1, 'Summary test memory about indexing', 'config', 'alice', owner1);
+    await team().saveMemory(agent1, 'Summary test memory about indexing', ['config'], 'alice', owner1);
     await team().startSession(agent1, 'alice', 'react', owner1);
   });
 
@@ -427,7 +421,7 @@ describe('Memory pruning', () => {
       await team().saveMemory(
         agentId,
         `Unique memory number ${i} with random value ${Math.random()} and extra context for uniqueness`,
-        'config',
+        ['config'],
         'alice',
         ownerId
       );
@@ -440,7 +434,7 @@ describe('Memory pruning', () => {
     expect(result.memories.length).toBeLessThanOrEqual(50);
 
     // Also verify via a second page: total count should be capped
-    const result2 = await team().searchMemories(agentId, null, 'config', 50, ownerId);
+    const result2 = await team().searchMemories(agentId, null, ['config'], 50, ownerId);
     expect(result2.memories.length).toBeLessThanOrEqual(50);
   });
 });
@@ -456,36 +450,35 @@ describe('Memory fuzzy dedup extended', () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
   });
 
-  it('creates original and deduplicates similar text', async () => {
+  it('saves similar text as separate entries (no dedup)', async () => {
     const original = await team().saveMemory(
       agentId,
       'The API rate limit should be configured to 100 requests per minute',
-      'config',
+      ['config'],
       'alice',
       ownerId
     );
     expect(original.ok).toBe(true);
     expect(original.id).toBeDefined();
-    expect(original.deduplicated).toBeUndefined();
 
-    // Very similar text
-    const dupe = await team().saveMemory(
+    // Similar text is saved as a separate entry
+    const second = await team().saveMemory(
       agentId,
       'The API rate limit should be configured to 100 requests per minute for safety',
-      'config',
+      ['config'],
       'alice',
       ownerId
     );
-    expect(dupe.ok).toBe(true);
-    expect(dupe.deduplicated).toBe(true);
-    expect(dupe.matched_id).toBe(original.id);
+    expect(second.ok).toBe(true);
+    expect(second.id).toBeDefined();
+    expect(second.id).not.toBe(original.id);
   });
 
-  it('does not deduplicate dissimilar text', async () => {
+  it('saves dissimilar text as separate entries', async () => {
     const mem1 = await team().saveMemory(
       agentId,
       'Always use TypeScript strict mode in production builds',
-      'pattern',
+      ['pattern'],
       'alice',
       ownerId
     );
@@ -494,17 +487,17 @@ describe('Memory fuzzy dedup extended', () => {
     const mem2 = await team().saveMemory(
       agentId,
       'Database connection pools should timeout after 30 seconds',
-      'config',
+      ['config'],
       'alice',
       ownerId
     );
     expect(mem2.ok).toBe(true);
-    expect(mem2.deduplicated).toBeUndefined();
-    expect(mem2.matched_id).toBeUndefined();
+    expect(mem2.id).toBeDefined();
+    expect(mem2.id).not.toBe(mem1.id);
   });
 });
 
-// --- saveMemory category validation ---
+// --- saveMemory validation ---
 
 describe('saveMemory validation', () => {
   const team = () => getTeam('savemem-validation');
@@ -515,13 +508,13 @@ describe('saveMemory validation', () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
   });
 
-  it('accepts all valid categories', async () => {
-    const categories = ['gotcha', 'pattern', 'config', 'decision', 'reference'];
-    for (const cat of categories) {
+  it('accepts freeform tags', async () => {
+    const tags = ['gotcha', 'setup', 'database', 'my-custom-tag'];
+    for (const tag of tags) {
       const res = await team().saveMemory(
         agentId,
-        `Memory for category ${cat} with more context to be unique ${Math.random()}`,
-        cat,
+        `Memory for tag ${tag} with more context to be unique ${Math.random()}`,
+        [tag],
         'alice',
         ownerId
       );
@@ -529,14 +522,19 @@ describe('saveMemory validation', () => {
     }
   });
 
-  it('rejects invalid category', async () => {
-    const res = await team().saveMemory(agentId, 'Some text', 'invalid_cat', 'alice', ownerId);
-    expect(res.error).toBeDefined();
-    expect(res.error).toContain('Category must be one of');
+  it('accepts multiple tags', async () => {
+    const res = await team().saveMemory(
+      agentId,
+      `Memory with multiple tags ${Math.random()}`,
+      ['pattern', 'config', 'important'],
+      'alice',
+      ownerId
+    );
+    expect(res.ok).toBe(true);
   });
 
   it('rejects non-member', async () => {
-    const res = await team().saveMemory('cursor:unknown', 'Text', 'config', 'alice', 'bad-owner');
+    const res = await team().saveMemory('cursor:unknown', 'Text', ['config'], 'alice', 'bad-owner');
     expect(res.error).toContain('Not a member');
   });
 });
@@ -597,7 +595,7 @@ describe('getContext extended', () => {
     await team().join(agent2, owner2, 'bob', 'claude');
     await team().updateActivity(agent1, ['src/shared.js'], 'Working on shared module', owner1);
     await team().updateActivity(agent2, ['src/shared.js'], 'Also on shared', owner2);
-    await team().saveMemory(agent1, 'Context test memory about shared module architecture', 'decision', 'alice', owner1);
+    await team().saveMemory(agent1, 'Context test memory about shared module architecture', ['decision'], 'alice', owner1);
     await team().startSession(agent1, 'alice', 'react', owner1);
   });
 
@@ -751,7 +749,7 @@ describe('Session lifecycle', () => {
     await team().saveMemory(
       agentId,
       'Session lifecycle test memory about session counting mechanism',
-      'pattern',
+      ['pattern'],
       'alice',
       ownerId
     );
@@ -773,7 +771,7 @@ describe('Telemetry tracking', () => {
 
   it('setup: join and perform actions', async () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
-    await team().saveMemory(agentId, 'Telemetry test memory with unique content for the test', 'config', 'alice', ownerId);
+    await team().saveMemory(agentId, 'Telemetry test memory with unique content for the test', ['config'], 'alice', ownerId);
     await team().sendMessage(agentId, 'alice', 'cursor', 'Telemetry msg', null, ownerId);
     await team().checkConflicts(agentId, ['src/tel.js'], ownerId);
   });

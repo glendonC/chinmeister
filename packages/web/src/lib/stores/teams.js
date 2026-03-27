@@ -87,11 +87,11 @@ export const teamActions = {
   ensureJoined: (id) => teamStore.getState().ensureJoined(id),
   subscribe: teamStore.subscribe,
 
-  async updateMemory(teamId, id, text, category) {
+  async updateMemory(teamId, id, text, tags) {
     const { token } = authActions.getState();
     const body = { id };
     if (text !== undefined) body.text = text;
-    if (category !== undefined) body.category = category;
+    if (tags !== undefined) body.tags = tags;
     await api('PUT', `/teams/${teamId}/memory`, body, token);
     requestRefresh();
   },

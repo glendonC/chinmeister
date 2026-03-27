@@ -328,31 +328,31 @@ describe('diffState', () => {
 
   describe('memories', () => {
     it('detects new memories by id', () => {
-      const prev = { memories: [{ id: 'm1', text: 'old', category: 'gotcha' }] };
+      const prev = { memories: [{ id: 'm1', text: 'old', tags: ['gotcha'] }] };
       const curr = {
         memories: [
-          { id: 'm1', text: 'old', category: 'gotcha' },
-          { id: 'm2', text: 'Redis needed on port 6379', category: 'config' },
+          { id: 'm1', text: 'old', tags: ['gotcha'] },
+          { id: 'm2', text: 'Redis needed on port 6379', tags: ['config'] },
         ],
       };
       const events = diffState(prev, curr, stucknessAlerted);
-      expect(events).toEqual(['New team knowledge: [config] Redis needed on port 6379']);
+      expect(events).toEqual(['New team knowledge: Redis needed on port 6379 [config]']);
     });
 
     it('detects new memories by text when id is missing', () => {
-      const prev = { memories: [{ text: 'old fact', category: 'pattern' }] };
+      const prev = { memories: [{ text: 'old fact', tags: ['pattern'] }] };
       const curr = {
         memories: [
-          { text: 'old fact', category: 'pattern' },
-          { text: 'new fact', category: 'decision' },
+          { text: 'old fact', tags: ['pattern'] },
+          { text: 'new fact', tags: ['decision'] },
         ],
       };
       const events = diffState(prev, curr, stucknessAlerted);
-      expect(events).toEqual(['New team knowledge: [decision] new fact']);
+      expect(events).toEqual(['New team knowledge: new fact [decision]']);
     });
 
     it('does not emit for memories that existed before', () => {
-      const mems = [{ id: 'm1', text: 'same', category: 'gotcha' }];
+      const mems = [{ id: 'm1', text: 'same', tags: ['gotcha'] }];
       const events = diffState({ memories: mems }, { memories: mems }, stucknessAlerted);
       expect(events).toEqual([]);
     });
@@ -438,7 +438,7 @@ describe('diffState', () => {
     it('returns empty array when both states are identical', () => {
       const state = {
         members: [{ handle: 'alice', agent_id: 'a1', status: 'active', activity: { files: ['a.js'] } }],
-        memories: [{ id: 'm1', text: 'fact', category: 'gotcha' }],
+        memories: [{ id: 'm1', text: 'fact', tags: ['gotcha'] }],
         locks: [{ file_path: 'b.js', owner_handle: 'alice', tool: 'cursor' }],
         messages: [{ from_handle: 'alice', text: 'hi', created_at: 't1' }],
       };
@@ -462,7 +462,7 @@ describe('diffState', () => {
       const prev = {};
       const curr = {
         members: [{ handle: 'alice', agent_id: 'a1', tool: 'cursor' }],
-        memories: [{ id: 'm1', text: 'note', category: 'config' }],
+        memories: [{ id: 'm1', text: 'note', tags: ['config'] }],
         locks: [{ file_path: 'x.js', owner_handle: 'alice', tool: 'cursor' }],
         messages: [{ from_handle: 'alice', from_tool: 'cursor', text: 'hey', created_at: 't1' }],
       };
@@ -477,7 +477,7 @@ describe('diffState', () => {
     it('handles transition from populated state to empty state', () => {
       const prev = {
         members: [{ handle: 'alice', agent_id: 'a1', tool: 'cursor' }],
-        memories: [{ id: 'm1', text: 'note', category: 'config' }],
+        memories: [{ id: 'm1', text: 'note', tags: ['config'] }],
         locks: [{ file_path: 'x.js', owner_handle: 'alice', tool: 'cursor' }],
         messages: [{ from_handle: 'alice', text: 'hey', created_at: 't1' }],
       };

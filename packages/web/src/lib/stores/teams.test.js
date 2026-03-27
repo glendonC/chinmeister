@@ -107,12 +107,12 @@ describe('team store', () => {
     const requestRefreshMock = vi.fn();
     const { teamActions } = await loadTeamsModule({ apiMock, requestRefreshMock });
 
-    await teamActions.updateMemory('t_team', 'mem_1', 'Updated note', 'decision');
+    await teamActions.updateMemory('t_team', 'mem_1', 'Updated note', ['decision', 'api']);
 
     expect(apiMock).toHaveBeenCalledWith('PUT', '/teams/t_team/memory', {
       id: 'mem_1',
       text: 'Updated note',
-      category: 'decision',
+      tags: ['decision', 'api'],
     }, 'tok_123');
     expect(requestRefreshMock).toHaveBeenCalledTimes(1);
   });

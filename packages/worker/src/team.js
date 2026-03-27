@@ -3,18 +3,14 @@
 // shared project memory, and session history (observability).
 
 import { DurableObject } from 'cloudflare:workers';
-import { normalizePath, extractWords, wordSimilarity } from './lib/text-utils.js';
+import { normalizePath } from './lib/text-utils.js';
 
 // --- Tuning constants ---
 const HEARTBEAT_ACTIVE_SECONDS = 60;    // Heartbeat within this window = "active"
 const HEARTBEAT_STALE_SECONDS = 300;    // No heartbeat for this long = evicted
-const MEMORY_DECAY_GRACE_DAYS = 7;      // Memories stay at full relevance for this long
-const MEMORY_DECAY_RATE = 0.1;          // Relevance drops by this per day after grace period
-const MEMORY_MIN_SCORE = 0.1;           // Floor — memories below this are excluded from queries
-const MEMORY_MAX_COUNT = 100;           // Max memories per team before pruning
+const MEMORY_MAX_COUNT = 500;           // Storage cap per team — prune oldest beyond this
 const ACTIVITY_MAX_FILES = 50;          // Max files tracked per agent activity
 const SESSION_RETENTION_DAYS = 30;      // How long session history is kept
-export const VALID_CATEGORIES = ['gotcha', 'pattern', 'config', 'decision', 'reference'];
 
 export class TeamDO extends DurableObject {
   #schemaReady = false;
@@ -48,11 +44,12 @@ export class TeamDO extends DurableObject {
       CREATE TABLE IF NOT EXISTS memories (
         id TEXT PRIMARY KEY,
         text TEXT NOT NULL,
-        category TEXT NOT NULL,
+        tags TEXT DEFAULT '[]',
         source_agent TEXT NOT NULL,
         source_handle TEXT,
+        source_tool TEXT DEFAULT 'unknown',
         created_at TEXT DEFAULT (datetime('now')),
-        relevance_score REAL DEFAULT 1.0
+        updated_at TEXT DEFAULT (datetime('now'))
       );
 
       CREATE TABLE IF NOT EXISTS sessions (
@@ -104,8 +101,7 @@ export class TeamDO extends DurableObject {
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)');
     this.sql.exec('CREATE INDEX IF NOT EXISTS idx_locks_agent ON locks(agent_id)');
 
-    // Additive migration: add tool column if missing (safe for existing DOs)
-    try { this.sql.exec("ALTER TABLE members ADD COLUMN tool TEXT DEFAULT 'unknown'"); } catch { /* already exists */ }
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at)');
 
     this.#schemaReady = true;
   }
@@ -419,20 +415,11 @@ export class TeamDO extends DurableObject {
     ).toArray();
 
     const memories = this.sql.exec(
-      `SELECT id, text, category, source_handle, created_at,
-              MAX(?,
-                1.0 - (MAX(0, julianday('now') - julianday(created_at) - ?) * ?)
-              ) as relevance
+      `SELECT id, text, tags, source_handle, source_tool, created_at, updated_at
        FROM memories
-       WHERE MAX(?,
-               1.0 - (MAX(0, julianday('now') - julianday(created_at) - ?) * ?)
-             ) > ?
-       ORDER BY relevance DESC, created_at DESC
-       LIMIT 10`,
-      MEMORY_MIN_SCORE, MEMORY_DECAY_GRACE_DAYS, MEMORY_DECAY_RATE,
-      MEMORY_MIN_SCORE, MEMORY_DECAY_GRACE_DAYS, MEMORY_DECAY_RATE,
-      MEMORY_MIN_SCORE
-    ).toArray();
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 20`
+    ).toArray().map(m => ({ ...m, tags: JSON.parse(m.tags || '[]') }));
 
     const recentSessions = this.sql.exec(`
       SELECT agent_id, owner_handle, framework, started_at, ended_at,
@@ -631,43 +618,25 @@ export class TeamDO extends DurableObject {
 
   // --- Memory ---
 
-  async saveMemory(agentId, text, category, handle, ownerId = null) {
+  async saveMemory(agentId, text, tags, handle, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team' };
 
-    if (!VALID_CATEGORIES.includes(category)) {
-      return { error: `Category must be one of: ${VALID_CATEGORIES.join(', ')}` };
-    }
-
-    // Fuzzy dedup: check word-level similarity against recent memories
-    const newWords = extractWords(text);
-    const candidates = this.sql.exec(
-      'SELECT id, text FROM memories ORDER BY created_at DESC LIMIT 50'
-    ).toArray();
-
-    for (const candidate of candidates) {
-      const candidateWords = extractWords(candidate.text);
-      if (wordSimilarity(newWords, candidateWords) > 0.7) {
-        // High similarity — boost existing memory instead of creating duplicate
-        this.sql.exec(
-          `UPDATE memories SET relevance_score = MIN(relevance_score + 0.5, 2.0), created_at = datetime('now') WHERE id = ?`,
-          candidate.id
-        );
-        return { ok: true, deduplicated: true, matched_id: candidate.id };
-      }
-    }
+    // Extract tool name from agent_id (format: "tool:hash" or "tool:hash:session")
+    const sourceTool = resolved.includes(':') ? resolved.split(':')[0] : 'unknown';
 
     const id = crypto.randomUUID();
     this.sql.exec(
-      `INSERT INTO memories (id, text, category, source_agent, source_handle, created_at, relevance_score)
-       VALUES (?, ?, ?, ?, ?, datetime('now'), 1.0)`,
-      id, text, category, resolved, handle || 'unknown'
+      `INSERT INTO memories (id, text, tags, source_agent, source_handle, source_tool, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      id, text, JSON.stringify(tags || []), resolved, handle || 'unknown', sourceTool
     );
 
+    // Prune oldest beyond storage cap
     this.sql.exec(
       `DELETE FROM memories WHERE id NOT IN (
-        SELECT id FROM memories ORDER BY relevance_score DESC, created_at DESC LIMIT ?
+        SELECT id FROM memories ORDER BY updated_at DESC, created_at DESC LIMIT ?
       )`,
       MEMORY_MAX_COUNT
     );
@@ -683,39 +652,38 @@ export class TeamDO extends DurableObject {
     return { ok: true, id };
   }
 
-  async searchMemories(agentId, query, category, limit = 20, ownerId = null) {
+  async searchMemories(agentId, query, tags, limit = 20, ownerId = null) {
     this.#ensureSchema();
     if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team' };
 
     const cappedLimit = Math.min(Math.max(1, limit), 50);
-    let sql, params;
+    const conditions = [];
+    const params = [];
 
-    if (query && category) {
-      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
-             FROM memories WHERE text LIKE ? AND category = ?
-             ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
-      params = [`%${query}%`, category, cappedLimit];
-    } else if (query) {
-      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
-             FROM memories WHERE text LIKE ?
-             ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
-      params = [`%${query}%`, cappedLimit];
-    } else if (category) {
-      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
-             FROM memories WHERE category = ?
-             ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
-      params = [category, cappedLimit];
-    } else {
-      sql = `SELECT id, text, category, source_handle, created_at, relevance_score
-             FROM memories ORDER BY relevance_score DESC, created_at DESC LIMIT ?`;
-      params = [cappedLimit];
+    if (query) {
+      conditions.push('text LIKE ?');
+      params.push(`%${query}%`);
+    }
+    if (tags && tags.length > 0) {
+      // OR filter: match memories containing ANY of the listed tags
+      const tagClauses = tags.map(() => "tags LIKE ?");
+      conditions.push(`(${tagClauses.join(' OR ')})`);
+      for (const tag of tags) params.push(`%"${tag}"%`);
     }
 
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const sql = `SELECT id, text, tags, source_handle, source_tool, created_at, updated_at
+                 FROM memories ${where}
+                 ORDER BY updated_at DESC, created_at DESC LIMIT ?`;
+    params.push(cappedLimit);
+
     const rows = this.sql.exec(sql, ...params).toArray();
-    return { memories: rows };
+    return {
+      memories: rows.map(m => ({ ...m, tags: JSON.parse(m.tags || '[]') })),
+    };
   }
 
-  async updateMemory(agentId, memoryId, text, category, ownerId = null) {
+  async updateMemory(agentId, memoryId, text, tags, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team' };
@@ -723,29 +691,19 @@ export class TeamDO extends DurableObject {
     if (text !== undefined && (typeof text !== 'string' || !text.trim())) {
       return { error: 'text must be a non-empty string' };
     }
-    if (category !== undefined && !VALID_CATEGORIES.includes(category)) {
-      return { error: `Category must be one of: ${VALID_CATEGORIES.join(', ')}` };
-    }
 
-    const existing = this.sql.exec(
-      'SELECT id, source_agent FROM memories WHERE id = ?',
-      memoryId
-    ).toArray();
+    const existing = this.sql.exec('SELECT id FROM memories WHERE id = ?', memoryId).toArray();
     if (existing.length === 0) return { error: 'Memory not found' };
-    if (this.#agentIdentityKey(existing[0].source_agent) !== this.#agentIdentityKey(resolved)) {
-      return { error: 'Only the author can update this memory' };
-    }
 
-    if (text !== undefined && category !== undefined) {
-      this.sql.exec('UPDATE memories SET text = ?, category = ?, relevance_score = 1.0 WHERE id = ?',
-        text.trim(), category, memoryId);
-    } else if (text !== undefined) {
-      this.sql.exec('UPDATE memories SET text = ?, relevance_score = 1.0 WHERE id = ?',
-        text.trim(), memoryId);
-    } else if (category !== undefined) {
-      this.sql.exec('UPDATE memories SET category = ? WHERE id = ?', category, memoryId);
-    }
+    // Any team member can update — memories are team knowledge
+    const sets = [];
+    const params = [];
+    if (text !== undefined) { sets.push('text = ?'); params.push(text.trim()); }
+    if (tags !== undefined) { sets.push('tags = ?'); params.push(JSON.stringify(tags)); }
+    sets.push("updated_at = datetime('now')");
+    params.push(memoryId);
 
+    this.sql.exec(`UPDATE memories SET ${sets.join(', ')} WHERE id = ?`, ...params);
     return { ok: true };
   }
 
@@ -754,14 +712,7 @@ export class TeamDO extends DurableObject {
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team' };
 
-    const existing = this.sql.exec(
-      'SELECT source_agent FROM memories WHERE id = ?',
-      memoryId
-    ).toArray();
-    if (existing.length === 0) return { error: 'Memory not found' };
-    if (this.#agentIdentityKey(existing[0].source_agent) !== this.#agentIdentityKey(resolved)) {
-      return { error: 'Only the author can delete this memory' };
-    }
+    // Any team member can delete — memories are team knowledge
     this.sql.exec('DELETE FROM memories WHERE id = ?', memoryId);
     const changed = this.sql.exec('SELECT changes() as c').toArray();
     if (changed[0].c === 0) return { error: 'Memory not found' };
@@ -948,5 +899,5 @@ export class TeamDO extends DurableObject {
   }
 }
 
-// Re-export utilities for backward compatibility
-export { normalizePath, extractWords, wordSimilarity } from './lib/text-utils.js';
+// Re-export path utility for consumers
+export { normalizePath } from './lib/text-utils.js';

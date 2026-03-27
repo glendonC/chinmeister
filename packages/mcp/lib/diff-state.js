@@ -115,7 +115,8 @@ export function diffState(prev, curr, stucknessAlerted) {
   for (const mem of (curr.memories || [])) {
     const key = mem.id || mem.text;
     if (!prevMemKeys.has(key)) {
-      events.push(`New team knowledge: [${mem.category}] ${mem.text}`);
+      const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
+      events.push(`New team knowledge: ${mem.text}${tagStr}`);
     }
   }
 
