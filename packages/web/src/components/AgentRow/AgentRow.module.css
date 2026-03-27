@@ -26,18 +26,33 @@
 
 .info {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
   flex: 1;
 }
 
-.tool {
+.handle {
   font-size: 14px;
   font-weight: 400;
   color: var(--ink);
   opacity: var(--opacity-primary);
   letter-spacing: -0.02em;
+}
+
+.metaRow {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tool {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--soft);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
 }
 
 .files {

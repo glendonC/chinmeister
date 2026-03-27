@@ -34,7 +34,7 @@ export default function MessageComposer({ onSend }) {
         <input
           type="text"
           className={styles.input}
-          placeholder="Message"
+          placeholder="Message this project"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={handleKeyDown}
@@ -47,13 +47,7 @@ export default function MessageComposer({ onSend }) {
           disabled={!text.trim() || sending}
           aria-label="Send message"
         >
-          {sending ? (
-            <span className={styles.sendingDot} />
-          ) : (
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 8l12-5-5 12-2-5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-            </svg>
-          )}
+          {sending ? 'Sending...' : 'Send'}
         </button>
       </div>
       {error && <span className={styles.error}>{error}</span>}

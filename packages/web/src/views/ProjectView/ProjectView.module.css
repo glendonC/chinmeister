@@ -1,54 +1,29 @@
 .page {
-  animation: viewFadeIn 0.25s var(--motion) both;
-}
-
-.headerMeta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.headerMetaLabel {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.headerMetaValue {
-  font-size: var(--text-xl);
-  font-weight: 400;
-  letter-spacing: -0.04em;
-}
-
-.headerMetaCaption {
-  font-size: var(--text-sm);
-  color: var(--muted);
+  animation: dashboardViewFadeIn 0.25s var(--motion) both;
 }
 
 .hero {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 22px;
-  padding-bottom: 40px;
+  margin-bottom: 38px;
 }
 
 .timelineSection {
   display: grid;
-  grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
-  gap: 32px;
+  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  gap: 28px;
   align-items: end;
-  padding-bottom: 42px;
+  margin-bottom: 40px;
 }
 
 .timelineCopy {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 4px;
 }
 
-.sectionEyebrow {
+.timelineLabel {
   font-family: var(--mono);
   font-size: var(--text-2xs);
   font-weight: 500;
@@ -57,23 +32,21 @@
   text-transform: uppercase;
 }
 
-.sectionTitle {
-  font-size: clamp(1.35rem, 2.3vw, 2rem);
-  font-weight: 400;
-  letter-spacing: -0.05em;
-  line-height: 1.05;
-}
-
-.sectionHint {
+.timelineMeta {
   font-size: var(--text-sm);
   color: var(--muted);
-  max-width: 34ch;
 }
 
-.tabGrid {
+.panelGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.9fr);
-  gap: 28px;
+  grid-template-columns: minmax(0, 1.18fr) minmax(280px, 0.82fr);
+  gap: 34px;
+}
+
+.asideStack {
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
 }
 
 .block {
@@ -89,13 +62,14 @@
 }
 
 .blockTitle {
-  font-size: clamp(1.2rem, 1.8vw, 1.6rem);
-  font-weight: 400;
+  font-size: 1rem;
+  font-weight: 500;
   letter-spacing: -0.04em;
 }
 
 .blockMeta {
-  font-size: var(--text-sm);
+  font-size: 11px;
+  font-family: var(--mono);
   color: var(--muted);
   white-space: nowrap;
 }
@@ -110,47 +84,25 @@
   color: var(--soft);
 }
 
-.fileCloud {
+.pathList {
   display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 18px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.fileChip {
-  display: inline-flex;
-  align-items: center;
-  padding: 7px 11px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.04);
+.pathRow {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.memorySummary {
+.lockList {
   display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 22px;
-}
-
-.memoryCategory {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
-}
-
-.memoryCategoryCount {
-  font-size: 1.05rem;
-  font-weight: 400;
-  letter-spacing: -0.04em;
-}
-
-.memoryCategoryLabel {
-  font-size: var(--text-sm);
-  color: var(--muted);
-  text-transform: capitalize;
+  flex-direction: column;
+  margin-top: 18px;
 }
 
 .summaryGrid {
@@ -178,74 +130,50 @@
   line-height: 1.35;
 }
 
-.fileList {
+.distributionList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 22px;
+  gap: 12px;
+  margin-top: 18px;
 }
 
-.fileRow {
-  font-family: var(--mono);
+.distributionRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: baseline;
+}
+
+.distributionCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.distributionLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.simpleLabel {
+  font-size: var(--text-sm);
+  color: var(--ink);
+}
+
+.distributionMeta {
   font-size: 11px;
   color: var(--muted);
 }
 
-.toolStack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.toolRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(120px, 0.9fr);
-  gap: 16px;
-  align-items: center;
-}
-
-.toolIdentity {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.toolCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.toolLabel {
-  font-size: var(--text-md);
-  color: var(--ink);
-}
-
-.toolMeta {
-  font-size: var(--text-sm);
-  color: var(--muted);
-}
-
-.toolBar {
-  display: block;
-  height: 6px;
-  border-radius: 999px;
-  background: var(--ghost);
-  overflow: hidden;
-}
-
-.toolBarFill {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--accent);
-}
-
-@keyframes viewFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
+.distributionValue {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  white-space: nowrap;
 }
 
 @media (max-width: 900px) {
@@ -254,7 +182,7 @@
   }
 
   .timelineSection,
-  .tabGrid {
+  .panelGrid {
     grid-template-columns: 1fr;
   }
 }

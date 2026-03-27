@@ -13,51 +13,41 @@
   font-family: var(--sans);
   font-size: 14px;
   color: var(--ink);
-  background: var(--ghost);
-  border: none;
-  border-radius: 999px;
-  padding: 12px 16px;
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 12px 14px;
   outline: none;
-  transition: box-shadow 0.1s;
+  transition: border-color 0.1s;
 }
 
 .input::placeholder { color: var(--soft); }
-.input:focus { box-shadow: 0 0 0 2px var(--accent); }
+.input:focus { border-color: var(--accent); }
 .input:disabled { opacity: 0.5; }
 
 .sendBtn {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 42px;
-  height: 42px;
-  background: var(--accent);
-  color: #fff;
+  min-width: 54px;
+  height: 40px;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--accent);
   border: none;
-  border-radius: 50%;
+  border-radius: 0;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity 0.1s;
+  font-family: var(--mono);
+  font-size: 11px;
 }
 
 .sendBtn:hover:not(:disabled) { opacity: 0.85; }
 .sendBtn:disabled { opacity: 0.3; cursor: default; }
 
-.sendingDot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: #fff;
-  animation: blink 1s infinite;
-}
-
 .error {
   font-size: 11px;
   color: var(--danger);
   margin-top: 8px;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
 }

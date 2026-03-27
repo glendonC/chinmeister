@@ -5,7 +5,7 @@ import styles from './ProjectCard.module.css';
 export default function ProjectCard({ team, featured = false }) {
   const selectTeam = useTeamStore((s) => s.selectTeam);
   const tools = team.tools_configured || [];
-  const stateLabel = `${team.active_agents || 0} active / ${team.conflict_count || 0} conflicts`;
+  const stateLabel = `${team.active_agents || 0} active · ${team.conflict_count || 0} conflicts`;
 
   const classes = [styles.card, featured ? styles.cardFeatured : ''].filter(Boolean).join(' ');
 
@@ -38,7 +38,7 @@ export default function ProjectCard({ team, featured = false }) {
         <div className={styles.primaryMetric}>
           <span className={styles.primaryValue}>{team.active_agents}</span>
           <div className={styles.primaryCopy}>
-            <span className={styles.primaryLabel}>agents in play</span>
+            <span className={styles.primaryLabel}>agents live</span>
             <span className={styles.primaryHint}>
               {team.live_sessions || 0} live session{team.live_sessions === 1 ? '' : 's'}
             </span>
@@ -53,22 +53,22 @@ export default function ProjectCard({ team, featured = false }) {
             </div>
             <div className={styles.cardStat}>
               <span className={styles.cardStatValue}>{team.memory_count || 0}</span>
-              <span className={styles.cardStatLabel}>shared memories</span>
+              <span className={styles.cardStatLabel}>memory</span>
             </div>
             <div className={styles.cardStat}>
               <span className={styles.cardStatValue}>{team.conflict_count || 0}</span>
-              <span className={styles.cardStatLabel}>active conflicts</span>
+              <span className={styles.cardStatLabel}>conflicts</span>
             </div>
           </div>
 
           {tools.length > 0 ? (
             <div className={styles.cardTools} aria-label="Configured tools">
-              {tools.slice(0, 5).map((tool) => (
-                <span key={tool.tool} className={styles.toolChip} title={tool.tool}>
+              {tools.slice(0, 6).map((tool) => (
+                <span key={tool.tool} className={styles.toolIcon} title={tool.tool}>
                   <ToolIcon tool={tool.tool} size={16} />
                 </span>
               ))}
-              {tools.length > 5 && <span className={styles.toolMore}>+{tools.length - 5}</span>}
+              {tools.length > 6 && <span className={styles.toolMore}>+{tools.length - 6}</span>}
             </div>
           ) : (
             <p className={styles.emptyTools}>No tools configured yet.</p>

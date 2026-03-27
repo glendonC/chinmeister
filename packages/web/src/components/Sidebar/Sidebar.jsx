@@ -34,12 +34,46 @@ export default function Sidebar({ activeNav, onNavigate }) {
     setMobileOpen(false);
   }
 
-  function handleKeydown(e, callback) {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      callback();
-    }
-  }
+  const primaryNav = [
+    {
+      id: 'overview',
+      label: 'Overview',
+      active: overviewActive,
+      onClick: goOverview,
+      icon: (
+        <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+          <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+          <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+          <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+        </svg>
+      ),
+    },
+    {
+      id: 'tools',
+      label: 'Tools',
+      active: toolsActive,
+      onClick: goTools,
+      icon: (
+        <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
+          <polygon points="6,10 7,7 10,6 9,9" fill="currentColor" />
+        </svg>
+      ),
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      active: settingsActive,
+      onClick: goSettings,
+      icon: (
+        <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+        </svg>
+      ),
+    },
+  ];
 
   return (
     <>
@@ -66,50 +100,19 @@ export default function Sidebar({ activeNav, onNavigate }) {
           </svg>
         </div>
 
-        <nav className={styles.sidebarNav}>
-          <div
-            className={`${styles.navItem} ${overviewActive ? styles.navItemActive : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={goOverview}
-            onKeyDown={(e) => handleKeydown(e, goOverview)}
-          >
-            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-              <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-              <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-              <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-            </svg>
-            <span className={styles.navLabel}>Overview</span>
-          </div>
-
-          <div
-            className={`${styles.navItem} ${toolsActive ? styles.navItemActive : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={goTools}
-            onKeyDown={(e) => handleKeydown(e, goTools)}
-          >
-            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-              <polygon points="6,10 7,7 10,6 9,9" fill="currentColor" />
-            </svg>
-            <span className={styles.navLabel}>Tools</span>
-          </div>
-
-          <div
-            className={`${styles.navItem} ${settingsActive ? styles.navItemActive : ''}`}
-            role="button"
-            tabIndex={0}
-            onClick={goSettings}
-            onKeyDown={(e) => handleKeydown(e, goSettings)}
-          >
-            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
-              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-            </svg>
-            <span className={styles.navLabel}>Settings</span>
-          </div>
+        <nav className={styles.sidebarNav} aria-label="Primary">
+          {primaryNav.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              className={`${styles.navItem} ${item.active ? styles.navItemActive : ''}`}
+              onClick={item.onClick}
+              aria-current={item.active ? 'page' : undefined}
+            >
+              {item.icon}
+              <span className={styles.navLabel}>{item.label}</span>
+            </button>
+          ))}
         </nav>
 
         <div className={styles.sidebarSection}>
@@ -117,17 +120,16 @@ export default function Sidebar({ activeNav, onNavigate }) {
           <div className={styles.projectList}>
             {teams.length > 0 ? (
               teams.map((team) => (
-                <div
+                <button
                   key={team.team_id}
+                  type="button"
                   className={`${styles.navItem} ${styles.navItemProject} ${activeTeamId === team.team_id && !activeNav ? styles.navItemActive : ''}`}
-                  role="button"
-                  tabIndex={0}
                   onClick={() => goTeam(team.team_id)}
-                  onKeyDown={(e) => handleKeydown(e, () => goTeam(team.team_id))}
+                  aria-current={activeTeamId === team.team_id && !activeNav ? 'page' : undefined}
                 >
                   <span className={styles.projectDot} />
                   <span className={styles.projectName}>{team.team_name || team.team_id}</span>
-                </div>
+                </button>
               ))
             ) : (
               <p className={styles.sectionEmpty}>No projects yet</p>

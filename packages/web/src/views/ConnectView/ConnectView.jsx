@@ -62,8 +62,8 @@ export default function ConnectView({ error: initialError = null }) {
           <span className={styles.connectBrand}>chinwag</span>
         </div>
 
-        <h1 className={styles.connectTitle}>Open your dashboard.</h1>
-        <p className={styles.connectSubtitle}>Run this in a configured repo:</p>
+        <h1 className={styles.connectTitle}>Authenticate this browser.</h1>
+        <p className={styles.connectSubtitle}>Run this in a repo that already uses chinwag:</p>
 
         {/* Command box */}
         <button className={styles.commandBox} onClick={copyCommand} title="Copy to clipboard">
@@ -84,8 +84,12 @@ export default function ConnectView({ error: initialError = null }) {
           </span>
         </button>
 
+        <p className={styles.connectNote}>
+          To add a repo first, run <code>npx chinwag init</code> in that repo.
+        </p>
+
         <details className={styles.tokenSection}>
-          <summary className={styles.tokenToggle}>Use token</summary>
+          <summary className={styles.tokenToggle}>Use token instead</summary>
           <div className={styles.tokenForm}>
             <input
               type="password"

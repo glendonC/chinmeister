@@ -4,14 +4,6 @@ export function formatDuration(m) {
   return `${Math.round(m)}m`;
 }
 
-export function collectMemoryTags(memories) {
-  const tags = new Set();
-  for (const m of memories) {
-    if (m.tags?.length) for (const t of m.tags) tags.add(t);
-  }
-  return [...tags].sort();
-}
-
 export const COLOR_PALETTE = [
   { name: 'red', hex: '#ff3b30' },
   { name: 'cyan', hex: '#32ced6' },

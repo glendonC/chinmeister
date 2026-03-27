@@ -9,9 +9,6 @@ export default function AgentRow({ agent }) {
   const summary = agent.activity?.summary || '';
   const duration = formatDuration(agent.session_minutes);
 
-  // Tool name is the primary identity, not the username
-  const label = tool || agent.handle;
-
   // Show first 2 file basenames
   const fileDisplay = files.length > 0
     ? files.slice(0, 2).map(f => f.split('/').pop()).join(', ') + (files.length > 2 ? ` +${files.length - 2}` : '')
@@ -27,9 +24,12 @@ export default function AgentRow({ agent }) {
         {tool && <ToolIcon tool={tool} size={16} monochrome={!isActive} />}
       </div>
       <div className={styles.info}>
-        <span className={styles.tool}>{label}</span>
-        {fileDisplay && <span className={styles.files}>{fileDisplay}</span>}
-        {showSummary && !fileDisplay && <span className={styles.summary}>{summary}</span>}
+        <span className={styles.handle}>{agent.handle}</span>
+        <div className={styles.metaRow}>
+          {tool ? <span className={styles.tool}>{tool}</span> : null}
+          {fileDisplay ? <span className={styles.files}>{fileDisplay}</span> : null}
+          {showSummary && !fileDisplay ? <span className={styles.summary}>{summary}</span> : null}
+        </div>
       </div>
       {duration && <span className={styles.time}>{duration}</span>}
     </div>

@@ -46,7 +46,7 @@
 .content {
   width: min(100%, var(--content-max-width));
   margin: 0 auto;
-  padding: 24px 56px 88px;
+  padding: 28px 56px 88px;
   max-width: var(--content-max-width);
 }
 
@@ -57,9 +57,7 @@
   justify-content: space-between;
   margin: 12px 56px 0;
   max-width: 700px;
-  padding: 10px 14px;
-  background: var(--danger-bg);
-  border-radius: var(--radius-xs);
+  padding: 4px 0 0;
 }
 
 .errorText {
@@ -73,7 +71,7 @@
   border: none;
   cursor: pointer;
   color: var(--danger);
-  opacity: 0.5;
+  opacity: 0.48;
   padding: 2px;
   display: flex;
 }

@@ -3,12 +3,12 @@
    Clean, minimal, Apple-inspired.
    ═══════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap');
 
 :root {
-  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-  --display: 'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
-  --mono: 'SF Mono', 'IBM Plex Mono', ui-monospace, monospace;
+  --sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+  --display: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
+  --mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, monospace;
 
   --text-2xs: 0.625rem;
   --text-xs: 0.6875rem;
@@ -23,12 +23,12 @@
   --opacity-secondary: 0.45;
   --opacity-tertiary: 0.28;
 
-  --ink: #1d1d1f;
-  --muted: rgba(0, 0, 0, 0.55);
-  --soft: rgba(0, 0, 0, 0.3);
-  --faint: rgba(0, 0, 0, 0.08);
-  --ghost: rgba(0, 0, 0, 0.04);
-  --hairline: rgba(0, 0, 0, 0.06);
+  --ink: #121317;
+  --muted: rgba(18, 19, 23, 0.58);
+  --soft: rgba(18, 19, 23, 0.34);
+  --faint: rgba(18, 19, 23, 0.1);
+  --ghost: rgba(18, 19, 23, 0.035);
+  --hairline: rgba(18, 19, 23, 0.08);
   --page-bg: #ffffff;
 
   --accent: #1d46ff;
@@ -50,8 +50,8 @@
 
   --motion: cubic-bezier(0.25, 0.1, 0.25, 1);
 
-  --sidebar-width: 224px;
-  --content-max-width: 1080px;
+  --sidebar-width: 216px;
+  --content-max-width: 1120px;
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -93,6 +93,11 @@ code {
 
 @keyframes fadeSlideIn {
   from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dashboardViewFadeIn {
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 

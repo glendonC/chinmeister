@@ -1,35 +1,20 @@
 .conflictsBanner {
-  padding: 14px 16px;
   margin-bottom: 18px;
-  border-radius: 18px;
-  background: var(--danger-bg);
 }
 
-.conflictsHeader {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
+.conflictsLead {
   margin-bottom: 10px;
-}
-
-.conflictsIcon {
-  font-size: 14px;
-  font-weight: 500;
+  font-size: 11px;
+  font-family: var(--mono);
   color: var(--danger);
-  line-height: 1;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-.conflictsTitle {
-  font-size: 14px;
-  font-weight: 400;
-  color: var(--danger);
-  letter-spacing: -0.02em;
-}
-
-.conflictsSubtitle {
-  margin-top: 3px;
-  font-size: 12px;
-  color: var(--muted);
+.conflictsList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .conflictRow {

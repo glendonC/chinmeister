@@ -38,13 +38,6 @@
   line-height: 1.45;
 }
 
-.memoryAuthor {
-  font-size: 11px;
-  color: var(--ink);
-  opacity: var(--opacity-tertiary);
-  flex-shrink: 0;
-}
-
 .memoryActions {
   display: flex;
   gap: 4px;

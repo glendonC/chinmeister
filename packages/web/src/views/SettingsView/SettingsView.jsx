@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useAuthStore, authActions } from '../../lib/stores/auth.js';
 import { stopPolling } from '../../lib/stores/polling.js';
 import { api } from '../../lib/api.js';
-import { COLOR_PALETTE } from '../../lib/utils.js';
+import { COLOR_PALETTE, getColorHex } from '../../lib/utils.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import styles from './SettingsView.module.css';
 
@@ -62,15 +62,12 @@ export default function SettingsView() {
 
   return (
     <div className={styles.page}>
-      <ViewHeader
-        eyebrow="Settings"
-        title="Settings"
-      />
+      <ViewHeader eyebrow="Configure" title="Settings" />
 
       <div className={styles.profilePreview}>
         <span
           className={styles.profileSwatch}
-          style={{ background: COLOR_PALETTE.find((entry) => entry.name === user?.color)?.hex || '#98989d' }}
+          style={{ background: getColorHex(user?.color) || '#98989d' }}
         />
         <div className={styles.profileCopy}>
           <strong className={styles.profileHandle}>{user?.handle || 'Unknown user'}</strong>
@@ -96,7 +93,7 @@ export default function SettingsView() {
                 placeholder="3-20 chars"
               />
               <button className={styles.btnSave} onClick={saveHandle} disabled={handleSaving}>
-                {handleSaving ? '...' : 'Save'}
+                {handleSaving ? 'Saving...' : 'Save'}
               </button>
               <button className={styles.btnCancel} onClick={() => setEditingHandle(false)} disabled={handleSaving}>
                 Cancel

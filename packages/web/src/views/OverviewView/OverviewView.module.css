@@ -1,12 +1,18 @@
 .overview {
-  animation: viewFadeIn 0.25s var(--motion) both;
+  animation: dashboardViewFadeIn 0.25s var(--motion) both;
+}
+
+.headerSection {
+  display: flex;
+  flex-direction: column;
+  gap: 28px;
+  margin-bottom: 42px;
 }
 
 .welcomeBlock {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  max-width: 56rem;
 }
 
 .sectionEyebrow {
@@ -17,16 +23,9 @@
   text-transform: uppercase;
 }
 
-.headerSection {
-  display: flex;
-  flex-direction: column;
-  gap: 26px;
-  margin-bottom: 42px;
-}
-
 .welcomeTitle {
   font-family: var(--display);
-  font-size: clamp(2.4rem, 5.8vw, 5rem);
+  font-size: clamp(2.5rem, 5.8vw, 4.8rem);
   font-weight: 300;
   line-height: 0.96;
   letter-spacing: -0.075em;
@@ -79,84 +78,64 @@
   color: var(--success);
 }
 
-.projectsSection {
+.workspaceSection {
   display: flex;
   flex-direction: column;
 }
 
-.gridHeader {
+.workspaceHeader {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 18px;
-  margin-bottom: 20px;
+  gap: 20px;
+  margin-bottom: 24px;
 }
 
-.gridHeaderCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
-.gridEyebrow {
-  display: inline-block;
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.gridTitleRow {
+.workspaceCopy {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 14px;
   flex-wrap: wrap;
 }
 
-.gridTitle {
-  font-size: clamp(1.3rem, 2vw, 1.9rem);
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.04em;
+.workspaceTitle {
+  font-family: var(--display);
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  font-weight: 300;
+  line-height: 0.98;
+  letter-spacing: -0.07em;
 }
 
-.gridMeta {
+.workspaceMeta {
   font-size: var(--text-sm);
   color: var(--muted);
-  white-space: nowrap;
 }
 
-.addProjectButton {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0 4px;
+.commandButton {
   border: none;
   background: transparent;
   color: var(--accent);
-  font-size: var(--text-sm);
-  font-weight: 500;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
   cursor: pointer;
-  transition: opacity 0.15s ease;
-  flex-shrink: 0;
+  white-space: nowrap;
 }
 
-.addProjectButton:hover {
-  opacity: 0.72;
+.commandButton:hover {
+  opacity: 0.7;
 }
 
 .controlsRow {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 180px 180px;
+  grid-template-columns: minmax(240px, 1fr) 160px 160px;
   gap: 14px;
-  align-items: center;
-  margin-bottom: 26px;
+  align-items: end;
+  margin-bottom: 32px;
 }
 
-.searchField {
+.searchField,
+.selectField {
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -171,12 +150,13 @@
   text-transform: uppercase;
 }
 
-.searchField input {
+.searchField input,
+.selectField select {
   width: 100%;
   min-height: 40px;
-  padding: 0 14px;
+  padding: 0 12px;
   border: 1px solid var(--hairline);
-  border-radius: 999px;
+  border-radius: 10px;
   background: transparent;
   color: var(--ink);
   outline: none;
@@ -187,21 +167,112 @@
   color: var(--soft);
 }
 
-.selectField {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.insightsGrid {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.35fr);
+  gap: 32px 40px;
+  margin-bottom: 38px;
 }
 
-.selectField select {
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid var(--hairline);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
+.insightSection {
+  min-width: 0;
+}
+
+.insightHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.insightTitle {
+  font-size: 1rem;
+  font-weight: 500;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.insightMeta {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--soft);
+  white-space: nowrap;
+}
+
+.stateGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.stateItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stateValue {
+  font-size: clamp(1.6rem, 3vw, 2.25rem);
+  font-weight: 300;
+  letter-spacing: -0.06em;
+  line-height: 0.94;
+  color: var(--ink);
+}
+
+.stateLabel {
   font-size: var(--text-sm);
-  outline: none;
+  color: var(--ink);
+}
+
+.dataList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.dataRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: baseline;
+}
+
+.dataLabel {
+  font-size: 0.84rem;
+  color: var(--ink);
+}
+
+.toolMixGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 26px;
+}
+
+.dataGroup {
+  min-width: 0;
+}
+
+.dataGroupTitle {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--soft);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dataValue {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  white-space: nowrap;
+}
+
+.emptyHint {
+  font-size: var(--text-sm);
+  color: var(--soft);
 }
 
 .featuredProjectWrap {
@@ -211,41 +282,35 @@
 .overviewGrid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 26px 22px;
+  gap: 28px 24px;
 }
 
-.overviewGrid [role="listitem"] {
+.overviewGrid [role='listitem'] {
   display: contents;
 }
 
-@keyframes viewFadeIn {
-  from { opacity: 0; transform: translateY(4px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@media (max-width: 900px) {
-  .metricsRow {
+@media (max-width: 980px) {
+  .metricsRow,
+  .insightsGrid,
+  .toolMixGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .controlsRow {
     grid-template-columns: 1fr;
-    align-items: stretch;
   }
 }
 
-@media (max-width: 600px) {
-  .metricsRow {
+@media (max-width: 640px) {
+  .metricsRow,
+  .insightsGrid,
+  .stateGrid,
+  .toolMixGrid {
     grid-template-columns: 1fr;
-    gap: 18px;
   }
 
-  .gridHeader {
+  .workspaceHeader {
     flex-direction: column;
     align-items: flex-start;
-  }
-
-  .gridMeta {
-    white-space: normal;
   }
 }
