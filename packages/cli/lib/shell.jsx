@@ -16,6 +16,10 @@ function getRailWidth(items, compact) {
   }, 0);
 }
 
+function getActiveModeItem(items, activeKey) {
+  return items.find((item) => item.key === activeKey) || items[0] || null;
+}
+
 function getNavHintWidth(compact) {
   const labels = compact
     ? ['← shift+tab', 'tab →']
@@ -114,12 +118,23 @@ export function ControlShell({
 
   const cols = dimensions.cols;
   const rows = dimensions.rows;
+  const activeModeItem = getActiveModeItem(modeItems, activeMode);
   const fullHintWidth = getNavHintWidth(false) * 2 + 4;
   const compactHintWidth = getNavHintWidth(true) * 2 + 4;
   const fullMinCols = Math.max(68, getRailWidth(modeItems, false) + fullHintWidth + 8);
   const compactMinCols = Math.max(60, getRailWidth(modeItems, true) + compactHintWidth + 8);
-  const compact = cols < fullMinCols;
-  const minCols = compact ? compactMinCols : fullMinCols;
+  const narrowMinCols = Math.max(
+    48,
+    getRailWidth(activeModeItem ? [activeModeItem] : [], true) + compactHintWidth + 8
+  );
+
+  let layoutMode = 'full';
+  if (cols < compactMinCols) layoutMode = 'narrow';
+  else if (cols < fullMinCols) layoutMode = 'compact';
+
+  const compact = layoutMode !== 'full';
+  const narrow = layoutMode === 'narrow';
+  const minCols = narrow ? narrowMinCols : compact ? compactMinCols : fullMinCols;
 
   if (cols < minCols || rows < MIN_ROWS) {
     return (
@@ -148,7 +163,12 @@ export function ControlShell({
             <NavControlHint direction="left" compact={compact} />
           </Box>
           <Box flexGrow={1} justifyContent="center">
-            <ModeRail items={modeItems} activeKey={activeMode} compact={compact} fillMode={terminalUi.hasBackgroundFill} />
+            <ModeRail
+              items={narrow && activeModeItem ? [activeModeItem] : modeItems}
+              activeKey={activeMode}
+              compact={compact}
+              fillMode={terminalUi.hasBackgroundFill}
+            />
           </Box>
           <Box width={navHintWidth} justifyContent="flex-end">
             <NavControlHint direction="right" align="right" compact={compact} />
@@ -159,7 +179,7 @@ export function ControlShell({
 
       <Box flexDirection="column" paddingX={2} height={viewportRows} flexGrow={1}>
         {typeof children === 'function'
-          ? children({ cols, rows, viewportRows, compact })
+          ? children({ cols, rows, viewportRows, compact, narrow })
           : children}
       </Box>
 
