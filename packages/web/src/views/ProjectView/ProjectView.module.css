@@ -2,40 +2,187 @@
   animation: dashboardViewFadeIn 0.25s var(--motion) both;
 }
 
-.hero {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 22px;
+/* ── Conflict banner ── */
+
+.conflictBanner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0;
+  margin-bottom: 24px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  width: 100%;
+}
+
+.conflictText {
+  font-size: var(--text-sm);
+  color: var(--danger);
+  letter-spacing: -0.01em;
+}
+
+.conflictAction {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--danger);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  opacity: 0.6;
+  transition: opacity var(--motion-fast) ease;
+}
+
+.conflictBanner:hover .conflictAction {
+  opacity: 1;
+}
+
+/* ── Stat tabs ── */
+
+.header {
   margin-bottom: 38px;
 }
 
-.timelineSection {
+.statsRow {
   display: grid;
-  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
-  gap: 28px;
-  align-items: end;
-  margin-bottom: 40px;
-}
-
-.timelineCopy {
-  display: flex;
-  flex-direction: column;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
 }
 
-.timelineLabel {
+.statButton {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.statLabel {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border-radius: 6px;
   font-family: var(--mono);
   font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--soft);
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
+  background: transparent;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
 }
 
-.timelineMeta {
-  font-size: var(--text-sm);
-  color: var(--muted);
+.statButton:hover .statLabel {
+  background: rgba(18, 19, 23, 0.04);
 }
+
+.statActive .statLabel {
+  background: rgba(29, 70, 255, 0.08);
+  color: var(--accent);
+}
+
+.statValue {
+  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  font-weight: 200;
+  letter-spacing: -0.07em;
+  line-height: 0.92;
+  color: var(--ink);
+}
+
+.statAccent {
+  color: var(--accent);
+}
+
+/* ── Activity visualization ── */
+
+.activitySection {
+  margin-bottom: 40px;
+}
+
+/* ── Memory controls ── */
+
+.memoryControls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.searchInput {
+  width: 100%;
+  max-width: 300px;
+  padding: 7px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--soft);
+}
+
+.searchInput:focus {
+  border-color: var(--accent);
+}
+
+.tagFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tagPill {
+  display: inline-flex;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 999px;
+  background: var(--ghost);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+}
+
+.tagPill:hover {
+  background: rgba(18, 19, 23, 0.06);
+  color: var(--ink);
+}
+
+.tagPillActive {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tagPillClear {
+  color: var(--soft);
+}
+
+/* ── Viz area ── */
+
+.vizArea {
+  min-height: 200px;
+}
+
+.vizPanel {
+  animation: dashboardViewFadeIn 0.2s var(--motion) both;
+}
+
+/* ── Panel layout ── */
 
 .panelGrid {
   display: grid;
@@ -63,7 +210,7 @@
 
 .blockTitle {
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: -0.04em;
 }
 
@@ -176,22 +323,21 @@
   white-space: nowrap;
 }
 
-@media (max-width: 900px) {
-  .hero {
+/* ── Responsive ── */
+
+@media (max-width: 980px) {
+  .statsRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .timelineSection,
+@media (max-width: 900px) {
   .panelGrid {
     grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 600px) {
-  .hero {
-    gap: 18px;
-  }
-
   .summaryGrid {
     grid-template-columns: 1fr;
   }

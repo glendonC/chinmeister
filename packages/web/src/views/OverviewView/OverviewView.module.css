@@ -197,7 +197,7 @@
   align-items: center;
   gap: 10px;
   font-size: 0.88rem;
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -262,7 +262,7 @@
 .toolsLegend {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 4px;
   width: 100%;
   max-width: 520px;
 }
@@ -272,12 +272,7 @@
   grid-template-columns: 10px auto 1fr auto auto;
   gap: 10px;
   align-items: center;
-  padding: 10px 4px;
-  border-bottom: 1px solid var(--faint);
-}
-
-.legendRow:last-child {
-  border-bottom: none;
+  padding: 8px 4px;
 }
 
 .legendDot {
@@ -289,7 +284,7 @@
 
 .legendName {
   font-size: 0.86rem;
-  font-weight: 500;
+  font-weight: 400;
   color: var(--ink);
   white-space: nowrap;
 }

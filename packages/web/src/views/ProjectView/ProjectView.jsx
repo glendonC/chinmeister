@@ -7,8 +7,6 @@ import {
   buildUsageEntries,
 } from '../../lib/toolAnalytics.js';
 import ActivityTimeline from '../../components/ActivityTimeline/ActivityTimeline.jsx';
-import StatCard from '../../components/StatCard/StatCard.jsx';
-import Tabs from '../../components/Tabs/Tabs.jsx';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import {
   buildFilesInPlay,
@@ -32,7 +30,7 @@ export default function ProjectView() {
   const contextData = usePollingStore((s) => s.contextData);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const teams = useTeamStore((s) => s.teams);
-  const [activeTab, setActiveTab] = useState('live');
+  const [activeViz, setActiveViz] = useState('live');
 
   const members = contextData?.members || [];
   const memories = contextData?.memories || [];
@@ -42,7 +40,6 @@ export default function ProjectView() {
   );
   const sessions = allSessions.slice(0, 8);
   const locks = contextData?.locks || [];
-  const messages = contextData?.messages || [];
   const toolsConfigured = contextData?.tools_configured || [];
   const usage = contextData?.usage || {};
   const activeTeam = teams.find((team) => team.team_id === activeTeamId) || null;
@@ -73,13 +70,6 @@ export default function ProjectView() {
     [members, toolsConfigured]
   );
 
-  const tabs = [
-    { id: 'live', label: 'Live', badge: activeAgents.length || null },
-    { id: 'knowledge', label: 'Memory', badge: memories.length || null },
-    { id: 'history', label: 'Sessions', badge: allSessions.length || null },
-    { id: 'tools', label: 'Tools', badge: toolSummaries.length || null },
-  ];
-
   const handleUpdateMemory = useCallback(async (id, text, tags) => {
     if (!activeTeamId) return;
     await teamActions.updateMemory(activeTeamId, id, text, tags);
@@ -90,85 +80,101 @@ export default function ProjectView() {
     await teamActions.deleteMemory(activeTeamId, id);
   }, [activeTeamId]);
 
-  const handleSendMessage = useCallback(async (text) => {
-    if (!activeTeamId) return;
-    await teamActions.sendMessage(activeTeamId, text);
-  }, [activeTeamId]);
+  const stats = [
+    { id: 'live', label: 'Agents', value: activeAgents.length, tone: activeAgents.length > 0 ? 'accent' : '' },
+    { id: 'memory', label: 'Memory', value: memories.length, tone: '' },
+    { id: 'sessions', label: 'Edits / 24h', value: sessionEditCount, tone: '' },
+    { id: 'tools', label: 'Tools', value: toolSummaries.length, tone: '' },
+  ];
 
   return (
     <div className={styles.page}>
       <ViewHeader eyebrow="Project" title={activeTeam?.team_name || 'Project'} />
 
-      <div className={styles.hero}>
-        <StatCard
-          label="Live agents"
-          value={activeAgents.length}
-          tone={activeAgents.length > 0 ? 'accent' : 'default'}
-        />
-        <StatCard
-          label="Conflicts"
-          value={conflicts.length}
-          tone={conflicts.length > 0 ? 'danger' : 'default'}
-        />
-        <StatCard
-          label="Memory"
-          value={memories.length}
-          tone={memories.length > 0 ? 'success' : 'default'}
-        />
-        <StatCard label="Sessions / 24h" value={allSessions.length} />
-      </div>
+      {conflicts.length > 0 && (
+        <button
+          type="button"
+          className={styles.conflictBanner}
+          onClick={() => setActiveViz('live')}
+        >
+          <span className={styles.conflictText}>
+            {conflicts.length} {conflicts.length === 1 ? 'file' : 'files'} with overlapping edits
+          </span>
+          <span className={styles.conflictAction}>View</span>
+        </button>
+      )}
 
-      <section className={styles.timelineSection}>
-        <div className={styles.timelineCopy}>
-          <span className={styles.timelineLabel}>24h sessions</span>
-          <p className={styles.timelineMeta}>{allSessions.length} reported</p>
+      <section className={styles.header}>
+        <div className={styles.statsRow}>
+          {stats.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              className={`${styles.statButton} ${activeViz === s.id ? styles.statActive : ''}`}
+              onClick={() => setActiveViz(s.id)}
+            >
+              <span className={styles.statLabel}>{s.label}</span>
+              <span className={`${styles.statValue} ${s.tone === 'accent' ? styles.statAccent : ''}`}>
+                {s.value}
+              </span>
+            </button>
+          ))}
         </div>
+      </section>
+
+      <section className={styles.activitySection}>
         <ActivityTimeline sessions={allSessions} liveCount={activeAgents.length} />
       </section>
 
-      <Tabs tabs={tabs} active={activeTab} onTabChange={setActiveTab}>
-        {activeTab === 'live' && (
-          <ProjectLiveTab
-            sortedAgents={sortedAgents}
-            offlineAgents={offlineAgents}
-            conflicts={conflicts}
-            filesInPlay={filesInPlay}
-            locks={locks}
-            liveToolMix={liveToolMix}
-          />
+      <section className={styles.vizArea}>
+        {activeViz === 'live' && (
+          <div className={styles.vizPanel}>
+            <ProjectLiveTab
+              sortedAgents={sortedAgents}
+              offlineAgents={offlineAgents}
+              conflicts={conflicts}
+              filesInPlay={filesInPlay}
+              locks={locks}
+              liveToolMix={liveToolMix}
+            />
+          </div>
         )}
 
-        {activeTab === 'knowledge' && (
-          <ProjectMemoryTab
-            memories={memories}
-            memoryBreakdown={memoryBreakdown}
-            messages={messages}
-            onUpdateMemory={handleUpdateMemory}
-            onDeleteMemory={handleDeleteMemory}
-            onSendMessage={handleSendMessage}
-          />
+        {activeViz === 'memory' && (
+          <div className={styles.vizPanel}>
+            <ProjectMemoryTab
+              memories={memories}
+              memoryBreakdown={memoryBreakdown}
+              onUpdateMemory={handleUpdateMemory}
+              onDeleteMemory={handleDeleteMemory}
+            />
+          </div>
         )}
 
-        {activeTab === 'history' && (
-          <ProjectSessionsTab
-            sessions={sessions}
-            sessionEditCount={sessionEditCount}
-            filesTouched={filesTouched}
-            filesTouchedCount={filesTouchedCount}
-            liveSessionCount={liveSessionCount}
-          />
+        {activeViz === 'sessions' && (
+          <div className={styles.vizPanel}>
+            <ProjectSessionsTab
+              sessions={sessions}
+              sessionEditCount={sessionEditCount}
+              filesTouched={filesTouched}
+              filesTouchedCount={filesTouchedCount}
+              liveSessionCount={liveSessionCount}
+            />
+          </div>
         )}
 
-        {activeTab === 'tools' && (
-          <ProjectToolsTab
-            toolSummaries={toolSummaries}
-            conflicts={conflicts}
-            filesInPlay={filesInPlay}
-            locks={locks}
-            usageEntries={usageEntries}
-          />
+        {activeViz === 'tools' && (
+          <div className={styles.vizPanel}>
+            <ProjectToolsTab
+              toolSummaries={toolSummaries}
+              conflicts={conflicts}
+              filesInPlay={filesInPlay}
+              locks={locks}
+              usageEntries={usageEntries}
+            />
+          </div>
         )}
-      </Tabs>
+      </section>
     </div>
   );
 }
