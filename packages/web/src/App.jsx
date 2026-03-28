@@ -6,7 +6,6 @@ import { usePollingStore, startPolling, stopPolling } from './lib/stores/polling
 import ConnectView from './views/ConnectView/ConnectView.jsx';
 import OverviewView from './views/OverviewView/OverviewView.jsx';
 import ProjectView from './views/ProjectView/ProjectView.jsx';
-import ToolsView from './views/ToolsView/ToolsView.jsx';
 import SettingsView from './views/SettingsView/SettingsView.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
 
@@ -105,7 +104,6 @@ export default function App() {
         <div className={styles.content}>
           {activeView === 'overview' && <OverviewView />}
           {activeView === 'project' && <ProjectView />}
-          {activeView === 'tools' && <ToolsView />}
           {activeView === 'settings' && <SettingsView />}
         </div>
       </div>

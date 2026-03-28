@@ -94,37 +94,36 @@
 .projectList {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
 }
 
 .navItemProject {
-  padding-right: 20px;
+  gap: 10px;
+  padding: 7px 20px;
 }
 
-.projectDot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--soft);
+.projectSquircle {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
   flex-shrink: 0;
-  transition: background 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
-.navItemActive .projectDot {
-  background: var(--accent);
-}
 
 .projectName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.8rem;
+  font-weight: 500;
   line-height: 1.2;
 }
 
 .sidebarSpacer {
   flex: 1;
 }
+
 
 .mobileToggle {
   display: none;

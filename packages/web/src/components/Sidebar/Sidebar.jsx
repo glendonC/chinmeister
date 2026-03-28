@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTeamStore } from '../../lib/stores/teams.js';
+import { projectGradient } from '../../lib/projectGradient.js';
 import styles from './Sidebar.module.css';
 
 export default function Sidebar({ activeNav, onNavigate }) {
@@ -7,7 +8,6 @@ export default function Sidebar({ activeNav, onNavigate }) {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const selectTeam = useTeamStore((s) => s.selectTeam);
   const overviewActive = activeNav === null && activeTeamId === null;
-  const toolsActive = activeNav === 'tools';
   const settingsActive = activeNav === 'settings';
 
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -24,56 +24,10 @@ export default function Sidebar({ activeNav, onNavigate }) {
     setMobileOpen(false);
   }
 
-  function goTools() {
-    onNavigate('tools');
-    setMobileOpen(false);
-  }
-
   function goSettings() {
     onNavigate('settings');
     setMobileOpen(false);
   }
-
-  const primaryNav = [
-    {
-      id: 'overview',
-      label: 'Overview',
-      active: overviewActive,
-      onClick: goOverview,
-      icon: (
-        <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-          <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
-        </svg>
-      ),
-    },
-    {
-      id: 'tools',
-      label: 'Tools',
-      active: toolsActive,
-      onClick: goTools,
-      icon: (
-        <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.2" />
-          <polygon points="6,10 7,7 10,6 9,9" fill="currentColor" />
-        </svg>
-      ),
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      active: settingsActive,
-      onClick: goSettings,
-      icon: (
-        <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
-          <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
-          <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-        </svg>
-      ),
-    },
-  ];
 
   return (
     <>
@@ -101,18 +55,32 @@ export default function Sidebar({ activeNav, onNavigate }) {
         </div>
 
         <nav className={styles.sidebarNav} aria-label="Primary">
-          {primaryNav.map((item) => (
-            <button
-              key={item.id}
-              type="button"
-              className={`${styles.navItem} ${item.active ? styles.navItemActive : ''}`}
-              onClick={item.onClick}
-              aria-current={item.active ? 'page' : undefined}
-            >
-              {item.icon}
-              <span className={styles.navLabel}>{item.label}</span>
-            </button>
-          ))}
+          <button
+            type="button"
+            className={`${styles.navItem} ${overviewActive ? styles.navItemActive : ''}`}
+            onClick={goOverview}
+            aria-current={overviewActive ? 'page' : undefined}
+          >
+            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <rect x="1" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <rect x="9" y="1" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <rect x="1" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+              <rect x="9" y="9" width="6" height="6" rx="1.5" stroke="currentColor" strokeWidth="1.2" />
+            </svg>
+            <span className={styles.navLabel}>Overview</span>
+          </button>
+          <button
+            type="button"
+            className={`${styles.navItem} ${settingsActive ? styles.navItemActive : ''}`}
+            onClick={goSettings}
+            aria-current={settingsActive ? 'page' : undefined}
+          >
+            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+            </svg>
+            <span className={styles.navLabel}>Settings</span>
+          </button>
         </nav>
 
         <div className={styles.sidebarSection}>
@@ -127,7 +95,10 @@ export default function Sidebar({ activeNav, onNavigate }) {
                   onClick={() => goTeam(team.team_id)}
                   aria-current={activeTeamId === team.team_id && !activeNav ? 'page' : undefined}
                 >
-                  <span className={styles.projectDot} />
+                  <span
+                    className={styles.projectSquircle}
+                    style={{ background: projectGradient(team.team_id) }}
+                  />
                   <span className={styles.projectName}>{team.team_name || team.team_id}</span>
                 </button>
               ))

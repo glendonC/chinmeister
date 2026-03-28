@@ -2,313 +2,271 @@ import { useMemo, useState } from 'react';
 import { usePollingStore } from '../../lib/stores/polling.js';
 import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
-import { useToolCatalog } from '../../lib/useToolCatalog.js';
-import {
-  buildCategoryJoinShare,
-  buildProjectStates,
-  buildToolJoinShare,
-  formatShare,
-} from '../../lib/toolAnalytics.js';
+import { getColorHex } from '../../lib/utils.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
-import ProjectCard from '../../components/ProjectCard/ProjectCard.jsx';
+import { projectGradient } from '../../lib/projectGradient.js';
+import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
 import styles from './OverviewView.module.css';
 
+// ── Arc ring ──
+const CX = 130, CY = 130, R = 58, SW = 13, GAP = 14;
+const DEG = Math.PI / 180;
+function arcPath(cx, cy, r, startDeg, sweepDeg) {
+  const s = (startDeg - 90) * DEG, e = (startDeg + sweepDeg - 90) * DEG;
+  return `M ${cx + r * Math.cos(s)} ${cy + r * Math.sin(s)} A ${r} ${r} 0 ${sweepDeg > 180 ? 1 : 0} 1 ${cx + r * Math.cos(e)} ${cy + r * Math.sin(e)}`;
+}
+
 export default function OverviewView() {
   const dashboardData = usePollingStore((s) => s.dashboardData);
-  const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
   const teamsError = useTeamStore((s) => s.teamsError);
+  const selectTeam = useTeamStore((s) => s.selectTeam);
   const summaries = dashboardData?.teams ?? [];
-  const { catalog, categories, loading: catalogLoading } = useToolCatalog(token);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterMode, setFilterMode] = useState('all');
-  const [sortMode, setSortMode] = useState('activity');
-  const [copiedInit, setCopiedInit] = useState(false);
+  const [activeViz, setActiveViz] = useState('projects');
+  const [search, setSearch] = useState('');
+  const userColor = getColorHex(user?.color) || '#121317';
 
-  const totalActive = useMemo(
-    () => summaries.reduce((sum, team) => sum + (team.active_agents || 0), 0),
-    [summaries]
-  );
-  const totalConflicts = useMemo(
-    () => summaries.reduce((sum, team) => sum + (team.conflict_count || 0), 0),
-    [summaries]
-  );
-  const totalSessions = useMemo(
-    () => summaries.reduce((sum, team) => sum + (team.recent_sessions_24h || 0), 0),
-    [summaries]
-  );
-  const hasMultipleProjects = summaries.length > 1;
-  const toolShare = useMemo(() => buildToolJoinShare(summaries), [summaries]);
-  const categoryShare = useMemo(
-    () => buildCategoryJoinShare(toolShare, catalog, categories),
-    [toolShare, catalog, categories]
-  );
-  const projectStates = useMemo(() => buildProjectStates(summaries), [summaries]);
-  const filteredProjects = useMemo(() => {
-    let items = [...summaries];
-    const query = searchQuery.trim().toLowerCase();
+  const totalActive = useMemo(() => summaries.reduce((s, t) => s + (t.active_agents || 0), 0), [summaries]);
+  const totalMemories = useMemo(() => summaries.reduce((s, t) => s + (t.memory_count || 0), 0), [summaries]);
 
-    if (query) {
-      items = items.filter((team) => {
-        const name = String(team.team_name || team.team_id || '').toLowerCase();
-        const tools = (team.tools_configured || [])
-          .map((tool) => tool.tool)
-          .join(' ')
-          .toLowerCase();
-        return name.includes(query) || tools.includes(query);
-      });
-    }
+  const toolUsage = useMemo(() => {
+    const totals = new Map();
+    for (const team of summaries)
+      for (const { tool, joins } of team.tools_configured || [])
+        if (getToolMeta(tool).icon) totals.set(tool, (totals.get(tool) || 0) + joins);
+    const entries = [...totals.entries()].map(([tool, joins]) => ({ tool, joins })).sort((a, b) => b.joins - a.joins);
+    const total = entries.reduce((s, e) => s + e.joins, 0);
+    return entries.map((e) => ({ ...e, share: total > 0 ? e.joins / total : 0 }));
+  }, [summaries]);
 
-    if (filterMode === 'active') {
-      items = items.filter((team) => (team.active_agents || 0) > 0);
-    } else if (filterMode === 'conflicts') {
-      items = items.filter((team) => (team.conflict_count || 0) > 0);
-    } else if (filterMode === 'quiet') {
-      items = items.filter(
-        (team) => (team.active_agents || 0) === 0 && (team.conflict_count || 0) === 0
-      );
-    }
+  const uniqueTools = toolUsage.length;
 
-    items.sort((a, b) => {
-      if (sortMode === 'name') {
-        return String(a.team_name || a.team_id).localeCompare(String(b.team_name || b.team_id));
-      }
-      if (sortMode === 'sessions') {
-        return (b.recent_sessions_24h || 0) - (a.recent_sessions_24h || 0);
-      }
-      if (sortMode === 'conflicts') {
-        return (b.conflict_count || 0) - (a.conflict_count || 0);
-      }
-
-      const aScore =
-        ((a.active_agents || 0) * 3) +
-        ((a.conflict_count || 0) * 4) +
-        (a.recent_sessions_24h || 0);
-      const bScore =
-        ((b.active_agents || 0) * 3) +
-        ((b.conflict_count || 0) * 4) +
-        (b.recent_sessions_24h || 0);
-      return bScore - aScore;
+  const arcs = useMemo(() => {
+    if (!toolUsage.length) return [];
+    const totalGap = GAP * toolUsage.length, available = 360 - totalGap;
+    let offset = 0;
+    return toolUsage.map((entry) => {
+      const sweep = Math.max(entry.share * available, 4);
+      const midDeg = (offset + sweep / 2 - 90) * DEG;
+      const labelR = R + SW / 2 + 22;
+      const anchorR = R + SW / 2 + 5;
+      const arc = { ...entry, startDeg: offset, sweepDeg: sweep,
+        labelX: CX + labelR * Math.cos(midDeg), labelY: CY + labelR * Math.sin(midDeg),
+        anchorX: CX + anchorR * Math.cos(midDeg), anchorY: CY + anchorR * Math.sin(midDeg),
+        side: Math.cos(midDeg) >= 0 ? 'right' : 'left' };
+      offset += sweep + GAP;
+      return arc;
     });
+  }, [toolUsage]);
 
-    return items;
-  }, [summaries, searchQuery, filterMode, sortMode]);
+  // Agents: per-project, per-tool breakdown
+  const agentRows = useMemo(() => {
+    const rows = [];
+    for (const team of summaries)
+      for (const t of (team.tools_configured || []).filter((t) => getToolMeta(t.tool).icon && t.joins > 0))
+        rows.push({ tool: t.tool, teamName: team.team_name || team.team_id, teamId: team.team_id, joins: t.joins });
+    return rows.sort((a, b) => b.joins - a.joins);
+  }, [summaries]);
 
-  async function handleCopyInit() {
-    try {
-      await navigator.clipboard.writeText('npx chinwag init');
-      setCopiedInit(true);
-      window.setTimeout(() => setCopiedInit(false), 1800);
-    } catch {
-      // Ignore clipboard failures.
-    }
+  // Filtered projects
+  const filteredProjects = useMemo(() => {
+    if (!search.trim()) return summaries;
+    const q = search.trim().toLowerCase();
+    return summaries.filter((t) => (t.team_name || t.team_id).toLowerCase().includes(q));
+  }, [summaries, search]);
+
+  if (summaries.length === 0) {
+    return (
+      <div className={styles.overview}>
+        <EmptyState large title={teamsError ? 'Could not load projects' : 'No projects yet'}
+          hint={teamsError || <>Run <code>npx chinwag init</code> in a repo to add one.</>} />
+      </div>
+    );
   }
+
+  const stats = [
+    { id: 'projects', label: 'Projects', value: summaries.length, tone: '' },
+    { id: 'agents', label: 'Agents live', value: totalActive, tone: totalActive > 0 ? 'accent' : '' },
+    { id: 'tools', label: 'Tools', value: uniqueTools, tone: '' },
+    { id: 'memories', label: 'Memories', value: totalMemories, tone: '' },
+  ];
 
   return (
     <div className={styles.overview}>
-      {summaries.length > 0 ? (
-        <>
-          <section className={styles.headerSection}>
-            <div className={styles.welcomeBlock}>
-              <span className={styles.sectionEyebrow}>Overview</span>
-              <h1 className={styles.welcomeTitle}>
-                Welcome back{user?.handle ? `, ${user.handle}` : ''}.
-              </h1>
-            </div>
+      <section className={styles.header}>
+        <div className={styles.welcomeBlock}>
+          <span className={styles.eyebrow}>Overview</span>
+          <h1 className={styles.title}>
+            Welcome back{user?.handle ? <>{', '}<span style={{ color: userColor }}>{user.handle}</span></> : null}.
+          </h1>
+        </div>
+        <div className={styles.statsRow}>
+          {stats.map((s) => (
+            <button key={s.id} type="button"
+              className={`${styles.statButton} ${activeViz === s.id ? styles.statActive : ''}`}
+              onClick={() => setActiveViz(s.id)}>
+              <span className={styles.statLabel}>{s.label}</span>
+              <span className={`${styles.statValue} ${s.tone === 'accent' ? styles.statAccent : ''}`}>{s.value}</span>
+            </button>
+          ))}
+        </div>
+      </section>
 
-            <div className={styles.metricsRow} aria-label="Project totals">
-              <OverviewMetric label="Projects" value={summaries.length} />
-              <OverviewMetric
-                label="Active agents"
-                value={totalActive}
-                tone={totalActive > 0 ? 'accent' : 'default'}
-                hint="Live now"
-              />
-              <OverviewMetric
-                label="Conflicts"
-                value={totalConflicts}
-                tone={totalConflicts > 0 ? 'danger' : 'default'}
-                hint="Overlapping files"
-              />
-              <OverviewMetric
-                label="Sessions / 24h"
-                value={totalSessions}
-                tone={totalSessions > 0 ? 'success' : 'default'}
-                hint="Reported"
-              />
-            </div>
-          </section>
+      <section className={styles.vizArea}>
 
-          <section className={styles.workspaceSection}>
-            <div className={styles.workspaceHeader}>
-              <div className={styles.workspaceCopy}>
-                <h2 className={styles.workspaceTitle}>Projects</h2>
-                <p className={styles.workspaceMeta}>{summaries.length} connected</p>
-              </div>
-              <button className={styles.commandButton} onClick={handleCopyInit}>
-                {copiedInit ? 'Copied npx chinwag init' : 'Copy npx chinwag init'}
-              </button>
-            </div>
-
-            {hasMultipleProjects && (
-              <div className={styles.controlsRow}>
-                <label className={styles.searchField}>
-                  <span className={styles.searchLabel}>Search</span>
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(event) => setSearchQuery(event.target.value)}
-                    placeholder="Project or tool"
-                    aria-label="Search projects"
-                  />
-                </label>
-
-                <label className={styles.selectField}>
-                  <span className={styles.selectLabel}>Filter</span>
-                  <select
-                    value={filterMode}
-                    onChange={(event) => setFilterMode(event.target.value)}
-                    aria-label="Filter projects"
-                  >
-                    <option value="all">All</option>
-                    <option value="active">Active</option>
-                    <option value="conflicts">Conflicts</option>
-                    <option value="quiet">Quiet</option>
-                  </select>
-                </label>
-
-                <label className={styles.selectField}>
-                  <span className={styles.selectLabel}>Sort</span>
-                  <select
-                    value={sortMode}
-                    onChange={(event) => setSortMode(event.target.value)}
-                    aria-label="Sort projects"
-                  >
-                    <option value="activity">Most active</option>
-                    <option value="sessions">Most sessions</option>
-                    <option value="conflicts">Most conflicts</option>
-                    <option value="name">Name</option>
-                  </select>
-                </label>
-              </div>
+        {/* ── PROJECTS ── */}
+        {activeViz === 'projects' && (
+          <div className={styles.vizPanel}>
+            {summaries.length > 3 && (
+              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search projects" className={styles.searchInput} />
             )}
-
-            <div className={styles.insightsGrid}>
-              <section className={styles.insightSection}>
-                <div className={styles.insightHeader}>
-                  <h2 className={styles.insightTitle}>Project states</h2>
-                  <span className={styles.insightMeta}>Current</span>
-                </div>
-                <div className={styles.stateGrid}>
-                  {projectStates.map((state) => (
-                    <div key={state.id} className={styles.stateItem}>
-                      <span
-                        className={`${styles.stateValue} ${
-                          state.id === 'active'
-                            ? styles.metricAccent
-                            : state.id === 'conflicts'
-                              ? styles.metricDanger
-                              : ''
-                        }`}
-                      >
-                        {state.value}
+            <div className={styles.tableWrap}>
+              <div className={styles.tableHead}>
+                <span className={styles.thLeft}>Name</span>
+                <span className={styles.th}>Live</span>
+                <span className={styles.th}>Memories</span>
+                <span className={styles.th}>Tools</span>
+              </div>
+              <div className={styles.tableBody}>
+                {filteredProjects.map((team) => {
+                  const agents = team.active_agents || 0;
+                  const toolCount = (team.tools_configured || []).filter((t) => getToolMeta(t.tool).icon).length;
+                  return (
+                    <button key={team.team_id} type="button" className={styles.tableRow} onClick={() => selectTeam(team.team_id)}>
+                      <span className={styles.tdLeft}>
+                        <span className={styles.squircle} style={{ background: projectGradient(team.team_id) }} />
+                        {team.team_name || team.team_id}
                       </span>
-                      <span className={styles.stateLabel}>{state.label}</span>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section className={styles.insightSection}>
-                <div className={styles.insightHeader}>
-                  <h2 className={styles.insightTitle}>Tool mix</h2>
-                  <span className={styles.insightMeta}>Recorded joins</span>
-                </div>
-                <div className={styles.toolMixGrid}>
-                  <div className={styles.dataGroup}>
-                    <span className={styles.dataGroupTitle}>By tool</span>
-                    {toolShare.length > 0 ? (
-                      <div className={styles.dataList}>
-                        {toolShare.slice(0, 3).map((tool) => (
-                          <div key={tool.tool} className={styles.dataRow}>
-                            <span className={styles.dataLabel}>{getToolMeta(tool.tool).label}</span>
-                            <span className={styles.dataValue}>{formatShare(tool.share)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className={styles.emptyHint}>No recorded joins yet.</p>
-                    )}
-                  </div>
-
-                  <div className={styles.dataGroup}>
-                    <span className={styles.dataGroupTitle}>By category</span>
-                    {categoryShare.length > 0 ? (
-                      <div className={styles.dataList}>
-                        {categoryShare.slice(0, 3).map((category) => (
-                          <div key={category.id} className={styles.dataRow}>
-                            <span className={styles.dataLabel}>{category.label}</span>
-                            <span className={styles.dataValue}>{formatShare(category.share)}</span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className={styles.emptyHint}>
-                        {catalogLoading ? 'Loading categories...' : 'No category data yet.'}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              </section>
+                      <span className={`${styles.td} ${agents > 0 ? styles.tdAccent : ''}`}>{agents}</span>
+                      <span className={styles.td}>{team.memory_count || 0}</span>
+                      <span className={styles.td}>{toolCount}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          </div>
+        )}
 
-            {filteredProjects.length === 0 ? (
-              <EmptyState title="No matching projects" hint="Try a different search, filter, or sort." />
-            ) : !hasMultipleProjects && !searchQuery && filterMode === 'all' ? (
-              <div className={styles.featuredProjectWrap}>
-                <ProjectCard team={filteredProjects[0]} featured={true} />
+        {/* ── AGENTS LIVE ── */}
+        {activeViz === 'agents' && (
+          <div className={styles.vizPanel}>
+            {agentRows.length > 0 ? (
+              <div className={styles.tableWrap}>
+                <div className={styles.tableHead}>
+                  <span className={styles.thLeft}>Tool</span>
+                  <span className={styles.thLeft}>Project</span>
+                  <span className={styles.th}>Sessions</span>
+                </div>
+                <div className={styles.tableBody}>
+                  {agentRows.map((agent, i) => {
+                    const meta = getToolMeta(agent.tool);
+                    return (
+                      <div key={`${agent.teamId}-${agent.tool}-${i}`} className={styles.tableRow}>
+                        <span className={styles.tdLeft}>
+                          <span className={styles.toolDot} style={{ background: meta.color }} />
+                          <ToolIcon tool={agent.tool} size={16} />
+                          {meta.label}
+                        </span>
+                        <span className={styles.tdLeftMuted}>{agent.teamName}</span>
+                        <span className={styles.td}>{agent.joins}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ) : (
-              <div className={styles.overviewGrid} role="list" aria-label="Projects">
-                {filteredProjects.map((team) => (
-                  <div key={team.team_id} role="listitem">
-                    <ProjectCard team={team} />
-                  </div>
-                ))}
-              </div>
+              <p className={styles.emptyHint}>No agent activity recorded yet.</p>
             )}
-          </section>
-        </>
-      ) : (
-        <EmptyState
-          large={true}
-          title={teamsError ? 'Could not load projects' : 'No projects yet'}
-          hint={teamsError || <>Run <code>npx chinwag init</code> in a repo to add one.</>}
-        />
-      )}
-    </div>
-  );
-}
+          </div>
+        )}
 
-function OverviewMetric({ label, value, tone = 'default', hint = '' }) {
-  return (
-    <div className={styles.metricItem}>
-      <span className={styles.metricLabel}>{label}</span>
-      <span
-        className={`${styles.metricValue} ${
-          tone === 'accent'
-            ? styles.metricAccent
-            : tone === 'danger'
-              ? styles.metricDanger
-              : tone === 'success'
-                ? styles.metricSuccess
-                : ''
-        }`}
-      >
-        {value}
-      </span>
-      {hint ? <span className={styles.metricHint}>{hint}</span> : null}
+        {/* ── TOOLS ── */}
+        {activeViz === 'tools' && (
+          <div className={styles.vizPanel}>
+            {arcs.length > 0 ? (
+              <div className={styles.toolsViz}>
+                <div className={styles.ringWrap}>
+                  <svg viewBox="0 0 260 260" className={styles.ringSvg}>
+                    {arcs.map((arc) => {
+                      const meta = getToolMeta(arc.tool);
+                      return (
+                        <g key={arc.tool}>
+                          <path d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)} fill="none" stroke={meta.color} strokeWidth={SW} strokeLinecap="round" opacity="0.8" />
+                          <line x1={arc.anchorX} y1={arc.anchorY} x2={arc.labelX} y2={arc.labelY} stroke="var(--faint)" strokeWidth="1" strokeDasharray="2 3" />
+                          <text x={arc.labelX} y={arc.labelY - 4} textAnchor={arc.side === 'right' ? 'start' : 'end'} fill={meta.color} fontSize="16" fontWeight="400" fontFamily="var(--display)" letterSpacing="-0.04em">{Math.round(arc.share * 100)}%</text>
+                          <text x={arc.labelX} y={arc.labelY + 10} textAnchor={arc.side === 'right' ? 'start' : 'end'} fill="var(--muted)" fontSize="9" fontFamily="var(--sans)" fontWeight="500">{meta.label}</text>
+                        </g>
+                      );
+                    })}
+                    <text x={CX} y={CY - 2} textAnchor="middle" dominantBaseline="central" fill="var(--ink)" fontSize="28" fontWeight="200" fontFamily="var(--display)" letterSpacing="-0.06em">{uniqueTools}</text>
+                    <text x={CX} y={CY + 16} textAnchor="middle" fill="var(--muted)" fontSize="8.5" fontFamily="var(--mono)" letterSpacing="0.1em">TOOLS</text>
+                  </svg>
+                </div>
+
+                <div className={styles.toolsLegend}>
+                  {toolUsage.map((entry) => {
+                    const meta = getToolMeta(entry.tool);
+                    const projects = summaries
+                      .filter((t) => (t.tools_configured || []).some((tc) => tc.tool === entry.tool))
+                      .map((t) => t.team_name || t.team_id);
+                    return (
+                      <div key={entry.tool} className={styles.legendRow}>
+                        <span className={styles.legendDot} style={{ background: meta.color }} />
+                        <span className={styles.legendName}>{meta.label}</span>
+                        <span className={styles.legendProjects}>{projects.join(', ')}</span>
+                        <span className={styles.legendShare}>{Math.round(entry.share * 100)}%</span>
+                        <span className={styles.legendSessions}>{entry.joins} session{entry.joins === 1 ? '' : 's'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className={styles.emptyHint}>No tools connected yet.</p>
+            )}
+          </div>
+        )}
+
+        {/* ── MEMORIES ── */}
+        {activeViz === 'memories' && (
+          <div className={styles.vizPanel}>
+            {totalMemories > 0 ? (
+              <div className={styles.tableWrap}>
+                <div className={styles.tableHead}>
+                  <span className={styles.thLeft}>Project</span>
+                  <span className={styles.th}>Count</span>
+                  <span className={styles.th}>Share</span>
+                </div>
+                <div className={styles.tableBody}>
+                  {summaries
+                    .filter((t) => (t.memory_count || 0) > 0)
+                    .sort((a, b) => (b.memory_count || 0) - (a.memory_count || 0))
+                    .map((team) => {
+                      const count = team.memory_count || 0;
+                      const share = totalMemories > 0 ? Math.round((count / totalMemories) * 100) : 0;
+                      return (
+                        <button key={team.team_id} type="button" className={styles.tableRow} onClick={() => selectTeam(team.team_id)}>
+                          <span className={styles.tdLeft}>
+                            <span className={styles.squircle} style={{ background: projectGradient(team.team_id) }} />
+                            {team.team_name || team.team_id}
+                          </span>
+                          <span className={styles.td}>{count}</span>
+                          <span className={styles.td}>{share}%</span>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            ) : (
+              <p className={styles.emptyHint}>No memories saved yet.</p>
+            )}
+          </div>
+        )}
+
+      </section>
     </div>
   );
 }

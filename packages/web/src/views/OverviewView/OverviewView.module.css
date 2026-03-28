@@ -2,11 +2,13 @@
   animation: dashboardViewFadeIn 0.25s var(--motion) both;
 }
 
-.headerSection {
+/* ── Header ── */
+
+.header {
   display: flex;
   flex-direction: column;
   gap: 28px;
-  margin-bottom: 42px;
+  margin-bottom: 48px;
 }
 
 .welcomeBlock {
@@ -15,7 +17,7 @@
   gap: 6px;
 }
 
-.sectionEyebrow {
+.eyebrow {
   font-family: var(--mono);
   font-size: var(--text-2xs);
   color: var(--soft);
@@ -23,251 +25,81 @@
   text-transform: uppercase;
 }
 
-.welcomeTitle {
+.title {
   font-family: var(--display);
-  font-size: clamp(2.5rem, 5.8vw, 4.8rem);
+  font-size: var(--display-hero);
   font-weight: 300;
-  line-height: 0.96;
-  letter-spacing: -0.075em;
+  line-height: var(--display-line);
+  letter-spacing: var(--display-spacing);
   color: var(--ink);
   text-wrap: balance;
 }
 
-.metricsRow {
+/* ── Stat tabs ── */
+
+.statsRow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 24px;
-}
-
-.metricItem {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.metricLabel {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.metricValue {
-  font-size: clamp(2.55rem, 4.8vw, 4.3rem);
-  font-weight: 200;
-  line-height: 0.92;
-  letter-spacing: -0.08em;
-  color: var(--ink);
-}
-
-.metricHint {
-  font-size: var(--text-sm);
-  color: var(--muted);
-}
-
-.metricAccent {
-  color: var(--accent);
-}
-
-.metricDanger {
-  color: var(--danger);
-}
-
-.metricSuccess {
-  color: var(--success);
-}
-
-.workspaceSection {
-  display: flex;
-  flex-direction: column;
-}
-
-.workspaceHeader {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 24px;
-}
-
-.workspaceCopy {
-  display: flex;
-  align-items: baseline;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.workspaceTitle {
-  font-family: var(--display);
-  font-size: clamp(1.75rem, 3vw, 2.5rem);
-  font-weight: 300;
-  line-height: 0.98;
-  letter-spacing: -0.07em;
-}
-
-.workspaceMeta {
-  font-size: var(--text-sm);
-  color: var(--muted);
-}
-
-.commandButton {
-  border: none;
-  background: transparent;
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.commandButton:hover {
-  opacity: 0.7;
-}
-
-.controlsRow {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) 160px 160px;
-  gap: 14px;
-  align-items: end;
-  margin-bottom: 32px;
-}
-
-.searchField,
-.selectField {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.searchLabel,
-.selectLabel {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.searchField input,
-.selectField select {
-  width: 100%;
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--hairline);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--ink);
-  outline: none;
-  font-size: var(--text-sm);
-}
-
-.searchField input::placeholder {
-  color: var(--soft);
-}
-
-.insightsGrid {
-  display: grid;
-  grid-template-columns: minmax(220px, 0.9fr) minmax(0, 1.35fr);
-  gap: 32px 40px;
-  margin-bottom: 38px;
-}
-
-.insightSection {
-  min-width: 0;
-}
-
-.insightHeader {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.insightTitle {
-  font-size: 1rem;
-  font-weight: 500;
-  letter-spacing: -0.03em;
-  color: var(--ink);
-}
-
-.insightMeta {
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--soft);
-  white-space: nowrap;
-}
-
-.stateGrid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.stateItem {
-  display: flex;
-  flex-direction: column;
   gap: 4px;
 }
 
-.stateValue {
-  font-size: clamp(1.6rem, 3vw, 2.25rem);
-  font-weight: 300;
-  letter-spacing: -0.06em;
-  line-height: 0.94;
-  color: var(--ink);
-}
-
-.stateLabel {
-  font-size: var(--text-sm);
-  color: var(--ink);
-}
-
-.dataList {
+.statButton {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
 }
 
-.dataRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 14px;
-  align-items: baseline;
+.statLabel {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: 4px 8px;
+  margin-left: -8px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--soft);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
 }
 
-.dataLabel {
-  font-size: 0.84rem;
+.statButton:hover .statLabel {
+  background: rgba(18, 19, 23, 0.04);
+}
+
+.statActive .statLabel {
+  background: rgba(29, 70, 255, 0.08);
+  color: var(--accent);
+}
+
+.statValue {
+  font-size: clamp(2.4rem, 5vw, 4.6rem);
+  font-weight: 200;
+  letter-spacing: -0.07em;
+  line-height: 0.92;
   color: var(--ink);
 }
 
-.toolMixGrid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 26px;
+.statAccent {
+  color: var(--accent);
 }
 
-.dataGroup {
-  min-width: 0;
+/* ── Viz area ── */
+
+.vizArea {
+  min-height: 200px;
 }
 
-.dataGroupTitle {
-  display: block;
-  margin-bottom: 12px;
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--soft);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.dataValue {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--soft);
-  white-space: nowrap;
+.vizPanel {
+  animation: dashboardViewFadeIn 0.2s var(--motion) both;
 }
 
 .emptyHint {
@@ -275,42 +107,238 @@
   color: var(--soft);
 }
 
-.featuredProjectWrap {
+/* ── Search ── */
+
+.searchInput {
+  width: 100%;
+  max-width: 260px;
+  padding: 7px 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 8px;
+  background: transparent;
+  font: inherit;
+  font-size: var(--text-sm);
+  color: var(--ink);
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--soft);
+}
+
+.searchInput:focus {
+  border-color: var(--accent);
+}
+
+/* ── Shared table system ── */
+
+.tableWrap {
   width: 100%;
 }
 
-.overviewGrid {
+.tableHead {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-  gap: 28px 24px;
+  grid-template-columns: minmax(140px, max-content) repeat(var(--cols, 3), 80px);
+  gap: 8px;
+  padding: 0 12px 10px;
+  width: fit-content;
 }
 
-.overviewGrid [role='listitem'] {
-  display: contents;
+.tableBody {
+  display: flex;
+  flex-direction: column;
+  max-height: 420px;
+  overflow-y: auto;
 }
+
+.tableRow {
+  display: grid;
+  grid-template-columns: minmax(140px, max-content) repeat(var(--cols, 3), 80px);
+  gap: 8px;
+  align-items: center;
+  width: fit-content;
+  padding: 10px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  color: var(--ink);
+  transition: background 0.15s ease;
+}
+
+.tableRow:hover {
+  background: rgba(18, 19, 23, 0.03);
+}
+
+.thLeft {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.th {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--soft);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  text-align: right;
+}
+
+.tdLeft {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.tdLeftMuted {
+  font-size: 0.84rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.td {
+  font-size: 0.88rem;
+  font-weight: 400;
+  color: var(--muted);
+  text-align: right;
+}
+
+.tdAccent {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.squircle {
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  flex-shrink: 0;
+}
+
+.toolDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+
+/* ── Tools viz ── */
+
+.toolsViz {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 32px;
+}
+
+.ringWrap {
+  width: 300px;
+}
+
+.ringSvg {
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.toolsLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  max-width: 520px;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 10px auto 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--faint);
+}
+
+.legendRow:last-child {
+  border-bottom: none;
+}
+
+.legendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  opacity: 0.8;
+}
+
+.legendName {
+  font-size: 0.86rem;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.legendProjects {
+  font-size: 0.8rem;
+  color: var(--soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.legendShare {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  text-align: right;
+  min-width: 28px;
+}
+
+.legendSessions {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  text-align: right;
+  min-width: 64px;
+}
+
+/* ── Responsive ── */
 
 @media (max-width: 980px) {
-  .metricsRow,
-  .insightsGrid,
-  .toolMixGrid {
+  .statsRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .controlsRow {
-    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 640px) {
-  .metricsRow,
-  .insightsGrid,
-  .stateGrid,
-  .toolMixGrid {
-    grid-template-columns: 1fr;
+  .statsRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .workspaceHeader {
-    flex-direction: column;
-    align-items: flex-start;
+  .tableHead,
+  .tableRow {
+    grid-template-columns: minmax(100px, max-content) repeat(2, 64px);
+  }
+
+  .th:last-child,
+  .td:last-child {
+    display: none;
   }
 }
