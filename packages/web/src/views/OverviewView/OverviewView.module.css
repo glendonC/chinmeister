@@ -17,6 +17,27 @@
   gap: 6px;
 }
 
+.summaryNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 12px;
+}
+
+.summaryNoticeLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--danger);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.summaryNoticeText {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
 .eyebrow {
   font-family: var(--mono);
   font-size: var(--text-2xs);

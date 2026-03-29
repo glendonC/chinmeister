@@ -111,7 +111,12 @@ export async function handleDashboardSummary(user, env) {
   const teams = await db.getUserTeams(user.id);
 
   if (teams.length === 0) {
-    return json({ teams: [] });
+    return json({
+      teams: [],
+      degraded: false,
+      failed_teams: [],
+      truncated: false,
+    });
   }
 
   const capped = teams.slice(0, 25);
@@ -126,25 +131,58 @@ export async function handleDashboardSummary(user, env) {
           } catch (err) {
             console.error(`[chinwag] Failed to reconcile stale team ${teamEntry.team_id}:`, err);
           }
-          return null;
+          return {
+            ok: false,
+            team_id: teamEntry.team_id,
+            team_name: teamEntry.team_name,
+          };
         }
         return {
-          team_id: teamEntry.team_id,
-          team_name: teamEntry.team_name,
-          ...summary,
+          ok: true,
+          team: {
+            team_id: teamEntry.team_id,
+            team_name: teamEntry.team_name,
+            ...summary,
+          },
         };
       } catch (err) {
         console.error(`[chinwag] Failed to build dashboard summary for team ${teamEntry.team_id}:`, err);
-        return null;
+        return {
+          ok: false,
+          team_id: teamEntry.team_id,
+          team_name: teamEntry.team_name,
+        };
       }
     })
   );
 
-  return json({
-    teams: results
-      .filter(result => result.status === 'fulfilled' && result.value !== null)
-      .map(result => result.value),
-  });
+  const loadedTeams = [];
+  const failedTeams = [];
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled') continue;
+    if (result.value?.ok) loadedTeams.push(result.value.team);
+    else if (result.value) failedTeams.push({
+      team_id: result.value.team_id,
+      team_name: result.value.team_name,
+    });
+  }
+
+  const response = {
+    teams: loadedTeams,
+    degraded: failedTeams.length > 0,
+    failed_teams: failedTeams,
+    truncated: teams.length > capped.length,
+  };
+
+  if (loadedTeams.length === 0 && failedTeams.length > 0) {
+    const error = failedTeams.length === 1
+      ? 'Project summary is temporarily unavailable.'
+      : 'Project summaries are temporarily unavailable.';
+    return json({ ...response, error }, 503);
+  }
+
+  return json(response);
 }
 
 export async function handleChatUpgrade(request, user, env) {

@@ -52,4 +52,19 @@ describe('web API client', () => {
     });
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+
+  it('preserves parsed error payloads on HTTP failures', async () => {
+    fetch.mockResolvedValue(mockJsonResponse({
+      error: 'Project summary is temporarily unavailable.',
+      failed_teams: [{ team_id: 't_one', team_name: 'chinwag' }],
+    }, 503));
+
+    await expect(api('GET', '/me/dashboard')).rejects.toMatchObject({
+      message: 'Project summary is temporarily unavailable.',
+      status: 503,
+      data: {
+        failed_teams: [{ team_id: 't_one', team_name: 'chinwag' }],
+      },
+    });
+  });
 });

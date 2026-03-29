@@ -12,8 +12,12 @@ let consecutiveFailures = 0;
 
 const pollingStore = createStore((set, get) => ({
   dashboardData: null,
+  dashboardStatus: 'idle',
   contextData: null,
+  contextStatus: 'idle',
+  contextTeamId: null,
   pollError: null,
+  pollErrorData: null,
   lastUpdate: null,
 }));
 
@@ -25,22 +29,48 @@ async function poll() {
 
   try {
     if (activeTeamId === null) {
-      // Overview mode
-      pollingStore.setState({ contextData: null });
+      pollingStore.setState((state) => ({
+        contextData: null,
+        contextTeamId: null,
+        contextStatus: 'idle',
+        dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
+      }));
       const data = await api('GET', '/me/dashboard', null, token);
+      if (data.failed_teams?.length > 0) {
+        await teamActions.loadTeams();
+      }
       if (teamActions.getState().activeTeamId !== null) return;
-      pollingStore.setState({ dashboardData: data, contextData: null });
+      pollingStore.setState({
+        dashboardData: data,
+        dashboardStatus: 'ready',
+        contextData: null,
+        contextStatus: 'idle',
+        contextTeamId: null,
+      });
     } else {
-      // Single team mode
-      pollingStore.setState({ dashboardData: null });
+      pollingStore.setState((state) => {
+        const sameTeam = state.contextTeamId === activeTeamId;
+        return {
+          dashboardData: null,
+          dashboardStatus: 'idle',
+          contextData: sameTeam ? state.contextData : null,
+          contextStatus: sameTeam && state.contextData ? state.contextStatus : 'loading',
+          contextTeamId: activeTeamId,
+        };
+      });
       await teamActions.ensureJoined(activeTeamId);
       const data = await api('GET', `/teams/${activeTeamId}/context`, null, token);
-      // Verify we haven't switched teams during the request
       if (teamActions.getState().activeTeamId !== activeTeamId) return;
-      pollingStore.setState({ contextData: data, dashboardData: null });
+      pollingStore.setState({
+        contextData: data,
+        contextStatus: 'ready',
+        contextTeamId: activeTeamId,
+        dashboardData: null,
+        dashboardStatus: 'idle',
+      });
     }
 
-    pollingStore.setState({ pollError: null, lastUpdate: new Date() });
+    pollingStore.setState({ pollError: null, pollErrorData: null, lastUpdate: new Date() });
 
     if (consecutiveFailures > 0) {
       consecutiveFailures = 0;
@@ -52,8 +82,35 @@ async function poll() {
       stopPolling();
       return;
     }
+    if (teamActions.getState().activeTeamId !== activeTeamId) return;
+    if (activeTeamId === null && err?.data?.failed_teams?.length > 0) {
+      await teamActions.loadTeams();
+    }
     consecutiveFailures++;
-    pollingStore.setState({ pollError: formatError(err) });
+    const pollError = formatError(err);
+    const pollErrorData = err?.data || null;
+    if (activeTeamId === null) {
+      pollingStore.setState((state) => ({
+        pollError,
+        pollErrorData,
+        dashboardStatus: state.dashboardData ? 'stale' : 'error',
+        contextData: null,
+        contextStatus: 'idle',
+        contextTeamId: null,
+      }));
+    } else {
+      pollingStore.setState((state) => {
+        const hasSnapshot = state.contextTeamId === activeTeamId && !!state.contextData;
+        return {
+          pollError,
+          pollErrorData,
+          dashboardData: null,
+          dashboardStatus: 'idle',
+          contextStatus: hasSnapshot ? 'stale' : 'error',
+          contextTeamId: activeTeamId,
+        };
+      });
+    }
     if (consecutiveFailures >= 3) restartPolling();
   }
 }

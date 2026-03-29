@@ -1,12 +1,14 @@
 import { useMemo, useCallback, useState } from 'react';
-import { usePollingStore } from '../../lib/stores/polling.js';
+import { usePollingStore, forceRefresh } from '../../lib/stores/polling.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { teamActions } from '../../lib/stores/teams.js';
+import { formatRelativeTime } from '../../lib/relativeTime.js';
 import {
   buildLiveToolMix,
   buildUsageEntries,
 } from '../../lib/toolAnalytics.js';
 import ActivityTimeline from '../../components/ActivityTimeline/ActivityTimeline.jsx';
+import StatusState from '../../components/StatusState/StatusState.jsx';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import {
   buildFilesInPlay,
@@ -28,9 +30,16 @@ import styles from './ProjectView.module.css';
 
 export default function ProjectView() {
   const contextData = usePollingStore((s) => s.contextData);
+  const contextStatus = usePollingStore((s) => s.contextStatus);
+  const contextTeamId = usePollingStore((s) => s.contextTeamId);
+  const pollError = usePollingStore((s) => s.pollError);
+  const lastUpdate = usePollingStore((s) => s.lastUpdate);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const teams = useTeamStore((s) => s.teams);
   const [activeViz, setActiveViz] = useState('live');
+  const activeTeam = teams.find((team) => team.team_id === activeTeamId) || null;
+  const hasCurrentContext = contextTeamId === activeTeamId && !!contextData;
+  const projectLabel = activeTeam?.team_name || activeTeam?.team_id || 'this project';
 
   const members = contextData?.members || [];
   const memories = contextData?.memories || [];
@@ -42,7 +51,6 @@ export default function ProjectView() {
   const locks = contextData?.locks || [];
   const toolsConfigured = contextData?.tools_configured || [];
   const usage = contextData?.usage || {};
-  const activeTeam = teams.find((team) => team.team_id === activeTeamId) || null;
 
   const activeAgents = useMemo(
     () => members.filter((member) => member.status === 'active'),
@@ -86,6 +94,39 @@ export default function ProjectView() {
     { id: 'sessions', label: 'Edits / 24h', value: sessionEditCount, tone: '' },
     { id: 'tools', label: 'Tools', value: toolSummaries.length, tone: '' },
   ];
+  const lastSynced = formatRelativeTime(lastUpdate);
+  const isLoading = !hasCurrentContext && (contextStatus === 'idle' || contextStatus === 'loading');
+  const isUnavailable = !hasCurrentContext && contextStatus === 'error';
+
+  if (isLoading) {
+    return (
+      <div className={styles.page}>
+        <StatusState
+          tone="loading"
+          eyebrow="Project"
+          title={`Loading ${projectLabel}`}
+          hint="Loading agents, files in play, recent sessions, and shared memory."
+        />
+      </div>
+    );
+  }
+
+  if (isUnavailable) {
+    return (
+      <div className={styles.page}>
+        <StatusState
+          tone="danger"
+          eyebrow="Project unavailable"
+          title={`Could not load ${projectLabel}`}
+          hint="Live coordination for this project is temporarily unavailable."
+          detail={pollError}
+          meta={lastSynced ? `Last synced ${lastSynced}` : 'No successful sync yet'}
+          actionLabel="Retry"
+          onAction={forceRefresh}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={styles.page}>

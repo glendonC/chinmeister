@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
-import { usePollingStore } from '../../lib/stores/polling.js';
+import { usePollingStore, forceRefresh } from '../../lib/stores/polling.js';
 import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { getColorHex } from '../../lib/utils.js';
+import { formatRelativeTime } from '../../lib/relativeTime.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { projectGradient } from '../../lib/projectGradient.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
+import StatusState from '../../components/StatusState/StatusState.jsx';
 import styles from './OverviewView.module.css';
 
 // ── Arc ring ──
@@ -17,15 +19,33 @@ function arcPath(cx, cy, r, startDeg, sweepDeg) {
   return `M ${cx + r * Math.cos(s)} ${cy + r * Math.sin(s)} A ${r} ${r} 0 ${sweepDeg > 180 ? 1 : 0} 1 ${cx + r * Math.cos(e)} ${cy + r * Math.sin(e)}`;
 }
 
+function summarizeNames(items) {
+  const names = items
+    .map((item) => item?.team_name || item?.team_id)
+    .filter(Boolean);
+  if (names.length <= 2) return names.join(', ');
+  return `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+}
+
 export default function OverviewView() {
   const dashboardData = usePollingStore((s) => s.dashboardData);
+  const dashboardStatus = usePollingStore((s) => s.dashboardStatus);
+  const pollError = usePollingStore((s) => s.pollError);
+  const pollErrorData = usePollingStore((s) => s.pollErrorData);
+  const lastUpdate = usePollingStore((s) => s.lastUpdate);
   const user = useAuthStore((s) => s.user);
+  const teams = useTeamStore((s) => s.teams);
   const teamsError = useTeamStore((s) => s.teamsError);
   const selectTeam = useTeamStore((s) => s.selectTeam);
   const summaries = dashboardData?.teams ?? [];
+  const failedTeams = dashboardData?.failed_teams ?? pollErrorData?.failed_teams ?? [];
   const [activeViz, setActiveViz] = useState('projects');
   const [search, setSearch] = useState('');
   const userColor = getColorHex(user?.color) || '#121317';
+  const knownTeamCount = teams.length;
+  const hasKnownProjects = knownTeamCount > 0 || summaries.length > 0;
+  const lastSynced = formatRelativeTime(lastUpdate);
+  const failedLabel = failedTeams.length > 0 ? summarizeNames(failedTeams) : '';
 
   const totalActive = useMemo(() => summaries.reduce((s, t) => s + (t.active_agents || 0), 0), [summaries]);
   const totalMemories = useMemo(() => summaries.reduce((s, t) => s + (t.memory_count || 0), 0), [summaries]);
@@ -75,6 +95,45 @@ export default function OverviewView() {
     const q = search.trim().toLowerCase();
     return summaries.filter((t) => (t.team_name || t.team_id).toLowerCase().includes(q));
   }, [summaries, search]);
+  const isLoading = !dashboardData && (dashboardStatus === 'idle' || dashboardStatus === 'loading');
+  const isUnavailable = dashboardStatus === 'error' || (!pollError && hasKnownProjects && summaries.length === 0);
+  const unavailableHint = knownTeamCount === 0
+    ? 'We could not load your project overview right now.'
+    : knownTeamCount === 1
+      ? `We found ${teams[0]?.team_name || teams[0]?.team_id || 'a connected project'}, but its overview data is unavailable right now.`
+      : `We found ${knownTeamCount} connected projects, but none of their overview data could be loaded.`;
+  const unavailableDetail = pollError
+    || (failedLabel ? `Unavailable now: ${failedLabel}` : 'Project summaries are temporarily unavailable.');
+
+  if (isLoading) {
+    return (
+      <div className={styles.overview}>
+        <StatusState
+          tone="loading"
+          eyebrow="Overview"
+          title="Loading your projects"
+          hint="Pulling the latest team activity, memory counts, and tool presence."
+        />
+      </div>
+    );
+  }
+
+  if (isUnavailable) {
+    return (
+      <div className={styles.overview}>
+        <StatusState
+          tone="danger"
+          eyebrow="Overview unavailable"
+          title="Could not load project overview"
+          hint={unavailableHint}
+          detail={unavailableDetail}
+          meta={lastSynced ? `Last synced ${lastSynced}` : knownTeamCount > 0 ? `${knownTeamCount} connected ${knownTeamCount === 1 ? 'project' : 'projects'}` : 'Overview'}
+          actionLabel="Retry"
+          onAction={forceRefresh}
+        />
+      </div>
+    );
+  }
 
   if (summaries.length === 0) {
     return (
@@ -86,7 +145,7 @@ export default function OverviewView() {
   }
 
   const stats = [
-    { id: 'projects', label: 'Projects', value: summaries.length, tone: '' },
+    { id: 'projects', label: 'Projects', value: knownTeamCount || summaries.length, tone: '' },
     { id: 'agents', label: 'Agents live', value: totalActive, tone: totalActive > 0 ? 'accent' : '' },
     { id: 'tools', label: 'Tools', value: uniqueTools, tone: '' },
     { id: 'memories', label: 'Memories', value: totalMemories, tone: '' },
@@ -101,6 +160,14 @@ export default function OverviewView() {
             Welcome back{user?.handle ? <>{', '}<span style={{ color: userColor }}>{user.handle}</span></> : null}.
           </h1>
         </div>
+        {failedTeams.length > 0 && (
+          <div className={styles.summaryNotice}>
+            <span className={styles.summaryNoticeLabel}>
+              {failedTeams.length} {failedTeams.length === 1 ? 'project' : 'projects'} unavailable
+            </span>
+            <span className={styles.summaryNoticeText}>{failedLabel}</span>
+          </div>
+        )}
         <div className={styles.statsRow}>
           {stats.map((s) => (
             <button key={s.id} type="button"

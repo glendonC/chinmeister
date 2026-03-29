@@ -64,6 +64,7 @@ export function createJsonApiClient({
       if (!res.ok) {
         const err = new Error(httpErrorMessage({ method, path, status: res.status, data }));
         err.status = res.status;
+        err.data = data;
         throw err;
       }
 

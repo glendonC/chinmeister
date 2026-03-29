@@ -47,23 +47,39 @@ export { RoomDO } from './room.js';
 export { TeamDO } from './team.js';
 export { parseTeamPath, getToolFromAgentId, sanitizeTags, teamErrorStatus };
 
+const PROD_ORIGINS = new Set(['https://chinwag.dev', 'https://www.chinwag.dev']);
+const DEV_ORIGINS = new Set(['http://localhost:8788', 'http://localhost:3000', 'http://127.0.0.1:8788']);
+
+function isLoopbackOrigin(origin) {
+  try {
+    const { protocol, hostname } = new URL(origin);
+    const isLoopbackHost = hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]' || hostname === '::1';
+    return isLoopbackHost && (protocol === 'http:' || protocol === 'https:');
+  } catch {
+    return false;
+  }
+}
+
+function getAllowedOrigin(origin, environment) {
+  if (!origin) return 'https://chinwag.dev';
+  if (PROD_ORIGINS.has(origin)) return origin;
+  if (environment !== 'production' && DEV_ORIGINS.has(origin)) return origin;
+  if (isLoopbackOrigin(origin)) return origin;
+  return '';
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const method = request.method;
     const path = url.pathname;
 
-    const PROD_ORIGINS = ['https://chinwag.dev', 'https://www.chinwag.dev'];
-    const DEV_ORIGINS = ['http://localhost:8788', 'http://localhost:3000', 'http://127.0.0.1:8788'];
-    const LOCAL_WEB_ORIGINS = ['http://localhost:56790', 'http://127.0.0.1:56790'];
-    const ALLOWED_ORIGINS = env.ENVIRONMENT === 'production'
-      ? [...PROD_ORIGINS, ...LOCAL_WEB_ORIGINS]
-      : [...PROD_ORIGINS, ...DEV_ORIGINS, ...LOCAL_WEB_ORIGINS];
     const origin = request.headers.get('Origin') || '';
     const corsHeaders = {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : 'https://chinwag.dev',
+      'Access-Control-Allow-Origin': getAllowedOrigin(origin, env.ENVIRONMENT),
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Vary': 'Origin',
     };
 
     if (method === 'OPTIONS') {

@@ -11,6 +11,7 @@ async function loadPollingModule({
   teamState = { activeTeamId },
   apiMock = vi.fn(),
   ensureJoinedMock = vi.fn(),
+  loadTeamsMock = vi.fn(),
   logoutMock = vi.fn(),
   withDocument = false,
 } = {}) {
@@ -39,11 +40,12 @@ async function loadPollingModule({
     teamActions: {
       getState: () => teamState,
       ensureJoined: ensureJoinedMock,
+      loadTeams: loadTeamsMock,
     },
   }));
 
   const mod = await import('./polling.js');
-  return { ...mod, apiMock, ensureJoinedMock, logoutMock, listeners };
+  return { ...mod, apiMock, ensureJoinedMock, loadTeamsMock, logoutMock, listeners };
 }
 
 afterEach(() => {
@@ -63,6 +65,8 @@ describe('polling store', () => {
     expect(apiMock).toHaveBeenCalledWith('GET', '/me/dashboard', null, 'tok_123');
     expect(pollingActions.getState()).toMatchObject({
       dashboardData: { teams: [{ team_id: 't_one' }] },
+      dashboardStatus: 'ready',
+      contextStatus: 'idle',
       pollError: null,
     });
     expect(pollingActions.getState().lastUpdate).toBeInstanceOf(Date);
@@ -84,6 +88,8 @@ describe('polling store', () => {
     expect(apiMock).toHaveBeenCalledWith('GET', '/teams/t_active/context', null, 'tok_123');
     expect(pollingActions.getState()).toMatchObject({
       contextData: { members: [] },
+      contextStatus: 'ready',
+      contextTeamId: 't_active',
       pollError: null,
     });
   });
@@ -110,6 +116,59 @@ describe('polling store', () => {
 
     expect(pollingActions.getState().dashboardData).toBeNull();
     expect(pollingActions.getState().contextData).toEqual({ members: [{ handle: 'alice' }] });
+  });
+
+  it('keeps the last overview snapshot when refresh fails', async () => {
+    const apiMock = vi.fn()
+      .mockResolvedValueOnce({ teams: [{ team_id: 't_one' }] })
+      .mockRejectedValueOnce(new Error('HTTP 500 (server error)'));
+    const { forceRefresh, pollingActions } = await loadPollingModule({ apiMock });
+
+    forceRefresh();
+    await flushPromises();
+    forceRefresh();
+    await flushPromises();
+
+    expect(pollingActions.getState()).toMatchObject({
+      dashboardData: { teams: [{ team_id: 't_one' }] },
+      dashboardStatus: 'stale',
+      pollError: 'HTTP 500 (server error)',
+    });
+  });
+
+  it('refreshes the team list when dashboard fetch reports failed teams', async () => {
+    const apiMock = vi.fn().mockResolvedValue({
+      teams: [],
+      degraded: true,
+      failed_teams: [{ team_id: 't_one', team_name: 'chinwag' }],
+    });
+    const loadTeamsMock = vi.fn().mockResolvedValue(undefined);
+    const { forceRefresh } = await loadPollingModule({ apiMock, loadTeamsMock });
+
+    forceRefresh();
+    await flushPromises();
+
+    expect(loadTeamsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('marks the project view unavailable when the first context load fails', async () => {
+    const apiMock = vi.fn().mockRejectedValue(new Error('HTTP 500 (server error)'));
+    const ensureJoinedMock = vi.fn().mockResolvedValue({ ok: true });
+    const { forceRefresh, pollingActions } = await loadPollingModule({
+      activeTeamId: 't_active',
+      apiMock,
+      ensureJoinedMock,
+    });
+
+    forceRefresh();
+    await flushPromises();
+
+    expect(pollingActions.getState()).toMatchObject({
+      contextData: null,
+      contextStatus: 'error',
+      contextTeamId: 't_active',
+      pollError: 'HTTP 500 (server error)',
+    });
   });
 
   it('logs out on 401 responses', async () => {

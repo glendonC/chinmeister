@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore, authActions } from './lib/stores/auth.js';
 import { useTeamStore, teamActions } from './lib/stores/teams.js';
-import { usePollingStore, startPolling, stopPolling } from './lib/stores/polling.js';
+import { usePollingStore, startPolling, stopPolling, forceRefresh } from './lib/stores/polling.js';
+import { formatRelativeTime } from './lib/relativeTime.js';
 
 import ConnectView from './views/ConnectView/ConnectView.jsx';
 import OverviewView from './views/OverviewView/OverviewView.jsx';
@@ -19,11 +20,23 @@ export default function App() {
 
   const token = useAuthStore((s) => s.token);
   const user = useAuthStore((s) => s.user);
+  const dashboardData = usePollingStore((s) => s.dashboardData);
+  const dashboardStatus = usePollingStore((s) => s.dashboardStatus);
+  const contextData = usePollingStore((s) => s.contextData);
+  const contextStatus = usePollingStore((s) => s.contextStatus);
+  const contextTeamId = usePollingStore((s) => s.contextTeamId);
   const pollError = usePollingStore((s) => s.pollError);
+  const lastUpdate = usePollingStore((s) => s.lastUpdate);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
 
   const isAuthenticated = !!token && !!user;
-  const showError = pollError && !errorDismissed;
+  const hasOverviewSnapshot = activeTeamId === null && dashboardStatus === 'stale' && !!dashboardData;
+  const hasProjectSnapshot = activeTeamId !== null
+    && contextStatus === 'stale'
+    && contextTeamId === activeTeamId
+    && !!contextData;
+  const showError = pollError && !errorDismissed && (hasOverviewSnapshot || hasProjectSnapshot);
+  const lastSynced = formatRelativeTime(lastUpdate);
 
   useEffect(() => {
     if (pollError) setErrorDismissed(false);
@@ -91,13 +104,27 @@ export default function App() {
 
       <div className={styles.main}>
         {showError && (
-          <div className={styles.errorBanner}>
-            <span className={styles.errorText}>{pollError}</span>
-            <button className={styles.errorDismiss} onClick={() => setErrorDismissed(true)} aria-label="Dismiss">
-              <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-              </svg>
-            </button>
+          <div className={styles.errorBanner} role="status" aria-live="polite">
+            <div className={styles.errorCopy}>
+              <span className={styles.errorEyebrow}>Live sync paused</span>
+              <span className={styles.errorText}>{pollError}</span>
+              <span className={styles.errorMeta}>
+                {lastSynced
+                  ? `Showing the last successful snapshot from ${lastSynced}.`
+                  : 'Showing the last successful snapshot.'}
+              </span>
+            </div>
+
+            <div className={styles.errorActions}>
+              <button type="button" className={styles.errorRetry} onClick={forceRefresh}>
+                Retry
+              </button>
+              <button className={styles.errorDismiss} onClick={() => setErrorDismissed(true)} aria-label="Dismiss">
+                <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+                  <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
           </div>
         )}
 

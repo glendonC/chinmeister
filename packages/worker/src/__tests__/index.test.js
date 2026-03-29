@@ -51,11 +51,18 @@ describe('CORS', () => {
     expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:56790');
   });
 
-  it('defaults to chinwag.dev for unknown origin', async () => {
+  it('reflects allowed origin for auto-incremented localhost dev ports', async () => {
+    const res = await SELF.fetch('http://localhost/stats', {
+      headers: { Origin: 'http://localhost:56791' },
+    });
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('http://localhost:56791');
+  });
+
+  it('does not reflect unknown origins', async () => {
     const res = await SELF.fetch('http://localhost/stats', {
       headers: { Origin: 'https://evil.com' },
     });
-    expect(res.headers.get('Access-Control-Allow-Origin')).toBe('https://chinwag.dev');
+    expect(res.headers.get('Access-Control-Allow-Origin')).toBeNull();
   });
 });
 
@@ -904,6 +911,45 @@ describe('GET /me/dashboard', () => {
     const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
     expect(res.status).toBe(200);
     const body = await res.json();
+    expect(body.teams).toEqual([]);
+    expect(body.degraded).toBe(false);
+    expect(body.failed_teams).toEqual([]);
+  });
+
+  it('returns degraded dashboard data when some project summaries fail', async () => {
+    const { headers, user } = await createAuthUser();
+    const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'Healthy Project' }),
+    });
+    const { team_id } = await createRes.json();
+
+    await db.addUserTeam(user.id, makeTeamId(), 'Broken Project');
+
+    const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.degraded).toBe(true);
+    expect(body.failed_teams).toHaveLength(1);
+    expect(body.failed_teams[0].team_name).toBe('Broken Project');
+    expect(body.teams).toHaveLength(1);
+    expect(body.teams[0].team_id).toBe(team_id);
+  });
+
+  it('returns 503 when all project summaries fail', async () => {
+    const { headers, user } = await createAuthUser();
+    const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+    await db.addUserTeam(user.id, makeTeamId(), 'Broken Project');
+
+    const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toContain('temporarily unavailable');
+    expect(body.degraded).toBe(true);
+    expect(body.failed_teams).toHaveLength(1);
     expect(body.teams).toEqual([]);
   });
 });
