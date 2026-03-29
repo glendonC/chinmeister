@@ -292,7 +292,7 @@ describe('registerTools', () => {
       });
 
       const result = await server.callTool('chinwag_check_conflicts', { files: ['different.js'] });
-      expect(result.isError).toBe(true);
+      expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toMatch(/No overlapping files were found in cache/);
     });
   });

@@ -98,6 +98,7 @@ function App() {
   const [config, setConfig] = useState(null);
   const [user, setUser] = useState(null);
   const [spin, setSpin] = useState(0);
+  const [footerHints, setFooterHints] = useState(null);
   const { exit } = useApp();
   const projectLabel = basename(process.cwd());
   const isPrimaryMode = PRIMARY_MODES.some(mode => mode.key === screen);
@@ -173,6 +174,7 @@ function App() {
       modeItems={shellModes}
       activeMode={screen}
       user={user}
+      footerHints={footerHints}
     >
       {({ viewportRows, compact }) => (
         <ErrorBoundary>
@@ -195,6 +197,7 @@ function App() {
                 layout={{ viewportRows }}
                 projectLabel={projectLabel}
                 appVersion={PKG_VERSION}
+                setFooterHints={setFooterHints}
               />
             );
           }

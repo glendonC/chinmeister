@@ -92,7 +92,7 @@ export function ControlShell({
   modeItems = [],
   activeMode,
   user,
-  footerText = '[q] quit',
+  footerHints = null,
   children,
 }) {
   const { stdout } = useStdout();
@@ -186,7 +186,15 @@ export function ControlShell({
       <Box flexDirection="column" paddingX={2} paddingBottom={1} flexShrink={0}>
         <Text dimColor>{divider}</Text>
         <Box justifyContent="space-between">
-          <Text dimColor>{footerText}</Text>
+          <Text>
+            {footerHints ? footerHints.map((h, i) => (
+              <Text key={h.key}>
+                {i > 0 ? '  ' : ''}
+                <Text color={h.color || 'cyan'} bold>[{h.key}]</Text>
+                <Text dimColor> {h.label}</Text>
+              </Text>
+            )) : <Text dimColor>[q] quit</Text>}
+          </Text>
           <OperatorBadge user={user} />
         </Box>
       </Box>

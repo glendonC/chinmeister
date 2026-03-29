@@ -22,6 +22,23 @@ export class TeamDO extends DurableObject {
   }
 
   #ensureSchema() {
+    // Run migrations BEFORE the flag check — they must apply even if schema was
+    // previously marked ready on an older code version.
+    // SQLite ALTER TABLE ADD COLUMN requires a constant default (not datetime('now')).
+    // Add missing columns to memories table — created before these columns existed.
+    const memoryMigrations = [
+      ["ALTER TABLE memories ADD COLUMN tags TEXT DEFAULT '[]'", null],
+      ["ALTER TABLE memories ADD COLUMN source_handle TEXT", null],
+      ["ALTER TABLE memories ADD COLUMN source_tool TEXT DEFAULT 'unknown'", null],
+      ["ALTER TABLE memories ADD COLUMN updated_at TEXT", "UPDATE memories SET updated_at = created_at WHERE updated_at IS NULL"],
+    ];
+    for (const [alter, backfill] of memoryMigrations) {
+      try {
+        this.sql.exec(alter);
+        if (backfill) this.sql.exec(backfill);
+      } catch { /* column already exists */ }
+    }
+
     if (this.#schemaReady) return;
 
     this.sql.exec(`
@@ -692,18 +709,18 @@ export class TeamDO extends DurableObject {
       return { error: 'text must be a non-empty string' };
     }
 
-    const existing = this.sql.exec('SELECT id FROM memories WHERE id = ?', memoryId).toArray();
+    const existing = this.sql.exec('SELECT id, text, tags FROM memories WHERE id = ?', memoryId).toArray();
     if (existing.length === 0) return { error: 'Memory not found' };
 
     // Any team member can update — memories are team knowledge
-    const sets = [];
-    const params = [];
-    if (text !== undefined) { sets.push('text = ?'); params.push(text.trim()); }
-    if (tags !== undefined) { sets.push('tags = ?'); params.push(JSON.stringify(tags)); }
-    sets.push("updated_at = datetime('now')");
-    params.push(memoryId);
+    // Fixed UPDATE: always set both columns, using existing value when not provided
+    const newText = text !== undefined ? text.trim() : existing[0].text;
+    const newTags = tags !== undefined ? JSON.stringify(tags) : existing[0].tags;
 
-    this.sql.exec(`UPDATE memories SET ${sets.join(', ')} WHERE id = ?`, ...params);
+    this.sql.exec(
+      `UPDATE memories SET text = ?, tags = ?, updated_at = datetime('now') WHERE id = ?`,
+      newText, newTags, memoryId
+    );
     return { ok: true };
   }
 
@@ -731,34 +748,30 @@ export class TeamDO extends DurableObject {
     const blocked = [];
 
     for (const file of normalized) {
-      // Check if already locked by another agent
-      const existing = this.sql.exec(
-        'SELECT agent_id, owner_handle, tool, claimed_at FROM locks WHERE file_path = ?', file
-      ).toArray();
-
-      if (existing.length > 0 && existing[0].agent_id !== resolved) {
-        const lock = existing[0];
-        blocked.push({
-          file,
-          held_by: lock.owner_handle,
-          tool: lock.tool || 'unknown',
-          claimed_at: lock.claimed_at,
-        });
-        continue;
-      }
-
-      // Claim or refresh the lock
+      // Atomic claim: INSERT only if not locked, preserve existing lock on conflict
       this.sql.exec(
         `INSERT INTO locks (file_path, agent_id, owner_handle, tool, claimed_at)
          VALUES (?, ?, ?, ?, datetime('now'))
          ON CONFLICT(file_path) DO UPDATE SET
-           agent_id = excluded.agent_id,
-           owner_handle = excluded.owner_handle,
-           tool = excluded.tool,
-           claimed_at = datetime('now')`,
+           claimed_at = claimed_at`,
         file, resolved, handle || 'unknown', tool || 'unknown'
       );
-      claimed.push(file);
+
+      // Check who actually owns the lock after the atomic operation
+      const owner = this.sql.exec(
+        'SELECT agent_id, owner_handle, tool, claimed_at FROM locks WHERE file_path = ?', file
+      ).toArray();
+
+      if (owner.length > 0 && owner[0].agent_id === resolved) {
+        claimed.push(file);
+      } else if (owner.length > 0) {
+        blocked.push({
+          file,
+          held_by: owner[0].owner_handle,
+          tool: owner[0].tool || 'unknown',
+          claimed_at: owner[0].claimed_at,
+        });
+      }
     }
 
     return { ok: true, claimed, blocked };

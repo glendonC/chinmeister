@@ -93,7 +93,12 @@ export async function runInit() {
       teamName = data.name || teamId;
       teamVerb = 'joined';
     } catch (err) {
+      const hint = err.status === 404 ? 'Team not found — the .chinwag file may be stale. Delete it and re-run init.'
+        : err.status === 403 ? 'Access denied. Ask a team member to verify your access.'
+        : err.status >= 500 ? 'Server error. Try again in a moment.'
+        : `Check your connection and try again.`;
       console.log(`  ${chalk.red('✖')} Failed to join team: ${err.message}`);
+      console.log(`    ${chalk.dim(hint)}`);
       console.log('');
       return;
     }
@@ -107,7 +112,11 @@ export async function runInit() {
       teamName = projectName;
       teamVerb = 'created';
     } catch (err) {
+      const hint = err.status === 429 ? 'Rate limit reached. Try again tomorrow.'
+        : err.status >= 500 ? 'Server error. Try again in a moment.'
+        : 'Check your connection and try again.';
       console.log(`  ${chalk.red('✖')} Failed to create team: ${err.message}`);
+      console.log(`    ${chalk.dim(hint)}`);
       console.log('');
       return;
     }

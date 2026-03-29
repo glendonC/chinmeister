@@ -205,10 +205,18 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
     return json({ error: 'text or tags required' }, 400);
   }
 
+  const db = getDB(env);
+  const updateLimit = await db.checkRateLimit(`memory_update:${user.id}`, 50);
+  if (!updateLimit.allowed) {
+    return json({ error: 'Memory update limit reached (50/day). Try again tomorrow.' }, 429);
+  }
+
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
   const result = await team.updateMemory(agentId, id, text, tags, user.id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+
+  await db.consumeRateLimit(`memory_update:${user.id}`);
   return json(result);
 }
 
@@ -220,10 +228,18 @@ export async function handleTeamDeleteMemory(request, user, env, teamId) {
     return json({ error: 'id is required' }, 400);
   }
 
+  const db = getDB(env);
+  const deleteLimit = await db.checkRateLimit(`memory_delete:${user.id}`, 50);
+  if (!deleteLimit.allowed) {
+    return json({ error: 'Memory delete limit reached (50/day). Try again tomorrow.' }, 429);
+  }
+
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
   const result = await team.deleteMemory(agentId, id, user.id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+
+  await db.consumeRateLimit(`memory_delete:${user.id}`);
   return json(result);
 }
 

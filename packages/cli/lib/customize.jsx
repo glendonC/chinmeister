@@ -119,7 +119,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
       if (wasInstalled) {
         showFlash(`${IDE_COMMAND_SHORTCUT} → "chinwag: Open Dashboard"`);
       } else {
-        showFlash('Could not install extension', 'error');
+        showFlash('Could not install IDE extension. Check file permissions.', 'error');
       }
     }
   }
@@ -132,7 +132,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
         showFlash(`Added ${result.name}: ${result.detail}`);
         setDetected(detectTools(process.cwd()));
       } else {
-        showFlash(`Error: ${result.error}`, 'error');
+        showFlash(`Could not add ${result.name || tool.name}: ${result.error}`, 'error');
       }
     } else if (tool.installCmd) {
       showFlash(`${tool.name} — Install: ${tool.installCmd}  |  ${tool.website}`);
@@ -225,7 +225,11 @@ export function Customize({ config, user, navigate, refreshUser }) {
       setMessage({ type: 'success', text: `You're now ${newHandle}!` });
       setMode('menu');
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      const msg = err.status === 409 ? 'That handle is already taken.'
+        : err.status === 400 ? 'Invalid handle. Use 3-20 alphanumeric characters.'
+        : err.status >= 500 ? 'Server error. Try again shortly.'
+        : err.message || 'Could not update handle.';
+      setMessage({ type: 'error', text: msg });
     }
   }
 
@@ -239,7 +243,9 @@ export function Customize({ config, user, navigate, refreshUser }) {
       setMessage({ type: 'success', text: 'Color updated!' });
       setMode('menu');
     } catch (err) {
-      setMessage({ type: 'error', text: err.message });
+      const msg = err.status >= 500 ? 'Server error. Try again shortly.'
+        : err.message || 'Could not update color.';
+      setMessage({ type: 'error', text: msg });
     }
   }
 

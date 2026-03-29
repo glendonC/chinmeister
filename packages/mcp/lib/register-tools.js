@@ -136,13 +136,13 @@ export function registerTools(server, { team, state, profile }) {
         if (result.conflicts?.length > 0) {
           for (const c of result.conflicts) {
             const who = c.tool && c.tool !== 'unknown' ? `${c.owner_handle} (${c.tool})` : c.owner_handle;
-            lines.push(`⚠ ${who} is working on ${c.files.join(', ')} — "${c.summary}"`);
+            lines.push(`[CONFLICT] ${who} is working on ${c.files.join(', ')} — "${c.summary}"`);
           }
         }
         if (result.locked?.length > 0) {
           for (const l of result.locked) {
             const who = l.tool && l.tool !== 'unknown' ? `${l.held_by} (${l.tool})` : l.held_by;
-            lines.push(`🔒 ${l.file} is locked by ${who}`);
+            lines.push(`[LOCKED] ${l.file} is locked by ${who}`);
           }
         }
         if (lines.length === 0) {
@@ -161,7 +161,7 @@ export function registerTools(server, { team, state, profile }) {
             const overlap = m.activity.files.map(normalizePath).filter(f => myFiles.has(f));
             if (overlap.length > 0) {
               const who = m.tool && m.tool !== 'unknown' ? `${m.handle} (${m.tool})` : m.handle;
-              warnings.push(`⚠ ${who} was working on ${overlap.join(', ')} (cached)`);
+              warnings.push(`[CONFLICT] ${who} was working on ${overlap.join(', ')} (cached)`);
             }
           }
           if (warnings.length > 0) {
@@ -172,7 +172,6 @@ export function registerTools(server, { team, state, profile }) {
           }
           return {
             content: [{ type: 'text', text: '[offline — cached data only] No overlapping files were found in cache. Do not treat this as live clearance to edit.' }],
-            isError: true,
           };
         }
         return {

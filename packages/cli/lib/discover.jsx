@@ -111,7 +111,7 @@ export function Discover({ config, navigate }) {
         showMessage(`Added ${result.name}: ${result.detail}`);
         setDetected(detectTools(process.cwd()));
       } else {
-        showMessage(`Error: ${result.error}`);
+        showMessage(`Could not add ${tool.name}: ${result.error}`);
       }
     } else if (tool.installCmd) {
       showMessage(`${tool.name} — Install: ${tool.installCmd}  |  ${tool.website}`);

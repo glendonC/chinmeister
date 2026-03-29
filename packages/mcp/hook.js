@@ -149,7 +149,9 @@ async function sessionStart(team, teamId, hasExactSession) {
             ? m.minutes_since_update
             : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
           if (mins > 15) {
-            insights.push(`${m.handle} has been on ${m.activity.files[0]} for ${Math.round(mins)} min — may need help`);
+            const stuckFile = m.activity?.files?.[0];
+            if (!stuckFile) continue;
+            insights.push(`${m.handle} has been on ${stuckFile} for ${Math.round(mins)} min — may need help`);
           }
         }
       }

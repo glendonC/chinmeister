@@ -3,6 +3,7 @@ import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { basename } from 'path';
 import { homedir } from 'os';
+import { execFileSync } from 'child_process';
 import { api } from './api.js';
 import {
   buildCombinedAgentRows,
@@ -12,7 +13,6 @@ import {
 } from './dashboard-view.js';
 import { detectTools } from './mcp-config.js';
 import { openCommandInTerminal } from './open-command-in-terminal.js';
-import { openPath } from './open-path.js';
 import { spawnAgent, killAgent, getAgents, getOutput, onUpdate, removeAgent } from './process-manager.js';
 import {
   HintRow,
@@ -34,6 +34,29 @@ import {
   saveLauncherPreference,
 } from './launcher-preferences.js';
 import { getProjectContext } from './project.js';
+
+const DASHBOARD_URL = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
+
+function openWebDashboard(token) {
+  const url = token ? `${DASHBOARD_URL}#token=${token}` : DASHBOARD_URL;
+  try {
+    if (process.platform === 'darwin') {
+      execFileSync('open', [url], { stdio: 'ignore' });
+      return { ok: true };
+    }
+    if (process.platform === 'linux') {
+      execFileSync('xdg-open', [url], { stdio: 'ignore' });
+      return { ok: true };
+    }
+    if (process.platform === 'win32') {
+      execFileSync('cmd', ['/c', 'start', '', url], { stdio: 'ignore' });
+      return { ok: true };
+    }
+    return { ok: false, error: 'Unsupported platform' };
+  } catch {
+    return { ok: false, error: 'Could not open browser' };
+  }
+}
 
 // Strip ANSI escape codes, OSC sequences, cursor controls, and carriage returns
 function stripAnsi(str) {
@@ -77,29 +100,7 @@ function formatProjectPath(projectRoot) {
   return projectRoot;
 }
 
-function PanelViewNav({ items, activeKey }) {
-  return (
-    <Box flexDirection="column" paddingTop={1}>
-      <Text dimColor>view</Text>
-      <Box flexDirection="row" flexWrap="wrap">
-        {items.map((item) => {
-          const active = item.key === activeKey;
-          const accent = item.accent || 'cyan';
-
-          return (
-            <Box key={item.key} marginRight={3}>
-              <Text color={active ? accent : 'gray'}>{active ? '› ' : '  '}</Text>
-              <Text color={active ? accent : 'white'} dimColor={!active} bold={active}>{item.label}</Text>
-              {item.meta ? <Text dimColor> {item.meta}</Text> : null}
-            </Box>
-          );
-        })}
-      </Box>
-    </Box>
-  );
-}
-
-export function Dashboard({ config, navigate, layout, projectLabel = null, appVersion = '0.1.0' }) {
+export function Dashboard({ config, navigate, layout, projectLabel = null, appVersion = '0.1.0', setFooterHints }) {
   const { stdout } = useStdout();
   const [cols, setCols] = useState(stdout?.columns || 80);
   const viewportRows = layout?.viewportRows || 18;
@@ -110,15 +111,24 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const [projectRoot, setProjectRoot] = useState(process.cwd());
   const [detectedTools, setDetectedTools] = useState([]);
   const [context, setContext] = useState(null);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null);          // fatal (no .chinwag, etc.)
+  const [connState, setConnState] = useState('connecting'); // 'connected' | 'connecting' | 'reconnecting' | 'offline'
+  const [connDetail, setConnDetail] = useState(null); // human-readable detail
+  const consecutiveFailures = useRef(0);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [spinnerFrame, setSpinnerFrame] = useState(0);
 
   // Navigation state
   const [selectedIdx, setSelectedIdx] = useState(-1);
-  const [mainFocus, setMainFocus] = useState('launcher');
+  const [mainFocus, setMainFocus] = useState('input');
   const [view, setView] = useState('home');
   const [notice, setNotice] = useState(null);
   const noticeTimer = useRef(null);
+
+  // Hero input bar state
+  const [heroInput, setHeroInput] = useState('');
+  const [heroInputActive, setHeroInputActive] = useState(false);
+  const [commandSelectedIdx, setCommandSelectedIdx] = useState(0);
 
   // Memory management
   const [memorySelectedIdx, setMemorySelectedIdx] = useState(-1);
@@ -135,7 +145,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const [focusedAgent, setFocusedAgent] = useState(null);
   const [showDiagnostics, setShowDiagnostics] = useState(false);
 
-  // Composer: null | 'command' | 'targeted' | 'launch' | 'memory-search' | 'memory-add'
+  // Composer: null | 'command' | 'targeted' | 'memory-search' | 'memory-add'
   const [composeMode, setComposeMode] = useState(null);
   const [composeText, setComposeText] = useState('');
   const [composeTarget, setComposeTarget] = useState(null);
@@ -151,6 +161,14 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
   // CLI agents
   const [installedCliAgents] = useState(() => listManagedAgentTools());
+
+  // ── Spinner for loading/reconnecting states ──────────
+  const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  useEffect(() => {
+    if (connState === 'connected' || connState === 'offline') return;
+    const t = setInterval(() => setSpinnerFrame(f => (f + 1) % SPINNER.length), 80);
+    return () => clearInterval(t);
+  }, [connState]);
 
   // ── Terminal resize ──────────────────────────────────
   useEffect(() => {
@@ -187,6 +205,21 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     const client = api(config);
     let joined = false;
 
+    function classifyError(err) {
+      const msg = err.message || '';
+      const status = err.status;
+      if (status === 401) return { state: 'offline', detail: 'Session expired. Re-run chinwag init.', fatal: true };
+      if (status === 403) return { state: 'offline', detail: 'Access denied. You may have been removed from this team.' };
+      if (status === 404) return { state: 'offline', detail: 'Team not found. The .chinwag file may be stale.' };
+      if (status === 429) return { state: 'reconnecting', detail: 'Rate limited. Retrying shortly.' };
+      if (status >= 500) return { state: 'reconnecting', detail: 'Server error. Retrying...' };
+      if (status === 408 || msg.includes('timed out')) return { state: 'reconnecting', detail: 'Request timed out. Retrying...' };
+      if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some(c => msg.includes(c))) {
+        return { state: 'offline', detail: 'Cannot reach server. Check your connection.' };
+      }
+      return { state: 'reconnecting', detail: msg || 'Connection issue. Retrying...' };
+    }
+
     async function fetchContext() {
       try {
         if (!joined) {
@@ -195,15 +228,31 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         }
         const ctx = await client.get(`/teams/${teamId}/context`);
         setContext(ctx);
-        setError(null);
+        consecutiveFailures.current = 0;
+        setConnState('connected');
+        setConnDetail(null);
       } catch (err) {
         if (err.message?.includes('Not a member')) joined = false;
-        setError(`Failed to fetch: ${err.message}`);
+        consecutiveFailures.current++;
+        const classified = classifyError(err);
+        // After 6+ consecutive failures, stop auto-retrying — let user decide
+        if (consecutiveFailures.current >= 6 && classified.state === 'reconnecting') {
+          setConnState('offline');
+          setConnDetail(classified.detail.replace('Retrying...', 'Press [r] to retry.').replace('Retrying shortly.', 'Press [r] to retry.'));
+        } else {
+          setConnState(classified.state);
+          setConnDetail(classified.detail);
+        }
+        // Don't wipe existing context — show stale data with a connection banner
       }
     }
 
     fetchContext();
-    const interval = setInterval(fetchContext, 5000);
+    // Back off if we keep failing: 5s normal, 15s after 3 failures, 30s after 6
+    const interval = setInterval(fetchContext,
+      consecutiveFailures.current >= 6 ? 30_000
+        : consecutiveFailures.current >= 3 ? 15_000
+        : 5000);
     return () => clearInterval(interval);
   }, [teamId, teamName, refreshKey, config?.token]);
 
@@ -276,7 +325,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
             || (agent.status === 'exited'
               ? `${agent.toolName} finished${preview}`
               : `${agent.toolName} failed${preview}`),
-          { tone: agent.status === 'exited' ? 'success' : 'warning', autoClearMs: 5000 }
+          { tone: agent.status === 'exited' ? 'success' : 'warning' }
         );
       }
       previous.set(agent.id, agent.status);
@@ -299,13 +348,29 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     setPreferredLaunchToolId(getSavedLauncherPreference(teamId));
   }, [teamId]);
 
+  // ── Footer bar commands (pushed to shell) ───────────
+  const isComposing = Boolean(composeMode);
+  useEffect(() => {
+    if (!setFooterHints) return;
+    if (heroInputActive || isComposing) {
+      setFooterHints([{ key: 'esc', label: 'back' }, { key: 'q', label: 'quit', color: 'gray' }]);
+    } else {
+      setFooterHints([
+        { key: 'n', label: 'new task', color: 'green' },
+        { key: 'w', label: 'web' },
+        { key: '/', label: 'more' },
+        { key: 'q', label: 'quit', color: 'gray' },
+      ]);
+    }
+  }, [heroInputActive, isComposing]);
+
   // ── Helpers ──────────────────────────────────────────
 
-  function flash(msg, duration = 3000) {
-    const tone = typeof duration === 'object' ? duration.tone || 'info' : 'info';
-    const autoClearMs = typeof duration === 'object'
-      ? (duration.autoClearMs ?? (tone === 'error' || tone === 'warning' ? null : 4000))
-      : duration;
+  function flash(msg, opts = {}) {
+    const tone = typeof opts === 'object' ? opts.tone || 'info' : 'info';
+    // Messages persist until replaced by another flash or cleared by user action.
+    // Only auto-clear if explicitly requested via autoClearMs.
+    const autoClearMs = typeof opts === 'object' ? opts.autoClearMs : null;
 
     if (noticeTimer.current) {
       clearTimeout(noticeTimer.current);
@@ -346,7 +411,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return next;
     });
     setManagedToolStatusTick(tick => tick + 1);
-    flash('Rechecking tools you can start...', { tone: 'info', autoClearMs: 3000 });
+    flash('Rechecking tools...', { tone: 'info' });
   }
 
   function getManagedToolState(toolId) {
@@ -380,6 +445,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   function beginCommandInput(initialText = '') {
     setComposeMode('command');
     setComposeText(initialText);
+    setCommandSelectedIdx(0);
   }
 
   function rememberLaunchTool(toolId) {
@@ -389,44 +455,16 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     }
   }
 
-  function closeLaunchComposer() {
-    setComposeMode(null);
-    setComposeText('');
-  }
-
-  function selectLaunchTool(tool, { startCompose = false, draftText = composeText } = {}) {
+  function selectLaunchTool(tool) {
     if (!tool) return;
     setLaunchToolId(tool.id);
-    if (startCompose) {
-      setView('home');
-      setMainFocus('launcher');
-      setComposeMode('launch');
-      setComposeText(draftText);
-    }
   }
 
-  function openLaunchComposer(preselectedTool = null, initialTaskText = '') {
-    if (!installedCliAgents.length) {
-      flash('No managed launchers are configured yet.', { tone: 'warning' });
-      return;
-    }
-
-    clearCompose();
-    setView('home');
-    setMainFocus('launcher');
-
-    const initialTool = preselectedTool
-      || (selectedLaunchTool && canLaunchSelectedTool ? selectedLaunchTool : null)
-      || preferredLaunchTool
-      || readyCliAgents[0]
-      || selectedLaunchTool
-      || installedCliAgents[0]
-      || null;
-    if (initialTool) {
-      setLaunchToolId(initialTool.id);
-    }
-    setComposeMode('launch');
-    setComposeText(initialTaskText);
+  function cycleToolForward() {
+    if (launcherChoices.length <= 1) return;
+    const currentIdx = launcherChoices.findIndex(t => t.id === launchToolId);
+    const nextIdx = (currentIdx + 1) % launcherChoices.length;
+    setLaunchToolId(launcherChoices[nextIdx].id);
   }
 
   function resolveReadyTool(query) {
@@ -453,7 +491,9 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
     if (verb === 'new' || verb === 'start') {
       if (!rest) {
-        openLaunchComposer();
+        setHeroInputActive(true);
+        setMainFocus('input');
+        clearCompose();
         return;
       }
 
@@ -464,8 +504,9 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         if (taskText) {
           launchManagedTask(explicitTool, taskText);
         } else {
-          openLaunchComposer(explicitTool);
-          return;
+          selectLaunchTool(explicitTool);
+          setHeroInputActive(true);
+          setMainFocus('input');
         }
         clearCompose();
         return;
@@ -477,7 +518,10 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         return;
       }
 
-      openLaunchComposer(null, rest);
+      setHeroInput(rest);
+      setHeroInputActive(true);
+      setMainFocus('input');
+      clearCompose();
       return;
     }
 
@@ -500,9 +544,16 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
-    if (verb === 'sessions' || verb === 'agents') {
+    if (verb === 'sessions' || verb === 'agents' || verb === 'history') {
       setView('sessions');
       setSelectedIdx(liveAgents.length > 0 ? 0 : -1);
+      clearCompose();
+      return;
+    }
+
+    if (verb === 'web' || verb === 'dashboard') {
+      const result = openWebDashboard(config?.token);
+      flash(result.ok ? 'Opened web dashboard' : 'Could not open browser', { tone: result.ok ? 'success' : 'error' });
       clearCompose();
       return;
     }
@@ -518,7 +569,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     }
 
     if (verb === 'help') {
-      flash('Try /new, /fix, /recheck, or /memory.', { tone: 'info', autoClearMs: 5000 });
+      flash('Try /new, /recheck, /memory, /web, or /sessions.', { tone: 'info' });
       clearCompose();
       return;
     }
@@ -529,7 +580,10 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
-    openLaunchComposer(null, text);
+    setHeroInput(text);
+    setHeroInputActive(true);
+    setMainFocus('input');
+    clearCompose();
   }
 
   function getAgentIntent(agent) {
@@ -578,7 +632,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       parts.push(`updated ${Math.round(agent.minutes_since_update)}m ago`);
     }
 
-    return parts.join(' · ');
+    return parts.join(' \u00b7 ');
   }
 
   function getRecentResultSummary(agent) {
@@ -607,6 +661,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const isSessionsView = view === 'sessions';
   const isMemoryView = view === 'memory';
   const isAgentFocusView = view === 'agent-focus';
+  const launcherChoices = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
 
   // ── API actions ──────────────────────────────────────
 
@@ -614,17 +669,17 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     if (!teamId || !text.trim()) return;
     api(config).post(`/teams/${teamId}/messages`, { text: text.trim(), target: target || undefined })
       .then(() => {
-        flash(targetLabel ? `Sent to ${targetLabel}` : 'Sent to team', { tone: 'success', autoClearMs: 4000 });
+        flash(targetLabel ? `Sent to ${targetLabel}` : 'Sent to team', { tone: 'success' });
         setRefreshKey(k => k + 1);
       })
-      .catch(() => flash('Could not send message', { tone: 'error' }));
+      .catch(() => flash('Message not sent. Check connection.', { tone: 'error' }));
   }
 
   function saveMemory(text) {
     if (!teamId || !text.trim()) return;
     api(config).post(`/teams/${teamId}/memory`, { text: text.trim() })
-      .then(() => { flash('Saved to shared memory', { tone: 'success', autoClearMs: 4000 }); setRefreshKey(k => k + 1); })
-      .catch(() => flash('Could not save to shared memory', { tone: 'error' }));
+      .then(() => { flash('Saved to shared memory', { tone: 'success' }); setRefreshKey(k => k + 1); })
+      .catch(() => flash('Memory not saved. Check connection.', { tone: 'error' }));
   }
 
   function deleteMemoryItem(mem) {
@@ -672,7 +727,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         return false;
       }
       if (flashSuccess) {
-        flash(successMessage, { tone: 'success', autoClearMs: 4000 });
+        flash(successMessage, { tone: 'success' });
       }
       return true;
     } catch (err) {
@@ -697,7 +752,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
-    flash(`Stopping ${getAgentDisplayLabel(agent)}`, { tone: 'info', autoClearMs: 4000 });
+    flash(`Stopping ${getAgentDisplayLabel(agent)}`, { tone: 'info' });
     if (view === 'agent-focus') {
       setView('home');
       setFocusedAgent(null);
@@ -708,13 +763,13 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     if (!agent?._managed) return;
     const removed = removeAgent(agent.id);
     if (removed) {
-      flash(`Removed ${getAgentDisplayLabel(agent)}`, { tone: 'success', autoClearMs: 4000 });
+      flash(`Removed ${getAgentDisplayLabel(agent)}`, { tone: 'success' });
       if (view === 'agent-focus') {
         setView('home');
         setFocusedAgent(null);
       }
     } else {
-      flash('Could not remove agent', { tone: 'error' });
+      flash('Agent removal failed. It may have already exited.', { tone: 'error' });
     }
   }
 
@@ -723,7 +778,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
     const removed = removeAgent(agent.id);
     if (!removed) {
-      flash('Could not restart agent', { tone: 'error' });
+      flash('Restart failed. Try stopping and launching a new agent.', { tone: 'error' });
       return;
     }
 
@@ -755,10 +810,41 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
     const result = openCommandInTerminal(status.recoveryCommand, projectRoot);
     if (result.ok) {
-      flash(`Opened ${tool.name} fix flow. Finish it, then press [u].`, { tone: 'info', autoClearMs: 5000 });
+      flash(`Opened ${tool.name} fix flow. Run /recheck when done.`, { tone: 'info' });
     } else {
-      flash(`Run \`${status.recoveryCommand}\` manually, then press [u].`, { tone: 'warning' });
+      flash(`Run \`${status.recoveryCommand}\` manually, then /recheck.`, { tone: 'warning' });
     }
+  }
+
+  function handleHeroSubmit() {
+    const task = heroInput.trim();
+    if (!task) return;
+
+    // Pick the first ready tool automatically
+    const tool = readyCliAgents[0] || selectedLaunchTool;
+    if (!tool || !canLaunchSelectedTool && tool === selectedLaunchTool) {
+      if (installedCliAgents.length === 0) {
+        flash('No CLI tools configured. Run chinwag add <tool> to add one.', { tone: 'warning' });
+      } else {
+        flash('No tools ready. Run /recheck to check tool availability.', { tone: 'warning' });
+      }
+      return;
+    }
+
+    const didStart = launchManagedTask(tool, task, { flashSuccess: false });
+    if (didStart) {
+      setHeroInput('');
+      setHeroInputActive(false);
+      flash(`Started ${tool.name}: ${task}`, { tone: 'success' });
+    }
+  }
+
+  function handleOpenWebDashboard() {
+    const result = openWebDashboard(config?.token);
+    flash(
+      result.ok ? 'Opened web dashboard' : `Could not open browser${result.error ? `: ${result.error}` : ''}`,
+      result.ok ? { tone: 'success' } : { tone: 'error' }
+    );
   }
 
   // ── Data ─────────────────────────────────────────────
@@ -785,10 +871,14 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     getToolName,
   });
   const liveAgents = combinedAgents.filter(agent => !agent._dead);
-  const recentManagedResults = combinedAgents
+  // Keep recently-finished agents visible so user can see results
+  const recentlyFinished = combinedAgents
     .filter(agent => agent._managed && agent._dead)
-    .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0));
-  const selectedAgent = selectedIdx >= 0 ? liveAgents[selectedIdx] : null;
+    .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
+    .slice(0, 3);
+  const allVisibleAgents = [...liveAgents, ...recentlyFinished];
+  const recentManagedResults = recentlyFinished;
+  const selectedAgent = selectedIdx >= 0 ? allVisibleAgents[selectedIdx] : null;
   const mainSelectedAgent = mainFocus === 'agents' ? selectedAgent : null;
   const knowledgeVisible = view === 'memory' || composeMode === 'memory-search' || composeMode === 'memory-add'
     ? visibleMemories
@@ -799,14 +889,13 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const hasLiveAgents = liveAgents.length > 0;
   const hasRecentManagedResults = Boolean(recentResult);
   const hasMemories = memories.length > 0;
-  const isEmpty = !hasLiveAgents && !hasRecentManagedResults && !hasMemories && installedCliAgents.length === 0;
-  const projectDisplayName = teamName || projectLabel || basename(projectRoot);
-  const projectDisplayPath = formatProjectPath(projectRoot);
+  const projectDir = projectRoot.startsWith(homedir()) ? '~' + projectRoot.slice(homedir().length) : projectRoot;
+  const projectDisplayName = projectDir;
   const liveAgentNameCounts = liveAgents.reduce((counts, agent) => {
     counts.set(agent._display, (counts.get(agent._display) || 0) + 1);
     return counts;
   }, new Map());
-  const visibleSessionRows = getVisibleWindow(liveAgents, selectedIdx, Math.max(4, viewportRows - 11));
+  const visibleSessionRows = getVisibleWindow(allVisibleAgents, selectedIdx, Math.max(4, viewportRows - 11));
   const visibleKnowledgeRows = getVisibleWindow(knowledgeVisible, memorySelectedIdx, Math.max(4, viewportRows - 11));
   const commandEntries = [
     { name: '/new', description: 'Start a new task' },
@@ -817,11 +906,12 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       ? [{ name: '/recheck', description: 'Refresh available tools and setup state' }]
       : []),
     ...(hasMemories
-      ? [{ name: '/memory', description: 'Open shared memory' }]
+      ? [{ name: '/knowledge', description: 'View shared knowledge' }]
       : []),
     ...(hasLiveAgents
-      ? [{ name: '/sessions', description: 'Open the active session list' }]
+      ? [{ name: '/history', description: 'View past agent activity' }]
       : []),
+    { name: '/web', description: 'Open chinwag in browser' },
     ...(selectedAgent && isAgentAddressable(selectedAgent)
       ? [{ name: '/message', description: `Message ${selectedAgent._display}` }]
       : []),
@@ -830,24 +920,25 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const commandQuery = composeMode === 'command'
     ? composeText.trim().replace(/^\//, '').toLowerCase()
     : '';
-  const commandSuggestions = commandEntries.filter((entry) => {
-    if (!composeText.trim().startsWith('/')) return false;
-    if (!commandQuery) return true;
-    const normalized = entry.name.slice(1).toLowerCase();
-    return normalized.startsWith(commandQuery) || entry.description.toLowerCase().includes(commandQuery);
-  });
+  const commandSuggestions = composeMode === 'command'
+    ? commandEntries.filter((entry) => {
+        if (!commandQuery) return true;
+        const normalized = entry.name.slice(1).toLowerCase();
+        return normalized.startsWith(commandQuery) || entry.description.toLowerCase().includes(commandQuery);
+      })
+    : [];
 
   // Clamp selection indices
   useEffect(() => {
-    if (liveAgents.length === 0) {
+    if (allVisibleAgents.length === 0) {
       if (selectedIdx !== -1) setSelectedIdx(-1);
-      if (mainFocus !== 'launcher') setMainFocus('launcher');
+      if (mainFocus === 'agents') setMainFocus('input');
       return;
     }
-    if (selectedIdx >= liveAgents.length) {
-      setSelectedIdx(liveAgents.length > 0 ? liveAgents.length - 1 : -1);
+    if (selectedIdx >= allVisibleAgents.length) {
+      setSelectedIdx(allVisibleAgents.length > 0 ? allVisibleAgents.length - 1 : -1);
     }
-  }, [selectedIdx, liveAgents.length, mainFocus]);
+  }, [selectedIdx, allVisibleAgents.length, mainFocus]);
 
   useEffect(() => {
     if (memorySelectedIdx >= visibleMemories.length) {
@@ -864,15 +955,22 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     }
   }, [launchToolId, installedCliAgents, preferredLaunchTool, readyCliAgents]);
 
-  // ── Composing state ──────────────────────────────────
-
-  const isComposing = Boolean(composeMode && composeMode !== 'launch');
-
   // ── Input handling ───────────────────────────────────
 
   useInput((input, key) => {
     if (cols < MIN_WIDTH) {
       if (input === 'q') navigate('quit');
+      return;
+    }
+
+    // ── Retry on error/loading screens ────────────────
+    if (input === 'r' && (error || !context)) {
+      if (error) {
+        setError(null);
+        setConnState('connecting');
+      }
+      consecutiveFailures.current = 0;
+      setRefreshKey(k => k + 1);
       return;
     }
 
@@ -910,40 +1008,53 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
-    // ── Overview mode input ────────────────────────────
-
-    if (composeMode === 'launch') {
-      if (key.escape) {
-        closeLaunchComposer();
+    // ── Hero input active: handle Tab to cycle tools ───
+    if (heroInputActive && isHomeView) {
+      if (key.tab) {
+        cycleToolForward();
         return;
       }
+      if (key.escape) {
+        setHeroInputActive(false);
+        return;
+      }
+      // Don't intercept other keys while typing in the hero input
+      return;
+    }
 
-      if (!canLaunchSelectedTool) {
-        const num = parseInt(input, 10);
-        if (num >= 1 && num <= launcherChoices.length) {
-          selectLaunchTool(launcherChoices[num - 1], { startCompose: true });
+    // When composing text in secondary modes
+    if (isComposing) {
+      if (key.escape) { clearCompose(); return; }
+      // Arrow navigation in command palette
+      if (composeMode === 'command') {
+        if (key.downArrow) {
+          setCommandSelectedIdx(i => Math.min(i + 1, Math.min(commandSuggestions.length - 1, 5)));
+          return;
+        }
+        if (key.upArrow) {
+          setCommandSelectedIdx(i => Math.max(i - 1, 0));
           return;
         }
       }
-
       return;
     }
 
-    // When composing text, only handle Esc
-    if (isComposing) {
-      if (key.escape) clearCompose();
-      return;
-    }
-
+    // ── Home view input ───────────────────────────────
     if (isHomeView) {
+      // [n] or Enter activates the hero input
+      if (input === 'n' || (key.return && mainFocus === 'input')) {
+        setHeroInputActive(true);
+        return;
+      }
+
       if (key.downArrow) {
-        if (mainFocus === 'launcher' && liveAgents.length > 0) {
+        if (mainFocus === 'input' && allVisibleAgents.length > 0) {
           setMainFocus('agents');
           setSelectedIdx(prev => prev >= 0 ? prev : 0);
           return;
         }
-        if (mainFocus === 'agents' && liveAgents.length > 0) {
-          setSelectedIdx(prev => Math.min((prev < 0 ? 0 : prev) + 1, liveAgents.length - 1));
+        if (mainFocus === 'agents' && allVisibleAgents.length > 0) {
+          setSelectedIdx(prev => Math.min((prev < 0 ? 0 : prev) + 1, allVisibleAgents.length - 1));
           return;
         }
       }
@@ -953,13 +1064,9 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
           return;
         }
         if (mainFocus === 'agents') {
-          setMainFocus('launcher');
+          setMainFocus('input');
           return;
         }
-      }
-      if (key.return && mainFocus === 'launcher') {
-        openLaunchComposer();
-        return;
       }
       if (key.return && mainSelectedAgent) {
         setFocusedAgent(mainSelectedAgent);
@@ -977,26 +1084,15 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       }
     }
 
-    if (isHomeView && mainFocus === 'launcher') {
-      const num = parseInt(input, 10);
-      if (num >= 1 && num <= launcherChoices.length) {
-        selectLaunchTool(launcherChoices[num - 1], { startCompose: true, draftText: '' });
-        return;
-      }
-    }
-
     if (input === 's' && hasLiveAgents) {
       setView('sessions');
       setSelectedIdx(prev => prev >= 0 ? prev : 0);
       return;
     }
 
-    if (input === 'o') {
-      const result = openPath(projectRoot);
-      flash(
-        result.ok ? 'Opened project folder' : `Unable to open project folder${result.error ? `: ${result.error}` : ''}`,
-        result.ok ? { tone: 'success', autoClearMs: 4000 } : { tone: 'error' }
-      );
+    // [w] — open web dashboard
+    if (input === 'w') {
+      handleOpenWebDashboard();
       return;
     }
 
@@ -1024,20 +1120,19 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         return;
       }
 
-      // Enter on selected agent → focus mode
+      // Enter on selected agent -> focus mode
       if (key.return) {
-        if (selectedIdx >= 0 && selectedIdx < liveAgents.length) {
+        if (selectedIdx >= 0 && selectedIdx < allVisibleAgents.length) {
           const agent = liveAgents[selectedIdx];
           setFocusedAgent(agent);
           setView('agent-focus');
           setShowDiagnostics(false);
           return;
         }
-        beginCommandInput('');
         return;
       }
 
-      // [x] on selected managed agent → stop (running) or remove (exited)
+      // [x] on selected managed agent -> stop (running) or remove (exited)
       if (input === 'x' && selectedIdx >= 0) {
         const agent = liveAgents[selectedIdx];
         if (agent?._managed) {
@@ -1078,22 +1173,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       }
     }
 
-    // [n] — spawn a new agent
-    if (input === 'n' && installedCliAgents.length > 0) {
-      openLaunchComposer();
-      return;
-    }
-
-    if (input === 'n' && installedCliAgents.length === 0) {
-      flash('No managed launchers are configured yet.', { tone: 'warning' });
-      return;
-    }
-
-    if (input === 'u' && installedCliAgents.length > 0) {
-      refreshManagedToolStates({ clearRuntimeFailures: true });
-      return;
-    }
-
     if (input === 'f' && unavailableCliAgents.some(tool => getManagedToolState(tool.id).recoveryCommand)) {
       handleFixLauncher(unavailableCliAgents.find(tool => getManagedToolState(tool.id).recoveryCommand));
       return;
@@ -1102,7 +1181,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     // [/] — command palette or memory search
     if (input === '/') {
       if (isHomeView || isSessionsView) {
-        beginCommandInput('/');
+        beginCommandInput('');
         return;
       }
       if (isMemoryView) {
@@ -1133,20 +1212,17 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
   function onComposeSubmit() {
     if (composeMode === 'command') {
-      handleCommandSubmit(composeText);
+      // Submit the selected suggestion, or typed text
+      const selected = commandSuggestions[commandSelectedIdx] || commandSuggestions[0];
+      if (selected) {
+        handleCommandSubmit(selected.name);
+      } else {
+        handleCommandSubmit(composeText);
+      }
       return;
     }
     sendMessage(composeText, composeTarget, composeTargetLabel);
     clearCompose();
-  }
-
-  function onTaskLaunchSubmit() {
-    if (!selectedLaunchTool || !canLaunchSelectedTool) return;
-    const didStart = launchManagedTask(selectedLaunchTool, composeText, { flashSuccess: false });
-    if (didStart) {
-      setComposeText('');
-      flash(`Started ${selectedLaunchTool.name}. Enter another task or press [esc].`, { tone: 'success', autoClearMs: 5000 });
-    }
   }
 
   function onMemorySubmit() {
@@ -1202,19 +1278,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     </Box>
   );
 
-  const dashboardRail = (
-    <Box paddingTop={1}>
-      <PanelViewNav
-        items={[
-          { key: 'overview', label: 'activity', accent: 'cyan' },
-          { key: 'agents', label: 'sessions', meta: liveAgents.length > 0 ? String(liveAgents.length) : null, accent: 'green' },
-          { key: 'memory', label: 'memory', meta: memories.length > 0 ? String(memories.length) : null, accent: 'magenta' },
-        ]}
-        activeKey={isAgentFocusView ? 'agents' : isSessionsView ? 'agents' : isMemoryView ? 'memory' : 'overview'}
-      />
-    </Box>
-  );
-
   function renderSectionIntro(title, summary, color = 'cyan') {
     return (
       <Box flexDirection="column" paddingTop={1}>
@@ -1238,19 +1301,44 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
   if (error) {
     return (
-      <Box flexDirection="column">
-        <Box paddingX={1} paddingTop={1}><Text color="red">{error}</Text></Box>
-        <Box paddingX={1} paddingTop={1}>
-          <HintRow hints={[{ commandKey: 'q', label: 'quit', color: 'gray' }]} />
-        </Box>
+      <Box flexDirection="column" paddingX={1} paddingTop={1}>
+        <Text color="red" bold>{error}</Text>
+        <Text>{''}</Text>
+        <Text dimColor>
+          {error.includes('chinwag init') ? 'Set up this project first, then relaunch.'
+            : error.includes('expired') ? 'Your auth token is no longer valid.'
+            : 'Check the issue above and try again.'}
+        </Text>
+        <HintRow hints={[
+          ...(error.includes('expired') || error.includes('.chinwag')
+            ? []
+            : [{ commandKey: 'r', label: 'retry', color: 'cyan' }]),
+          { commandKey: 'q', label: 'quit', color: 'gray' },
+        ]} />
       </Box>
     );
   }
 
   if (!context) {
+    const isAutoRetrying = connState === 'connecting' || connState === 'reconnecting';
+    const spin = SPINNER[spinnerFrame];
     return (
       <Box flexDirection="column" paddingX={1} paddingTop={1}>
-        <Text dimColor>Loading team context...</Text>
+        {isAutoRetrying ? (
+          <Text>
+            <Text color="cyan">{spin} </Text>
+            <Text color="cyan">{connState === 'connecting' ? 'Connecting to team' : (connDetail || 'Reconnecting')}</Text>
+          </Text>
+        ) : (
+          <Box flexDirection="column">
+            <Text color="red">{connDetail || 'Cannot reach server.'}</Text>
+            <Text>{''}</Text>
+            <HintRow hints={[
+              { commandKey: 'r', label: 'retry now', color: 'cyan' },
+              { commandKey: 'q', label: 'quit', color: 'gray' },
+            ]} />
+          </Box>
+        )}
       </Box>
     );
   }
@@ -1280,7 +1368,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
     return (
       <Box flexDirection="column">
-        {dashboardRail}
         {renderSectionIntro('session details', sourceLabel, 'green')}
 
         <Box flexDirection="column" paddingX={1} paddingTop={1}>
@@ -1328,7 +1415,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
           {agentConflicts.length > 0 ? (
             <Box flexDirection="column">
               {agentConflicts.map(([file, owners]) => (
-                <Text key={file} color="red">  Conflict on {basename(file)} · {owners.join(' & ')}</Text>
+                <Text key={file} color="red">  Conflict on {basename(file)} {'· '}{owners.join(' & ')}</Text>
               ))}
             </Box>
           ) : (
@@ -1368,54 +1455,60 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
   const inputBars = (
     <>
-      {composeMode === 'command' && (
-        <Box flexDirection="column" paddingX={1} paddingTop={1}>
-          <Box>
-            <Text color="cyan">  /{'>'}</Text>
-            <TextInput
-              value={composeText}
-              onChange={setComposeText}
-              onSubmit={onComposeSubmit}
-              placeholder="new, fix, recheck, memory"
-            />
-          </Box>
-          {commandSuggestions.length > 0 && (
-            <Box flexDirection="column" marginLeft={2}>
-              {commandSuggestions.slice(0, 5).map((entry, idx) => (
-                <Text key={entry.name}>
-                  <Text color={idx === 0 ? 'cyan' : 'gray'}>{idx === 0 ? '  ▸ ' : '    '}</Text>
-                  <Text color={idx === 0 ? 'cyan' : 'white'}>{entry.name}</Text>
-                  <Text dimColor>  {entry.description}</Text>
-                </Text>
-              ))}
+      {composeMode === 'command' && (() => {
+        const maxNameLen = Math.max(...commandSuggestions.map(e => e.name.length), 0);
+        return (
+          <Box flexDirection="column">
+            <Box>
+              <Text color="cyan">{'> '}</Text>
+              <TextInput
+                value={composeText}
+                onChange={v => { setComposeText(v); setCommandSelectedIdx(0); }}
+                onSubmit={onComposeSubmit}
+                placeholder="type a command"
+              />
             </Box>
-          )}
-        </Box>
-      )}
+            {commandSuggestions.length > 0 && (
+              <Box flexDirection="column" marginTop={1}>
+                {commandSuggestions.slice(0, 6).map((entry, idx) => {
+                  const sel = idx === commandSelectedIdx;
+                  return (
+                    <Text key={entry.name}>
+                      <Text color={sel ? 'cyan' : 'gray'}>{sel ? '› ' : '  '}</Text>
+                      <Text color={sel ? 'cyan' : 'white'}>{entry.name.padEnd(maxNameLen)}</Text>
+                      <Text dimColor>  {entry.description}</Text>
+                    </Text>
+                  );
+                })}
+              </Box>
+            )}
+          </Box>
+        );
+      })()}
 
       {composeMode === 'targeted' && (
-        <Box paddingX={1} paddingTop={1}>
-          <Text color="cyan">  @{composeTargetLabel || 'agent'}{'> '}</Text>
+        <Box>
+          <Text color="cyan">{'@'}{composeTargetLabel || 'agent'}{' '}</Text>
           <TextInput
             value={composeText}
             onChange={setComposeText}
             onSubmit={onComposeSubmit}
-            placeholder="Send a coordination note..."
+            placeholder="send a message"
           />
         </Box>
       )}
 
       {composeMode === 'memory-search' && (
-        <Box paddingX={1} paddingTop={1}>
-          <Text color="yellow">  memory{'> '}</Text>
-          <TextInput value={memorySearch} onChange={setMemorySearch} placeholder="Search shared memory..." />
+        <Box>
+          <Text color="yellow">{'search '}</Text>
+          <TextInput value={memorySearch} onChange={setMemorySearch} placeholder="search shared knowledge" />
         </Box>
       )}
 
       {composeMode === 'memory-add' && (
-        <Box paddingX={1} paddingTop={1}>
-          <Text color="green">  save{'> '}</Text>
-          <TextInput value={memoryInput} onChange={setMemoryInput} onSubmit={onMemorySubmit} placeholder="Save shared memory..." />
+        <Box>
+          <Text color="green">{'save '}</Text>
+          <TextInput value={memoryInput} onChange={setMemoryInput} onSubmit={onMemorySubmit} placeholder="save to shared knowledge" />
         </Box>
       )}
     </>
@@ -1451,188 +1544,115 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     </Box>
   );
 
-  const overlayBar = (isComposing || notice) ? (
-    <Box paddingTop={1} flexDirection="column">
-      {isComposing ? (
-        <Box borderStyle="round" borderColor="cyan" paddingX={1} flexDirection="column">
-          {inputBars}
-        </Box>
-      ) : null}
-      <NoticeLine notice={notice} />
-      {isComposing ? (
-        <HintRow hints={navItems.map(item => ({
-          commandKey: item.key,
-          label: item.label,
-          color: item.color || 'cyan',
-        }))} />
-      ) : null}
-    </Box>
-  ) : null;
+  const hasMultipleTools = launcherChoices.length > 1;
 
-  const launcherSummary = selectedLaunchTool
-    ? selectedLaunchTool.name
-    : readyCliAgents.length > 1
-      ? `Choose from ${readyCliAgents.length} ready tools`
-      : checkingCliAgents.length > 0
-        ? 'Checking tools'
-        : unavailableCliAgents.some(tool => getManagedToolState(tool.id).recoveryCommand)
-          ? 'Unavailable. Press [f] or [u].'
-          : installedCliAgents.length > 0
-            ? 'Unavailable. Press [u].'
-            : 'Not configured';
-  const launcherChoices = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
+  // ── Build hint bars: contextual (top) + global (bottom) ─────
+  // Contextual hints change with mode (shown only when relevant)
+  const contextHints = [];
+  if (heroInputActive) {
+    if (heroInput.trim()) contextHints.push({ commandKey: 'enter', label: 'send', color: 'green' });
+    contextHints.push({ commandKey: 'esc', label: 'back', color: 'cyan' });
+  } else if (mainSelectedAgent) {
+    contextHints.push({ commandKey: 'enter', label: 'inspect', color: 'cyan' });
+    if (isAgentAddressable(mainSelectedAgent)) contextHints.push({ commandKey: 'm', label: 'message', color: 'cyan' });
+    if (mainSelectedAgent._managed && !mainSelectedAgent._dead) contextHints.push({ commandKey: 'x', label: 'stop', color: 'red' });
+  }
+  // ── Home view (prompt-first) ─────────────────────────
 
-  const mainActionHints = [
-    ...(composeMode === 'launch' && canLaunchSelectedTool ? [{ commandKey: 'enter', label: 'start', color: 'green' }] : []),
-    ...(composeMode === 'launch' ? [{ commandKey: 'esc', label: 'close', color: 'cyan' }] : []),
-    ...(composeMode !== 'launch' && mainFocus === 'launcher' && installedCliAgents.length > 0 ? [{ commandKey: 'n', label: 'compose', color: 'cyan' }] : []),
-    ...(composeMode !== 'launch' && launcherChoices.length > 1 ? [{ commandKey: `1-${launcherChoices.length}`, label: 'pick launcher', color: 'cyan' }] : []),
-    ...(hasLiveAgents ? [{ commandKey: '↑↓', label: 'move', color: 'cyan' }] : []),
-    ...(mainSelectedAgent ? [{ commandKey: 'enter', label: 'inspect', color: 'cyan' }] : []),
-    ...(mainSelectedAgent && isAgentAddressable(mainSelectedAgent) ? [{ commandKey: 'm', label: 'message', color: 'cyan' }] : []),
-    ...(mainSelectedAgent?._managed && !mainSelectedAgent._dead ? [{ commandKey: 'x', label: 'stop', color: 'red' }] : []),
-    ...(hasLiveAgents ? [{ commandKey: 's', label: 'sessions', color: 'cyan' }] : []),
-    ...(hasMemories ? [{ commandKey: 'k', label: 'memory', color: 'magenta' }] : []),
-    { commandKey: '/', label: 'commands', color: 'cyan' },
-    ...(installedCliAgents.length > 0 ? [{ commandKey: 'u', label: 'recheck', color: 'yellow' }] : []),
-    ...(unavailableCliAgents.some(tool => getManagedToolState(tool.id).recoveryCommand)
-      ? [{ commandKey: 'f', label: 'fix', color: 'yellow' }]
-      : []),
-    { commandKey: 'o', label: 'folder', color: 'cyan' },
-    { commandKey: 'q', label: 'quit', color: 'gray' },
-  ];
+  const activeAgents = liveAgents.filter(a => !a._dead);
+  const idleAgents = liveAgents.filter(a => {
+    const intent = getAgentIntent(a);
+    return !intent || /idle/i.test(intent);
+  });
 
   const mainPane = (
     <Box flexDirection="column" paddingTop={1}>
-      {dashboardRail}
-      <Box borderStyle="round" borderColor={mainFocus === 'launcher' ? 'cyan' : 'gray'} paddingX={1} flexDirection="column">
-        <Text>
-          <Text color="magenta" bold>chinwag</Text>
-          <Text dimColor> (v{appVersion})</Text>
+      {/* Status line */}
+      <Text>
+        <Text color="magenta" bold>chinwag</Text>
+        <Text dimColor>  {projectDisplayName}</Text>
+        {connState === 'reconnecting' && <Text color="yellow">  {SPINNER[spinnerFrame]} reconnecting</Text>}
+        {connState === 'offline' && <Text color="red">  offline</Text>}
+      </Text>
+
+      {/* Connection banner */}
+      {connState !== 'connected' && connDetail && (
+        <Text color={connState === 'offline' ? 'red' : 'yellow'}>{connDetail}</Text>
+      )}
+
+      {/* Task input (only when activated with [n]) */}
+      {heroInputActive && (
+        <Box marginTop={1}>
+          <Text color="cyan">{'> '}</Text>
+          <TextInput
+            value={heroInput}
+            onChange={setHeroInput}
+            onSubmit={handleHeroSubmit}
+            placeholder="describe a task for an agent"
+          />
+        </Box>
+      )}
+
+      {/* Agents section */}
+      <Box flexDirection="column" marginTop={1}>
+        <Text bold>
+          {'agents'}
+          <Text dimColor>  {activeAgents.length} connected</Text>
+          {idleAgents.length > 0 && activeAgents.length > idleAgents.length && (
+            <Text dimColor>{' · '}{activeAgents.length - idleAgents.length} working</Text>
+          )}
         </Text>
-        <Text>
-          <Text dimColor>project: </Text>
-          <Text color="cyan" bold>{projectDisplayName}</Text>
-        </Text>
-        <Text>
-          <Text dimColor>directory: </Text>
-          <Text>{projectDisplayPath}</Text>
-        </Text>
-        <Text>
-          <Text dimColor>launcher: </Text>
-          <Text color={canLaunchSelectedTool ? 'cyan' : selectedLaunchTool ? 'yellow' : 'white'}>{launcherSummary}</Text>
-          {selectedLaunchTool && !canLaunchSelectedTool && selectedLaunchToolState?.detail ? (
-            <Text dimColor>  {selectedLaunchToolState.detail}</Text>
-          ) : null}
-        </Text>
-        {launcherChoices.length > 0 ? (
-          <Box flexWrap="wrap" paddingTop={1}>
-            {launcherChoices.map((tool, idx) => {
-              const state = getManagedToolState(tool.id).state;
-              const selected = selectedLaunchTool?.id === tool.id;
-              const ready = state === 'ready';
-              return (
-                <Box key={tool.id} marginRight={2}>
-                  <Text color={selected ? 'cyan' : ready ? 'white' : 'gray'} bold={selected || ready}>[{idx + 1}] {tool.name}</Text>
-                  {!ready ? <Text dimColor> unavailable</Text> : null}
-                </Box>
-              );
-            })}
-          </Box>
-        ) : null}
-        {composeMode === 'launch' && selectedLaunchTool ? (
-          canLaunchSelectedTool ? (
-            <Box flexDirection="column" paddingTop={1}>
-              <Box>
-                <Text color={mainFocus === 'launcher' ? 'cyan' : 'gray'}>{mainFocus === 'launcher' ? '› ' : '  '}</Text>
-                <Text color="cyan">{selectedLaunchTool.name}{'> '}</Text>
-                <TextInput
-                  value={composeText}
-                  onChange={setComposeText}
-                  onSubmit={onTaskLaunchSubmit}
-                  placeholder="Describe the task to delegate..."
-                />
-              </Box>
-              {launcherChoices.length > 1 ? (
-                <Text dimColor>Press [esc], then choose another launcher.</Text>
-              ) : null}
-            </Box>
-          ) : (
-            <Box flexDirection="column" paddingTop={1}>
-              <Text color="yellow">{selectedLaunchToolState?.detail || `${selectedLaunchTool.name} is not ready`}</Text>
-              <Text dimColor>
-                {launcherChoices.some(tool => getManagedToolState(tool.id).state === 'ready')
-                  ? 'Pick a ready launcher above, or press [f]/[u].'
-                  : 'Press [f] or [u] to make a launcher ready.'}
-              </Text>
-            </Box>
-          )
+        {allVisibleAgents.length === 0 ? (
+          <Text dimColor>  No agents connected. Start a tool in another terminal.</Text>
         ) : (
-          <Text>
-            <Text color={mainFocus === 'launcher' ? 'cyan' : 'gray'}>{mainFocus === 'launcher' ? '› ' : '  '}</Text>
-            <Text color={installedCliAgents.length > 0 ? 'cyan' : 'gray'} bold={installedCliAgents.length > 0}>[n]</Text>
-            <Text bold={mainFocus === 'launcher'}> new task</Text>
-            <Text dimColor>  {installedCliAgents.length > 0 ? 'start here' : 'no launchers configured'}</Text>
-          </Text>
-        )}
-      </Box>
-
-      {recentResult ? (
-        <Box paddingTop={1}>
-          <Text dimColor>Last result: {recentResult._display} · {getRecentResultSummary(recentResult)}</Text>
-        </Box>
-      ) : null}
-
-      {liveAgents.length === 0 ? (
-        <Box flexDirection="column" paddingTop={2}>
-          <Text dimColor>No live agents yet.</Text>
-          <Text dimColor>Agents started elsewhere appear here automatically.</Text>
-        </Box>
-      ) : (
-        <Box flexDirection="column" paddingTop={2}>
-          <Text>
-            <Text bold>live agents</Text>
-            <Text dimColor>  {liveAgents.length} live</Text>
-          </Text>
-          <Box flexDirection="column" paddingTop={1}>
+          <Box flexDirection="column" marginTop={1}>
             {visibleSessionRows.items.map((agent, idx) => {
               const absoluteIdx = visibleSessionRows.start + idx;
               const isSelected = absoluteIdx === selectedIdx;
               const intent = getAgentIntent(agent);
-              const origin = getAgentOriginLabel(agent);
+              const isDone = agent._dead;
+              const isFailed = agent._failed;
+              const statusIcon = isDone ? (isFailed ? '✗' : '✓') : '●';
+              const statusColor = isDone ? (isFailed ? 'red' : 'green') : (agent._managed ? 'green' : 'cyan');
+              const statusText = isDone
+                ? (isFailed ? 'failed' : (agent.outputPreview ? agent.outputPreview : 'done'))
+                : (intent || 'Idle');
+              const statusTextColor = isDone ? (isFailed ? 'red' : 'green') : getIntentColor(intent);
               return (
                 <Box key={agent.agent_id || agent.id} flexDirection="column" paddingBottom={1}>
                   <Text>
                     <Text color={isSelected && mainFocus === 'agents' ? 'cyan' : 'gray'}>{isSelected && mainFocus === 'agents' ? '› ' : '  '}</Text>
-                    <Text color={agent._managed ? 'green' : 'cyan'}>● </Text>
-                    <Text bold={isSelected && mainFocus === 'agents'}>{getAgentDisplayLabel(agent)}</Text>
-                  </Text>
-                  <Text>
-                    <Text dimColor>  {origin} · </Text>
-                    <Text color={getIntentColor(intent)} dimColor={getIntentColor(intent) === 'gray'}>{intent || 'Idle'}</Text>
+                    <Text color={statusColor}>{statusIcon} </Text>
+                    <Text bold={isSelected && mainFocus === 'agents'} dimColor={isDone}>{getAgentDisplayLabel(agent)}</Text>
+                    {agent._duration && <Text dimColor>  {agent._duration}</Text>}
+                    <Text dimColor>  </Text>
+                    <Text color={statusTextColor} dimColor={statusTextColor === 'gray'}>{statusText}</Text>
                   </Text>
                 </Box>
               );
             })}
           </Box>
+        )}
+      </Box>
+
+      {/* Notice line */}
+      <NoticeLine notice={notice} />
+
+      {/* Compose overlay (commands, messages, memory) */}
+      {isComposing && (
+        <Box paddingTop={1} flexDirection="column">
+          {inputBars}
         </Box>
       )}
 
-      <HintRow hints={mainActionHints} />
-      {overlayBar}
+      {/* Contextual hints — only when agent selected */}
+      <HintRow hints={contextHints} />
     </Box>
   );
-
-  // ── Empty state ──────────────────────────────────────
-
-  if (isEmpty) {
-    return mainPane;
-  }
 
   if (isMemoryView) {
     return (
       <Box flexDirection="column">
-        {dashboardRail}
         {renderSectionIntro('memory', 'Shared memory across your agents and teammates.', 'magenta')}
 
         <KnowledgePanel
@@ -1654,7 +1674,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   if (isSessionsView) {
     return (
       <Box flexDirection="column">
-        {dashboardRail}
         {renderSectionIntro('sessions', `${liveAgents.length} live session${liveAgents.length === 1 ? '' : 's'} across managed and connected agents.`, 'green')}
 
         <SessionsPanel
