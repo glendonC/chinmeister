@@ -375,24 +375,6 @@ export function waitForExit(id) {
 }
 
 /**
- * Write input data to a managed agent's pty (forward keyboard input).
- *
- * @param {number} id - Process ID
- * @param {string} data - Data to write (keystrokes, text)
- * @returns {boolean} Whether the write succeeded
- */
-export function writeInput(id, data) {
-  const proc = processes.get(id);
-  if (!proc || proc.status !== 'running' || !proc.pty) return false;
-  try {
-    proc.pty.write(data);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-/**
  * Resize a managed agent's pty.
  *
  * @param {number} id - Process ID

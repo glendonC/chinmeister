@@ -31,7 +31,7 @@ export function isBlocked(text) {
 // S8 (IP), S9 (indiscriminate weapons), S10 (hate), S11 (suicide/self-harm),
 // S12 (sexual content), S13 (elections), S14 (code interpreter abuse).
 // Returns { flagged, categories } or null if AI binding unavailable.
-export async function moderateWithAI(text, env) {
+async function moderateWithAI(text, env) {
   if (!env.AI) return null;
 
   try {

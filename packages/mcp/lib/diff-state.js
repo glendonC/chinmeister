@@ -2,13 +2,13 @@
 // Compares two snapshots of team context and returns human-readable event strings
 // for meaningful changes (new agents, file edits, conflicts, memories, locks, messages).
 
-export const STUCKNESS_THRESHOLD_MINUTES = 15;
+const STUCKNESS_THRESHOLD_MINUTES = 15;
 
-export function agentKey(m) {
+function agentKey(m) {
   return m.agent_id || m.handle;
 }
 
-export function agentLabel(m) {
+function agentLabel(m) {
   if (m.tool && m.tool !== 'unknown') return `${m.handle} (${m.tool})`;
   return m.handle;
 }

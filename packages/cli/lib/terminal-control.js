@@ -46,7 +46,7 @@ function sanitizeTitle(title) {
     .trim();
 }
 
-export function setTerminalTitle(title) {
+function setTerminalTitle(title) {
   if (!supportsAlternateScreen()) return;
   writeEscape(`\x1b]0;${sanitizeTitle(title)}\x07`);
 }

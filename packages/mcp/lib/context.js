@@ -41,10 +41,6 @@ export function getCachedContext() {
   return cachedContext;
 }
 
-export function getIsOffline() {
-  return isOffline;
-}
-
 export function clearContextCache() {
   cachedContext = null;
   cachedContextAt = 0;

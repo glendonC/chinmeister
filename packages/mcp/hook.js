@@ -11,7 +11,7 @@
 import { basename } from 'path';
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
-import { findTeamFile } from './lib/team.js';
+import { findTeamFile, teamHandlers } from './lib/team.js';
 import { resolveAgentIdentity } from './lib/lifecycle.js';
 
 const subcommand = process.argv[2];
@@ -30,16 +30,17 @@ async function main() {
   // Hooks are always Claude Code
   const { agentId, hasExactSession } = resolveAgentIdentity(config.token, 'claude-code');
   const client = api(config, { agentId });
+  const team = teamHandlers(client);
 
   switch (subcommand) {
     case 'check-conflict':
-      await checkConflict(client, teamId, input);
+      await checkConflict(team, teamId, input);
       break;
     case 'report-edit':
-      await reportEdit(client, teamId, input);
+      await reportEdit(team, teamId, input);
       break;
     case 'session-start':
-      await sessionStart(client, teamId, hasExactSession);
+      await sessionStart(team, teamId, hasExactSession);
       break;
     default:
       console.error(`[chinwag] Unknown hook subcommand: ${subcommand}`);
@@ -49,14 +50,12 @@ async function main() {
 
 // --- Hook handlers ---
 
-async function checkConflict(client, teamId, input) {
+async function checkConflict(team, teamId, input) {
   const filePath = input?.tool_input?.file_path;
   if (!filePath) process.exit(0);
 
   try {
-    const result = await client.post(`/teams/${teamId}/conflicts`, {
-      files: [filePath],
-    });
+    const result = await team.checkConflicts(teamId, [filePath]);
 
     const issues = [];
 
@@ -87,15 +86,15 @@ async function checkConflict(client, teamId, input) {
   }
 }
 
-async function reportEdit(client, teamId, input) {
+async function reportEdit(team, teamId, input) {
   const filePath = input?.tool_input?.file_path;
   if (!filePath) process.exit(0);
 
   try {
     // Update current activity + record in session history (parallel)
     await Promise.all([
-      client.post(`/teams/${teamId}/file`, { file: filePath }),
-      client.post(`/teams/${teamId}/sessionedit`, { file: filePath }),
+      team.reportFile(teamId, filePath),
+      team.recordEdit(teamId, filePath),
     ]);
   } catch (err) {
     console.error(`[chinwag] Activity report failed: ${err.message}`);
@@ -104,15 +103,15 @@ async function reportEdit(client, teamId, input) {
   process.exit(0);
 }
 
-async function sessionStart(client, teamId, hasExactSession) {
+async function sessionStart(team, teamId, hasExactSession) {
   try {
     // Avoid creating duplicate base-ID memberships when the exact MCP session
     // has not registered its per-process agent id yet.
     if (hasExactSession) {
-      await client.post(`/teams/${teamId}/join`, { name: basename(process.cwd()) });
+      await team.joinTeam(teamId, basename(process.cwd()));
     }
 
-    const ctx = await client.get(`/teams/${teamId}/context`);
+    const ctx = await team.getTeamContext(teamId);
 
     if (ctx.members && ctx.members.length > 0) {
       console.log('=== chinwag team context ===');

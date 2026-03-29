@@ -3,7 +3,7 @@ import { join, dirname } from 'path';
 
 const TEAM_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
-export function isValidTeamId(id) {
+function isValidTeamId(id) {
   return typeof id === 'string' && id.length > 0 && id.length <= 30 && TEAM_ID_PATTERN.test(id);
 }
 
@@ -33,10 +33,6 @@ export function teamHandlers(client) {
   function validateTeam(teamId) {
     if (!teamId || !isValidTeamId(teamId)) throw new Error('Invalid or missing team ID');
   }
-
-  // ── Full API surface ─────────────────────────────────────────────
-  // Client wrappers for all team endpoints. Not all are called by
-  // current MCP tools/hooks/channels — kept for future features.
 
   return {
     async joinTeam(teamId, name = null) {
@@ -112,22 +108,11 @@ export function teamHandlers(client) {
       return client.del(`/teams/${teamId}/locks`, files ? { files } : {});
     },
 
-    async getLockedFiles(teamId) {
-      validateTeam(teamId);
-      return client.get(`/teams/${teamId}/locks`);
-    },
-
     async sendMessage(teamId, text, target) {
       validateTeam(teamId);
       const body = { text };
       if (target) body.target = target;
       return client.post(`/teams/${teamId}/messages`, body);
-    },
-
-    async getMessages(teamId, since) {
-      validateTeam(teamId);
-      const qs = since ? `?since=${encodeURIComponent(since)}` : '';
-      return client.get(`/teams/${teamId}/messages${qs}`);
     },
 
     async startSession(teamId, framework) {
@@ -143,11 +128,6 @@ export function teamHandlers(client) {
     async recordEdit(teamId, file) {
       validateTeam(teamId);
       return client.post(`/teams/${teamId}/sessionedit`, { file });
-    },
-
-    async getHistory(teamId, days = 7) {
-      validateTeam(teamId);
-      return client.get(`/teams/${teamId}/history?days=${days}`);
     },
   };
 }

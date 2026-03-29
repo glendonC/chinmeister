@@ -41,7 +41,7 @@ cd chinwag
 npm install
 ```
 
-This installs the root workspace dependencies for `packages/cli`, `packages/worker`, and `packages/mcp`.
+This installs the root workspace dependencies for `packages/cli`, `packages/worker`, `packages/mcp`, and `packages/shared`.
 
 If you are working on the web dashboard, install its dependencies separately:
 
@@ -81,7 +81,7 @@ VITE_CHINWAG_API_URL=http://localhost:8787 npm run dev --workspace=packages/web
 
 ## Project structure
 
-chinwag is a monorepo with four packages:
+chinwag is a monorepo with five packages:
 
 ```
 packages/
@@ -96,13 +96,19 @@ packages/
     lib/
       init-command.js   chinwag init: account, team, tool detection, config writing
       add-command.js    chinwag add: adds MCP config, fetches catalog from API
-      tools.js          MCP tool registry (8 tools chinwag configures)
+      tools.js          CLI re-export of the shared MCP tool registry
       mcp-config.js     Tool detection and config file writing
       dashboard.jsx     Agent activity dashboard
       discover.jsx      Tool discovery screen (fetches catalog from API)
-      home.jsx, chat.jsx, customize.jsx   Other screens
+      chat.jsx, customize.jsx             Other screens
       api.js            HTTP client with timeout + retry
     dist/         Build output (gitignored)
+
+  shared/       Shared infrastructure primitives
+    tool-registry.js   Canonical MCP-configurable tool definitions
+    agent-identity.js  Tool detection and agent/session ID helpers
+    api-client.js      Shared JSON API client factory
+    session-registry.js Terminal/session helpers used across surfaces
 
   worker/       Cloudflare Workers backend
     src/
@@ -206,7 +212,7 @@ npm run test
 
 - Built with [Ink](https://github.com/vadimdemedes/ink) (React for terminals)
 - Bundled with esbuild to `dist/cli.js`
-- Screen components are in `lib/`. Each screen is a React component receiving `navigate`, `user`, and `config` props.
+- Screen components are in `lib/`. The dashboard is the primary control surface; other screens receive `navigate`, `user`, and `config` props as needed.
 - Colors are mapped in `lib/colors.js`. Use `getInkColor()` for Ink components.
 - Config lives at `~/.chinwag/config.json`. Use `lib/config.js` helpers; never write directly.
 

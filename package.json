@@ -4,7 +4,8 @@
   "workspaces": [
     "packages/cli",
     "packages/worker",
-    "packages/mcp"
+    "packages/mcp",
+    "packages/shared"
   ],
   "scripts": {
     "build:vscode": "esbuild packages/vscode/extension.js --bundle --platform=node --format=cjs --outfile=packages/vscode/dist/extension.js --external:vscode",

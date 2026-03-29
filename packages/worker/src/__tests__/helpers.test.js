@@ -4,7 +4,7 @@ import { describe, it, expect, vi } from 'vitest';
 vi.mock('cloudflare:workers', () => ({ DurableObject: class {} }));
 
 import { parseTeamPath, getToolFromAgentId, sanitizeTags, teamErrorStatus } from '../index.js';
-import { normalizePath } from '../team.js';
+import { normalizePath } from '../lib/text-utils.js';
 
 // --- parseTeamPath ---
 
