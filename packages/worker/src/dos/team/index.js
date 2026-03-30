@@ -1,0 +1,551 @@
+// Team Durable Object — one instance per team.
+// Manages team membership, activity tracking, file conflict detection,
+// shared project memory, and session history (observability).
+//
+// Business logic is split into submodules; this file owns the class shell,
+// schema, cleanup, identity resolution, and the two composite queries
+// (getContext / getSummary) that touch every table.
+
+import { DurableObject } from 'cloudflare:workers';
+import { join, leave, heartbeat as heartbeatFn } from './membership.js';
+import { updateActivity as updateActivityFn, checkConflicts as checkConflictsFn, reportFile as reportFileFn } from './activity.js';
+import { saveMemory as saveMemoryFn, searchMemories as searchMemoriesFn, updateMemory as updateMemoryFn, deleteMemory as deleteMemoryFn } from './memory.js';
+import { claimFiles as claimFilesFn, releaseFiles as releaseFilesFn, getLockedFiles as getLockedFilesFn } from './locks.js';
+import { startSession as startSessionFn, endSession as endSessionFn, recordEdit as recordEditFn, getSessionHistory } from './sessions.js';
+import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
+
+// --- Tuning constants ---
+const HEARTBEAT_ACTIVE_SECONDS = 60;    // Heartbeat within this window = "active"
+const HEARTBEAT_STALE_SECONDS = 300;    // No heartbeat for this long = evicted
+const SESSION_RETENTION_DAYS = 30;      // How long session history is kept
+
+export class TeamDO extends DurableObject {
+  #schemaReady = false;
+  #lastCleanup = 0;
+
+  constructor(ctx, env) {
+    super(ctx, env);
+    this.sql = ctx.storage.sql;
+  }
+
+  #ensureSchema() {
+    if (this.#schemaReady) return;
+
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS members (
+        agent_id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        owner_handle TEXT NOT NULL,
+        tool TEXT DEFAULT 'unknown',
+        joined_at TEXT DEFAULT (datetime('now')),
+        last_heartbeat TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS activities (
+        agent_id TEXT PRIMARY KEY,
+        files TEXT NOT NULL DEFAULT '[]',
+        summary TEXT NOT NULL DEFAULT '',
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        tags TEXT DEFAULT '[]',
+        source_agent TEXT NOT NULL,
+        source_handle TEXT,
+        source_tool TEXT DEFAULT 'unknown',
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        owner_handle TEXT NOT NULL,
+        framework TEXT DEFAULT 'unknown',
+        started_at TEXT DEFAULT (datetime('now')),
+        ended_at TEXT,
+        edit_count INTEGER DEFAULT 0,
+        files_touched TEXT DEFAULT '[]',
+        conflicts_hit INTEGER DEFAULT 0,
+        memories_saved INTEGER DEFAULT 0
+      );
+    `);
+
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS locks (
+        file_path TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        owner_handle TEXT NOT NULL,
+        tool TEXT DEFAULT 'unknown',
+        claimed_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        from_agent TEXT NOT NULL,
+        from_handle TEXT NOT NULL,
+        from_tool TEXT DEFAULT 'unknown',
+        target_agent TEXT,
+        text TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    this.sql.exec(`
+      CREATE TABLE IF NOT EXISTS telemetry (
+        metric TEXT PRIMARY KEY,
+        count INTEGER DEFAULT 0,
+        last_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
+
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_locks_agent ON locks(agent_id)');
+    this.sql.exec('CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at)');
+
+    this.#schemaReady = true;
+  }
+
+  // Evict stale members and prune old sessions — at most once per minute.
+  // Keeps getContext fast when polled frequently by channels/dashboards.
+  #maybeCleanup() {
+    const now = Date.now();
+    if (now - this.#lastCleanup < 60_000) return;
+    this.#lastCleanup = now;
+
+    this.sql.exec(
+      `DELETE FROM activities WHERE agent_id IN (
+        SELECT agent_id FROM members
+        WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
+      )`,
+      HEARTBEAT_STALE_SECONDS
+    );
+    this.sql.exec(
+      `DELETE FROM members WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_STALE_SECONDS
+    );
+    this.sql.exec(
+      `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
+      SESSION_RETENTION_DAYS
+    );
+    // Expire messages older than 1 hour
+    this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')");
+    // Auto-release locks for stale agents
+    this.sql.exec(
+      `DELETE FROM locks WHERE agent_id NOT IN (
+        SELECT agent_id FROM members
+        WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+      )`,
+      HEARTBEAT_STALE_SECONDS
+    );
+    // Auto-close orphaned sessions (agent stopped heartbeating)
+    this.sql.exec(
+      `UPDATE sessions SET ended_at = datetime('now')
+       WHERE ended_at IS NULL
+       AND agent_id NOT IN (
+         SELECT agent_id FROM members
+         WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+       )`,
+      HEARTBEAT_STALE_SECONDS
+    );
+  }
+
+  #recordMetric(metric) {
+    this.sql.exec(
+      `INSERT INTO telemetry (metric, count, last_at) VALUES (?, 1, datetime('now'))
+       ON CONFLICT(metric) DO UPDATE SET count = count + 1, last_at = datetime('now')`,
+      metric
+    );
+  }
+
+  #findExactMember(agentId) {
+    const rows = this.sql.exec(
+      'SELECT agent_id, owner_id FROM members WHERE agent_id = ?',
+      agentId
+    ).toArray();
+    return rows[0] || null;
+  }
+
+  #findPrefixedMember(agentId) {
+    const rows = this.sql.exec(
+      "SELECT agent_id, owner_id FROM members WHERE agent_id LIKE ? || ':%' ORDER BY last_heartbeat DESC LIMIT 1",
+      agentId
+    ).toArray();
+    return rows[0] || null;
+  }
+
+  #findLatestMemberForOwner(ownerId) {
+    const rows = this.sql.exec(
+      "SELECT agent_id, owner_id FROM members WHERE owner_id = ? ORDER BY last_heartbeat DESC LIMIT 1",
+      ownerId
+    ).toArray();
+    return rows[0] || null;
+  }
+
+  #resolveOwnedAgentId(agentId, ownerId = null) {
+    const exact = this.#findExactMember(agentId);
+    if (exact) {
+      return !ownerId || exact.owner_id === ownerId ? exact.agent_id : null;
+    }
+
+    const prefixed = this.#findPrefixedMember(agentId);
+    if (prefixed) {
+      return !ownerId || prefixed.owner_id === ownerId ? prefixed.agent_id : null;
+    }
+
+    // Legacy callers may still send the authenticated user id instead of X-Agent-Id.
+    if (ownerId && agentId === ownerId) {
+      const latest = this.#findLatestMemberForOwner(ownerId);
+      return latest?.agent_id || null;
+    }
+
+    return null;
+  }
+
+  #isMember(agentId, ownerId = null) {
+    return Boolean(this.#resolveOwnedAgentId(agentId, ownerId));
+  }
+
+  // --- Bound helper for submodules that need to record telemetry ---
+  #boundRecordMetric = (metric) => this.#recordMetric(metric);
+
+  // --- Membership ---
+
+  async join(agentId, ownerId, ownerHandle, tool = 'unknown') {
+    this.#ensureSchema();
+    return join(this.sql, agentId, ownerId, ownerHandle, tool, this.#boundRecordMetric);
+  }
+
+  async leave(agentId, ownerId = null) {
+    this.#ensureSchema();
+    return leave(this.sql, agentId, ownerId);
+  }
+
+  async heartbeat(agentId, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return heartbeatFn(this.sql, resolved);
+  }
+
+  // --- Activity ---
+
+  async updateActivity(agentId, files, summary, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return updateActivityFn(this.sql, resolved, files, summary);
+  }
+
+  async checkConflicts(agentId, files, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return checkConflictsFn(this.sql, resolved, files, this.#boundRecordMetric);
+  }
+
+  async reportFile(agentId, filePath, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return reportFileFn(this.sql, resolved, filePath);
+  }
+
+  // --- Context (composite query across all tables) ---
+
+  async getContext(agentId, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+
+    this.#maybeCleanup();
+
+    const members = this.sql.exec(
+      `SELECT m.agent_id, m.owner_handle, m.tool, a.files, a.summary, a.updated_at,
+              s.framework, s.started_at as session_started,
+              ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
+              ROUND((julianday('now') - julianday(a.updated_at)) * 1440) as minutes_since_update,
+              CASE WHEN m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
+                THEN 'active' ELSE 'offline' END as status
+       FROM members m
+       LEFT JOIN activities a ON a.agent_id = m.agent_id
+       LEFT JOIN sessions s ON s.agent_id = m.agent_id AND s.ended_at IS NULL`,
+      HEARTBEAT_ACTIVE_SECONDS
+    ).toArray();
+
+    const memories = this.sql.exec(
+      `SELECT id, text, tags, source_handle, source_tool, created_at, updated_at
+       FROM memories
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT 20`
+    ).toArray().map(m => ({ ...m, tags: JSON.parse(m.tags || '[]') }));
+
+    const recentSessions = this.sql.exec(`
+      SELECT agent_id, owner_handle, framework, started_at, ended_at,
+             edit_count, files_touched, conflicts_hit, memories_saved,
+             ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
+      FROM sessions
+      WHERE started_at > datetime('now', '-24 hours')
+      ORDER BY started_at DESC
+      LIMIT 20
+    `).toArray();
+
+    const memberList = members.map(m => ({
+      agent_id: m.agent_id,
+      handle: m.owner_handle,
+      tool: m.tool || 'unknown',
+      status: m.status,
+      framework: m.framework || null,
+      session_minutes: m.session_minutes || null,
+      minutes_since_update: m.minutes_since_update ?? null,
+      activity: m.files ? {
+        files: JSON.parse(m.files),
+        summary: m.summary,
+        updated_at: m.updated_at,
+      } : null,
+    }));
+
+    // Server-side conflict detection — single source of truth
+    const conflicts = [];
+    const fileOwners = new Map();
+    for (const m of memberList) {
+      if (m.status !== 'active' || !m.activity?.files) continue;
+      for (const f of m.activity.files) {
+        if (!fileOwners.has(f)) fileOwners.set(f, []);
+        fileOwners.get(f).push({ handle: m.handle, tool: m.tool });
+      }
+    }
+    for (const [file, owners] of fileOwners) {
+      if (owners.length > 1) {
+        conflicts.push({
+          file,
+          agents: owners.map(o => o.tool !== 'unknown' ? `${o.handle} (${o.tool})` : o.handle),
+        });
+      }
+    }
+
+    // Active file locks
+    const locks = this.sql.exec(
+      `SELECT l.file_path, l.owner_handle, l.tool,
+              ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
+       FROM locks l
+       JOIN members m ON m.agent_id = l.agent_id
+       WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_ACTIVE_SECONDS
+    ).toArray();
+
+    // Recent messages (last 10 within the hour, visible to this agent)
+    const messages = this.sql.exec(
+      `SELECT from_handle, from_tool, text, created_at
+       FROM messages
+       WHERE created_at > datetime('now', '-1 hour')
+         AND (target_agent IS NULL OR target_agent = ?)
+       ORDER BY created_at DESC LIMIT 10`,
+      resolved
+    ).toArray();
+
+    // Telemetry — tool usage breakdown + key metrics
+    const toolMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const tools_configured = toolMetrics.map(t => ({
+      tool: t.metric.replace('tool:', ''),
+      joins: t.count,
+    }));
+
+    const keyMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
+    ).toArray();
+    const usage = {};
+    for (const m of keyMetrics) usage[m.metric] = m.count;
+
+    return {
+      members: memberList,
+      conflicts,
+      locks,
+      memories,
+      messages,
+      tools_configured,
+      usage,
+      recentSessions: recentSessions.map(s => {
+        // Parse tool name from agent_id (format: "tool:hash")
+        const toolFromAgent = s.agent_id?.includes(':') ? s.agent_id.split(':')[0] : null;
+        return {
+          ...s,
+          tool: toolFromAgent && toolFromAgent !== 'unknown' ? toolFromAgent : null,
+          files_touched: JSON.parse(s.files_touched || '[]'),
+        };
+      }),
+    };
+  }
+
+  // --- Sessions (observability) ---
+
+  async startSession(agentId, handle, framework, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return startSessionFn(this.sql, resolved, handle, framework);
+  }
+
+  async endSession(agentId, sessionId, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return endSessionFn(this.sql, resolved, sessionId);
+  }
+
+  async recordEdit(agentId, filePath, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return recordEditFn(this.sql, resolved, filePath);
+  }
+
+  async getHistory(agentId, days, ownerId = null) {
+    this.#ensureSchema();
+    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team' };
+    return getSessionHistory(this.sql, days);
+  }
+
+  // --- Memory ---
+
+  async saveMemory(agentId, text, tags, handle, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return saveMemoryFn(this.sql, resolved, text, tags, handle, this.#boundRecordMetric);
+  }
+
+  async searchMemories(agentId, query, tags, limit = 20, ownerId = null) {
+    this.#ensureSchema();
+    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team' };
+    return searchMemoriesFn(this.sql, query, tags, limit);
+  }
+
+  async updateMemory(agentId, memoryId, text, tags, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return updateMemoryFn(this.sql, resolved, memoryId, text, tags);
+  }
+
+  async deleteMemory(agentId, memoryId, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return deleteMemoryFn(this.sql, memoryId);
+  }
+
+  // --- File Locks ---
+
+  async claimFiles(agentId, files, handle, tool, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return claimFilesFn(this.sql, resolved, files, handle, tool);
+  }
+
+  async releaseFiles(agentId, files, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return releaseFilesFn(this.sql, resolved, files);
+  }
+
+  async getLockedFiles(agentId, ownerId = null) {
+    this.#ensureSchema();
+    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team' };
+    return getLockedFilesFn(this.sql);
+  }
+
+  // --- Messages ---
+
+  async sendMessage(agentId, handle, tool, text, targetAgent, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return sendMessageFn(this.sql, resolved, handle, tool, text, targetAgent, this.#boundRecordMetric);
+  }
+
+  async getMessages(agentId, since, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return getMessagesFn(this.sql, resolved, since);
+  }
+
+  // --- Summary (lightweight, for cross-project dashboard) ---
+
+  async getSummary(agentId, ownerId = null) {
+    this.#ensureSchema();
+    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team' };
+    this.#maybeCleanup();
+
+    const active = this.sql.exec(
+      `SELECT COUNT(*) as c FROM members
+       WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_ACTIVE_SECONDS
+    ).toArray();
+
+    const total = this.sql.exec('SELECT COUNT(*) as c FROM members').toArray();
+
+    // Conflict count: files claimed by 2+ active agents
+    const activities = this.sql.exec(
+      `SELECT a.files FROM activities a
+       JOIN members m ON m.agent_id = a.agent_id
+       WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+      HEARTBEAT_ACTIVE_SECONDS
+    ).toArray();
+
+    const fileCounts = new Map();
+    for (const row of activities) {
+      if (!row.files) continue;
+      for (const f of JSON.parse(row.files)) {
+        fileCounts.set(f, (fileCounts.get(f) || 0) + 1);
+      }
+    }
+    const conflictCount = [...fileCounts.values()].filter(c => c > 1).length;
+
+    const memoriesCount = this.sql.exec('SELECT COUNT(*) as c FROM memories').toArray();
+    const live = this.sql.exec('SELECT COUNT(*) as c FROM sessions WHERE ended_at IS NULL').toArray();
+    const recent = this.sql.exec(
+      "SELECT COUNT(*) as c FROM sessions WHERE started_at > datetime('now', '-24 hours')"
+    ).toArray();
+
+    // Telemetry — tool usage breakdown
+    const toolMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const tools_configured = toolMetrics.map(t => ({
+      tool: t.metric.replace('tool:', ''),
+      joins: t.count,
+    }));
+
+    const keyMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
+    ).toArray();
+    const usage = {};
+    for (const m of keyMetrics) usage[m.metric] = m.count;
+
+    return {
+      active_agents: active[0]?.c || 0,
+      total_members: total[0]?.c || 0,
+      conflict_count: conflictCount,
+      memory_count: memoriesCount[0]?.c || 0,
+      live_sessions: live[0]?.c || 0,
+      recent_sessions_24h: recent[0]?.c || 0,
+      tools_configured,
+      usage,
+    };
+  }
+}
+
+// Re-export path utility for consumers
+export { normalizePath } from '../../lib/text-utils.js';

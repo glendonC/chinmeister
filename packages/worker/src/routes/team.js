@@ -2,6 +2,7 @@ import { isBlocked } from '../moderation.js';
 import { getDB, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
 import { getAgentId, getToolFromAgentId, teamErrorStatus } from '../lib/request-utils.js';
+import { requireJson, validateFileArray, validateTagsArray, withRateLimit } from '../lib/validation.js';
 
 export async function handleTeamJoin(request, user, env, teamId) {
   let name = null;
@@ -60,11 +61,13 @@ export async function handleTeamContext(request, user, env, teamId) {
 
 export async function handleTeamActivity(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { files, summary } = body;
-  if (!Array.isArray(files) || files.length === 0) return json({ error: 'files must be a non-empty array' }, 400);
-  if (files.length > 50) return json({ error: 'too many files (max 50)' }, 400);
-  if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
+  const fileErr = validateFileArray(files, 50);
+  if (fileErr) return json({ error: fileErr }, 400);
+
   if (typeof summary !== 'string') return json({ error: 'summary must be a string' }, 400);
   if (summary.length > 280) return json({ error: 'summary must be 280 characters or less' }, 400);
   if (summary && isBlocked(summary)) return json({ error: 'Content blocked' }, 400);
@@ -78,11 +81,12 @@ export async function handleTeamActivity(request, user, env, teamId) {
 
 export async function handleTeamConflicts(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { files } = body;
-  if (!Array.isArray(files) || files.length === 0) return json({ error: 'files must be a non-empty array' }, 400);
-  if (files.length > 50) return json({ error: 'too many files (max 50)' }, 400);
-  if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
+  const fileErr = validateFileArray(files, 50);
+  if (fileErr) return json({ error: fileErr }, 400);
 
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
@@ -101,7 +105,9 @@ export async function handleTeamHeartbeat(request, user, env, teamId) {
 
 export async function handleTeamFile(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
     return json({ error: 'file must be a non-empty string' }, 400);
@@ -111,22 +117,22 @@ export async function handleTeamFile(request, user, env, teamId) {
   }
 
   const db = getDB(env);
-  const fileLimit = await db.checkRateLimit(`file:${user.id}`, 500);
-  if (!fileLimit.allowed) return json({ error: 'File report limit reached (500/day). Try again tomorrow.' }, 429);
-
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.reportFile(agentId, file, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
-  await db.consumeRateLimit(`file:${user.id}`);
-  return json(result);
+
+  return withRateLimit(db, `file:${user.id}`, 500, 'File report limit reached (500/day). Try again tomorrow.', async () => {
+    const result = await team.reportFile(agentId, file, user.id);
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    return json(result);
+  });
 }
 
 export async function handleTeamSaveMemory(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { text } = body;
-  let tags = body.tags;
   if (typeof text !== 'string' || !text.trim()) {
     return json({ error: 'text is required' }, 400);
   }
@@ -134,31 +140,20 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
     return json({ error: 'text must be 2000 characters or less' }, 400);
   }
   if (isBlocked(text)) return json({ error: 'Content blocked' }, 400);
-  // Validate tags shape
-  if (tags !== undefined && tags !== null) {
-    if (!Array.isArray(tags)) return json({ error: 'tags must be an array of strings' }, 400);
-    if (tags.length > 10) return json({ error: 'max 10 tags' }, 400);
-    if (tags.some(t => typeof t !== 'string' || t.length > 50)) {
-      return json({ error: 'each tag must be a string of 50 chars or less' }, 400);
-    }
-    tags = tags.map(t => t.toLowerCase().trim()).filter(Boolean);
-  } else {
-    tags = [];
-  }
+
+  const tagsResult = validateTagsArray(body.tags, 10);
+  if (tagsResult.error) return json({ error: tagsResult.error }, 400);
+  const tags = tagsResult.tags;
 
   const db = getDB(env);
-  const memLimit = await db.checkRateLimit(`memory:${user.id}`, 20);
-  if (!memLimit.allowed) {
-    return json({ error: 'Memory save limit reached (20/day). Try again tomorrow.' }, 429);
-  }
-
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.saveMemory(agentId, text.trim(), tags, user.handle, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
 
-  await db.consumeRateLimit(`memory:${user.id}`);
-  return json(result, 201);
+  return withRateLimit(db, `memory:${user.id}`, 20, 'Memory save limit reached (20/day). Try again tomorrow.', async () => {
+    const result = await team.saveMemory(agentId, text.trim(), tags, user.handle, user.id);
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    return json(result, 201);
+  });
 }
 
 export async function handleTeamSearchMemory(request, user, env, teamId) {
@@ -181,9 +176,10 @@ export async function handleTeamSearchMemory(request, user, env, teamId) {
 
 export async function handleTeamUpdateMemory(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { id, text } = body;
-  let tags = body.tags;
   if (typeof id !== 'string' || !id.trim()) {
     return json({ error: 'id is required' }, 400);
   }
@@ -193,14 +189,14 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
   if (text !== undefined && text.length > 2000) {
     return json({ error: 'text must be 2000 characters or less' }, 400);
   }
+
+  let tags = body.tags;
   if (tags !== undefined) {
-    if (!Array.isArray(tags)) return json({ error: 'tags must be an array of strings' }, 400);
-    if (tags.length > 10) return json({ error: 'max 10 tags' }, 400);
-    if (tags.some(t => typeof t !== 'string' || t.length > 50)) {
-      return json({ error: 'each tag must be a string of 50 chars or less' }, 400);
-    }
-    tags = tags.map(t => t.toLowerCase().trim()).filter(Boolean);
+    const tagsResult = validateTagsArray(tags, 10);
+    if (tagsResult.error) return json({ error: tagsResult.error }, 400);
+    tags = tagsResult.tags;
   }
+
   if (text === undefined && tags === undefined) {
     return json({ error: 'text or tags required' }, 400);
   }
@@ -222,7 +218,9 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
 
 export async function handleTeamDeleteMemory(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { id } = body;
   if (typeof id !== 'string' || !id.trim()) {
     return json({ error: 'id is required' }, 400);
@@ -245,28 +243,30 @@ export async function handleTeamDeleteMemory(request, user, env, teamId) {
 
 export async function handleTeamClaimFiles(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { files } = body;
-  if (!Array.isArray(files) || files.length === 0) return json({ error: 'files must be a non-empty array' }, 400);
-  if (files.length > 20) return json({ error: 'too many files (max 20)' }, 400);
-  if (files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
+  const fileErr = validateFileArray(files, 20);
+  if (fileErr) return json({ error: fileErr }, 400);
 
   const db = getDB(env);
-  const lockLimit = await db.checkRateLimit(`locks:${user.id}`, 100);
-  if (!lockLimit.allowed) return json({ error: 'Lock claim limit reached (100/day). Try again tomorrow.' }, 429);
-
   const agentId = getAgentId(request, user);
   const tool = getToolFromAgentId(agentId);
   const team = getTeam(env, teamId);
-  const result = await team.claimFiles(agentId, files, user.handle, tool, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
-  await db.consumeRateLimit(`locks:${user.id}`);
-  return json(result);
+
+  return withRateLimit(db, `locks:${user.id}`, 100, 'Lock claim limit reached (100/day). Try again tomorrow.', async () => {
+    const result = await team.claimFiles(agentId, files, user.handle, tool, user.id);
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    return json(result);
+  });
 }
 
 export async function handleTeamReleaseFiles(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const files = body.files || null;
   if (files !== null && !Array.isArray(files)) return json({ error: 'files must be an array' }, 400);
   if (files && files.some(f => typeof f !== 'string' || f.length > 500)) return json({ error: 'invalid file path' }, 400);
@@ -288,7 +288,9 @@ export async function handleTeamGetLocks(request, user, env, teamId) {
 
 export async function handleTeamSendMessage(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { text, target } = body;
   if (typeof text !== 'string' || !text.trim()) return json({ error: 'text is required' }, 400);
   if (text.length > 500) return json({ error: 'text must be 500 characters or less' }, 400);
@@ -296,16 +298,15 @@ export async function handleTeamSendMessage(request, user, env, teamId) {
   if (target !== undefined && typeof target !== 'string') return json({ error: 'target must be a string' }, 400);
 
   const db = getDB(env);
-  const msgLimit = await db.checkRateLimit(`messages:${user.id}`, 200);
-  if (!msgLimit.allowed) return json({ error: 'Message limit reached (200/day). Try again tomorrow.' }, 429);
-
   const agentId = getAgentId(request, user);
   const tool = getToolFromAgentId(agentId);
   const team = getTeam(env, teamId);
-  const result = await team.sendMessage(agentId, user.handle, tool, text.trim(), target || null, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
-  await db.consumeRateLimit(`messages:${user.id}`);
-  return json(result, 201);
+
+  return withRateLimit(db, `messages:${user.id}`, 200, 'Message limit reached (200/day). Try again tomorrow.', async () => {
+    const result = await team.sendMessage(agentId, user.handle, tool, text.trim(), target || null, user.id);
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    return json(result, 201);
+  });
 }
 
 export async function handleTeamGetMessages(request, user, env, teamId) {
@@ -321,25 +322,27 @@ export async function handleTeamGetMessages(request, user, env, teamId) {
 
 export async function handleTeamStartSession(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const framework = typeof body.framework === 'string' ? body.framework.slice(0, 50) : 'unknown';
 
   const db = getDB(env);
-  const limit = await db.checkRateLimit(`session:${user.id}`, 50);
-  if (!limit.allowed) return json({ error: 'Session limit reached. Try again tomorrow.' }, 429);
-
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.startSession(agentId, user.handle, framework, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
 
-  await db.consumeRateLimit(`session:${user.id}`);
-  return json(result, 201);
+  return withRateLimit(db, `session:${user.id}`, 50, 'Session limit reached. Try again tomorrow.', async () => {
+    const result = await team.startSession(agentId, user.handle, framework, user.id);
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    return json(result, 201);
+  });
 }
 
 export async function handleTeamEndSession(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { session_id } = body;
   if (typeof session_id !== 'string') {
     return json({ error: 'session_id is required' }, 400);
@@ -354,7 +357,9 @@ export async function handleTeamEndSession(request, user, env, teamId) {
 
 export async function handleTeamSessionEdit(request, user, env, teamId) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
     return json({ error: 'file is required' }, 400);
@@ -362,15 +367,14 @@ export async function handleTeamSessionEdit(request, user, env, teamId) {
   if (file.length > 500) return json({ error: 'file path too long' }, 400);
 
   const db = getDB(env);
-  const editLimit = await db.checkRateLimit(`edit:${user.id}`, 1000);
-  if (!editLimit.allowed) return json({ error: 'Edit recording limit reached. Try again tomorrow.' }, 429);
-
   const agentId = getAgentId(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.recordEdit(agentId, file, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
-  await db.consumeRateLimit(`edit:${user.id}`);
-  return json(result);
+
+  return withRateLimit(db, `edit:${user.id}`, 1000, 'Edit recording limit reached. Try again tomorrow.', async () => {
+    const result = await team.recordEdit(agentId, file, user.id);
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    return json(result);
+  });
 }
 
 export async function handleTeamHistory(request, user, env, teamId) {

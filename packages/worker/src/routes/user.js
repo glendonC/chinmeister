@@ -2,6 +2,7 @@ import { checkContent } from '../moderation.js';
 import { getDB, getLobby, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
 import { getAgentId, getToolFromAgentId, sanitizeTags } from '../lib/request-utils.js';
+import { requireJson, withRateLimit } from '../lib/validation.js';
 
 export async function authenticate(request, env) {
   const auth = request.headers.get('Authorization');
@@ -24,7 +25,9 @@ export async function authenticate(request, env) {
 
 export async function handleUpdateHandle(request, user, env) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { handle } = body;
   if (!handle || typeof handle !== 'string') {
     return json({ error: 'Handle is required' }, 400);
@@ -40,7 +43,9 @@ export async function handleUpdateHandle(request, user, env) {
 
 export async function handleUpdateColor(request, user, env) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { color } = body;
   if (!color || typeof color !== 'string') {
     return json({ error: 'Color is required' }, 400);
@@ -56,7 +61,9 @@ export async function handleUpdateColor(request, user, env) {
 
 export async function handleSetStatus(request, user, env) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
   const { status } = body;
   if (!status || typeof status !== 'string') {
     return json({ error: 'Status is required' }, 400);
@@ -86,7 +93,8 @@ export async function handleHeartbeat(user, env) {
 
 export async function handleUpdateAgentProfile(request, user, env) {
   const body = await parseBody(request);
-  if (body._parseError) return json({ error: body._parseError }, 400);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
 
   const profile = {
     framework: typeof body.framework === 'string' ? body.framework.slice(0, 50) : null,
@@ -227,23 +235,20 @@ export async function handleCreateTeam(request, user, env) {
   } catch {}
 
   const db = getDB(env);
-  const limit = await db.checkRateLimit(`team:${user.id}`, 5);
-  if (!limit.allowed) {
-    return json({ error: 'Team creation limit reached. Try again tomorrow.' }, 429);
-  }
 
-  const agentId = getAgentId(request, user);
-  const tool = getToolFromAgentId(agentId);
-  const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-  const team = getTeam(env, teamId);
-  await team.join(agentId, user.id, user.handle, tool);
+  return withRateLimit(db, `team:${user.id}`, 5, 'Team creation limit reached. Try again tomorrow.', async () => {
+    const agentId = getAgentId(request, user);
+    const tool = getToolFromAgentId(agentId);
+    const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+    const team = getTeam(env, teamId);
+    await team.join(agentId, user.id, user.handle, tool);
 
-  try {
-    await db.addUserTeam(user.id, teamId, name);
-  } catch (err) {
-    console.error(`[chinwag] Failed to record created team ${teamId} for user ${user.id}:`, err);
-  }
-  await db.consumeRateLimit(`team:${user.id}`);
+    try {
+      await db.addUserTeam(user.id, teamId, name);
+    } catch (err) {
+      console.error(`[chinwag] Failed to record created team ${teamId} for user ${user.id}:`, err);
+    }
 
-  return json({ team_id: teamId }, 201);
+    return json({ team_id: teamId }, 201);
+  });
 }

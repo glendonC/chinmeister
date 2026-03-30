@@ -44,7 +44,7 @@ import {
 export { DatabaseDO } from './db.js';
 export { LobbyDO } from './lobby.js';
 export { RoomDO } from './room.js';
-export { TeamDO } from './team.js';
+export { TeamDO } from './dos/team/index.js';
 export { parseTeamPath, getToolFromAgentId, sanitizeTags, teamErrorStatus };
 
 const PROD_ORIGINS = new Set(['https://chinwag.dev', 'https://www.chinwag.dev']);
