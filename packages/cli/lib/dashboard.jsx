@@ -196,6 +196,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   }, [teamId]);
 
   // ── External agent lifecycle (pidfile polling + liveness) ──
+  const externalAgentPrevStatus = useRef(new Map());
   useEffect(() => {
     const interval = setInterval(() => {
       const agents = getAgents();
@@ -208,7 +209,28 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         }
       }
       // Check liveness of all external agents with known PIDs
-      checkExternalAgentLiveness();
+      const prev = externalAgentPrevStatus.current;
+      const changed = checkExternalAgentLiveness();
+      if (changed) {
+        // Quick-exit detection: if a terminal agent died within 15s of spawn,
+        // it likely hit an auth or config error — re-check that tool's state
+        const now = Date.now();
+        for (const agent of getAgents()) {
+          if (agent.spawnType !== 'external') continue;
+          const was = prev.get(agent.id);
+          if (was === 'running' && agent.status !== 'running') {
+            const age = now - (agent.startedAt || 0);
+            if (age < 15000 && agent.toolId) {
+              flash(`${agent.toolName || agent.toolId} exited immediately. Press [f] to fix.`, { tone: 'warning' });
+              setManagedToolStatusTick(t => t + 1); // triggers re-check
+            }
+          }
+        }
+      }
+      // Always update tracked status for next tick
+      for (const agent of getAgents()) {
+        if (agent.spawnType === 'external') prev.set(agent.id, agent.status);
+      }
     }, 3000);
     return () => clearInterval(interval);
   }, []);
@@ -487,8 +509,9 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     } = options;
     const toolState = getManagedToolState(toolInfo.id);
     if (toolState.state !== 'ready') {
-      const recoveryHint = toolState.recoveryCommand ? ` Run \`${toolState.recoveryCommand}\`.` : '';
-      flash(`${toolState.detail || `${toolInfo.name} is not ready`}.${recoveryHint}`, { tone: 'warning' });
+      const detail = toolState.detail || `${toolInfo.name} is not ready`;
+      const hint = toolState.recoveryCommand ? ' Press [f] to fix.' : '';
+      flash(`${detail}.${hint}`, { tone: 'warning' });
       return false;
     }
 
@@ -1316,6 +1339,23 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
           );
         })()}
       </Box>
+
+      {/* Tool issue banners — persistent until resolved */}
+      {!toolPickerOpen && !isComposing && unavailableCliAgents.map(tool => {
+        const state = getManagedToolState(tool.id);
+        if (!state.recoveryCommand) return null;
+        return (
+          <Box key={tool.id} marginTop={1}>
+            <Text>
+              <Text color="yellow" bold>{tool.name}</Text>
+              <Text color="yellow"> {state.detail || 'needs setup'}</Text>
+              <Text dimColor>  </Text>
+              <Text color="cyan" bold>[f]</Text>
+              <Text dimColor> fix</Text>
+            </Text>
+          </Box>
+        );
+      })}
 
       {/* Notice line */}
       <NoticeLine notice={notice} />

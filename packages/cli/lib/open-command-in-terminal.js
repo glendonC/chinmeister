@@ -1,12 +1,11 @@
+import { detectTerminalEnvironment } from './terminal-spawner.js';
 import { execFileSync } from 'child_process';
+import { mkdirSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 
 function shellQuote(value) {
   return JSON.stringify(String(value));
-}
-
-function buildShellCommand(command, cwd) {
-  if (!cwd) return command;
-  return `cd ${shellQuote(cwd)} && ${command}`;
 }
 
 function escapeAppleScriptString(value) {
@@ -16,10 +15,27 @@ function escapeAppleScriptString(value) {
 }
 
 export function openCommandInTerminal(command, cwd = process.cwd()) {
-  const shellCommand = buildShellCommand(command, cwd);
+  const env = detectTerminalEnvironment();
+
+  // IDE terminal — write to launch queue so the command runs in-IDE
+  if (env.type === 'ide-terminal') {
+    try {
+      const queuePath = join(homedir(), '.chinwag', 'launch-queue.json');
+      mkdirSync(join(homedir(), '.chinwag'), { recursive: true });
+      writeFileSync(queuePath, JSON.stringify({
+        command,
+        name: 'fix',
+        cwd,
+      }));
+      return { ok: true };
+    } catch {
+      // fall through to platform spawners
+    }
+  }
 
   try {
     if (process.platform === 'darwin') {
+      const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
       execFileSync('osascript', [
         '-e',
         'tell application "Terminal" to activate',
@@ -30,6 +46,7 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
     }
 
     if (process.platform === 'linux') {
+      const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
       const attempts = [
         ['x-terminal-emulator', ['-e', 'sh', '-lc', shellCommand]],
         ['gnome-terminal', ['--', 'sh', '-lc', shellCommand]],
@@ -48,6 +65,7 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
     }
 
     if (process.platform === 'win32') {
+      const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
       execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], { stdio: 'ignore' });
       return { ok: true };
     }

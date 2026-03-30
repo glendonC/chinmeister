@@ -56,24 +56,58 @@ function createFakeTeam() {
   };
 }
 
+function createFakeIntegrationDoctor() {
+  return {
+    scanHostIntegrations: vi.fn().mockReturnValue([
+      {
+        id: 'cursor',
+        name: 'Cursor',
+        tier: 'connected',
+        capabilities: ['mcp'],
+        detected: true,
+        status: 'needs_setup',
+        configPath: '.cursor/mcp.json',
+        issues: ['Missing or outdated config at .cursor/mcp.json'],
+      },
+      {
+        id: 'claude-code',
+        name: 'Claude Code',
+        tier: 'managed',
+        capabilities: ['mcp', 'hooks', 'channel', 'managed-process'],
+        detected: true,
+        status: 'ready',
+        configPath: '.mcp.json',
+        issues: [],
+      },
+    ]),
+    configureHostIntegration: vi.fn().mockReturnValue({
+      ok: true,
+      name: 'Cursor',
+      detail: '.cursor/mcp.json',
+    }),
+  };
+}
+
 describe('registerTools', () => {
-  let server, team, state, profile;
+  let server, team, state, profile, integrationDoctor;
 
   beforeEach(() => {
     vi.clearAllMocks();
     server = createFakeServer();
     team = createFakeTeam();
+    integrationDoctor = createFakeIntegrationDoctor();
     state = { teamId: 't_test123', heartbeatInterval: null, sessionId: null };
     profile = { framework: 'unknown', languages: ['javascript'], frameworks: ['react'], tools: ['vitest'], platforms: [] };
     teamPreamble.mockResolvedValue('');
     refreshContext.mockResolvedValue(null);
     getCachedContext.mockReturnValue(null);
-    registerTools(server, { team, state, profile });
+    registerTools(server, { team, state, profile, integrationDoctor });
   });
 
-  it('registers all 11 tools', () => {
-    expect(server._tools.size).toBe(11);
+  it('registers all 13 tools', () => {
+    expect(server._tools.size).toBe(13);
     const expected = [
+      'chinwag_scan_integrations', 'chinwag_configure_integration',
       'chinwag_join_team', 'chinwag_update_activity', 'chinwag_check_conflicts',
       'chinwag_get_team_context', 'chinwag_save_memory', 'chinwag_update_memory', 'chinwag_search_memory',
       'chinwag_delete_memory', 'chinwag_claim_files', 'chinwag_release_files',
@@ -82,6 +116,31 @@ describe('registerTools', () => {
     for (const name of expected) {
       expect(server._tools.has(name)).toBe(true);
     }
+  });
+
+  describe('integration doctor tools', () => {
+    it('scans local integration health without requiring team membership', async () => {
+      state.teamId = null;
+      const result = await server.callTool('chinwag_scan_integrations', {});
+      expect(integrationDoctor.scanHostIntegrations).toHaveBeenCalledWith(process.cwd());
+      expect(result.isError).not.toBe(true);
+      expect(result.content[0].text).toMatch(/Cursor \[connected\] — needs_setup/);
+    });
+
+    it('configures a local integration and reports refreshed status', async () => {
+      const result = await server.callTool('chinwag_configure_integration', { host_id: 'cursor' });
+      expect(integrationDoctor.configureHostIntegration).toHaveBeenCalledWith(process.cwd(), 'cursor', { surfaceId: undefined });
+      expect(integrationDoctor.scanHostIntegrations).toHaveBeenCalledWith(process.cwd());
+      expect(result.content[0].text).toMatch(/Configured Cursor: \.cursor\/mcp\.json/);
+      expect(result.content[0].text).toMatch(/Status: needs_setup/);
+    });
+
+    it('returns an error when integration configuration fails', async () => {
+      integrationDoctor.configureHostIntegration.mockReturnValueOnce({ error: 'Unknown host integration: nope' });
+      const result = await server.callTool('chinwag_configure_integration', { host_id: 'nope' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Unknown host integration/);
+    });
   });
 
   // --- Tools that require teamId ---

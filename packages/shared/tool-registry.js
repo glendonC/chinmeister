@@ -123,7 +123,7 @@ export const MCP_TOOLS = [
       aliases: [],
     },
     mcpConfig: '.mcp.json',
-    spawn: { cmd: 'codex', args: ['exec', '--color', 'never'] },
+    spawn: { cmd: 'codex', args: ['exec', '--color', 'never'], interactiveArgs: [] },
     availabilityCheck: {
       args: ['login', 'status'],
       parse: parseCodexAvailability,

@@ -12,7 +12,7 @@ import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
-import { detectToolName, generateSessionAgentId, getConfiguredAgentId } from './lib/identity.js';
+import { detectRuntimeIdentity, generateSessionAgentId, getConfiguredAgentId } from './lib/identity.js';
 import { cleanupProcessSession, registerProcessSession } from './lib/lifecycle.js';
 import { registerTools, registerResources } from './lib/register-tools.js';
 import { isProcessAlive, setTerminalTitle } from '../shared/session-registry.js';
@@ -34,10 +34,14 @@ async function main() {
     process.exit(1);
   }
 
-  const toolName = detectToolName();
-  const agentId = getConfiguredAgentId(toolName) || generateSessionAgentId(config.token, toolName);
+  const runtime = detectRuntimeIdentity('unknown', { defaultTransport: 'mcp' });
+  const toolName = runtime.hostTool;
+  const agentId = getConfiguredAgentId(runtime) || generateSessionAgentId(config.token, runtime);
   const client = api(config, { agentId });
-  console.error(`[chinwag] Tool: ${toolName}, Agent ID: ${agentId}`);
+  const runtimeLabel = runtime.agentSurface
+    ? `${runtime.hostTool}/${runtime.agentSurface}`
+    : runtime.hostTool;
+  console.error(`[chinwag] Runtime: ${runtimeLabel} via ${runtime.transport}, Agent ID: ${agentId}`);
 
   // Detect parent TTY and write session file for terminal identification
   let parentTty = null;

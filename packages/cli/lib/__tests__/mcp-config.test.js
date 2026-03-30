@@ -89,7 +89,7 @@ describe('writeMcpConfig', () => {
     writeMcpConfig(tmpDir, '.cursor/mcp.json', { toolId: 'cursor' });
 
     const content = JSON.parse(fs.readFileSync(path.join(tmpDir, '.cursor', 'mcp.json'), 'utf-8'));
-    expect(content.mcpServers['chinwag-cursor'].args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
+    expect(content.mcpServers.chinwag.args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
   });
 
   it('upgrades legacy unique tool entries in place', () => {
@@ -98,14 +98,15 @@ describe('writeMcpConfig', () => {
     fs.writeFileSync(filePath, JSON.stringify({
       mcpServers: {
         chinwag: { command: 'npx', args: ['chinwag-mcp', '--tool', 'cursor'] },
+        'chinwag-cursor': { command: 'npx', args: ['-y', 'chinwag', 'mcp', '--tool', 'cursor'] },
       },
     }, null, 2));
 
     writeMcpConfig(tmpDir, '.cursor/mcp.json', { toolId: 'cursor' });
 
     const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    expect(content.mcpServers.chinwag).toBeUndefined();
-    expect(content.mcpServers['chinwag-cursor'].args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
+    expect(content.mcpServers.chinwag.args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
+    expect(content.mcpServers['chinwag-cursor']).toBeUndefined();
   });
 });
 
@@ -190,8 +191,8 @@ describe('configureTool', () => {
     expect(fs.existsSync(filePath)).toBe(true);
 
     const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    expect(content.mcpServers['chinwag-cursor']).toBeDefined();
-    expect(content.mcpServers['chinwag-cursor'].args).toContain('cursor');
+    expect(content.mcpServers.chinwag).toBeDefined();
+    expect(content.mcpServers.chinwag.args).toContain('cursor');
   });
 
   it('returns error for unknown tool', () => {

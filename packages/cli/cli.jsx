@@ -18,7 +18,10 @@ try {
   PKG_VERSION = pkg.version || PKG_VERSION;
 } catch {}
 
-async function handOffToRuntime(modulePath, { stripSubcommand = false } = {}) {
+async function handOffToRuntime(modulePath, { stripSubcommand = false, transport = null } = {}) {
+  if (transport) {
+    process.env.CHINWAG_TRANSPORT = transport;
+  }
   if (stripSubcommand) {
     process.argv = [process.argv[0], process.argv[1], ...process.argv.slice(3)];
   }
@@ -60,15 +63,15 @@ if (process.argv[2] === 'reset') {
 
 // Hidden runtime subcommands used by generated tool configs.
 if (process.argv[2] === 'mcp') {
-  await handOffToRuntime('../mcp/index.js');
+  await handOffToRuntime('chinwag-mcp/index.js', { transport: 'mcp' });
 }
 
 if (process.argv[2] === 'channel') {
-  await handOffToRuntime('../mcp/channel.js');
+  await handOffToRuntime('chinwag-mcp/channel.js', { transport: 'channel' });
 }
 
 if (process.argv[2] === 'hook') {
-  await handOffToRuntime('../mcp/hook.js', { stripSubcommand: true });
+  await handOffToRuntime('chinwag-mcp/hook.js', { stripSubcommand: true, transport: 'hook' });
 }
 
 // Handle init command before launching TUI

@@ -1,4 +1,5 @@
 export {
+  detectRuntimeIdentity,
   detectToolName,
   generateAgentId,
   generateSessionAgentId,

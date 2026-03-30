@@ -1,16 +1,14 @@
-import { buildMcpToolCatalogEntries } from '../../shared/tool-registry.js';
+import { buildAgentSurfaceCatalogEntries, buildHostIntegrationCatalogEntries } from '../../shared/integration-model.js';
 
 // Tool Catalog — discovery surface for the full AI dev tool catalog.
 // MCP-configurable tools are derived from the shared canonical registry so
 // runtime integration and discovery cannot drift apart.
 
 export const TOOL_CATALOG = [
-  ...buildMcpToolCatalogEntries(),
+  ...buildHostIntegrationCatalogEntries(),
+  ...buildAgentSurfaceCatalogEntries(),
 
   // Discovery-only coding agents
-  { id: 'cline', name: 'Cline', description: 'Autonomous AI coding agent for VS Code', category: 'coding-agent', website: 'https://cline.bot', mcpCompatible: true },
-  { id: 'continue', name: 'Continue', description: 'Open-source AI code assistant for VS Code and JetBrains', category: 'coding-agent', website: 'https://continue.dev', mcpCompatible: true },
-  { id: 'roo-code', name: 'Roo Code', description: 'Multi-agent AI coding in VS Code, forked from Cline', category: 'coding-agent', website: 'https://roocode.com', mcpCompatible: true },
   { id: 'goose', name: 'Goose', description: 'Open-source on-machine AI agent from Block', category: 'coding-agent', website: 'https://block.github.io/goose/', installCmd: 'brew install block-goose-cli', mcpCompatible: true },
   { id: 'opencode', name: 'OpenCode', description: 'Open-source terminal AI coding agent', category: 'coding-agent', website: 'https://opencode.ai', installCmd: 'brew install opencode', mcpCompatible: true },
   { id: 'amp', name: 'Amp', description: 'AI coding agent from Sourcegraph with codebase search', category: 'coding-agent', website: 'https://ampcode.com', mcpCompatible: true },

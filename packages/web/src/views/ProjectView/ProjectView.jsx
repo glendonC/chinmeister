@@ -20,12 +20,10 @@ import {
   selectRecentSessions,
   sumSessionEdits,
 } from './projectViewState.js';
-import {
-  ProjectLiveTab,
-  ProjectMemoryTab,
-  ProjectSessionsTab,
-  ProjectToolsTab,
-} from './ProjectTabParts.jsx';
+import ProjectLiveTab from './ProjectLiveTab.jsx';
+import ProjectMemoryTab from './ProjectMemoryTab.jsx';
+import ProjectSessionsTab from './ProjectSessionsTab.jsx';
+import ProjectToolsTab from './ProjectToolsTab.jsx';
 import styles from './ProjectView.module.css';
 
 export default function ProjectView() {

@@ -26,8 +26,7 @@ export function detectTerminalEnvironment() {
       : /Windsurf/i.test(appPath) ? 'Windsurf'
       : /Code/i.test(appPath) ? 'VS Code'
       : 'IDE';
-    const termName = process.platform === 'darwin' ? 'Terminal.app' : 'terminal';
-    return { type: 'ide-terminal', name: `${termName} (from ${name})` };
+    return { type: 'ide-terminal', name: `${name} terminal` };
   }
 
   // 3. iTerm2 — macOS power terminal, AppleScript for new tab

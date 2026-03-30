@@ -14,7 +14,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
-import { detectToolName } from './lib/identity.js';
+import { detectRuntimeIdentity } from './lib/identity.js';
 import { resolveAgentIdentity } from './lib/lifecycle.js';
 import { diffState } from './lib/diff-state.js';
 import { isProcessAlive, pingAgentTerminal } from '../shared/session-registry.js';
@@ -44,15 +44,16 @@ async function main() {
     process.exit(0);
   }
 
-  const toolName = detectToolName('unknown');
-  if (toolName !== 'claude-code') {
-    console.error(`[chinwag-channel] Parent tool is ${toolName}; channel disabled.`);
+  const runtime = detectRuntimeIdentity('unknown', { defaultTransport: 'channel' });
+  const toolName = runtime.hostTool;
+  if (!runtime.capabilities.includes('channel')) {
+    console.error(`[chinwag-channel] Parent host is ${toolName}; channel disabled.`);
     process.exit(0);
   }
   const { agentId } = resolveAgentIdentity(config.token, toolName);
   const client = api(config, { agentId });
   const team = teamHandlers(client);
-  console.error(`[chinwag-channel] Tool: ${toolName}, Agent ID: ${agentId}`);
+  console.error(`[chinwag-channel] Runtime: ${toolName} via ${runtime.transport}, Agent ID: ${agentId}`);
 
   const server = new Server(
     { name: 'chinwag-channel', version: PKG.version },

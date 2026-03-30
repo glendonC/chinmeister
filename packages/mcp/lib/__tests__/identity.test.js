@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateAgentId, generateSessionAgentId, detectToolName, getConfiguredAgentId } from '../identity.js';
+import {
+  detectRuntimeIdentity,
+  generateAgentId,
+  generateSessionAgentId,
+  detectToolName,
+  getConfiguredAgentId,
+} from '../identity.js';
 
 describe('generateAgentId', () => {
   it('is deterministic — same input produces same output', () => {
@@ -55,19 +61,27 @@ describe('detectToolName', () => {
   let savedArgv;
   let savedEnv;
   let savedAgentId;
+  let savedSurface;
+  let savedTransport;
 
   beforeEach(() => {
     savedArgv = [...process.argv];
     savedEnv = process.env.CHINWAG_TOOL;
     savedAgentId = process.env.CHINWAG_AGENT_ID;
+    savedSurface = process.env.CHINWAG_SURFACE;
+    savedTransport = process.env.CHINWAG_TRANSPORT;
     // Clean slate: remove --tool from argv and env var
     process.argv = process.argv.filter((_, i, arr) => {
       if (arr[i] === '--tool') return false;
       if (i > 0 && arr[i - 1] === '--tool') return false;
+      if (arr[i] === '--surface') return false;
+      if (i > 0 && arr[i - 1] === '--surface') return false;
       return true;
     });
     delete process.env.CHINWAG_TOOL;
     delete process.env.CHINWAG_AGENT_ID;
+    delete process.env.CHINWAG_SURFACE;
+    delete process.env.CHINWAG_TRANSPORT;
   });
 
   afterEach(() => {
@@ -81,6 +95,16 @@ describe('detectToolName', () => {
       process.env.CHINWAG_AGENT_ID = savedAgentId;
     } else {
       delete process.env.CHINWAG_AGENT_ID;
+    }
+    if (savedSurface !== undefined) {
+      process.env.CHINWAG_SURFACE = savedSurface;
+    } else {
+      delete process.env.CHINWAG_SURFACE;
+    }
+    if (savedTransport !== undefined) {
+      process.env.CHINWAG_TRANSPORT = savedTransport;
+    } else {
+      delete process.env.CHINWAG_TRANSPORT;
     }
   });
 
@@ -139,6 +163,47 @@ describe('detectToolName', () => {
   it('falls back when parent process inspection finds nothing', () => {
     const readProcessInfoFn = vi.fn(() => null);
     expect(detectToolName('fallback', { parentPid: 10, readProcessInfoFn })).toBe('fallback');
+  });
+});
+
+describe('detectRuntimeIdentity', () => {
+  afterEach(() => {
+    delete process.env.CHINWAG_TOOL;
+    delete process.env.CHINWAG_SURFACE;
+    delete process.env.CHINWAG_TRANSPORT;
+  });
+
+  it('returns structured identity for explicit host and surface overrides', () => {
+    process.env.CHINWAG_TOOL = 'cursor';
+    process.env.CHINWAG_SURFACE = 'cline';
+    process.env.CHINWAG_TRANSPORT = 'mcp';
+
+    expect(detectRuntimeIdentity('unknown', { readProcessInfoFn: () => null })).toMatchObject({
+      hostTool: 'cursor',
+      agentSurface: 'cline',
+      transport: 'mcp',
+      tier: 'connected',
+      detectionSource: 'explicit',
+      detectionConfidence: 1,
+    });
+  });
+
+  it('marks parent-process inference with lower confidence', () => {
+    const readProcessInfoFn = vi.fn((pid) => {
+      if (pid === 10) return { ppid: 1, command: 'Code Helper (Plugin) --inspect' };
+      return null;
+    });
+
+    expect(detectRuntimeIdentity('fallback', {
+      parentPid: 10,
+      readProcessInfoFn,
+      defaultTransport: 'mcp',
+    })).toMatchObject({
+      hostTool: 'vscode',
+      transport: 'mcp',
+      detectionSource: 'parent-process',
+      detectionConfidence: 0.7,
+    });
   });
 });
 

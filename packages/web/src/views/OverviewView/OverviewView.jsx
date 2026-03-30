@@ -9,15 +9,8 @@ import { projectGradient } from '../../lib/projectGradient.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
 import StatusState from '../../components/StatusState/StatusState.jsx';
+import { arcPath, CX, CY, R, SW, GAP, DEG } from '../../lib/svgArcs.js';
 import styles from './OverviewView.module.css';
-
-// ── Arc ring ──
-const CX = 130, CY = 130, R = 58, SW = 13, GAP = 14;
-const DEG = Math.PI / 180;
-function arcPath(cx, cy, r, startDeg, sweepDeg) {
-  const s = (startDeg - 90) * DEG, e = (startDeg + sweepDeg - 90) * DEG;
-  return `M ${cx + r * Math.cos(s)} ${cy + r * Math.sin(s)} A ${r} ${r} 0 ${sweepDeg > 180 ? 1 : 0} 1 ${cx + r * Math.cos(e)} ${cy + r * Math.sin(e)}`;
-}
 
 function summarizeNames(items) {
   const names = items
