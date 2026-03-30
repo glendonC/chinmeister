@@ -1,12 +1,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import { getAnimatedGlyph } from './dashboard-ui.jsx';
-
-function truncateText(text, max) {
-  if (!text) return text;
-  if (text.length <= max) return text;
-  return `${text.slice(0, max - 1)}…`;
-}
+import { truncateText } from './dashboard-utils.js';
 
 function shortSessionId(agentId) {
   if (!agentId) return '';

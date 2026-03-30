@@ -9,7 +9,7 @@ import {
   KnowledgePanel,
   SessionsPanel,
 } from './dashboard-sections.jsx';
-import { SPINNER } from './dashboard-utils.js';
+import { SPINNER, truncateText } from './dashboard-utils.js';
 import {
   isAgentAddressable, getAgentIntent,
   getAgentDisplayLabel,
@@ -132,6 +132,7 @@ export function MainPane({
   connState,
   connDetail,
   spinnerFrame,
+  cols,
   allVisibleAgents,
   liveAgents,
   visibleSessionRows,
@@ -176,9 +177,10 @@ export function MainPane({
           )}
         </Text>
         {allVisibleAgents.length === 0 ? (
-          <Text dimColor>  No agents connected. Press [n] to open one.</Text>
+          <Text dimColor>  No agents connected. Press [n] to start one.</Text>
         ) : (() => {
           const toolColWidth = Math.max(4, ...allVisibleAgents.map(a => getAgentDisplayLabel(a, liveAgentNameCounts).length)) + 1;
+          const maxActivity = cols ? cols - 4 - 2 - 10 - toolColWidth : Infinity;
           return (
             <Box flexDirection="column" marginTop={1}>
               <Text dimColor>
@@ -199,12 +201,13 @@ export function MainPane({
                 const activity = isDone
                   ? (agent.outputPreview || (isFailed ? 'exited with error' : 'completed'))
                   : (intent && !/idle/i.test(intent) ? intent : (agent._duration || '-'));
+                const activityColor = isDone ? undefined : (status === 'active' ? 'cyan' : 'gray');
                 return (
                   <Text key={agent.agent_id || agent.id}>
                     <Text color={sel ? 'cyan' : 'gray'}>{sel ? '\u203A ' : '  '}</Text>
                     <Text color={statusColor}>{status.padEnd(10)}</Text>
                     <Text bold={sel} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts).padEnd(toolColWidth)}</Text>
-                    <Text dimColor={isDone}>{activity}</Text>
+                    <Text color={activityColor} dimColor={isDone}>{truncateText(activity, maxActivity)}</Text>
                   </Text>
                 );
               })}

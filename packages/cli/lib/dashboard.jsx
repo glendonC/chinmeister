@@ -83,8 +83,8 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       const ready = agents.readyCliAgents;
       const primary = ready[0] || agents.installedCliAgents[0];
       const nLabel = primary
-        ? (ready.length > 1 ? 'open agent' : `open ${primary.name}`)
-        : 'open agent';
+        ? (ready.length > 1 ? 'new agent' : `new ${primary.name}`)
+        : 'new agent';
       setFooterHints([
         { key: 'n', label: nLabel, color: 'green' },
         { key: 'w', label: 'web' },
@@ -360,6 +360,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       connState={connState}
       connDetail={connDetail}
       spinnerFrame={spinnerFrame}
+      cols={cols}
       allVisibleAgents={allVisibleAgents}
       liveAgents={liveAgents}
       visibleSessionRows={visibleSessionRows}

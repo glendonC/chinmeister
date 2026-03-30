@@ -21,11 +21,34 @@ export function formatDuration(minutes) {
   return `${m} min`;
 }
 
+const MEDIA_EXTS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp', '.tiff',
+  '.mp4', '.mov', '.avi', '.webm', '.mp3', '.wav', '.ogg',
+]);
+
+function isMediaFile(name) {
+  const dot = name.lastIndexOf('.');
+  return dot !== -1 && MEDIA_EXTS.has(name.slice(dot).toLowerCase());
+}
+
 export function formatFiles(files) {
   if (!files?.length) return null;
   const names = files.map(f => basename(f));
-  if (names.length <= 3) return names.join(', ');
-  return `${names[0]}, ${names[1]} + ${names.length - 2} more`;
+  const code = names.filter(n => !isMediaFile(n));
+  const mediaCount = names.length - code.length;
+
+  // Show code files first, collapse media to a count
+  const display = code.length > 0 ? code : names;
+  const shown = display.length <= 3 ? display.join(', ') : `${display[0]}, ${display[1]} + ${display.length - 2} more`;
+
+  if (mediaCount > 0 && code.length > 0) {
+    return `${shown} + ${mediaCount} image${mediaCount > 1 ? 's' : ''}`;
+  }
+  // All media, no code files
+  if (code.length === 0) {
+    return `${mediaCount} image${mediaCount > 1 ? 's' : ''}`;
+  }
+  return shown;
 }
 
 export function smartSummary(activity) {

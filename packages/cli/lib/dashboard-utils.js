@@ -1,3 +1,9 @@
+export function truncateText(text, max) {
+  if (!text) return text;
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1)}\u2026`;
+}
+
 import { execFileSync } from 'child_process';
 import { homedir } from 'os';
 

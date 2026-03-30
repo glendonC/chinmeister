@@ -1,13 +1,39 @@
 import React from 'react';
 import { Box, Text } from 'ink';
-import { basename } from 'path';
+import { basename, resolve } from 'path';
 import { stripAnsi } from './dashboard-utils.js';
 import {
   getAgentDisplayLabel, getAgentIntent,
-  getAgentOriginLabel, getAgentMeta,
+  getAgentOriginLabel,
 } from './dashboard-agent-display.js';
 import { HintRow, NoticeLine } from './dashboard-ui.jsx';
 import { getOutput } from './process-manager.js';
+
+const MEDIA_EXTS = new Set([
+  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp', '.tiff',
+  '.mp4', '.mov', '.avi', '.webm', '.mp3', '.wav', '.ogg',
+]);
+const CONFIG_EXTS = new Set(['.json', '.yaml', '.yml', '.toml', '.ini', '.env', '.lock']);
+
+function fileColor(name) {
+  const dot = name.lastIndexOf('.');
+  if (dot === -1) return 'cyan';
+  const ext = name.slice(dot).toLowerCase();
+  if (MEDIA_EXTS.has(ext)) return 'gray';
+  if (CONFIG_EXTS.has(ext)) return 'yellow';
+  return 'cyan';
+}
+
+function isMedia(name) {
+  const dot = name.lastIndexOf('.');
+  return dot !== -1 && MEDIA_EXTS.has(name.slice(dot).toLowerCase());
+}
+
+// OSC 8 terminal hyperlink — clickable in iTerm2, VS Code/Cursor terminal
+function linked(label, filePath) {
+  const abs = resolve(filePath);
+  return `\x1b]8;;file://${abs}\x07${label}\x1b]8;;\x07`;
+}
 
 export function AgentFocusView({
   focusedAgent,
@@ -33,99 +59,94 @@ export function AgentFocusView({
         .filter(Boolean)
     : [];
   const agentFiles = freshAgent.activity?.files || [];
+  const codeFiles = agentFiles.filter(f => !isMedia(basename(f)));
+  const mediaCount = agentFiles.length - codeFiles.length;
   const agentConflicts = conflicts.filter(([file]) => agentFiles.includes(file));
-  const sourceLabel = getAgentOriginLabel(freshAgent);
-  const quietLabel = freshAgent.minutes_since_update != null && freshAgent.minutes_since_update >= 15
-    ? `Quiet for ${Math.round(freshAgent.minutes_since_update)}m`
-    : null;
+  const quietMinutes = freshAgent.minutes_since_update;
   const outputSummary = freshAgent.outputPreview || null;
 
+  const statusColor = isRunning ? 'green' : isDead ? 'red' : 'green';
+  const statusLabel = isRunning ? 'live' : isDead ? (exitCode !== 0 ? 'error' : 'done') : 'live';
+
   return (
-    <Box flexDirection="column">
-      <Box flexDirection="column" paddingTop={1}>
-        <Text color="green" bold>session details</Text>
-        <Text dimColor>{sourceLabel}</Text>
+    <Box flexDirection="column" paddingTop={1}>
+      {/* Agent header */}
+      <Box>
+        <Text color={statusColor} bold>{getAgentDisplayLabel(freshAgent, liveAgentNameCounts)}</Text>
+        {freshAgent.handle && <Text dimColor>  @{freshAgent.handle}</Text>}
+      </Box>
+      <Box>
+        <Text color={statusColor}>{statusLabel}</Text>
+        {freshAgent._duration && <Text dimColor>  {freshAgent._duration}</Text>}
+        <Text dimColor>  {getAgentOriginLabel(freshAgent)}</Text>
       </Box>
 
-      <Box flexDirection="column" paddingX={1} paddingTop={1}>
-        <Text>
-          {isRunning
-            ? <Text color="green">{'\u25CF'} </Text>
-            : isDead
-              ? <Text color="red">{'\u25CF'} </Text>
-              : <Text color="green">{'\u25CF'} </Text>
-          }
-          <Text bold>{getAgentDisplayLabel(freshAgent, liveAgentNameCounts)}</Text>
-          {freshAgent.handle && <Text dimColor>  {freshAgent.handle}</Text>}
-          {freshAgent._duration && <Text dimColor>  {freshAgent._duration}</Text>}
-        </Text>
-        <Text>{''}</Text>
-        <Text bold>Session</Text>
-        <Text dimColor>  {sourceLabel}</Text>
-        {isRunning && <Text color="green">  Live</Text>}
-        {isDead && exitCode === 0 && <Text dimColor>  Completed</Text>}
-        {isDead && exitCode !== 0 && <Text color="red">  Exited with error (code {exitCode ?? 'unknown'})</Text>}
+      {/* Exit info */}
+      {isDead && exitCode !== 0 && (
+        <Box marginTop={1}>
+          <Text color="red">exited with code {exitCode ?? 'unknown'}</Text>
+        </Box>
+      )}
+      {isDead && outputSummary && (
+        <Box>
+          <Text dimColor>{outputSummary}</Text>
+        </Box>
+      )}
 
-        <Text>{''}</Text>
-        <Text bold>Work</Text>
-        {getAgentIntent(freshAgent) ? (
-          <Text>  {getAgentIntent(freshAgent)}</Text>
-        ) : (
-          <Text dimColor>  No current work summary</Text>
-        )}
-        {freshAgent._managed && freshAgent._dead && outputSummary && (
-          <Text dimColor>  Final response: {outputSummary}</Text>
-        )}
-        {agentFiles.length > 0 ? (
-          <Box flexDirection="column">
-            {agentFiles.map(file => (
-              <Text key={file} dimColor>  {basename(file)}</Text>
-            ))}
-          </Box>
-        ) : (
-          <Text dimColor>  No files reported yet</Text>
-        )}
+      {/* Files */}
+      {agentFiles.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text dimColor>files</Text>
+          {codeFiles.map(file => (
+            <Text key={file}>
+              <Text>  </Text>
+              <Text color={fileColor(basename(file))}>{linked(basename(file), file)}</Text>
+            </Text>
+          ))}
+          {mediaCount > 0 && (
+            <Text dimColor>  {mediaCount} image{mediaCount > 1 ? 's' : ''}</Text>
+          )}
+        </Box>
+      )}
 
-        <Text>{''}</Text>
-        <Text bold>Coordination</Text>
-        {quietLabel ? <Text color="yellow">  {quietLabel}</Text> : <Text dimColor>  No quiet-session signal</Text>}
-        {agentConflicts.length > 0 ? (
-          <Box flexDirection="column">
-            {agentConflicts.map(([file, owners]) => (
-              <Text key={file} color="red">  Conflict on {basename(file)} {'· '}{owners.join(' & ')}</Text>
-            ))}
-          </Box>
-        ) : (
-          <Text dimColor>  No active conflicts involving this agent</Text>
-        )}
-        {getAgentMeta(freshAgent) && <Text dimColor>  {getAgentMeta(freshAgent)}</Text>}
+      {/* Conflicts — only if present */}
+      {agentConflicts.length > 0 && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text color="red">conflicts</Text>
+          {agentConflicts.map(([file, owners]) => (
+            <Text key={file}>
+              <Text>  </Text>
+              <Text color="red">{basename(file)}</Text>
+              <Text dimColor>  {owners.join(' & ')}</Text>
+            </Text>
+          ))}
+        </Box>
+      )}
 
-        {freshAgent._managed && (
-          <>
-            <Text>{''}</Text>
-            <Text bold>Diagnostics</Text>
-            {!showDiagnostics ? (
-              <Text dimColor>  Hidden by default. Press [l] to inspect captured process output.</Text>
-            ) : outputLines.length > 0 ? (
-              <Box flexDirection="column">
-                {outputLines.map((line, idx) => (
-                  <Text key={`${freshAgent.id}-${idx}`} dimColor>  {line}</Text>
-                ))}
-              </Box>
-            ) : (
-              <Text dimColor>  No captured output yet</Text>
-            )}
-          </>
-        )}
-      </Box>
+      {/* Quiet warning — only if actually quiet */}
+      {quietMinutes != null && quietMinutes >= 15 && (
+        <Box marginTop={1}>
+          <Text color="yellow">quiet for {Math.round(quietMinutes)}m</Text>
+        </Box>
+      )}
 
-      <Box paddingX={1} paddingTop={1}>
-        <NoticeLine notice={notice} />
-      </Box>
+      {/* Diagnostics (managed agents only) */}
+      {freshAgent._managed && showDiagnostics && (
+        <Box flexDirection="column" marginTop={1}>
+          <Text dimColor>diagnostics</Text>
+          {outputLines.length > 0 ? (
+            outputLines.map((line, idx) => (
+              <Text key={`${freshAgent.id}-${idx}`} dimColor>  {line}</Text>
+            ))
+          ) : (
+            <Text dimColor>  no output</Text>
+          )}
+        </Box>
+      )}
 
-      <Box paddingTop={1}>
-        <HintRow hints={navHints} />
-      </Box>
+      <NoticeLine notice={notice} />
+
+      <HintRow hints={navHints} />
     </Box>
   );
 }
