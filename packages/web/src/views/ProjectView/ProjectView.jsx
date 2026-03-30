@@ -87,6 +87,7 @@ export default function ProjectView() {
     () => buildProjectSurfaceSummaries(members, surfacesSeen),
     [members, surfacesSeen]
   );
+  const modelsSeen = contextData?.models_seen || [];
 
   const handleUpdateMemory = useCallback(async (id, text, tags) => {
     if (!activeTeamId) return;
@@ -220,6 +221,7 @@ export default function ProjectView() {
               toolSummaries={toolSummaries}
               hostSummaries={hostSummaries}
               surfaceSummaries={surfaceSummaries}
+              modelsSeen={modelsSeen}
               conflicts={conflicts}
               filesInPlay={filesInPlay}
               locks={locks}

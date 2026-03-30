@@ -24,7 +24,7 @@ One command (`npx chinwag init`) connects your stack. From that point, agents sh
 
 Cross-vendor, cross-developer, real-time agent coordination.
 
-- **Shared project memory** across all tools and teammates. What one agent learns, every agent knows next session.
+- **Shared project memory** across all tools and teammates. What one agent learns, every agent knows next session. Memory is infrastructure, not a black box — tagged, queryable, editable, and deletable by agents and humans. Every entry is source-attributed and searchable. Knowledge doesn't rot in flat files or disappear inside opaque tool state.
 - **Live awareness** of every agent across every tool. See who is editing what, in real time.
 - **Conflict prevention.** Agents know when they're about to collide on a file — before it happens. Enforced on Claude Code via hooks, advisory on other tools via MCP.
 - **File locking and activity tracking.** Claim files, report activity, detect conflicts.

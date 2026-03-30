@@ -1,4 +1,7 @@
 import { useState } from 'react';
+import { formatRelativeTime } from '../../lib/relativeTime.js';
+import { getToolMeta } from '../../lib/toolMeta.js';
+import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './MemoryRow.module.css';
 
 export default function MemoryRow({ memory, onUpdate, onDelete }) {
@@ -10,6 +13,12 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
   const [error, setError] = useState(null);
 
   const tags = memory.tags || [];
+  const when = formatRelativeTime(memory.updated_at || memory.created_at);
+  const rawTool = memory.source_tool || memory.source_host_tool;
+  const toolMeta = rawTool && rawTool !== 'unknown' ? getToolMeta(rawTool) : null;
+  const handle = memory.source_handle || null;
+  const model = memory.source_model || null;
+  const accentColor = toolMeta?.color || 'var(--soft)';
 
   function handleEdit() {
     setEditText(memory.text);
@@ -54,7 +63,10 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
   }
 
   async function handleDelete() {
-    if (!confirmDelete) { setConfirmDelete(true); return; }
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -73,9 +85,10 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
 
   if (isEditing) {
     return (
-      <div className={styles.memoryRow} onKeyDown={handleKeyDown}>
-        <div className={styles.editForm}>
-          <div className={styles.editTop}>
+      <div className={styles.row}>
+        <div className={styles.accent} style={{ background: accentColor }} />
+        <div className={styles.body} onKeyDown={handleKeyDown}>
+          <div className={styles.editForm}>
             <input
               className={styles.editTagsInput}
               type="text"
@@ -84,25 +97,27 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
               placeholder="Tags (comma-separated)"
               disabled={saving}
             />
-            <span className={styles.editAuthor}>{memory.source_handle}</span>
-          </div>
-          <textarea
-            className={styles.editTextarea}
-            value={editText}
-            onChange={(e) => setEditText(e.target.value)}
-            maxLength={2000}
-            rows={3}
-            disabled={saving}
-            autoFocus
-          />
-          {error && <span className={styles.editError}>{error}</span>}
-          <div className={styles.editActions}>
-            <button className={styles.btnSave} onClick={handleSave} disabled={saving || !editText.trim()}>
-              {saving ? 'Saving...' : 'Save'}
-            </button>
-            <button className={styles.btnCancel} onClick={handleCancel} disabled={saving}>
-              Cancel
-            </button>
+            <textarea
+              className={styles.editTextarea}
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              disabled={saving}
+              autoFocus
+            />
+            {error && <span className={styles.editError}>{error}</span>}
+            <div className={styles.editFooter}>
+              <span className={styles.editAuthor}>{handle}</span>
+              <div className={styles.editActions}>
+                <button className={styles.btnSave} onClick={handleSave} disabled={saving || !editText.trim()}>
+                  {saving ? 'Saving\u2026' : 'Save'}
+                </button>
+                <button className={styles.btnCancel} onClick={handleCancel} disabled={saving}>
+                  Cancel
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -110,46 +125,75 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
   }
 
   return (
-    <div className={styles.memoryRow}>
-      <div className={styles.memoryContent}>
-        {tags.length > 0 && (
-          <span className={styles.tagGroup}>
-            {tags.map((t) => (
-              <span key={t} className={styles.tag}>{t}</span>
-            ))}
-          </span>
-        )}
-        <span className={styles.memoryText}>{memory.text}</span>
-      </div>
-      {(onUpdate || onDelete) && (
-        <div className={styles.memoryActions}>
-          {onUpdate && (
-            <button className={styles.btnAction} onClick={handleEdit} title="Edit memory" aria-label="Edit memory">
-              <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                <path d="M11.5 1.5l3 3L5 14H2v-3z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
-              </svg>
-            </button>
-          )}
-          {onDelete && (
-            <button
-              className={`${styles.btnAction} ${confirmDelete ? styles.btnConfirmDelete : ''}`}
-              onClick={handleDelete}
-              onBlur={() => setConfirmDelete(false)}
-              title={confirmDelete ? 'Click again to confirm' : 'Delete memory'}
-              aria-label={confirmDelete ? 'Confirm delete' : 'Delete memory'}
-              disabled={saving}
-            >
-              {confirmDelete ? (
-                <span className={styles.confirmText}>Delete?</span>
-              ) : (
-                <svg width="13" height="13" viewBox="0 0 16 16" fill="none">
-                  <path d="M3 4h10M5.5 4V3a1 1 0 011-1h3a1 1 0 011 1v1M6 7v5M10 7v5M4 4l.8 9a1 1 0 001 .9h4.4a1 1 0 001-.9L12 4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
+    <div className={styles.row}>
+      <div className={styles.accent} style={{ background: accentColor }} />
+      <div className={styles.body}>
+        <div className={styles.text}>{memory.text}</div>
+
+        <div className={styles.footer}>
+          <div className={styles.source}>
+            {toolMeta && (
+              <>
+                <ToolIcon tool={rawTool} size={14} />
+                <span className={styles.toolLabel}>{toolMeta.label}</span>
+              </>
+            )}
+            {model && (
+              <>
+                {toolMeta && <span className={styles.sep}>&middot;</span>}
+                <span className={styles.modelLabel}>{model}</span>
+              </>
+            )}
+            {handle && (
+              <>
+                {(toolMeta || model) && <span className={styles.sep}>&middot;</span>}
+                <span>{handle}</span>
+              </>
+            )}
+            {when && (
+              <>
+                <span className={styles.sep}>&middot;</span>
+                <span>{when}</span>
+              </>
+            )}
+            {tags.length > 0 && (
+              <>
+                <span className={styles.sep}>&middot;</span>
+                {tags.map((t) => (
+                  <span key={t} className={styles.tag}>{t}</span>
+                ))}
+              </>
+            )}
+          </div>
+
+          {(onUpdate || onDelete) && (
+            <div className={styles.actions}>
+              {onUpdate && (
+                <button className={styles.btnText} onClick={handleEdit}>
+                  Edit
+                </button>
               )}
-            </button>
+              {onDelete && (
+                <>
+                  <span className={styles.actionSep}>&middot;</span>
+                  <button
+                    className={confirmDelete ? styles.btnText : styles.btnDelete}
+                    onClick={handleDelete}
+                    onBlur={() => setConfirmDelete(false)}
+                    disabled={saving}
+                  >
+                    {confirmDelete ? (
+                      <span className={styles.confirmLabel}>Confirm?</span>
+                    ) : (
+                      'Delete'
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -115,5 +115,10 @@ export function teamHandlers(client) {
       validateTeam(teamId);
       return client.post(`/teams/${teamId}/sessionedit`, { file });
     },
+
+    async reportModel(teamId, model) {
+      validateTeam(teamId);
+      return client.put(`/teams/${teamId}/sessionmodel`, { model });
+    },
   };
 }

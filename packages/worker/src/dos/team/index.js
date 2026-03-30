@@ -11,7 +11,7 @@ import { join, leave, heartbeat as heartbeatFn } from './membership.js';
 import { updateActivity as updateActivityFn, checkConflicts as checkConflictsFn, reportFile as reportFileFn } from './activity.js';
 import { saveMemory as saveMemoryFn, searchMemories as searchMemoriesFn, updateMemory as updateMemoryFn, deleteMemory as deleteMemoryFn } from './memory.js';
 import { claimFiles as claimFilesFn, releaseFiles as releaseFilesFn, getLockedFiles as getLockedFilesFn } from './locks.js';
-import { startSession as startSessionFn, endSession as endSessionFn, recordEdit as recordEditFn, getSessionHistory } from './sessions.js';
+import { startSession as startSessionFn, endSession as endSessionFn, recordEdit as recordEditFn, getSessionHistory, enrichSessionModel as enrichSessionModelFn } from './sessions.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import { inferHostToolFromAgentId } from './runtime.js';
 
@@ -43,6 +43,9 @@ export class TeamDO extends DurableObject {
       ["ALTER TABLE sessions ADD COLUMN host_tool TEXT DEFAULT 'unknown'", "UPDATE sessions SET host_tool = CASE WHEN instr(agent_id, ':') > 0 THEN substr(agent_id, 1, instr(agent_id, ':') - 1) ELSE 'unknown' END WHERE host_tool IS NULL"],
       ["ALTER TABLE sessions ADD COLUMN agent_surface TEXT", null],
       ["ALTER TABLE sessions ADD COLUMN transport TEXT", null],
+      ["ALTER TABLE sessions ADD COLUMN agent_model TEXT", null],
+      ["ALTER TABLE members ADD COLUMN agent_model TEXT", null],
+      ["ALTER TABLE memories ADD COLUMN source_model TEXT", null],
     ];
     for (const [alter, backfill] of migrations) {
       try {
@@ -62,6 +65,7 @@ export class TeamDO extends DurableObject {
         host_tool TEXT DEFAULT 'unknown',
         agent_surface TEXT,
         transport TEXT,
+        agent_model TEXT,
         joined_at TEXT DEFAULT (datetime('now')),
         last_heartbeat TEXT DEFAULT (datetime('now'))
       );
@@ -82,6 +86,7 @@ export class TeamDO extends DurableObject {
         source_tool TEXT DEFAULT 'unknown',
         source_host_tool TEXT DEFAULT 'unknown',
         source_agent_surface TEXT,
+        source_model TEXT,
         created_at TEXT DEFAULT (datetime('now')),
         updated_at TEXT DEFAULT (datetime('now'))
       );
@@ -94,6 +99,7 @@ export class TeamDO extends DurableObject {
         host_tool TEXT DEFAULT 'unknown',
         agent_surface TEXT,
         transport TEXT,
+        agent_model TEXT,
         started_at TEXT DEFAULT (datetime('now')),
         ended_at TEXT,
         edit_count INTEGER DEFAULT 0,
@@ -301,7 +307,7 @@ export class TeamDO extends DurableObject {
     this.#maybeCleanup();
 
     const members = this.sql.exec(
-      `SELECT m.agent_id, m.owner_handle, m.tool, m.host_tool, m.agent_surface, m.transport, a.files, a.summary, a.updated_at,
+      `SELECT m.agent_id, m.owner_handle, m.tool, m.host_tool, m.agent_surface, m.transport, m.agent_model, a.files, a.summary, a.updated_at,
               s.framework, s.started_at as session_started,
               ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
               ROUND((julianday('now') - julianday(a.updated_at)) * 1440) as minutes_since_update,
@@ -314,14 +320,14 @@ export class TeamDO extends DurableObject {
     ).toArray();
 
     const memories = this.sql.exec(
-      `SELECT id, text, tags, source_handle, source_tool, source_host_tool, source_agent_surface, created_at, updated_at
+      `SELECT id, text, tags, source_handle, source_tool, source_host_tool, source_agent_surface, source_model, created_at, updated_at
        FROM memories
        ORDER BY updated_at DESC, created_at DESC
        LIMIT 20`
     ).toArray().map(m => ({ ...m, tags: JSON.parse(m.tags || '[]') }));
 
     const recentSessions = this.sql.exec(`
-      SELECT agent_id, owner_handle, framework, host_tool, agent_surface, transport, started_at, ended_at,
+      SELECT agent_id, owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
              edit_count, files_touched, conflicts_hit, memories_saved,
              ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
       FROM sessions
@@ -337,6 +343,7 @@ export class TeamDO extends DurableObject {
       host_tool: m.host_tool || m.tool || 'unknown',
       agent_surface: m.agent_surface || null,
       transport: m.transport || null,
+      agent_model: m.agent_model || null,
       status: m.status,
       framework: m.framework || null,
       session_minutes: m.session_minutes || null,
@@ -412,6 +419,14 @@ export class TeamDO extends DurableObject {
       joins: t.count,
     }));
 
+    const modelMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'model:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const models_seen = modelMetrics.map(t => ({
+      model: t.metric.replace('model:', ''),
+      count: t.count,
+    }));
+
     const keyMetrics = this.sql.exec(
       "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
     ).toArray();
@@ -427,6 +442,7 @@ export class TeamDO extends DurableObject {
       tools_configured,
       hosts_configured,
       surfaces_seen,
+      models_seen,
       usage,
       recentSessions: recentSessions.map(s => {
         const toolFromAgent = s.host_tool || inferHostToolFromAgentId(s.agent_id);
@@ -436,6 +452,7 @@ export class TeamDO extends DurableObject {
           host_tool: s.host_tool || toolFromAgent || 'unknown',
           agent_surface: s.agent_surface || null,
           transport: s.transport || null,
+          agent_model: s.agent_model || null,
           files_touched: JSON.parse(s.files_touched || '[]'),
         };
       }),
@@ -471,6 +488,13 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team' };
     return getSessionHistory(this.sql, days);
+  }
+
+  async enrichModel(agentId, model, ownerId = null) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team' };
+    return enrichSessionModelFn(this.sql, resolved, model, this.#boundRecordMetric);
   }
 
   // --- Memory ---
@@ -605,6 +629,14 @@ export class TeamDO extends DurableObject {
       joins: t.count,
     }));
 
+    const modelMetricsSummary = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'model:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const models_seen = modelMetricsSummary.map(t => ({
+      model: t.metric.replace('model:', ''),
+      count: t.count,
+    }));
+
     const keyMetrics = this.sql.exec(
       "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
     ).toArray();
@@ -621,6 +653,7 @@ export class TeamDO extends DurableObject {
       tools_configured,
       hosts_configured,
       surfaces_seen,
+      models_seen,
       usage,
     };
   }

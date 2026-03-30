@@ -21,6 +21,7 @@ export function normalizeRuntimeMetadata(runtimeOrTool, agentId = '') {
       agentSurface: null,
       transport: null,
       tier: null,
+      model: null,
     };
   }
 
@@ -34,5 +35,6 @@ export function normalizeRuntimeMetadata(runtimeOrTool, agentId = '') {
     agentSurface: normalizeValue(runtimeOrTool.agentSurface || runtimeOrTool.agent_surface),
     transport: normalizeValue(runtimeOrTool.transport),
     tier: normalizeValue(runtimeOrTool.tier),
+    model: normalizeValue(runtimeOrTool.model || runtimeOrTool.agent_model),
   };
 }

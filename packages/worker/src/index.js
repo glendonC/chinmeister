@@ -39,6 +39,7 @@ import {
   handleTeamStartSession,
   handleTeamSessionEdit,
   handleTeamUpdateMemory,
+  handleTeamEnrichModel,
 } from './routes/team.js';
 
 export { DatabaseDO } from './db.js';
@@ -164,6 +165,8 @@ export default {
             response = await handleTeamStartSession(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'sessionend') {
             response = await handleTeamEndSession(request, user, env, parsed.teamId);
+          } else if (method === 'PUT' && parsed.action === 'sessionmodel') {
+            response = await handleTeamEnrichModel(request, user, env, parsed.teamId);
           } else if (method === 'POST' && parsed.action === 'sessionedit') {
             response = await handleTeamSessionEdit(request, user, env, parsed.teamId);
           } else if (method === 'GET' && parsed.action === 'history') {

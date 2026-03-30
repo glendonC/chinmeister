@@ -390,3 +390,23 @@ export async function handleTeamHistory(request, user, env, teamId) {
   if (result.error) return json({ error: result.error }, 403);
   return json(result);
 }
+
+export async function handleTeamEnrichModel(request, user, env, teamId) {
+  const body = await parseBody(request);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
+  const { model } = body;
+  if (typeof model !== 'string' || !model.trim()) {
+    return json({ error: 'model is required' }, 400);
+  }
+  if (model.length > 50) {
+    return json({ error: 'model must be 50 characters or less' }, 400);
+  }
+
+  const { agentId } = getAgentRuntime(request, user);
+  const team = getTeam(env, teamId);
+  const result = await team.enrichModel(agentId, model.trim(), user.id);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  return json(result);
+}

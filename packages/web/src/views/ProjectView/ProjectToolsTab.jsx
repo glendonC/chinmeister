@@ -9,6 +9,7 @@ export default function ProjectToolsTab({
   toolSummaries,
   hostSummaries,
   surfaceSummaries,
+  modelsSeen,
   conflicts,
   filesInPlay,
   locks,
@@ -107,6 +108,25 @@ export default function ProjectToolsTab({
             <p className={styles.emptyHint}>No extension-level surfaces observed yet.</p>
           )}
         </section>
+
+        {modelsSeen.length > 0 && (
+          <section className={styles.block}>
+            <div className={styles.blockHeader}>
+              <h2 className={styles.blockTitle}>Models</h2>
+              <span className={styles.blockMeta}>AI models observed</span>
+            </div>
+            <div className={styles.distributionList}>
+              {modelsSeen.map((m) => (
+                <div key={m.model} className={styles.distributionRow}>
+                  <div className={styles.distributionCopy}>
+                    <span className={styles.simpleLabel}>{m.model}</span>
+                    <span className={styles.distributionMeta}>{m.count} session{m.count === 1 ? '' : 's'}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         <section className={styles.block}>
           <div className={styles.blockHeader}>

@@ -10,10 +10,21 @@ export function registerContextTool(addTool, { team, state }) {
     'chinwag_get_team_context',
     {
       description: 'Get the full state of your team: who is online, what everyone is working on, and any file overlaps. Use this to orient yourself before starting work.',
-      inputSchema: z.object({}),
+      inputSchema: z.object({
+        model: z.string().max(100).optional().describe('Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.'),
+      }),
     },
-    async () => {
+    async ({ model } = {}) => {
       if (!state.teamId) return noTeam();
+
+      // Deferred model enrichment — fire-and-forget on first report
+      if (model && !state.modelReported && state.teamId) {
+        state.modelReported = true;
+        team.reportModel(state.teamId, model).catch((err) => {
+          console.error('[chinwag] Model report failed:', err.message);
+          state.modelReported = false;
+        });
+      }
       const ctx = await refreshContext(team, state.teamId);
       if (!ctx) {
         return { content: [{ type: 'text', text: 'No team context available (API unreachable, no cached data).' }], isError: true };

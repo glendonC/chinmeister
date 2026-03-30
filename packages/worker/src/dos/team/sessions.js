@@ -28,11 +28,24 @@ export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrT
 
   const id = crypto.randomUUID();
   sql.exec(
-    `INSERT INTO sessions (id, agent_id, owner_handle, framework, host_tool, agent_surface, transport, started_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    id, resolvedAgentId, handle, framework || 'unknown', runtime.hostTool, runtime.agentSurface, runtime.transport
+    `INSERT INTO sessions (id, agent_id, owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    id, resolvedAgentId, handle, framework || 'unknown', runtime.hostTool, runtime.agentSurface, runtime.transport, runtime.model
   );
   return { ok: true, session_id: id };
+}
+
+export function enrichSessionModel(sql, resolvedAgentId, model, recordMetric) {
+  sql.exec(
+    `UPDATE sessions SET agent_model = ? WHERE agent_id = ? AND ended_at IS NULL AND agent_model IS NULL`,
+    model, resolvedAgentId
+  );
+  sql.exec(
+    `UPDATE members SET agent_model = ? WHERE agent_id = ? AND agent_model IS NULL`,
+    model, resolvedAgentId
+  );
+  recordMetric(`model:${model}`);
+  return { ok: true };
 }
 
 export function endSession(sql, resolvedAgentId, sessionId) {
@@ -72,7 +85,7 @@ export function recordEdit(sql, resolvedAgentId, filePath) {
 
 export function getSessionHistory(sql, days) {
   const sessions = sql.exec(
-    `SELECT owner_handle, framework, host_tool, agent_surface, transport, started_at, ended_at,
+    `SELECT owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
            ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
      FROM sessions
