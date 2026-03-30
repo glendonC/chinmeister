@@ -22,6 +22,27 @@ let devMode = false;
 export function activate(context) {
   extensionDir = context.extensionPath;
 
+  // ── Launch queue watcher: CLI writes here, extension picks up and opens terminal ──
+  const launchQueuePath = join(homedir(), '.chinwag', 'launch-queue.json');
+  const launchWatcher = setInterval(() => {
+    try {
+      if (!existsSync(launchQueuePath)) return;
+      const raw = readFileSync(launchQueuePath, 'utf-8');
+      const { unlinkSync: rm } = require('fs');
+      rm(launchQueuePath);
+      const launch = JSON.parse(raw);
+      if (launch.command) {
+        const term = vscode.window.createTerminal({
+          name: launch.name || 'chinwag agent',
+          cwd: launch.cwd || undefined,
+        });
+        term.show();
+        term.sendText(launch.command);
+      }
+    } catch {}
+  }, 500);
+  context.subscriptions.push({ dispose: () => clearInterval(launchWatcher) });
+
   // Dev mode: load webview HTML/CSS/JS from disk files so "Developer: Reload Webviews"
   // picks up changes instantly — no window reload needed.
   const webviewDir = join(extensionDir, 'webview');

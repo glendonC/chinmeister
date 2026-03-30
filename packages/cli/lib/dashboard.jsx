@@ -10,7 +10,8 @@ import {
   shortAgentId,
 } from './dashboard-view.js';
 import { openCommandInTerminal } from './open-command-in-terminal.js';
-import { spawnAgent, killAgent, getAgents, getOutput, onUpdate, removeAgent } from './process-manager.js';
+import { spawnAgent, killAgent, getAgents, getOutput, onUpdate, removeAgent, registerExternalAgent, setExternalAgentPid, checkExternalAgentLiveness } from './process-manager.js';
+import { spawnInTerminal, detectTerminalEnvironment, readPidFile, cleanPidFile } from './terminal-spawner.js';
 import {
   HintRow,
   NoticeLine,
@@ -23,6 +24,7 @@ import {
   checkManagedAgentToolAvailability,
   classifyManagedAgentFailure,
   createManagedAgentLaunch,
+  createTerminalAgentLaunch,
   listManagedAgentTools,
 } from './managed-agents.js';
 import {
@@ -65,6 +67,8 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const [heroInput, setHeroInput] = useState('');
   const [heroInputActive, setHeroInputActive] = useState(false);
   const [commandSelectedIdx, setCommandSelectedIdx] = useState(0);
+  const [toolPickerOpen, setToolPickerOpen] = useState(false);
+  const [toolPickerIdx, setToolPickerIdx] = useState(0);
 
   // Memory management
   const [memorySelectedIdx, setMemorySelectedIdx] = useState(-1);
@@ -191,21 +195,44 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     setPreferredLaunchToolId(getSavedLauncherPreference(teamId));
   }, [teamId]);
 
+  // ── External agent lifecycle (pidfile polling + liveness) ──
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const agents = getAgents();
+      for (const agent of agents) {
+        if (agent.spawnType !== 'external' || agent.status !== 'running') continue;
+        // Try to resolve PID from pidfile if we don't have it yet
+        if (!agent.pid && agent.agentId) {
+          const pid = readPidFile(agent.agentId);
+          if (pid) setExternalAgentPid(agent.id, pid);
+        }
+      }
+      // Check liveness of all external agents with known PIDs
+      checkExternalAgentLiveness();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ── Footer bar commands (pushed to shell) ───────────
   const isComposing = Boolean(composeMode);
   useEffect(() => {
     if (!setFooterHints) return;
-    if (heroInputActive || isComposing) {
+    if (isComposing) {
       setFooterHints([{ key: 'esc', label: 'back' }, { key: 'q', label: 'quit', color: 'gray' }]);
     } else {
+      const ready = installedCliAgents.filter(t => getManagedToolState(t.id).state === 'ready');
+      const primary = ready[0] || installedCliAgents[0];
+      const nLabel = primary
+        ? (ready.length > 1 ? 'open agent' : `open ${primary.name}`)
+        : 'open agent';
       setFooterHints([
-        { key: 'n', label: 'new task', color: 'green' },
+        { key: 'n', label: nLabel, color: 'green' },
         { key: 'w', label: 'web' },
         { key: '/', label: 'more' },
         { key: 'q', label: 'quit', color: 'gray' },
       ]);
     }
-  }, [heroInputActive, isComposing]);
+  }, [isComposing, installedCliAgents, managedToolStates]);
 
   // ── Helpers ──────────────────────────────────────────
 
@@ -322,37 +349,15 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     const rest = restParts.join(' ').trim();
 
     if (verb === 'new' || verb === 'start') {
-      if (!rest) {
-        setHeroInputActive(true);
-        setMainFocus('input');
-        clearCompose();
-        return;
+      // /new <tool> — launch specific tool
+      // /new — launch first ready tool
+      const explicitTool = rest ? resolveReadyTool(rest) : null;
+      const tool = explicitTool || selectedLaunchTool || readyCliAgents[0];
+      if (tool) {
+        launchManagedTask(tool, '');
+      } else {
+        flash('No tools ready. Run /recheck.', { tone: 'warning' });
       }
-
-      const [toolToken, ...taskParts] = rest.split(/\s+/);
-      const explicitTool = resolveReadyTool(toolToken);
-      if (explicitTool) {
-        const taskText = taskParts.join(' ').trim();
-        if (taskText) {
-          launchManagedTask(explicitTool, taskText);
-        } else {
-          selectLaunchTool(explicitTool);
-          setHeroInputActive(true);
-          setMainFocus('input');
-        }
-        clearCompose();
-        return;
-      }
-
-      if (selectedLaunchTool && canLaunchSelectedTool) {
-        launchManagedTask(selectedLaunchTool, rest);
-        clearCompose();
-        return;
-      }
-
-      setHeroInput(rest);
-      setHeroInputActive(true);
-      setMainFocus('input');
       clearCompose();
       return;
     }
@@ -475,11 +480,10 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       });
   }
 
-  function handleSpawnAgent(toolInfo, task, options = {}) {
-    if (!toolInfo || !task.trim()) return false;
+  function handleSpawnAgent(toolInfo, task = '', options = {}) {
+    if (!toolInfo) return false;
     const {
       flashSuccess = true,
-      successMessage = `Started ${toolInfo.name}`,
     } = options;
     const toolState = getManagedToolState(toolInfo.id);
     if (toolState.state !== 'ready') {
@@ -489,6 +493,24 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     }
 
     try {
+      // Try spawning in a real terminal tab first (full interactive UX)
+      const termLaunch = createTerminalAgentLaunch({
+        tool: toolInfo,
+        task,
+        cwd: projectRoot,
+        token: config?.token,
+      });
+      const termResult = spawnInTerminal(termLaunch);
+      if (termResult.ok) {
+        registerExternalAgent(termLaunch);
+        if (flashSuccess) {
+          const env = detectTerminalEnvironment();
+          flash(`Opened ${toolInfo.name} in ${env.name}`, { tone: 'success' });
+        }
+        return true;
+      }
+
+      // Fallback: spawn via node-pty (captured output, no interactivity)
       const launch = createManagedAgentLaunch({
         tool: toolInfo,
         task,
@@ -503,7 +525,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         return false;
       }
       if (flashSuccess) {
-        flash(successMessage, { tone: 'success' });
+        flash(`Started ${toolInfo.name} in background`, { tone: 'success' });
       }
       return true;
     } catch (err) {
@@ -592,29 +614,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     }
   }
 
-  function handleHeroSubmit() {
-    const task = heroInput.trim();
-    if (!task) return;
-
-    // Pick the first ready tool automatically
-    const tool = readyCliAgents[0] || selectedLaunchTool;
-    if (!tool || !canLaunchSelectedTool && tool === selectedLaunchTool) {
-      if (installedCliAgents.length === 0) {
-        flash('No CLI tools configured. Run chinwag add <tool> to add one.', { tone: 'warning' });
-      } else {
-        flash('No tools ready. Run /recheck to check tool availability.', { tone: 'warning' });
-      }
-      return;
-    }
-
-    const didStart = launchManagedTask(tool, task, { flashSuccess: false });
-    if (didStart) {
-      setHeroInput('');
-      setHeroInputActive(false);
-      flash(`Started ${tool.name}: ${task}`, { tone: 'success' });
-    }
-  }
-
   function handleOpenWebDashboard() {
     const result = openWebDashboard(config?.token);
     flash(
@@ -673,7 +672,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const visibleSessionRows = getVisibleWindow(allVisibleAgents, selectedIdx, Math.max(4, viewportRows - 11));
   const visibleKnowledgeRows = getVisibleWindow(knowledgeVisible, memorySelectedIdx, Math.max(4, viewportRows - 11));
   const commandEntries = [
-    { name: '/new', description: 'Start a new task' },
+    { name: '/new', description: 'Open a tool in a new terminal tab' },
     ...(unavailableCliAgents.some(tool => getManagedToolState(tool.id).recoveryCommand)
       ? [{ name: '/fix', description: 'Open the main setup fix flow' }]
       : []),
@@ -778,19 +777,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
-    // ── Hero input active: handle Tab to cycle tools ───
-    if (heroInputActive && isHomeView) {
-      if (key.tab) {
-        cycleToolForward();
-        return;
-      }
-      if (key.escape) {
-        setHeroInputActive(false);
-        return;
-      }
-      // Don't intercept other keys while typing in the hero input
-      return;
-    }
 
     // When composing text in secondary modes
     if (isComposing) {
@@ -809,11 +795,34 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
+    // ── Tool picker overlay ─────────────────────────────
+    if (toolPickerOpen) {
+      const tools = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
+      if (key.escape) { setToolPickerOpen(false); return; }
+      if (key.downArrow) { setToolPickerIdx(i => Math.min(i + 1, tools.length - 1)); return; }
+      if (key.upArrow) { setToolPickerIdx(i => Math.max(i - 1, 0)); return; }
+      if (key.return) {
+        const tool = tools[toolPickerIdx];
+        if (tool) handleSpawnAgent(tool, '', { flashSuccess: true });
+        setToolPickerOpen(false);
+        return;
+      }
+      return;
+    }
+
     // ── Home view input ───────────────────────────────
     if (isHomeView) {
-      // [n] or Enter activates the hero input
-      if (input === 'n' || (key.return && mainFocus === 'input')) {
-        setHeroInputActive(true);
+      // [n] opens tool or tool picker
+      if (input === 'n') {
+        const tools = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
+        if (tools.length === 0) {
+          flash('No tools configured. Run chinwag add <tool>.', { tone: 'warning' });
+        } else if (tools.length === 1) {
+          handleSpawnAgent(tools[0], '', { flashSuccess: true });
+        } else {
+          setToolPickerIdx(0);
+          setToolPickerOpen(true);
+        }
         return;
       }
 
@@ -1231,10 +1240,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   // ── Build hint bars: contextual (top) + global (bottom) ─────
   // Contextual hints change with mode (shown only when relevant)
   const contextHints = [];
-  if (heroInputActive) {
-    if (heroInput.trim()) contextHints.push({ commandKey: 'enter', label: 'send', color: 'green' });
-    contextHints.push({ commandKey: 'esc', label: 'back', color: 'cyan' });
-  } else if (mainSelectedAgent) {
+  if (mainSelectedAgent) {
     contextHints.push({ commandKey: 'enter', label: 'inspect', color: 'cyan' });
     if (isAgentAddressable(mainSelectedAgent)) contextHints.push({ commandKey: 'm', label: 'message', color: 'cyan' });
     if (mainSelectedAgent._managed && !mainSelectedAgent._dead) contextHints.push({ commandKey: 'x', label: 'stop', color: 'red' });
@@ -1262,18 +1268,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         <Text color={connState === 'offline' ? 'red' : 'yellow'}>{connDetail}</Text>
       )}
 
-      {/* Task input (only when activated with [n]) */}
-      {heroInputActive && (
-        <Box marginTop={1}>
-          <Text color="cyan">{'> '}</Text>
-          <TextInput
-            value={heroInput}
-            onChange={setHeroInput}
-            onSubmit={handleHeroSubmit}
-            placeholder="describe a task for an agent"
-          />
-        </Box>
-      )}
 
       {/* Agents section */}
       <Box flexDirection="column" marginTop={1}>
@@ -1285,40 +1279,69 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
           )}
         </Text>
         {allVisibleAgents.length === 0 ? (
-          <Text dimColor>  No agents connected. Start a tool in another terminal.</Text>
-        ) : (
-          <Box flexDirection="column" marginTop={1}>
-            {visibleSessionRows.items.map((agent, idx) => {
-              const absoluteIdx = visibleSessionRows.start + idx;
-              const isSelected = absoluteIdx === selectedIdx;
-              const intent = getAgentIntent(agent);
-              const isDone = agent._dead;
-              const isFailed = agent._failed;
-              const statusIcon = isDone ? (isFailed ? '✗' : '✓') : '●';
-              const statusColor = isDone ? (isFailed ? 'red' : 'green') : (agent._managed ? 'green' : 'cyan');
-              const statusText = isDone
-                ? (isFailed ? 'failed' : (agent.outputPreview ? agent.outputPreview : 'done'))
-                : (intent || 'Idle');
-              const statusTextColor = isDone ? (isFailed ? 'red' : 'green') : getIntentColor(intent);
-              return (
-                <Box key={agent.agent_id || agent.id} flexDirection="column" paddingBottom={1}>
-                  <Text>
-                    <Text color={isSelected && mainFocus === 'agents' ? 'cyan' : 'gray'}>{isSelected && mainFocus === 'agents' ? '› ' : '  '}</Text>
-                    <Text color={statusColor}>{statusIcon} </Text>
-                    <Text bold={isSelected && mainFocus === 'agents'} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts)}</Text>
-                    {agent._duration && <Text dimColor>  {agent._duration}</Text>}
-                    <Text dimColor>  </Text>
-                    <Text color={statusTextColor} dimColor={statusTextColor === 'gray'}>{statusText}</Text>
+          <Text dimColor>  No agents connected. Press [n] to open one.</Text>
+        ) : (() => {
+          const toolColWidth = Math.max(4, ...allVisibleAgents.map(a => getAgentDisplayLabel(a, liveAgentNameCounts).length)) + 1;
+          return (
+            <Box flexDirection="column" marginTop={1}>
+              {/* Header */}
+              <Text dimColor>
+                {'  '}
+                {'STATUS'.padEnd(10)}
+                {'TOOL'.padEnd(toolColWidth)}
+                {'ACTIVITY'}
+              </Text>
+              {visibleSessionRows.items.map((agent, idx) => {
+                const absoluteIdx = visibleSessionRows.start + idx;
+                const isSelected = absoluteIdx === selectedIdx;
+                const sel = isSelected && mainFocus === 'agents';
+                const intent = getAgentIntent(agent);
+                const isDone = agent._dead;
+                const isFailed = agent._failed;
+                const status = isDone ? (isFailed ? 'failed' : 'done') : (intent && !/idle/i.test(intent) ? 'active' : 'idle');
+                const statusColor = { active: 'green', idle: 'yellow', done: 'green', failed: 'red' }[status] || 'gray';
+                const activity = isDone
+                  ? (agent.outputPreview || (isFailed ? 'exited with error' : 'completed'))
+                  : (intent && !/idle/i.test(intent) ? intent : (agent._duration || '-'));
+                return (
+                  <Text key={agent.agent_id || agent.id}>
+                    <Text color={sel ? 'cyan' : 'gray'}>{sel ? '› ' : '  '}</Text>
+                    <Text color={statusColor}>{status.padEnd(10)}</Text>
+                    <Text bold={sel} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts).padEnd(toolColWidth)}</Text>
+                    <Text dimColor={isDone}>{activity}</Text>
                   </Text>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
+                );
+              })}
+            </Box>
+          );
+        })()}
       </Box>
 
       {/* Notice line */}
       <NoticeLine notice={notice} />
+
+      {/* Tool picker overlay */}
+      {toolPickerOpen && (() => {
+        const tools = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
+        const termEnv = detectTerminalEnvironment();
+        return (
+          <Box flexDirection="column" marginTop={1}>
+            <Text>
+              <Text dimColor>Opens in: </Text>
+              <Text>{termEnv.name}</Text>
+            </Text>
+            <Box flexDirection="column" marginTop={1}>
+              {tools.map((tool, idx) => (
+                <Text key={tool.id}>
+                  <Text color={idx === toolPickerIdx ? 'cyan' : 'gray'}>{idx === toolPickerIdx ? '› ' : '  '}</Text>
+                  <Text color={idx === toolPickerIdx ? 'cyan' : 'white'}>{tool.name}</Text>
+                </Text>
+              ))}
+            </Box>
+            <Text dimColor>{'\n'}↑↓ select · enter open · esc cancel</Text>
+          </Box>
+        );
+      })()}
 
       {/* Compose overlay (commands, messages, memory) */}
       {isComposing && (

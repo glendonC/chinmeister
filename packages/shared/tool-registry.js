@@ -35,7 +35,7 @@ export const MCP_TOOLS = [
     mcpConfig: '.mcp.json',
     hooks: true,
     channel: true,
-    spawn: { cmd: 'claude', args: ['--print'] },
+    spawn: { cmd: 'claude', args: ['--print'], interactiveArgs: [] },
     availabilityCheck: {
       args: ['auth', 'status', '--json'],
       parse: parseClaudeCodeAvailability,

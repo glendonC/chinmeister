@@ -71,6 +71,28 @@ export function createManagedAgentLaunch({
   };
 }
 
+export function createTerminalAgentLaunch({ tool, task = '', cwd, token }) {
+  if (!tool?.id || !tool?.cmd) throw new Error('Missing managed agent tool metadata');
+  if (!cwd) throw new Error('Working directory is required');
+  if (!token) throw new Error('Missing chinwag auth token');
+
+  const agentId = generateSessionAgentId(token, tool.id);
+  const fullTool = MCP_TOOLS.find(t => t.id === tool.id);
+  const args = fullTool?.spawn?.interactiveArgs ?? tool.args ?? [];
+
+  return {
+    toolId: tool.id,
+    toolName: tool.name,
+    cmd: tool.cmd,
+    args,
+    taskArg: tool.taskArg,
+    task: task?.trim() || '',
+    cwd,
+    agentId,
+    interactive: true,
+  };
+}
+
 export async function checkManagedAgentToolAvailability(tool, { cwd = process.cwd(), timeoutMs = 4000 } = {}) {
   if (!tool?.id || !tool?.cmd) {
     return { toolId: tool?.id || 'unknown', state: 'unavailable', detail: 'Missing tool metadata' };

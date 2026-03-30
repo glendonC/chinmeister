@@ -271,32 +271,49 @@ export function spawnAgent(launch) {
 export function killAgent(id) {
   const proc = processes.get(id);
   if (!proc) return false;
+  if (proc.status !== 'running') return false;
 
-  // Already dead
-  if (proc.status !== 'running' || !proc.pty) return false;
-
-  try {
-    proc.pty.kill('SIGTERM');
-  } catch {
-    // Process may already be gone
-    return false;
-  }
-
-  // Schedule SIGKILL if it doesn't exit gracefully
-  if (!proc._killTimer) {
-    proc._killTimer = setTimeout(() => {
-      if (proc.status === 'running' && proc.pty) {
-        try {
-          proc.pty.kill('SIGKILL');
-        } catch {
-          // Already gone
+  // PTY-based agent (spawned via node-pty)
+  if (proc.pty) {
+    try {
+      proc.pty.kill('SIGTERM');
+    } catch {
+      return false;
+    }
+    if (!proc._killTimer) {
+      proc._killTimer = setTimeout(() => {
+        if (proc.status === 'running' && proc.pty) {
+          try { proc.pty.kill('SIGKILL'); } catch {}
         }
-      }
-      proc._killTimer = null;
-    }, KILL_GRACE_MS);
+        proc._killTimer = null;
+      }, KILL_GRACE_MS);
+    }
+    return true;
   }
 
-  return true;
+  // External agent (spawned in terminal tab, tracked by PID)
+  if (proc.pid) {
+    try {
+      process.kill(proc.pid, 'SIGTERM');
+    } catch {
+      // Process already gone — mark as exited
+      proc.status = 'exited';
+      proc.exitCode = null;
+      notifyUpdate();
+      return true;
+    }
+    if (!proc._killTimer) {
+      proc._killTimer = setTimeout(() => {
+        if (proc.status === 'running') {
+          try { process.kill(proc.pid, 'SIGKILL'); } catch {}
+        }
+        proc._killTimer = null;
+      }, KILL_GRACE_MS);
+    }
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -318,6 +335,7 @@ export function getAgents() {
     status: proc.status,
     startedAt: proc.startedAt,
     exitCode: proc.exitCode,
+    spawnType: proc.spawnType || 'pty',
     outputPreview: summarizeOutput(proc.outputBuffer, proc.task),
   }));
 }
@@ -437,4 +455,74 @@ export function removeAgent(id) {
   processes.delete(id);
   notifyUpdate();
   return true;
+}
+
+/**
+ * Register an externally-spawned agent (terminal tab).
+ * No pty, no output buffer. Tracked by PID for lifecycle management.
+ */
+export function registerExternalAgent({
+  toolId,
+  toolName,
+  cmd,
+  args = [],
+  taskArg,
+  task,
+  cwd,
+  agentId = null,
+  pid = null,
+}) {
+  const id = nextId++;
+  const proc = {
+    id,
+    toolId,
+    toolName: toolName || toolId,
+    cmd,
+    args,
+    taskArg,
+    task,
+    cwd,
+    agentId,
+    pty: null,
+    pid,
+    spawnType: 'external',
+    status: 'running',
+    startedAt: Date.now(),
+    exitCode: null,
+    outputBuffer: [],
+    _killTimer: null,
+  };
+  processes.set(id, proc);
+  notifyUpdate();
+  return { id, toolId, toolName: proc.toolName, task, status: 'running', startedAt: proc.startedAt, agentId };
+}
+
+/**
+ * Update the PID of an external agent (resolved from pidfile after spawn).
+ */
+export function setExternalAgentPid(id, pid) {
+  const proc = processes.get(id);
+  if (!proc || proc.pty) return;
+  proc.pid = pid;
+}
+
+/**
+ * Check liveness of external agents. Mark dead ones as exited.
+ * Returns true if any state changed.
+ */
+export function checkExternalAgentLiveness() {
+  let changed = false;
+  for (const proc of processes.values()) {
+    if (proc.spawnType !== 'external' || proc.status !== 'running') continue;
+    if (!proc.pid) continue;
+    try {
+      process.kill(proc.pid, 0);
+    } catch {
+      proc.status = 'exited';
+      proc.exitCode = null;
+      changed = true;
+    }
+  }
+  if (changed) notifyUpdate();
+  return changed;
 }
