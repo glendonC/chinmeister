@@ -13,6 +13,8 @@ import { loadConfig, configExists } from './lib/config.js';
 import { api } from './lib/api.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
 import { resolveAgentIdentity } from './lib/lifecycle.js';
+import { formatWho } from './lib/utils/formatting.js';
+import { formatTeamContextDisplay } from './lib/utils/display.js';
 
 const subcommand = process.argv[2];
 
@@ -61,15 +63,13 @@ async function checkConflict(team, teamId, input) {
 
     if (result.conflicts && result.conflicts.length > 0) {
       for (const c of result.conflicts) {
-        const who = c.tool && c.tool !== 'unknown' ? `${c.owner_handle} (${c.tool})` : c.owner_handle;
-        issues.push(`${who} is editing ${c.files.join(', ')} — "${c.summary}"`);
+        issues.push(`${formatWho(c.owner_handle, c.tool)} is editing ${c.files.join(', ')} — "${c.summary}"`);
       }
     }
 
     if (result.locked && result.locked.length > 0) {
       for (const l of result.locked) {
-        const who = l.tool && l.tool !== 'unknown' ? `${l.held_by} (${l.tool})` : l.held_by;
-        issues.push(`${l.file} is locked by ${who}`);
+        issues.push(`${l.file} is locked by ${formatWho(l.held_by, l.tool)}`);
       }
     }
 
@@ -115,54 +115,10 @@ async function sessionStart(team, teamId, hasExactSession) {
 
     if (ctx.members && ctx.members.length > 0) {
       console.log('=== chinwag team context ===');
-      for (const m of ctx.members) {
-        const toolInfo = m.tool && m.tool !== 'unknown' ? `, ${m.tool}` : '';
-        const activity = m.activity
-          ? `working on ${m.activity.files.join(', ')}${m.activity.summary ? ` — "${m.activity.summary}"` : ''}`
-          : 'idle';
-        console.log(`  ${m.handle} (${m.status}${toolInfo}): ${activity}`);
+      const lines = formatTeamContextDisplay(ctx, { showInsights: true });
+      for (const line of lines) {
+        console.log(line);
       }
-
-      if (ctx.locks && ctx.locks.length > 0) {
-        console.log('');
-        console.log('Locked files:');
-        for (const l of ctx.locks) {
-          const who = l.tool && l.tool !== 'unknown' ? `${l.owner_handle} (${l.tool})` : l.owner_handle;
-          console.log(`  ${l.file_path} — ${who} (${Math.round(l.minutes_held)}m)`);
-        }
-      }
-
-      if (ctx.memories && ctx.memories.length > 0) {
-        console.log('');
-        console.log('Project knowledge:');
-        for (const mem of ctx.memories) {
-          const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
-          console.log(`  ${mem.text}${tagStr}`);
-        }
-      }
-
-      // Surface actionable insights
-      const insights = [];
-      for (const m of ctx.members) {
-        if (m.activity?.updated_at) {
-          const mins = m.minutes_since_update != null
-            ? m.minutes_since_update
-            : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
-          if (mins > 15) {
-            const stuckFile = m.activity?.files?.[0];
-            if (!stuckFile) continue;
-            insights.push(`${m.handle} has been on ${stuckFile} for ${Math.round(mins)} min — may need help`);
-          }
-        }
-      }
-      if (insights.length > 0) {
-        console.log('');
-        console.log('Insights:');
-        for (const insight of insights) {
-          console.log(`  ${insight}`);
-        }
-      }
-
       console.log('===========================');
     }
   } catch (err) {

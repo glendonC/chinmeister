@@ -14,7 +14,7 @@ import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
 import { detectRuntimeIdentity, generateSessionAgentId, getConfiguredAgentId } from './lib/identity.js';
 import { cleanupProcessSession, registerProcessSession } from './lib/lifecycle.js';
-import { registerTools, registerResources } from './lib/register-tools.js';
+import { registerTools, registerResources } from './lib/tools/index.js';
 import { isProcessAlive, setTerminalTitle } from '../shared/session-registry.js';
 
 let PKG = { version: '0.0.0' };

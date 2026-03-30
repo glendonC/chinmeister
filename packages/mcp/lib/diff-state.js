@@ -2,15 +2,12 @@
 // Compares two snapshots of team context and returns human-readable event strings
 // for meaningful changes (new agents, file edits, conflicts, memories, locks, messages).
 
+import { formatAgentLabel, formatWho } from './utils/formatting.js';
+
 const STUCKNESS_THRESHOLD_MINUTES = 15;
 
 function agentKey(m) {
   return m.agent_id || m.handle;
-}
-
-function agentLabel(m) {
-  if (m.tool && m.tool !== 'unknown') return `${m.handle} (${m.tool})`;
-  return m.handle;
 }
 
 export function diffState(prev, curr, stucknessAlerted) {
@@ -26,7 +23,7 @@ export function diffState(prev, curr, stucknessAlerted) {
     if (!prevKeys.has(key)) {
       const m = currByKey.get(key);
       const activity = m.activity ? ` — working on ${m.activity.files.join(', ')}` : '';
-      events.push(`Agent ${agentLabel(m)} joined the team${activity}`);
+      events.push(`Agent ${formatAgentLabel(m)} joined the team${activity}`);
     }
   }
 
@@ -34,7 +31,7 @@ export function diffState(prev, curr, stucknessAlerted) {
   for (const key of prevKeys) {
     if (!currKeys.has(key)) {
       const m = prevByKey.get(key);
-      events.push(`Agent ${agentLabel(m)} disconnected`);
+      events.push(`Agent ${formatAgentLabel(m)} disconnected`);
     }
   }
 
@@ -50,7 +47,7 @@ export function diffState(prev, curr, stucknessAlerted) {
     const newFiles = currFiles.filter(f => !prevFiles.has(f));
 
     if (newFiles.length > 0) {
-      events.push(`${agentLabel(currMember)} started editing ${newFiles.join(', ')}`);
+      events.push(`${formatAgentLabel(currMember)} started editing ${newFiles.join(', ')}`);
     }
   }
 
@@ -61,7 +58,7 @@ export function diffState(prev, curr, stucknessAlerted) {
     if (m.status !== 'active' || !m.activity?.files) continue;
     for (const f of m.activity.files) {
       if (!prevFileOwners.has(f)) prevFileOwners.set(f, []);
-      prevFileOwners.get(f).push(agentLabel(m));
+      prevFileOwners.get(f).push(formatAgentLabel(m));
     }
   }
   for (const [file, owners] of prevFileOwners) {
@@ -73,7 +70,7 @@ export function diffState(prev, curr, stucknessAlerted) {
     if (m.status !== 'active' || !m.activity?.files) continue;
     for (const f of m.activity.files) {
       if (!currFileOwners.has(f)) currFileOwners.set(f, []);
-      currFileOwners.get(f).push(agentLabel(m));
+      currFileOwners.get(f).push(formatAgentLabel(m));
     }
   }
   for (const [file, owners] of currFileOwners) {
@@ -97,7 +94,7 @@ export function diffState(prev, curr, stucknessAlerted) {
         ? m.minutes_since_update
         : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
       if (minutesOnSameActivity > STUCKNESS_THRESHOLD_MINUTES) {
-        events.push(`Agent ${agentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min — may be stuck`);
+        events.push(`Agent ${formatAgentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min — may be stuck`);
         stucknessAlerted.set(key, m.activity.updated_at);
       }
     }
@@ -125,14 +122,12 @@ export function diffState(prev, curr, stucknessAlerted) {
   const currLocks = new Map((curr.locks || []).map(l => [l.file_path, l]));
   for (const [file, lock] of currLocks) {
     if (!prevLocks.has(file)) {
-      const who = lock.tool && lock.tool !== 'unknown' ? `${lock.owner_handle} (${lock.tool})` : lock.owner_handle;
-      events.push(`${who} locked ${file}`);
+      events.push(`${formatWho(lock.owner_handle, lock.tool)} locked ${file}`);
     }
   }
   for (const [file, lock] of prevLocks) {
     if (!currLocks.has(file)) {
-      const who = lock.tool && lock.tool !== 'unknown' ? `${lock.owner_handle} (${lock.tool})` : lock.owner_handle;
-      events.push(`${who} released lock on ${file}`);
+      events.push(`${formatWho(lock.owner_handle, lock.tool)} released lock on ${file}`);
     }
   }
 
@@ -141,8 +136,7 @@ export function diffState(prev, curr, stucknessAlerted) {
   for (const msg of (curr.messages || [])) {
     const key = msg.created_at + msg.from_handle;
     if (!prevMsgIds.has(key)) {
-      const from = msg.from_tool && msg.from_tool !== 'unknown' ? `${msg.from_handle} (${msg.from_tool})` : msg.from_handle;
-      events.push(`Message from ${from}: ${msg.text}`);
+      events.push(`Message from ${formatWho(msg.from_handle, msg.from_tool)}: ${msg.text}`);
     }
   }
 

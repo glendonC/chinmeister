@@ -1,6 +1,8 @@
 // Shared context cache — serves as both preamble source and offline fallback.
 // When the API is unreachable, tools return this cached state with an [offline] tag.
 
+import { formatToolTag } from './utils/formatting.js';
+
 let cachedContext = null;
 let cachedContextAt = 0;
 let cachedContextTeam = null;
@@ -54,7 +56,7 @@ export async function teamPreamble(team, teamId) {
   if (active.length === 0) return offlinePrefix();
 
   const summary = active.map(m => {
-    const toolTag = m.tool && m.tool !== 'unknown' ? ` (${m.tool})` : '';
+    const toolTag = formatToolTag(m.tool);
     const files = m.activity?.files?.join(', ') || 'idle';
     return `${m.handle}${toolTag}: ${files}`;
   }).join(' | ');
