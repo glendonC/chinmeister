@@ -1,32 +1,18 @@
-import { existsSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import {
+  TEAM_ID_PATTERN,
+  isValidTeamId,
+  findTeamFile as findTeamFileShared,
+} from '../../shared/team-utils.js';
 
-const TEAM_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+export { TEAM_ID_PATTERN, isValidTeamId };
 
-function isValidTeamId(id) {
-  return typeof id === 'string' && id.length > 0 && id.length <= 30 && TEAM_ID_PATTERN.test(id);
-}
-
+/**
+ * Find .chinwag file and return the team ID, or null.
+ * Wraps the shared findTeamFile to preserve the MCP-expected return type (string | null).
+ */
 export function findTeamFile(cwd = process.cwd()) {
-  let dir = cwd;
-  while (true) {
-    const filePath = join(dir, '.chinwag');
-    if (existsSync(filePath)) {
-      try {
-        const raw = readFileSync(filePath, 'utf-8');
-        const data = JSON.parse(raw);
-        const teamId = data.team || null;
-        if (teamId && !isValidTeamId(teamId)) return null;
-        return teamId;
-      } catch {
-        return null;
-      }
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  return null;
+  const result = findTeamFileShared(cwd);
+  return result ? result.teamId : null;
 }
 
 export function teamHandlers(client) {
