@@ -2,8 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
 import { basename } from 'path';
-import { homedir } from 'os';
-import { execFileSync } from 'child_process';
 import { api } from './api.js';
 import {
   buildCombinedAgentRows,
@@ -11,7 +9,6 @@ import {
   formatFiles,
   shortAgentId,
 } from './dashboard-view.js';
-import { detectTools } from './mcp-config.js';
 import { openCommandInTerminal } from './open-command-in-terminal.js';
 import { spawnAgent, killAgent, getAgents, getOutput, onUpdate, removeAgent } from './process-manager.js';
 import {
@@ -33,90 +30,29 @@ import {
   resolvePreferredManagedTool,
   saveLauncherPreference,
 } from './launcher-preferences.js';
-import { getProjectContext } from './project.js';
-
-const DASHBOARD_URL = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
-
-function openWebDashboard(token) {
-  const url = token ? `${DASHBOARD_URL}#token=${token}` : DASHBOARD_URL;
-  try {
-    if (process.platform === 'darwin') {
-      execFileSync('open', [url], { stdio: 'ignore' });
-      return { ok: true };
-    }
-    if (process.platform === 'linux') {
-      execFileSync('xdg-open', [url], { stdio: 'ignore' });
-      return { ok: true };
-    }
-    if (process.platform === 'win32') {
-      execFileSync('cmd', ['/c', 'start', '', url], { stdio: 'ignore' });
-      return { ok: true };
-    }
-    return { ok: false, error: 'Unsupported platform' };
-  } catch {
-    return { ok: false, error: 'Could not open browser' };
-  }
-}
-
-// Strip ANSI escape codes, OSC sequences, cursor controls, and carriage returns
-function stripAnsi(str) {
-  return str
-    .replace(/\x1b\][^\x07]*\x07/g, '')          // OSC sequences (title, etc.)
-    .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, '')       // CSI sequences (colors, cursor)
-    .replace(/\x1b\([A-Z]/g, '')                    // Character set selection
-    .replace(/\x1b[=>MNOP78]/g, '')                 // Other escape sequences
-    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '') // Control characters (keep \n \r \t)
-    .replace(/\r/g, '');
-}
-
-const MIN_WIDTH = 50;
-
-function getVisibleWindow(items, selectedIdx, maxItems) {
-  if (!items?.length || items.length <= maxItems) {
-    return { items: items || [], start: 0 };
-  }
-
-  if (selectedIdx == null || selectedIdx < 0) {
-    return { items: items.slice(0, maxItems), start: 0 };
-  }
-
-  const half = Math.floor(maxItems / 2);
-  let start = Math.max(0, selectedIdx - half);
-  if (start + maxItems > items.length) {
-    start = Math.max(0, items.length - maxItems);
-  }
-
-  return {
-    items: items.slice(start, start + maxItems),
-    start,
-  };
-}
-
-function formatProjectPath(projectRoot) {
-  const home = homedir();
-  if (projectRoot?.startsWith(home)) {
-    return `~${projectRoot.slice(home.length)}`;
-  }
-  return projectRoot;
-}
+import { useDashboardConnection } from './dashboard-connection.jsx';
+import { AgentFocusView } from './dashboard-agent-focus.jsx';
+import {
+  MIN_WIDTH, SPINNER,
+  openWebDashboard, getVisibleWindow, formatProjectPath,
+} from './dashboard-utils.js';
+import {
+  isAgentAddressable, getAgentTargetLabel, getAgentIntent,
+  getAgentDisplayLabel, getIntentColor,
+} from './dashboard-agent-display.js';
 
 export function Dashboard({ config, navigate, layout, projectLabel = null, appVersion = '0.1.0', setFooterHints }) {
   const { stdout } = useStdout();
-  const [cols, setCols] = useState(stdout?.columns || 80);
   const viewportRows = layout?.viewportRows || 18;
 
-  // Project state
-  const [teamId, setTeamId] = useState(null);
-  const [teamName, setTeamName] = useState(null);
-  const [projectRoot, setProjectRoot] = useState(process.cwd());
-  const [detectedTools, setDetectedTools] = useState([]);
-  const [context, setContext] = useState(null);
-  const [error, setError] = useState(null);          // fatal (no .chinwag, etc.)
-  const [connState, setConnState] = useState('connecting'); // 'connected' | 'connecting' | 'reconnecting' | 'offline'
-  const [connDetail, setConnDetail] = useState(null); // human-readable detail
-  const consecutiveFailures = useRef(0);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [spinnerFrame, setSpinnerFrame] = useState(0);
+  // ── Connection + project state (hook) ──────────────
+  const connection = useDashboardConnection({ config, stdout });
+  const {
+    teamId, teamName, projectRoot, detectedTools,
+    context, error, connState, connDetail, spinnerFrame, cols,
+    consecutiveFailures, retry: connectionRetry, bumpRefreshKey,
+    setError, setConnState,
+  } = connection;
 
   // Navigation state
   const [selectedIdx, setSelectedIdx] = useState(-1);
@@ -162,99 +98,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   // CLI agents
   const [installedCliAgents] = useState(() => listManagedAgentTools());
 
-  // ── Spinner for loading/reconnecting states ──────────
-  const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  useEffect(() => {
-    if (connState === 'connected' || connState === 'offline') return;
-    const t = setInterval(() => setSpinnerFrame(f => (f + 1) % SPINNER.length), 80);
-    return () => clearInterval(t);
-  }, [connState]);
-
-  // ── Terminal resize ──────────────────────────────────
-  useEffect(() => {
-    if (!stdout) return;
-    const onResize = () => setCols(stdout.columns);
-    stdout.on('resize', onResize);
-    return () => stdout.off('resize', onResize);
-  }, [stdout]);
-
-  // ── .chinwag file discovery ──────────────────────────
-  useEffect(() => {
-    const project = getProjectContext(process.cwd());
-    if (!project) {
-      setError('No .chinwag file found. Run `npx chinwag init` first.');
-      return;
-    }
-    if (project.error) {
-      setError(project.error);
-      return;
-    }
-
-    setTeamId(project.teamId);
-    setTeamName(project.teamName);
-    setProjectRoot(project.root);
-
-    try {
-      setDetectedTools(detectTools(project.root));
-    } catch {}
-  }, []);
-
-  // ── API polling ──────────────────────────────────────
-  useEffect(() => {
-    if (!teamId) return;
-    const client = api(config);
-    let joined = false;
-
-    function classifyError(err) {
-      const msg = err.message || '';
-      const status = err.status;
-      if (status === 401) return { state: 'offline', detail: 'Session expired. Re-run chinwag init.', fatal: true };
-      if (status === 403) return { state: 'offline', detail: 'Access denied. You may have been removed from this team.' };
-      if (status === 404) return { state: 'offline', detail: 'Team not found. The .chinwag file may be stale.' };
-      if (status === 429) return { state: 'reconnecting', detail: 'Rate limited. Retrying shortly.' };
-      if (status >= 500) return { state: 'reconnecting', detail: 'Server error. Retrying...' };
-      if (status === 408 || msg.includes('timed out')) return { state: 'reconnecting', detail: 'Request timed out. Retrying...' };
-      if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some(c => msg.includes(c))) {
-        return { state: 'offline', detail: 'Cannot reach server. Check your connection.' };
-      }
-      return { state: 'reconnecting', detail: msg || 'Connection issue. Retrying...' };
-    }
-
-    async function fetchContext() {
-      try {
-        if (!joined) {
-          await client.post(`/teams/${teamId}/join`, { name: teamName }).catch(() => {});
-          joined = true;
-        }
-        const ctx = await client.get(`/teams/${teamId}/context`);
-        setContext(ctx);
-        consecutiveFailures.current = 0;
-        setConnState('connected');
-        setConnDetail(null);
-      } catch (err) {
-        if (err.message?.includes('Not a member')) joined = false;
-        consecutiveFailures.current++;
-        const classified = classifyError(err);
-        // After 6+ consecutive failures, stop auto-retrying — let user decide
-        if (consecutiveFailures.current >= 6 && classified.state === 'reconnecting') {
-          setConnState('offline');
-          setConnDetail(classified.detail.replace('Retrying...', 'Press [r] to retry.').replace('Retrying shortly.', 'Press [r] to retry.'));
-        } else {
-          setConnState(classified.state);
-          setConnDetail(classified.detail);
-        }
-        // Don't wipe existing context — show stale data with a connection banner
-      }
-    }
-
-    fetchContext();
-    // Back off if we keep failing: 5s normal, 15s after 3 failures, 30s after 6
-    const interval = setInterval(fetchContext,
-      consecutiveFailures.current >= 6 ? 30_000
-        : consecutiveFailures.current >= 3 ? 15_000
-        : 5000);
-    return () => clearInterval(interval);
-  }, [teamId, teamName, refreshKey, config?.token]);
 
   // ── Process manager sync + duration ticker ───────────
   useEffect(() => {
@@ -418,17 +261,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     return managedToolStates[toolId] || { toolId, state: 'checking', detail: 'Checking readiness' };
   }
 
-  function isAgentAddressable(agent) {
-    if (!agent?.agent_id) return false;
-    if (agent._managed) return agent.status === 'running';
-    return agent.status === 'active';
-  }
-
-  function getAgentTargetLabel(agent) {
-    if (!agent) return 'agent';
-    if (agent.handle && agent._display) return `${agent.handle} (${agent._display})`;
-    return agent.handle || agent._display || 'agent';
-  }
 
   function beginTargetedMessage(agent) {
     if (!isAgentAddressable(agent)) {
@@ -586,62 +418,6 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     clearCompose();
   }
 
-  function getAgentIntent(agent) {
-    if (!agent) return null;
-    if (agent._managed && agent._dead && agent.outputPreview) return agent.outputPreview;
-    if (agent._summary) return agent._summary;
-    const files = formatFiles(agent.activity?.files || []);
-    if (files) return `Working in ${files}`;
-    if (agent._managed && agent.task) return `Delegated task: ${agent.task}`;
-    return 'Idle';
-  }
-
-  function getAgentOriginLabel(agent) {
-    if (!agent) return null;
-    if (agent._managed) {
-      return agent._connected ? 'started here' : 'starting here';
-    }
-    return 'joined automatically';
-  }
-
-  function getAgentDisplayLabel(agent) {
-    if (!agent) return 'agent';
-    const baseLabel = agent._display || agent.toolName || agent.tool || 'agent';
-    if ((liveAgentNameCounts.get(baseLabel) || 0) <= 1) return baseLabel;
-    const suffix = shortAgentId(agent.agent_id) || String(agent.id || '').slice(-4);
-    return suffix ? `${baseLabel} #${suffix}` : baseLabel;
-  }
-
-  function getIntentColor(intent) {
-    if (!intent) return 'gray';
-    if (/idle/i.test(intent)) return 'yellow';
-    if (/error|failed|blocked|conflict/i.test(intent)) return 'red';
-    return 'cyan';
-  }
-
-  function getAgentMeta(agent) {
-    if (!agent) return null;
-
-    const parts = [];
-    parts.push(getAgentOriginLabel(agent));
-
-    const files = formatFiles(agent.activity?.files || []);
-    if (files) parts.push(files);
-
-    if (agent.minutes_since_update != null && agent.minutes_since_update > 0) {
-      parts.push(`updated ${Math.round(agent.minutes_since_update)}m ago`);
-    }
-
-    return parts.join(' \u00b7 ');
-  }
-
-  function getRecentResultSummary(agent) {
-    const status = getManagedToolState(agent.toolId);
-    if (agent._failed && status.detail) return status.detail;
-    if (agent.outputPreview) return agent.outputPreview;
-    if (agent.task) return agent.task;
-    return agent._failed ? 'Task failed' : 'Task completed';
-  }
 
   const readyCliAgents = installedCliAgents.filter(tool => getManagedToolState(tool.id).state === 'ready');
   const unavailableCliAgents = installedCliAgents.filter(tool => {
@@ -670,7 +446,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     api(config).post(`/teams/${teamId}/messages`, { text: text.trim(), target: target || undefined })
       .then(() => {
         flash(targetLabel ? `Sent to ${targetLabel}` : 'Sent to team', { tone: 'success' });
-        setRefreshKey(k => k + 1);
+        bumpRefreshKey();
       })
       .catch(() => flash('Message not sent. Check connection.', { tone: 'error' }));
   }
@@ -678,7 +454,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   function saveMemory(text) {
     if (!teamId || !text.trim()) return;
     api(config).post(`/teams/${teamId}/memory`, { text: text.trim() })
-      .then(() => { flash('Saved to shared memory', { tone: 'success' }); setRefreshKey(k => k + 1); })
+      .then(() => { flash('Saved to shared memory', { tone: 'success' }); bumpRefreshKey(); })
       .catch(() => flash('Memory not saved. Check connection.', { tone: 'error' }));
   }
 
@@ -689,7 +465,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
         setDeleteMsg('Deleted');
         setDeleteConfirm(false);
         setMemorySelectedIdx(-1);
-        setRefreshKey(k => k + 1);
+        bumpRefreshKey();
         setTimeout(() => setDeleteMsg(null), 2000);
       })
       .catch(() => {
@@ -752,7 +528,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
       return;
     }
 
-    flash(`Stopping ${getAgentDisplayLabel(agent)}`, { tone: 'info' });
+    flash(`Stopping ${getAgentDisplayLabel(agent, liveAgentNameCounts)}`, { tone: 'info' });
     if (view === 'agent-focus') {
       setView('home');
       setFocusedAgent(null);
@@ -763,7 +539,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
     if (!agent?._managed) return;
     const removed = removeAgent(agent.id);
     if (removed) {
-      flash(`Removed ${getAgentDisplayLabel(agent)}`, { tone: 'success' });
+      flash(`Removed ${getAgentDisplayLabel(agent, liveAgentNameCounts)}`, { tone: 'success' });
       if (view === 'agent-focus') {
         setView('home');
         setFocusedAgent(null);
@@ -889,8 +665,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const hasLiveAgents = liveAgents.length > 0;
   const hasRecentManagedResults = Boolean(recentResult);
   const hasMemories = memories.length > 0;
-  const projectDir = projectRoot.startsWith(homedir()) ? '~' + projectRoot.slice(homedir().length) : projectRoot;
-  const projectDisplayName = projectDir;
+  const projectDisplayName = formatProjectPath(projectRoot);
   const liveAgentNameCounts = liveAgents.reduce((counts, agent) => {
     counts.set(agent._display, (counts.get(agent._display) || 0) + 1);
     return counts;
@@ -965,12 +740,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
 
     // ── Retry on error/loading screens ────────────────
     if (input === 'r' && (error || !context)) {
-      if (error) {
-        setError(null);
-        setConnState('connecting');
-      }
-      consecutiveFailures.current = 0;
-      setRefreshKey(k => k + 1);
+      connectionRetry();
       return;
     }
 
@@ -1346,108 +1116,20 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   // ── Agent focus view ─────────────────────────────────
 
   if (isAgentFocusView && focusedAgent) {
-    const freshAgent = focusedAgent._managed
-      ? (combinedAgents.find(agent => agent._managed && agent.id === focusedAgent.id) || focusedAgent)
-      : (combinedAgents.find(agent => !agent._managed && agent.agent_id === focusedAgent.agent_id) || focusedAgent);
-    const isRunning = freshAgent._managed ? freshAgent.status === 'running' : freshAgent.status === 'active';
-    const isDead = freshAgent._managed ? freshAgent._dead : freshAgent.status !== 'active';
-    const exitCode = freshAgent._exitCode;
-    const outputLines = showDiagnostics && freshAgent._managed
-      ? getOutput(freshAgent.id, 12)
-          .map(line => stripAnsi(line))
-          .map(line => line.trimEnd())
-          .filter(Boolean)
-      : [];
-    const agentFiles = freshAgent.activity?.files || [];
-    const agentConflicts = conflicts.filter(([file]) => agentFiles.includes(file));
-    const sourceLabel = getAgentOriginLabel(freshAgent);
-    const quietLabel = freshAgent.minutes_since_update != null && freshAgent.minutes_since_update >= 15
-      ? `Quiet for ${Math.round(freshAgent.minutes_since_update)}m`
-      : null;
-    const outputSummary = freshAgent.outputPreview || null;
-
     return (
-      <Box flexDirection="column">
-        {renderSectionIntro('session details', sourceLabel, 'green')}
-
-        <Box flexDirection="column" paddingX={1} paddingTop={1}>
-          <Text>
-            {isRunning
-              ? <Text color="green">{'\u25CF'} </Text>
-              : isDead
-                ? <Text color="red">{'\u25CF'} </Text>
-                : <Text color="green">{'\u25CF'} </Text>
-            }
-            <Text bold>{getAgentDisplayLabel(freshAgent)}</Text>
-            {freshAgent.handle && <Text dimColor>  {freshAgent.handle}</Text>}
-            {freshAgent._duration && <Text dimColor>  {freshAgent._duration}</Text>}
-          </Text>
-          <Text>{''}</Text>
-          <Text bold>Session</Text>
-          <Text dimColor>  {sourceLabel}</Text>
-          {isRunning && <Text color="green">  Live</Text>}
-          {isDead && exitCode === 0 && <Text dimColor>  Completed</Text>}
-          {isDead && exitCode !== 0 && <Text color="red">  Exited with error (code {exitCode ?? 'unknown'})</Text>}
-
-          <Text>{''}</Text>
-          <Text bold>Work</Text>
-          {getAgentIntent(freshAgent) ? (
-            <Text>  {getAgentIntent(freshAgent)}</Text>
-          ) : (
-            <Text dimColor>  No current work summary</Text>
-          )}
-          {freshAgent._managed && freshAgent._dead && outputSummary && (
-            <Text dimColor>  Final response: {outputSummary}</Text>
-          )}
-          {agentFiles.length > 0 ? (
-            <Box flexDirection="column">
-              {agentFiles.map(file => (
-                <Text key={file} dimColor>  {basename(file)}</Text>
-              ))}
-            </Box>
-          ) : (
-            <Text dimColor>  No files reported yet</Text>
-          )}
-
-          <Text>{''}</Text>
-          <Text bold>Coordination</Text>
-          {quietLabel ? <Text color="yellow">  {quietLabel}</Text> : <Text dimColor>  No quiet-session signal</Text>}
-          {agentConflicts.length > 0 ? (
-            <Box flexDirection="column">
-              {agentConflicts.map(([file, owners]) => (
-                <Text key={file} color="red">  Conflict on {basename(file)} {'· '}{owners.join(' & ')}</Text>
-              ))}
-            </Box>
-          ) : (
-            <Text dimColor>  No active conflicts involving this agent</Text>
-          )}
-          {getAgentMeta(freshAgent) && <Text dimColor>  {getAgentMeta(freshAgent)}</Text>}
-
-          {freshAgent._managed && (
-            <>
-              <Text>{''}</Text>
-              <Text bold>Diagnostics</Text>
-              {!showDiagnostics ? (
-                <Text dimColor>  Hidden by default. Press [l] to inspect captured process output.</Text>
-              ) : outputLines.length > 0 ? (
-                <Box flexDirection="column">
-                  {outputLines.map((line, idx) => (
-                    <Text key={`${freshAgent.id}-${idx}`} dimColor>  {line}</Text>
-                  ))}
-                </Box>
-              ) : (
-                <Text dimColor>  No captured output yet</Text>
-              )}
-            </>
-          )}
-        </Box>
-
-        <Box paddingX={1} paddingTop={1}>
-          <NoticeLine notice={notice} />
-        </Box>
-
-        {focusBar}
-      </Box>
+      <AgentFocusView
+        focusedAgent={focusedAgent}
+        combinedAgents={combinedAgents}
+        conflicts={conflicts}
+        notice={notice}
+        showDiagnostics={showDiagnostics}
+        liveAgentNameCounts={liveAgentNameCounts}
+        navHints={navItems.map(item => ({
+          commandKey: item.key,
+          label: item.label,
+          color: item.color || 'cyan',
+        }))}
+      />
     );
   }
 
@@ -1623,7 +1305,7 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
                   <Text>
                     <Text color={isSelected && mainFocus === 'agents' ? 'cyan' : 'gray'}>{isSelected && mainFocus === 'agents' ? '› ' : '  '}</Text>
                     <Text color={statusColor}>{statusIcon} </Text>
-                    <Text bold={isSelected && mainFocus === 'agents'} dimColor={isDone}>{getAgentDisplayLabel(agent)}</Text>
+                    <Text bold={isSelected && mainFocus === 'agents'} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts)}</Text>
                     {agent._duration && <Text dimColor>  {agent._duration}</Text>}
                     <Text dimColor>  </Text>
                     <Text color={statusTextColor} dimColor={statusTextColor === 'gray'}>{statusText}</Text>

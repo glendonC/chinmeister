@@ -140,7 +140,8 @@ export function buildDashboardView({
   const dividerWidth = Math.min((cols || 80) - 4, 50);
 
   const members = context?.members || [];
-  const activeAgents = members.filter(m => m.status === 'active' && m.tool && m.tool !== 'unknown');
+  // Show all active agents except dashboard observers (tool='dashboard' or 'unknown')
+  const activeAgents = members.filter(m => m.status === 'active' && m.tool && m.tool !== 'unknown' && m.tool !== 'dashboard');
   const agentsWithWork = activeAgents.filter(m => m.activity?.files?.length > 0);
   const uniqueHandles = new Set(activeAgents.map(m => m.handle));
   const isTeam = uniqueHandles.size > 1;

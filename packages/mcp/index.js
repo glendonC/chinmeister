@@ -87,7 +87,17 @@ async function main() {
         try {
           await team.heartbeat(state.teamId);
         } catch (err) {
-          console.error('[chinwag] Heartbeat failed:', err.message);
+          // If evicted (stale heartbeat), rejoin automatically
+          if (err.message?.includes('Not a member')) {
+            try {
+              await team.joinTeam(state.teamId, projectName);
+              console.error('[chinwag] Rejoined team after eviction');
+            } catch (joinErr) {
+              console.error('[chinwag] Rejoin failed:', joinErr.message);
+            }
+          } else {
+            console.error('[chinwag] Heartbeat failed:', err.message);
+          }
         }
       }, 30_000);
     } catch (err) {

@@ -97,11 +97,15 @@ async function main() {
 
   const interval = setInterval(poll, POLL_INTERVAL_MS);
 
-  // Heartbeat to keep membership alive
+  // Heartbeat to keep membership alive — rejoin if evicted
   const heartbeat = setInterval(async () => {
     try {
       await team.heartbeat(teamId);
-    } catch {}
+    } catch (err) {
+      if (err.message?.includes('Not a member')) {
+        try { await team.joinTeam(teamId); } catch {}
+      }
+    }
   }, 30_000);
 
   const parentPid = process.ppid;

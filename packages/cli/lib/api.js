@@ -5,10 +5,11 @@ export function getApiUrl() {
   return process.env.CHINWAG_API_URL || DEFAULT_API_URL;
 }
 
-export function api(config) {
+export function api(config, { agentId } = {}) {
   return createJsonApiClient({
     baseUrl: getApiUrl(),
     authToken: config?.token || null,
+    agentId: agentId || null,
     timeoutMs: 10_000,
     maxRetryAttempts: 2,
     maxTimeoutRetryAttempts: 1,

@@ -160,13 +160,17 @@ export async function runInit() {
 
   // Next steps
   console.log('');
-  console.log(`  ${dim('Done. Chinwag runs invisibly inside your AI tools now.')}`);
-  console.log('');
-  console.log(`  ${dim('Try it:')}  ${chalk.cyan('npx chinwag')}           ${dim('open the dashboard')}`);
-  console.log(`           ${chalk.cyan('npx chinwag add')}       ${dim('add more tools')}`);
+  if (configured.length > 0) {
+    console.log(`  ${dim('Open or restart your tools to activate chinwag:')}`);
+    for (const { name } of configured) {
+      console.log(`    ${bullet} ${name}`);
+    }
+    console.log('');
+  }
+  console.log(`  ${chalk.cyan('npx chinwag')}           ${dim('open the dashboard')}`);
+  console.log(`  ${chalk.cyan('npx chinwag add')}       ${dim('add more tools')}`);
   console.log('');
   console.log(`  ${dim('Commit')} ${chalk.cyan('.chinwag')} ${dim('so teammates auto-join.')}`);
-  console.log(`  ${dim('Web:')} ${link(chalk.cyan('chinwag.dev/dashboard'), 'https://chinwag.dev/dashboard')}`);
   console.log('');
 }
 
