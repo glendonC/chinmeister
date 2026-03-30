@@ -1,18 +1,9 @@
 import { detectTerminalEnvironment } from './terminal-spawner.js';
 import { execFileSync } from 'child_process';
+import { shellQuote, escapeAppleScriptString } from './utils/shell.js';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-
-function shellQuote(value) {
-  return JSON.stringify(String(value));
-}
-
-function escapeAppleScriptString(value) {
-  return String(value)
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"');
-}
 
 export function openCommandInTerminal(command, cwd = process.cwd()) {
   const env = detectTerminalEnvironment();

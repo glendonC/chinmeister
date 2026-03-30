@@ -6,6 +6,9 @@
  */
 
 import { createRequire } from 'module';
+import { shellQuote } from './utils/shell.js';
+import { stripAnsi } from './utils/ansi.js';
+
 const require = createRequire(import.meta.url);
 
 // Lazy-load node-pty (native module, can't be bundled)
@@ -27,20 +30,6 @@ const MAX_OUTPUT_LINES = 200;
 const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 30;
 const KILL_GRACE_MS = 5000;
-
-function shellQuote(value) {
-  return JSON.stringify(String(value));
-}
-
-function stripAnsi(str) {
-  return str
-    .replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '')
-    .replace(/\x1b[P^_][\s\S]*?\x1b\\/g, '')
-    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
-    .replace(/\x1b[@-_]/g, '')
-    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g, '')
-    .replace(/\r/g, '');
-}
 
 function looksLikeTerminalNoise(line) {
   return /^(\[[0-9;?<>A-Za-z]+)+$/.test(line);
