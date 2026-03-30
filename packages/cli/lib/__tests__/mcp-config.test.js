@@ -44,7 +44,7 @@ describe('writeMcpConfig', () => {
     const content = JSON.parse(fs.readFileSync(path.join(tmpDir, 'mcp.json'), 'utf-8'));
     expect(content.mcpServers.chinwag).toBeDefined();
     expect(content.mcpServers.chinwag.command).toBe('npx');
-    expect(content.mcpServers.chinwag.args).toContain('chinwag-mcp');
+    expect(content.mcpServers.chinwag.args).toEqual(['-y', 'chinwag', 'mcp']);
   });
 
   it('adds chinwag-channel when channel=true', () => {
@@ -52,7 +52,7 @@ describe('writeMcpConfig', () => {
 
     const content = JSON.parse(fs.readFileSync(path.join(tmpDir, 'mcp.json'), 'utf-8'));
     expect(content.mcpServers['chinwag-channel']).toBeDefined();
-    expect(content.mcpServers['chinwag-channel'].args).toContain('chinwag-channel');
+    expect(content.mcpServers['chinwag-channel'].args).toEqual(['-y', 'chinwag', 'channel']);
   });
 
   it('preserves existing entries in the file', () => {
@@ -82,14 +82,30 @@ describe('writeMcpConfig', () => {
     writeMcpConfig(tmpDir, 'mcp.json', { toolId: 'cursor' });
 
     const content = JSON.parse(fs.readFileSync(path.join(tmpDir, 'mcp.json'), 'utf-8'));
-    expect(content.mcpServers.chinwag.args).toEqual(['chinwag-mcp']);
+    expect(content.mcpServers.chinwag.args).toEqual(['-y', 'chinwag', 'mcp']);
   });
 
   it('uses tool-specific args for unique config files', () => {
     writeMcpConfig(tmpDir, '.cursor/mcp.json', { toolId: 'cursor' });
 
     const content = JSON.parse(fs.readFileSync(path.join(tmpDir, '.cursor', 'mcp.json'), 'utf-8'));
-    expect(content.mcpServers['chinwag-cursor'].args).toEqual(['chinwag-mcp', '--tool', 'cursor']);
+    expect(content.mcpServers['chinwag-cursor'].args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
+  });
+
+  it('upgrades legacy unique tool entries in place', () => {
+    const filePath = path.join(tmpDir, '.cursor', 'mcp.json');
+    fs.mkdirSync(path.join(tmpDir, '.cursor'), { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify({
+      mcpServers: {
+        chinwag: { command: 'npx', args: ['chinwag-mcp', '--tool', 'cursor'] },
+      },
+    }, null, 2));
+
+    writeMcpConfig(tmpDir, '.cursor/mcp.json', { toolId: 'cursor' });
+
+    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    expect(content.mcpServers.chinwag).toBeUndefined();
+    expect(content.mcpServers['chinwag-cursor'].args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
   });
 });
 
@@ -137,7 +153,30 @@ describe('writeHooksConfig', () => {
     // Should have both the existing hook and the chinwag hook
     expect(content.hooks.PreToolUse).toHaveLength(2);
     expect(content.hooks.PreToolUse[0].command).toBe('some-other-hook');
-    expect(content.hooks.PreToolUse[1].hooks[0].command).toBe('chinwag-hook check-conflict');
+    expect(content.hooks.PreToolUse[1].hooks[0].command).toBe('npx -y chinwag hook check-conflict');
+  });
+
+  it('upgrades legacy chinwag-hook commands in place', () => {
+    const filePath = path.join(tmpDir, '.claude', 'settings.json');
+    fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
+    const existing = {
+      hooks: {
+        PreToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook check-conflict' }] }],
+        PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook report-edit' }] }],
+        SessionStart: [{ hooks: [{ type: 'command', command: 'chinwag-hook session-start' }] }],
+      },
+    };
+    fs.writeFileSync(filePath, JSON.stringify(existing, null, 2));
+
+    writeHooksConfig(tmpDir);
+
+    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    expect(content.hooks.PreToolUse).toHaveLength(1);
+    expect(content.hooks.PostToolUse).toHaveLength(1);
+    expect(content.hooks.SessionStart).toHaveLength(1);
+    expect(content.hooks.PreToolUse[0].hooks[0].command).toBe('npx -y chinwag hook check-conflict');
+    expect(content.hooks.PostToolUse[0].hooks[0].command).toBe('npx -y chinwag hook report-edit');
+    expect(content.hooks.SessionStart[0].hooks[0].command).toBe('npx -y chinwag hook session-start');
   });
 });
 

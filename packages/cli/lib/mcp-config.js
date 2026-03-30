@@ -6,6 +6,21 @@ import { join, dirname } from 'path';
 import { execFileSync } from 'child_process';
 import { MCP_TOOLS } from './tools.js';
 
+function buildChinwagCliArgs(subcommand, toolId = null) {
+  const args = ['-y', 'chinwag', subcommand];
+  if (toolId) args.push('--tool', toolId);
+  return args;
+}
+
+function buildChinwagHookCommand(subcommand) {
+  return `npx -y chinwag hook ${subcommand}`;
+}
+
+function isChinwagHookCommand(command) {
+  return typeof command === 'string'
+    && (command.includes('chinwag-hook') || command.includes('chinwag hook'));
+}
+
 export function detectTools(cwd) {
   return MCP_TOOLS.filter(tool => {
     const { dirs = [], cmds = [] } = tool.detect;
@@ -27,6 +42,7 @@ export function commandExists(cmd) {
 export function writeMcpConfig(cwd, relativePath, { channel = false, toolId = null } = {}) {
   const filePath = join(cwd, relativePath);
   const isSharedRootConfig = relativePath === '.mcp.json' || relativePath === 'mcp.json';
+  const toolEntryName = toolId && toolId !== 'claude-code' ? `chinwag-${toolId}` : 'chinwag';
 
   let existing = {};
   if (existsSync(filePath)) {
@@ -47,23 +63,27 @@ export function writeMcpConfig(cwd, relativePath, { channel = false, toolId = nu
         delete existing.mcpServers[key];
       }
     }
-    existing.mcpServers.chinwag = { command: 'npx', args: ['chinwag-mcp'] };
+    existing.mcpServers.chinwag = { command: 'npx', args: buildChinwagCliArgs('mcp') };
     if (existing.mcpServers['chinwag-channel']) {
-      existing.mcpServers['chinwag-channel'] = { command: 'npx', args: ['chinwag-channel'] };
+      existing.mcpServers['chinwag-channel'] = { command: 'npx', args: buildChinwagCliArgs('channel') };
     }
   } else {
-    const entryName = toolId && toolId !== 'claude-code' ? `chinwag-${toolId}` : 'chinwag';
-    existing.mcpServers[entryName] = toolId
-      ? { command: 'npx', args: ['chinwag-mcp', '--tool', toolId] }
-      : { command: 'npx', args: ['chinwag-mcp'] };
+    for (const key of Object.keys(existing.mcpServers)) {
+      if (key === 'chinwag' || key.startsWith('chinwag-')) {
+        delete existing.mcpServers[key];
+      }
+    }
+    existing.mcpServers[toolEntryName] = toolId
+      ? { command: 'npx', args: buildChinwagCliArgs('mcp', toolId) }
+      : { command: 'npx', args: buildChinwagCliArgs('mcp') };
   }
 
   if (channel) {
     existing.mcpServers['chinwag-channel'] = isSharedRootConfig
-      ? { command: 'npx', args: ['chinwag-channel'] }
+      ? { command: 'npx', args: buildChinwagCliArgs('channel') }
       : toolId
-        ? { command: 'npx', args: ['chinwag-channel', '--tool', toolId] }
-        : { command: 'npx', args: ['chinwag-channel'] };
+        ? { command: 'npx', args: buildChinwagCliArgs('channel', toolId) }
+        : { command: 'npx', args: buildChinwagCliArgs('channel') };
   }
 
   try {
@@ -99,24 +119,20 @@ export function writeHooksConfig(cwd) {
   if (!existing.hooks) existing.hooks = {};
 
   const chinwagHooks = {
-    PreToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook check-conflict' }] }],
-    PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook report-edit' }] }],
-    SessionStart: [{ hooks: [{ type: 'command', command: 'chinwag-hook session-start' }] }],
+    PreToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: buildChinwagHookCommand('check-conflict') }] }],
+    PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: buildChinwagHookCommand('report-edit') }] }],
+    SessionStart: [{ hooks: [{ type: 'command', command: buildChinwagHookCommand('session-start') }] }],
   };
 
   for (const [event, entries] of Object.entries(chinwagHooks)) {
     if (!existing.hooks[event]) existing.hooks[event] = [];
+    existing.hooks[event] = existing.hooks[event].filter((hook) => {
+      const existingCmd = hook.hooks?.[0]?.command || hook.command;
+      return !isChinwagHookCommand(existingCmd);
+    });
 
     for (const entry of entries) {
-      const cmd = entry.hooks[0]?.command;
-      const hasChinwag = existing.hooks[event].some(h => {
-        // Check both new format (hooks array) and old format (command directly)
-        const existingCmd = h.hooks?.[0]?.command || h.command;
-        return existingCmd === cmd || existingCmd?.startsWith('chinwag-hook ');
-      });
-      if (!hasChinwag) {
-        existing.hooks[event].push(entry);
-      }
+      existing.hooks[event].push(entry);
     }
   }
 

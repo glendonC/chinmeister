@@ -18,6 +18,14 @@ try {
   PKG_VERSION = pkg.version || PKG_VERSION;
 } catch {}
 
+async function handOffToRuntime(modulePath, { stripSubcommand = false } = {}) {
+  if (stripSubcommand) {
+    process.argv = [process.argv[0], process.argv[1], ...process.argv.slice(3)];
+  }
+  await import(modulePath);
+  await new Promise(() => {});
+}
+
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);
@@ -48,6 +56,19 @@ if (process.argv[2] === 'reset') {
   deleteConfig();
   console.log('Config cleared. Run chinwag to start fresh.');
   process.exit(0);
+}
+
+// Hidden runtime subcommands used by generated tool configs.
+if (process.argv[2] === 'mcp') {
+  await handOffToRuntime('../mcp/index.js');
+}
+
+if (process.argv[2] === 'channel') {
+  await handOffToRuntime('../mcp/channel.js');
+}
+
+if (process.argv[2] === 'hook') {
+  await handOffToRuntime('../mcp/hook.js', { stripSubcommand: true });
 }
 
 // Handle init command before launching TUI
