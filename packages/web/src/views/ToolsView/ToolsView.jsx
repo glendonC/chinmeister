@@ -21,12 +21,153 @@ function summarizeProjects(projects) {
   return `${projects.slice(0, 2).join(', ')} +${projects.length - 2}`;
 }
 
+const VERDICT_OPTIONS = [
+  { value: 'all', label: 'All' },
+  { value: 'compatible', label: 'Compatible' },
+  { value: 'partial', label: 'Partial' },
+  { value: 'incompatible', label: 'Incompatible' },
+];
+
+function VerdictBadge({ verdict }) {
+  const map = {
+    compatible: { className: styles.verdictCompatible, label: 'Compatible' },
+    partial: { className: styles.verdictPartial, label: 'Partial' },
+    incompatible: { className: styles.verdictIncompatible, label: 'Incompatible' },
+  };
+  const config = map[verdict] || map.incompatible;
+  return <span className={config.className}>{config.label}</span>;
+}
+
+function ConfidenceDot({ level }) {
+  const map = {
+    high: styles.confidenceHigh,
+    medium: styles.confidenceMedium,
+    low: styles.confidenceLow,
+  };
+  return (
+    <span className={`${styles.confidence} ${map[level] || map.low}`}>
+      {level || 'unknown'}
+    </span>
+  );
+}
+
+function DirectoryRow({ evaluation, categories, isExpanded, onToggle }) {
+  const meta = getToolMeta(evaluation.id);
+  const categoryLabel = categories[evaluation.category] || evaluation.category || '';
+
+  return (
+    <div className={styles.directoryEntry}>
+      <button
+        className={styles.directoryRow}
+        onClick={onToggle}
+        type="button"
+        aria-expanded={isExpanded}
+      >
+        <div className={styles.rowIdentity}>
+          <ToolIcon tool={evaluation.id} size={18} />
+          <span className={styles.rowLabel}>{evaluation.name || meta.label}</span>
+        </div>
+        <VerdictBadge verdict={evaluation.verdict} />
+        <span className={styles.dirMcp}>
+          {evaluation.mcp_support ? 'MCP' : '\u2014'}
+        </span>
+        <span className={styles.dirCategory}>{categoryLabel}</span>
+        <ConfidenceDot level={evaluation.confidence} />
+        <span className={styles.dirTagline}>
+          {evaluation.tagline
+            ? evaluation.tagline.length > 60
+              ? evaluation.tagline.slice(0, 60) + '\u2026'
+              : evaluation.tagline
+            : ''}
+        </span>
+      </button>
+
+      {isExpanded ? (
+        <div className={styles.expandedDetail}>
+          {evaluation.tagline ? (
+            <p className={styles.detailTagline}>{evaluation.tagline}</p>
+          ) : null}
+
+          <div className={styles.detailLinks}>
+            {evaluation.metadata?.website ? (
+              <a
+                href={evaluation.metadata.website}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.detailLink}
+              >
+                Website
+              </a>
+            ) : null}
+            {evaluation.metadata?.github ? (
+              <a
+                href={evaluation.metadata.github}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={styles.detailLink}
+              >
+                GitHub
+              </a>
+            ) : null}
+          </div>
+
+          {evaluation.metadata?.install_command ? (
+            <code className={styles.detailInstall}>
+              {evaluation.metadata.install_command}
+            </code>
+          ) : null}
+
+          {evaluation.metadata?.notable ? (
+            <p className={styles.detailNotable}>{evaluation.metadata.notable}</p>
+          ) : null}
+
+          {evaluation.sources?.length > 0 ? (
+            <div className={styles.detailSources}>
+              <span className={styles.detailSourcesLabel}>Sources</span>
+              {evaluation.sources.map((source, si) => (
+                <div key={si} className={styles.sourceEntry}>
+                  <span className={styles.sourceClaim}>{source.claim}</span>
+                  {source.citations?.map((cite, ci) => (
+                    <a
+                      key={ci}
+                      href={cite.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={styles.citationLink}
+                    >
+                      {cite.title || cite.url}
+                    </a>
+                  ))}
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          <div className={styles.detailFooter}>
+            <span className={styles.detailEvaluatedBy}>
+              {evaluation.evaluated_by || 'unknown'}
+            </span>
+            {evaluation.evaluated_at ? (
+              <span className={styles.detailDate}>
+                {new Date(evaluation.evaluated_at).toLocaleDateString()}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export default function ToolsView() {
   const token = useAuthStore((s) => s.token);
   const dashboardData = usePollingStore((s) => s.dashboardData);
-  const { catalog, categories, loading } = useToolCatalog(token);
+  const { catalog, categories, evaluations, loading } = useToolCatalog(token);
 
   const [activeCategory, setActiveCategory] = useState('all');
+  const [activeVerdict, setActiveVerdict] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [expandedId, setExpandedId] = useState(null);
   const [dashboardSnapshot, setDashboardSnapshot] = useState(null);
 
   useEffect(() => {
@@ -77,28 +218,49 @@ export default function ToolsView() {
     () => new Set(surfaceShare.map((surface) => surface.agent_surface)),
     [surfaceShare]
   );
-  const filteredTools = useMemo(() => {
-    if (activeCategory === 'all') return catalog;
-    return catalog.filter((tool) => tool.category === activeCategory);
-  }, [catalog, activeCategory]);
+
   const categoryList = useMemo(() => Object.entries(categories), [categories]);
   const connectedProjects = dashboardSnapshot?.teams?.length || 0;
-  const discoveryTools = useMemo(() => {
-    return [...filteredTools].sort((a, b) => {
+
+  const filteredEvaluations = useMemo(() => {
+    let result = evaluations;
+
+    if (activeCategory !== 'all') {
+      result = result.filter((ev) => ev.category === activeCategory);
+    }
+    if (activeVerdict !== 'all') {
+      result = result.filter((ev) => ev.verdict === activeVerdict);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (ev) =>
+          (ev.name || '').toLowerCase().includes(q) ||
+          (ev.id || '').toLowerCase().includes(q) ||
+          (ev.tagline || '').toLowerCase().includes(q)
+      );
+    }
+
+    return [...result].sort((a, b) => {
       const aId = normalizeToolId(a.id);
       const bId = normalizeToolId(b.id);
-      const aConfigured = userToolIds.has(aId) || userHostIds.has(aId) || seenSurfaceIds.has(aId) ? 1 : 0;
-      const bConfigured = userToolIds.has(bId) || userHostIds.has(bId) || seenSurfaceIds.has(bId) ? 1 : 0;
-      if (aConfigured !== bConfigured) return aConfigured - bConfigured;
-      if (a.featured !== b.featured) return a.featured ? -1 : 1;
-      return a.name.localeCompare(b.name);
+      const aConfigured =
+        userToolIds.has(aId) || userHostIds.has(aId) || seenSurfaceIds.has(aId) ? 1 : 0;
+      const bConfigured =
+        userToolIds.has(bId) || userHostIds.has(bId) || seenSurfaceIds.has(bId) ? 1 : 0;
+      if (aConfigured !== bConfigured) return bConfigured - aConfigured;
+      const verdictOrder = { compatible: 0, partial: 1, incompatible: 2 };
+      const aV = verdictOrder[a.verdict] ?? 3;
+      const bV = verdictOrder[b.verdict] ?? 3;
+      if (aV !== bV) return aV - bV;
+      return (a.name || '').localeCompare(b.name || '');
     });
-  }, [filteredTools, seenSurfaceIds, userHostIds, userToolIds]);
+  }, [evaluations, activeCategory, activeVerdict, searchQuery, userToolIds, userHostIds, seenSurfaceIds]);
 
-  if (loading && catalog.length === 0) {
+  if (loading && evaluations.length === 0) {
     return (
       <div className={styles.page}>
-        <p className={styles.loadingText}>Loading tool catalog...</p>
+        <p className={styles.loadingText}>Loading tool directory...</p>
       </div>
     );
   }
@@ -108,7 +270,7 @@ export default function ToolsView() {
       <ViewHeader eyebrow="Across projects" title="Tools" />
 
       <p className={styles.intro}>
-        Discover your full Chinwag tool stack across projects: configured hosts, observed agent surfaces, and the wider catalog you can add next.
+        Discover your full Chinwag tool stack across projects: configured hosts, observed agent surfaces, and the wider directory of evaluated tools.
       </p>
 
       <div className={styles.hero}>
@@ -250,55 +412,71 @@ export default function ToolsView() {
 
       <section className={styles.section}>
         <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitleSmall}>Catalog</h2>
-          <span className={styles.sectionMeta}>{catalog.length} available to add or observe</span>
+          <h2 className={styles.sectionTitleSmall}>Directory</h2>
+          <span className={styles.sectionMeta}>
+            {filteredEvaluations.length} of {evaluations.length} evaluated
+          </span>
         </div>
 
-        <div className={styles.filterRow}>
-          <button
-            className={`${styles.filterButton} ${activeCategory === 'all' ? styles.filterButtonActive : ''}`}
-            onClick={() => setActiveCategory('all')}
-          >
-            All
-          </button>
-          {categoryList.map(([id, label]) => (
+        <div className={styles.directoryControls}>
+          <div className={styles.filterRow}>
+            {VERDICT_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                className={`${styles.filterButton} ${activeVerdict === opt.value ? styles.filterButtonActive : ''}`}
+                onClick={() => setActiveVerdict(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+            <span className={styles.filterDivider} />
             <button
-              key={id}
-              className={`${styles.filterButton} ${activeCategory === id ? styles.filterButtonActive : ''}`}
-              onClick={() => setActiveCategory(id)}
+              className={`${styles.filterButton} ${activeCategory === 'all' ? styles.filterButtonActive : ''}`}
+              onClick={() => setActiveCategory('all')}
             >
-              {label}
+              All categories
             </button>
-          ))}
+            {categoryList.map(([id, label]) => (
+              <button
+                key={id}
+                className={`${styles.filterButton} ${activeCategory === id ? styles.filterButtonActive : ''}`}
+                onClick={() => setActiveCategory(id)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <input
+            type="text"
+            className={styles.searchInput}
+            placeholder="Search tools..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
         </div>
 
-        <div className={styles.catalogGrid}>
-          {discoveryTools.map((tool) => {
-            const toolId = normalizeToolId(tool.id);
-            const isConfigured = userToolIds.has(toolId) || userHostIds.has(toolId);
-            const isObserved = !isConfigured && seenSurfaceIds.has(toolId);
-            return (
-              <article key={tool.id} className={styles.catalogItem}>
-                <div className={styles.toolTop}>
-                  <div className={styles.rowIdentity}>
-                    <ToolIcon tool={tool.id} size={18} />
-                    <div className={styles.rowCopy}>
-                      <span className={styles.rowLabel}>{tool.name}</span>
-                      <span className={styles.rowMeta}>
-                        {categories[tool.category] || tool.category}
-                      </span>
-                    </div>
-                  </div>
-                  {isConfigured ? <span className={styles.toolConfigured}>Configured</span> : null}
-                  {isObserved ? <span className={styles.toolObserved}>Observed</span> : null}
-                </div>
-                {tool.description ? <p className={styles.toolDesc}>{tool.description}</p> : null}
-                {tool.installCmd ? <code className={styles.toolInstall}>{tool.installCmd}</code> : null}
-              </article>
-            );
-          })}
-          {discoveryTools.length === 0 ? (
-            <p className={styles.emptyHint}>No tools in this category.</p>
+        <div className={styles.directoryHeader}>
+          <span className={styles.dhName}>Tool</span>
+          <span className={styles.dhVerdict}>Verdict</span>
+          <span className={styles.dhMcp}>MCP</span>
+          <span className={styles.dhCategory}>Category</span>
+          <span className={styles.dhConfidence}>Confidence</span>
+          <span className={styles.dhTagline}>Summary</span>
+        </div>
+
+        <div className={styles.directoryList}>
+          {filteredEvaluations.map((ev) => (
+            <DirectoryRow
+              key={ev.id}
+              evaluation={ev}
+              categories={categories}
+              isExpanded={expandedId === ev.id}
+              onToggle={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
+            />
+          ))}
+          {filteredEvaluations.length === 0 ? (
+            <p className={styles.emptyHint}>No tools match the current filters.</p>
           ) : null}
         </div>
       </section>

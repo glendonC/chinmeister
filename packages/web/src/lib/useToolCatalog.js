@@ -3,14 +3,29 @@ import { api } from './api.js';
 
 let cachedCatalog = null;
 let cachedCategories = null;
+let cachedEvaluations = null;
 let inflightRequest = null;
 
 function getCachedState() {
   return {
     catalog: cachedCatalog || [],
     categories: cachedCategories || {},
+    evaluations: cachedEvaluations || [],
     loading: cachedCatalog == null,
     error: null,
+  };
+}
+
+/** Map a directory evaluation to the old catalog shape for backwards compat. */
+function evaluationToCatalogItem(ev) {
+  return {
+    id: ev.id,
+    name: ev.name,
+    category: ev.category,
+    description: ev.tagline || '',
+    featured: ev.integration_tier === 'connected',
+    installCmd: ev.metadata?.install_command || null,
+    mcp_support: ev.mcp_support,
   };
 }
 
@@ -28,26 +43,34 @@ export function useToolCatalog(token) {
     }
 
     if (!inflightRequest) {
-      inflightRequest = api('GET', '/tools/catalog', null, token)
+      inflightRequest = api('GET', '/tools/directory?limit=200', null, token)
         .then((data) => {
-          cachedCatalog = data.tools || [];
+          cachedEvaluations = data.evaluations || [];
           cachedCategories = data.categories || {};
-          return {
-            catalog: cachedCatalog,
-            categories: cachedCategories,
-          };
+          cachedCatalog = cachedEvaluations.map(evaluationToCatalogItem);
+          return { catalog: cachedCatalog, categories: cachedCategories, evaluations: cachedEvaluations };
         })
+        .catch(() =>
+          // Fallback to old catalog endpoint if directory isn't deployed yet
+          api('GET', '/tools/catalog', null, token).then((data) => {
+            cachedCatalog = data.tools || [];
+            cachedCategories = data.categories || {};
+            cachedEvaluations = [];
+            return { catalog: cachedCatalog, categories: cachedCategories, evaluations: cachedEvaluations };
+          })
+        )
         .finally(() => {
           inflightRequest = null;
         });
     }
 
     inflightRequest
-      .then(({ catalog, categories }) => {
+      .then(({ catalog, categories, evaluations }) => {
         if (!cancelled) {
           setState({
             catalog,
             categories,
+            evaluations,
             loading: false,
             error: null,
           });
@@ -58,6 +81,7 @@ export function useToolCatalog(token) {
           setState({
             catalog: [],
             categories: {},
+            evaluations: [],
             loading: false,
             error,
           });

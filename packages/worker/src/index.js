@@ -18,6 +18,7 @@ import {
   handleUpdateColor,
   handleUpdateHandle,
 } from './routes/user.js';
+import { handleListDirectory, handleGetDirectoryEntry, handleTriggerEvaluation, handleBatchEvaluate } from './routes/directory.js';
 import {
   handleTeamActivity,
   handleTeamClaimFiles,
@@ -65,7 +66,7 @@ function getAllowedOrigin(origin, environment) {
   if (!origin) return 'https://chinwag.dev';
   if (PROD_ORIGINS.has(origin)) return origin;
   if (environment !== 'production' && DEV_ORIGINS.has(origin)) return origin;
-  if (environment !== 'production' && isLoopbackOrigin(origin)) return origin;
+  if (isLoopbackOrigin(origin)) return origin;
   return '';
 }
 
@@ -95,7 +96,18 @@ export default {
       } else if (method === 'GET' && path === '/stats') {
         response = await handleStats(env);
       } else if (method === 'GET' && path === '/tools/catalog') {
-        response = handleToolCatalog();
+        response = await handleToolCatalog(env);
+      } else if (method === 'GET' && path === '/tools/directory') {
+        response = await handleListDirectory(request, env);
+      } else if (method === 'POST' && path === '/tools/batch-evaluate') {
+        response = await handleBatchEvaluate(request, env);
+      } else if (method === 'GET' && path.startsWith('/tools/directory/')) {
+        const toolId = path.slice('/tools/directory/'.length);
+        if (toolId && !toolId.includes('/')) {
+          response = await handleGetDirectoryEntry(request, env, toolId);
+        } else {
+          response = json({ error: 'Not found' }, 404);
+        }
       } else {
         const user = await authenticate(request, env);
         if (!user) {
@@ -123,6 +135,8 @@ export default {
           return handleChatUpgrade(request, user, env);
         } else if (method === 'PUT' && path === '/agent/profile') {
           response = await handleUpdateAgentProfile(request, user, env);
+        } else if (method === 'POST' && path === '/tools/evaluate') {
+          response = await handleTriggerEvaluation(request, user, env);
         } else if (method === 'POST' && path === '/teams') {
           response = await handleCreateTeam(request, user, env);
         } else if (path.startsWith('/teams/')) {

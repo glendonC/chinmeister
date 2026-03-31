@@ -7,6 +7,16 @@ import { api } from './api.js';
 const MAX_RECOMMENDATIONS = 9;
 const LOADING_TIMEOUT_MS = 15000;
 
+function evalToTool(e) {
+  const meta = e.metadata || {};
+  return {
+    id: e.id, name: e.name, description: e.tagline,
+    category: e.category, mcpCompatible: !!e.mcp_support,
+    website: meta.website, installCmd: meta.install_command,
+    featured: !!meta.featured, verdict: e.verdict, confidence: e.confidence,
+  };
+}
+
 export function Discover({ config, navigate }) {
   const { stdout } = useStdout();
   const cols = stdout?.columns || 80;
@@ -26,12 +36,18 @@ export function Discover({ config, navigate }) {
     // Fetch catalog from API (single source of truth)
     async function fetchCatalog() {
       try {
-        const result = await api(config).get('/tools/catalog');
-        setCatalog(result.tools || []);
+        const result = await api(config).get('/tools/directory?limit=200');
+        setCatalog((result.evaluations || []).map(evalToTool));
         setCategories(result.categories || {});
-      } catch (err) {
-        // Fallback: show just detected tools if API is unreachable
-        setMessage(`Could not fetch tool catalog: ${err.message}`);
+      } catch {
+        // Fallback to old catalog endpoint if directory isn't deployed yet
+        try {
+          const fallback = await api(config).get('/tools/catalog');
+          setCatalog(fallback.tools || []);
+          setCategories(fallback.categories || {});
+        } catch (err) {
+          setMessage(`Could not fetch tool catalog: ${err.message}`);
+        }
       }
       setLoading(false);
       if (loadingTimer.current) { clearTimeout(loadingTimer.current); loadingTimer.current = null; }
@@ -221,12 +237,15 @@ export function Discover({ config, navigate }) {
                   const desc = descAvail > 10 && tool.description.length > descAvail
                     ? tool.description.slice(0, descAvail - 1) + '…'
                     : tool.description;
+                  const verdictColor = tool.verdict === 'compatible' ? 'green'
+                    : tool.verdict === 'partial' ? 'yellow' : undefined;
                   return (
                     <Text key={tool.id}>
                       <Text color="cyan" bold>[{i + 1}]</Text>
                       <Text> {tool.name.padEnd(maxName + 1)}</Text>
                       <Text dimColor>{desc}</Text>
                       {tool.mcpCompatible && <Text color="green"> [MCP]</Text>}
+                      {tool.verdict && <Text color={verdictColor} dimColor={!verdictColor}> [{tool.verdict}]</Text>}
                     </Text>
                   );
                 });
@@ -274,12 +293,15 @@ export function Discover({ config, navigate }) {
               const desc = descAvail > 10 && tool.description.length > descAvail
                 ? tool.description.slice(0, descAvail - 1) + '…'
                 : tool.description;
+              const verdictColor = tool.verdict === 'compatible' ? 'green'
+                : tool.verdict === 'partial' ? 'yellow' : undefined;
               return (
                 <Text key={tool.id}>
                   <Text dimColor>○</Text>
                   <Text> {tool.name.padEnd(maxName + 1)}</Text>
                   <Text dimColor>{desc}</Text>
                   {tool.mcpCompatible && <Text color="green"> [MCP]</Text>}
+                  {tool.verdict && <Text color={verdictColor} dimColor={!verdictColor}> [{tool.verdict}]</Text>}
                 </Text>
               );
             })}

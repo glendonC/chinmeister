@@ -73,8 +73,8 @@ describe('runAdd', () => {
 
       const mockClient = {
         get: vi.fn().mockResolvedValue({
-          tools: [
-            { id: 'some-tool', name: 'SomeTool', description: 'A tool', category: 'other' },
+          evaluations: [
+            { id: 'some-tool', name: 'SomeTool', tagline: 'A tool', category: 'other', mcp_support: 0, metadata: {} },
           ],
           categories: { other: 'Other' },
         }),
@@ -93,8 +93,8 @@ describe('runAdd', () => {
 
       const mockClient = {
         get: vi.fn().mockResolvedValue({
-          tools: [
-            { id: 'windsurf', name: 'Windsurf', description: 'AI code editor', category: 'editors' },
+          evaluations: [
+            { id: 'windsurf', name: 'Windsurf', tagline: 'AI code editor', category: 'editors', mcp_support: 0, metadata: {} },
           ],
           categories: { editors: 'Editors' },
         }),
@@ -113,14 +113,16 @@ describe('runAdd', () => {
 
       const mockClient = {
         get: vi.fn().mockResolvedValue({
-          tools: [
+          evaluations: [
             {
               id: 'copilot',
               name: 'GitHub Copilot',
-              description: 'AI pair programmer',
-              mcpCompatible: false,
+              tagline: 'AI pair programmer',
+              mcp_support: 0,
               category: 'ai',
-              website: 'https://copilot.github.com',
+              verdict: 'partial',
+              confidence: 'high',
+              metadata: { website: 'https://copilot.github.com' },
             },
           ],
           categories: { ai: 'AI Tools' },
@@ -159,9 +161,9 @@ describe('runAdd', () => {
 
       const mockClient = {
         get: vi.fn().mockResolvedValue({
-          tools: [
-            { id: 'cursor', name: 'Cursor', description: 'AI editor', mcpCompatible: true, mcpConfigurable: true, category: 'editors' },
-            { id: 'aider', name: 'Aider', description: 'AI terminal tool', mcpCompatible: true, mcpConfigurable: false, category: 'cli' },
+          evaluations: [
+            { id: 'cursor', name: 'Cursor', tagline: 'AI editor', mcp_support: 1, category: 'editors', metadata: {} },
+            { id: 'aider', name: 'Aider', tagline: 'AI terminal tool', mcp_support: 1, category: 'cli', metadata: {} },
           ],
           categories: { editors: 'Editors', cli: 'CLI Tools' },
         }),
@@ -181,14 +183,14 @@ describe('runAdd', () => {
       loadConfig.mockReturnValue({ token: 'tok_ok' });
 
       const mockClient = {
-        get: vi.fn().mockResolvedValue({ tools: [], categories: {} }),
+        get: vi.fn().mockResolvedValue({ evaluations: [], categories: {} }),
       };
       api.mockReturnValue(mockClient);
 
       await runAdd(null);
 
-      // Should call the catalog endpoint (list mode)
-      expect(mockClient.get).toHaveBeenCalledWith('/tools/catalog');
+      // Should call the directory endpoint (list mode)
+      expect(mockClient.get).toHaveBeenCalledWith('/tools/directory?limit=200');
     });
 
     it('handles catalog fetch failure in list mode', async () => {

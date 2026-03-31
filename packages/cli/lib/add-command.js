@@ -7,6 +7,16 @@ import { configureTool } from './mcp-config.js';
 import { configExists, loadConfig } from './config.js';
 import { api } from './api.js';
 
+function evalToTool(e) {
+  const meta = e.metadata || {};
+  return {
+    id: e.id, name: e.name, description: e.tagline,
+    category: e.category, mcpCompatible: !!e.mcp_support,
+    website: meta.website, installCmd: meta.install_command,
+    featured: !!meta.featured, verdict: e.verdict, confidence: e.confidence,
+  };
+}
+
 export async function runAdd(toolArg) {
   if (!toolArg || toolArg === '--list') {
     await printList();
@@ -37,6 +47,10 @@ export async function runAdd(toolArg) {
   if (catalogTool) {
     console.log('');
     console.log(`  ${catalogTool.name} — ${catalogTool.description}`);
+    if (catalogTool.verdict) {
+      const conf = catalogTool.confidence ? ` (${catalogTool.confidence} confidence)` : '';
+      console.log(`  Verdict: ${catalogTool.verdict}${conf}`);
+    }
     if (!catalogTool.mcpCompatible) {
       console.log('  This tool does not support MCP, so chinwag cannot auto-configure it.');
     }
@@ -62,12 +76,22 @@ export async function runAdd(toolArg) {
 }
 
 async function fetchCatalog() {
+  const config = configExists() ? loadConfig() : null;
   try {
-    const config = configExists() ? loadConfig() : null;
-    return await api(config).get('/tools/catalog');
-  } catch (err) {
-    console.log(`  Could not fetch tool catalog: ${err.message}`);
-    return null;
+    const result = await api(config).get('/tools/directory?limit=200');
+    return {
+      tools: (result.evaluations || []).map(evalToTool),
+      categories: result.categories || {},
+    };
+  } catch {
+    // Fallback to old catalog endpoint if directory isn't deployed yet
+    try {
+      const fallback = await api(config).get('/tools/catalog');
+      return { tools: fallback.tools || [], categories: fallback.categories || {} };
+    } catch (err) {
+      console.log(`  Could not fetch tool catalog: ${err.message}`);
+      return null;
+    }
   }
 }
 

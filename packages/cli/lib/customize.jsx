@@ -11,6 +11,16 @@ import { getInkColor, getColorList } from './colors.js';
 import { MCP_TOOLS } from './tools.js';
 import { configureTool, scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js';
 
+function evalToTool(e) {
+  const meta = e.metadata || {};
+  return {
+    id: e.id, name: e.name, description: e.tagline,
+    category: e.category, mcpCompatible: !!e.mcp_support,
+    website: meta.website, installCmd: meta.install_command,
+    featured: !!meta.featured, verdict: e.verdict, confidence: e.confidence,
+  };
+}
+
 let PKG_VERSION = '0.1.0';
 try {
   const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
@@ -91,10 +101,15 @@ export function Customize({ config, user, navigate, refreshUser }) {
 
     async function fetchCatalog() {
       try {
-        const result = await api(config).get('/tools/catalog');
-        setCatalog(result.tools || []);
-      } catch (err) {
-        showFlash(`Could not fetch tool catalog: ${err.message}`, 'error');
+        const result = await api(config).get('/tools/directory?limit=200');
+        setCatalog((result.evaluations || []).map(evalToTool));
+      } catch {
+        try {
+          const fallback = await api(config).get('/tools/catalog');
+          setCatalog(fallback.tools || []);
+        } catch (err) {
+          showFlash(`Could not fetch tool catalog: ${err.message}`, 'error');
+        }
       }
       setToolsLoading(false);
     }

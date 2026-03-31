@@ -3,6 +3,7 @@
 // Users have UUID primary keys; handles are display names with a unique index.
 
 import { DurableObject } from 'cloudflare:workers';
+import { seedEvaluations } from './lib/seed-evaluations.js';
 
 const COLORS = [
   'red', 'cyan', 'yellow', 'green', 'magenta', 'blue',
@@ -33,6 +34,7 @@ const NOUNS = [
 
 export class DatabaseDO extends DurableObject {
   #schemaReady = false;
+  #evaluationsSeeded = false;
 
   constructor(ctx, env) {
     super(ctx, env);
@@ -78,6 +80,30 @@ export class DatabaseDO extends DurableObject {
         joined_at TEXT DEFAULT (datetime('now')),
         PRIMARY KEY (user_id, team_id)
       );
+
+      CREATE TABLE IF NOT EXISTS tool_evaluations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        tagline TEXT,
+        category TEXT,
+        mcp_support INTEGER,
+        has_cli INTEGER,
+        hooks_support INTEGER,
+        channel_support INTEGER,
+        process_detectable INTEGER,
+        open_source INTEGER,
+        verdict TEXT NOT NULL,
+        integration_tier TEXT,
+        blocking_issues TEXT DEFAULT '[]',
+        metadata TEXT NOT NULL DEFAULT '{}',
+        sources TEXT NOT NULL DEFAULT '[]',
+        in_registry INTEGER DEFAULT 0,
+        evaluated_at TEXT NOT NULL,
+        confidence TEXT NOT NULL DEFAULT 'medium',
+        evaluated_by TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_eval_category ON tool_evaluations(category);
+      CREATE INDEX IF NOT EXISTS idx_eval_verdict ON tool_evaluations(verdict);
     `);
 
     // Migrate: add team_name column for tables created before this column existed
@@ -214,6 +240,137 @@ export class DatabaseDO extends DurableObject {
 
     return {
       totalUsers: users[0]?.count || 0,
+    };
+  }
+
+  // --- Tool evaluations ---
+
+  async #ensureEvaluationsSeeded() {
+    if (this.#evaluationsSeeded) return;
+    this.#ensureSchema();
+    const rows = this.sql.exec('SELECT COUNT(*) as count FROM tool_evaluations').toArray();
+    if (rows[0].count === 0) {
+      await seedEvaluations(this);
+    }
+    this.#evaluationsSeeded = true;
+  }
+
+  async saveEvaluation(evaluation) {
+    this.#ensureSchema();
+    const metadata = typeof evaluation.metadata === 'string' ? evaluation.metadata : JSON.stringify(evaluation.metadata ?? {});
+    const sources = typeof evaluation.sources === 'string' ? evaluation.sources : JSON.stringify(evaluation.sources ?? []);
+    const blockingIssues = typeof evaluation.blocking_issues === 'string' ? evaluation.blocking_issues : JSON.stringify(evaluation.blocking_issues ?? []);
+
+    this.sql.exec(
+      `INSERT INTO tool_evaluations (id, name, tagline, category, mcp_support, has_cli, hooks_support, channel_support, process_detectable, open_source, verdict, integration_tier, blocking_issues, metadata, sources, in_registry, evaluated_at, confidence, evaluated_by)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         tagline = excluded.tagline,
+         category = excluded.category,
+         mcp_support = excluded.mcp_support,
+         has_cli = excluded.has_cli,
+         hooks_support = excluded.hooks_support,
+         channel_support = excluded.channel_support,
+         process_detectable = excluded.process_detectable,
+         open_source = excluded.open_source,
+         verdict = excluded.verdict,
+         integration_tier = excluded.integration_tier,
+         blocking_issues = excluded.blocking_issues,
+         metadata = excluded.metadata,
+         sources = excluded.sources,
+         in_registry = excluded.in_registry,
+         evaluated_at = excluded.evaluated_at,
+         confidence = excluded.confidence,
+         evaluated_by = excluded.evaluated_by`,
+      evaluation.id,
+      evaluation.name,
+      evaluation.tagline ?? null,
+      evaluation.category ?? null,
+      evaluation.mcp_support ?? null,
+      evaluation.has_cli ?? null,
+      evaluation.hooks_support ?? null,
+      evaluation.channel_support ?? null,
+      evaluation.process_detectable ?? null,
+      evaluation.open_source ?? null,
+      evaluation.verdict,
+      evaluation.integration_tier ?? null,
+      blockingIssues,
+      metadata,
+      sources,
+      evaluation.in_registry ?? 0,
+      evaluation.evaluated_at,
+      evaluation.confidence ?? 'medium',
+      evaluation.evaluated_by ?? null
+    );
+
+    return { ok: true };
+  }
+
+  async getEvaluation(toolId) {
+    await this.#ensureEvaluationsSeeded();
+    const rows = this.sql.exec('SELECT * FROM tool_evaluations WHERE id = ?', toolId).toArray();
+    if (rows.length === 0) return { evaluation: null };
+    return { evaluation: this.#parseEvaluation(rows[0]) };
+  }
+
+  async listEvaluations(filters = {}) {
+    await this.#ensureEvaluationsSeeded();
+    const conditions = [];
+    const params = [];
+
+    if (filters.verdict != null) {
+      conditions.push('verdict = ?');
+      params.push(filters.verdict);
+    }
+    if (filters.category != null) {
+      conditions.push('category = ?');
+      params.push(filters.category);
+    }
+    if (filters.mcp_support != null) {
+      conditions.push('mcp_support = ?');
+      params.push(filters.mcp_support);
+    }
+    if (filters.in_registry != null) {
+      conditions.push('in_registry = ?');
+      params.push(filters.in_registry);
+    }
+
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const limit = Math.min(filters.limit || 100, 200);
+    const offset = filters.offset || 0;
+
+    const rows = this.sql.exec(
+      `SELECT * FROM tool_evaluations ${where} ORDER BY name ASC LIMIT ? OFFSET ?`,
+      ...params, limit, offset
+    ).toArray();
+
+    return { evaluations: rows.map(r => this.#parseEvaluation(r)) };
+  }
+
+  async searchEvaluations(query, limit = 20) {
+    await this.#ensureEvaluationsSeeded();
+    const pattern = `%${query}%`;
+    const rows = this.sql.exec(
+      'SELECT * FROM tool_evaluations WHERE name LIKE ? OR tagline LIKE ? ORDER BY name ASC LIMIT ?',
+      pattern, pattern, limit
+    ).toArray();
+
+    return { evaluations: rows.map(r => this.#parseEvaluation(r)) };
+  }
+
+  async hasEvaluations() {
+    this.#ensureSchema();
+    const rows = this.sql.exec('SELECT COUNT(*) as count FROM tool_evaluations').toArray();
+    return { count: rows[0].count };
+  }
+
+  #parseEvaluation(row) {
+    return {
+      ...row,
+      metadata: JSON.parse(row.metadata || '{}'),
+      sources: JSON.parse(row.sources || '[]'),
+      blocking_issues: JSON.parse(row.blocking_issues || '[]'),
     };
   }
 

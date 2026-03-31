@@ -148,8 +148,8 @@
 .filterRow {
   display: flex;
   gap: 16px;
-  margin-bottom: 26px;
   flex-wrap: wrap;
+  align-items: center;
 }
 
 .filterButton {
@@ -170,6 +170,304 @@
 .filterButtonActive {
   color: var(--accent);
 }
+
+.filterDivider {
+  width: 1px;
+  height: 14px;
+  background: var(--faint);
+}
+
+/* ── Directory controls ── */
+
+.directoryControls {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 26px;
+  flex-wrap: wrap;
+}
+
+.searchInput {
+  background: transparent;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xs);
+  padding: 6px 12px;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  width: 200px;
+  outline: none;
+  transition: border-color var(--motion-fast) ease;
+}
+
+.searchInput::placeholder {
+  color: var(--soft);
+}
+
+.searchInput:focus {
+  border-color: var(--accent);
+}
+
+/* ── Directory table header ── */
+
+.directoryHeader {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) 90px 50px minmax(90px, 0.8fr) 80px minmax(120px, 1.6fr);
+  gap: 12px;
+  padding: 0 0 10px;
+  align-items: baseline;
+}
+
+.directoryHeader > span {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--soft);
+}
+
+.dhName { }
+.dhVerdict { }
+.dhMcp { }
+.dhCategory { }
+.dhConfidence { }
+.dhTagline { }
+
+/* ── Directory list ── */
+
+.directoryList {
+  display: flex;
+  flex-direction: column;
+}
+
+.directoryEntry {
+  border-top: 1px solid var(--ghost);
+}
+
+.directoryEntry:last-child {
+  border-bottom: 1px solid var(--ghost);
+}
+
+.directoryRow {
+  display: grid;
+  grid-template-columns: minmax(160px, 1.4fr) 90px 50px minmax(90px, 0.8fr) 80px minmax(120px, 1.6fr);
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+  align-items: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--sans);
+  transition: background var(--motion-fast) ease;
+}
+
+.directoryRow:hover {
+  background: var(--ghost);
+}
+
+/* ── Verdict badges ── */
+
+.verdictCompatible,
+.verdictPartial,
+.verdictIncompatible {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.02em;
+}
+
+.verdictCompatible {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.verdictPartial {
+  color: var(--warn);
+  background: var(--warn-bg);
+}
+
+.verdictIncompatible {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+/* ── MCP indicator ── */
+
+.dirMcp {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* ── Category in row ── */
+
+.dirCategory {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Confidence ── */
+
+.confidence {
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: capitalize;
+}
+
+.confidenceHigh {
+  color: var(--success);
+}
+
+.confidenceMedium {
+  color: var(--warn);
+}
+
+.confidenceLow {
+  color: var(--soft);
+}
+
+/* ── Tagline in row ── */
+
+.dirTagline {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Expanded detail panel ── */
+
+.expandedDetail {
+  padding: 0 0 20px 28px;
+  animation: detailFadeIn 0.15s var(--motion) both;
+}
+
+@keyframes detailFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.detailTagline {
+  font-size: var(--text-sm);
+  color: var(--ink);
+  line-height: 1.55;
+  margin-bottom: 12px;
+  max-width: 40rem;
+}
+
+.detailLinks {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.detailLink {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.detailLink:hover {
+  text-decoration: underline;
+}
+
+.detailInstall {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  background: var(--ghost);
+  padding: 4px 10px;
+  border-radius: var(--radius-xs);
+  margin-bottom: 10px;
+}
+
+.detailNotable {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 12px;
+  max-width: 40rem;
+}
+
+.detailSources {
+  margin-bottom: 12px;
+}
+
+.detailSourcesLabel {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--soft);
+  margin-bottom: 6px;
+}
+
+.sourceEntry {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 4px;
+}
+
+.sourceClaim {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.citationLink {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.citationLink:hover {
+  text-decoration: underline;
+}
+
+.detailFooter {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.detailEvaluatedBy {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--soft);
+}
+
+.detailDate {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--soft);
+}
+
+/* ── Legacy catalog styles (kept for compat) ── */
 
 .catalogGrid {
   display: grid;
@@ -241,6 +539,21 @@
   .topGrid {
     grid-template-columns: 1fr;
   }
+
+  .directoryHeader {
+    display: none;
+  }
+
+  .directoryRow {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 8px;
+  }
+
+  .dirCategory,
+  .dirTagline,
+  .dirMcp {
+    display: none;
+  }
 }
 
 @media (max-width: 767px) {
@@ -260,5 +573,13 @@
 
   .signalValueBlock {
     align-items: flex-start;
+  }
+
+  .directoryControls {
+    flex-direction: column;
+  }
+
+  .searchInput {
+    width: 100%;
   }
 }

@@ -5,9 +5,12 @@ compatibility_date = "2024-12-01"
 [vars]
 ENVIRONMENT = "production"
 
-# Workers AI for content moderation (Llama Guard 3)
+# Workers AI for content moderation (Llama Guard 3) and tool evaluation
 [ai]
 binding = "AI"
+
+# Exa API key for web search in tool evaluation pipeline
+# Set via: npx wrangler secret put EXA_API_KEY
 
 # KV namespace for token-to-user-id auth lookups
 [[kv_namespaces]]
