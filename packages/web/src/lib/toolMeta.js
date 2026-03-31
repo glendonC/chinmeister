@@ -1,91 +1,109 @@
+// Tool metadata for display: icons, brand colors, label normalization.
+// Icons use SVGs from /assets/ rendered as CSS masks with brand colors.
+// Tools without SVGs get a colored letter fallback.
+
 const TOOL_META = {
-  claude: {
-    label: 'Claude Code',
-    icon: '/assets/claude-code.svg',
-    color: '#d9773c',
-  },
-  cursor: {
-    label: 'Cursor',
-    icon: '/assets/cursor.svg',
-    color: '#111111',
-  },
-  windsurf: {
-    label: 'Windsurf',
-    icon: '/assets/windsurf.svg',
-    color: '#0f8b7b',
-  },
-  vscode: {
-    label: 'VS Code',
-    icon: '/assets/vscode.svg',
-    color: '#0078d4',
-  },
-  codex: {
-    label: 'Codex',
-    icon: '/assets/codex.svg',
-    color: '#10a37f',
-  },
-  aider: {
-    label: 'Aider',
-    icon: '/assets/aider.svg',
-    color: '#297a4a',
-  },
-  amazonq: {
-    label: 'Amazon Q',
-    icon: '/assets/amazon-q.svg',
-    color: '#5b36d6',
-  },
-  jetbrains: {
-    label: 'JetBrains',
-    icon: '/assets/jetbrains.svg',
-    color: '#f97316',
-  },
-  continue: {
-    label: 'Continue',
-    icon: '/assets/continue.svg',
-    color: '#047857',
-  },
-  cline: {
-    label: 'Cline',
-    icon: '/assets/cline.svg',
-    color: '#c2410c',
-  },
-  warp: {
-    label: 'Warp',
-    icon: '/assets/warp.svg',
-    color: '#6d28d9',
-  },
-  zed: {
-    label: 'Zed',
-    icon: '/assets/zed.svg',
-    color: '#09090b',
-  },
+  // Tools with SVG icons
+  claude:     { label: 'Claude Code',    icon: '/assets/claude-code.svg',    color: '#d9773c' },
+  cursor:     { label: 'Cursor',         icon: '/assets/cursor.svg',         color: '#111111' },
+  windsurf:   { label: 'Windsurf',       icon: '/assets/windsurf.svg',       color: '#0f8b7b' },
+  vscode:     { label: 'VS Code',        icon: '/assets/vscode.svg',         color: '#0078d4' },
+  codex:      { label: 'Codex',          icon: '/assets/codex.svg',          color: '#10a37f' },
+  aider:      { label: 'Aider',          icon: '/assets/aider.svg',          color: '#297a4a' },
+  amazonq:    { label: 'Amazon Q',       icon: '/assets/amazon-q.svg',       color: '#5b36d6' },
+  jetbrains:  { label: 'JetBrains',      icon: '/assets/jetbrains.svg',      color: '#f97316' },
+  continue:   { label: 'Continue',       icon: '/assets/continue.svg',       color: '#047857' },
+  cline:      { label: 'Cline',          icon: '/assets/cline.svg',          color: '#c2410c' },
+  warp:       { label: 'Warp',           icon: '/assets/warp.svg',           color: '#01a4ff' },
+  zed:        { label: 'Zed',            icon: '/assets/zed.svg',            color: '#09090b' },
+  copilot:    { label: 'GitHub Copilot', icon: '/assets/github-copilot.svg', color: '#6e40c9' },
+
+  // Tools without SVGs — get colored letter fallback
+  devin:      { label: 'Devin',          icon: null, color: '#4f46e5' },
+  superset:   { label: 'Superset',       icon: null, color: '#0ea5e9' },
+  replit:      { label: 'Replit',         icon: null, color: '#f26207' },
+  goose:      { label: 'Goose',          icon: null, color: '#1d4ed8' },
+  amp:        { label: 'Amp',            icon: null, color: '#a855f7' },
+  kiro:       { label: 'Kiro',           icon: null, color: '#ff9900' },
+  augment:    { label: 'Augment Code',   icon: null, color: '#8b5cf6' },
+  cody:       { label: 'Cody',           icon: null, color: '#a112ff' },
+  tabnine:    { label: 'Tabnine',        icon: null, color: '#e44332' },
+  opencode:   { label: 'OpenCode',       icon: null, color: '#22c55e' },
+  roocode:    { label: 'Roo Code',       icon: null, color: '#3b82f6' },
+  pieces:     { label: 'Pieces',         icon: null, color: '#111111' },
+  boltnew:    { label: 'Bolt.new',       icon: null, color: '#1389fd' },
+  lovable:    { label: 'Lovable',        icon: null, color: '#ec4899' },
+  v0:         { label: 'v0',             icon: null, color: '#000000' },
+  trae:       { label: 'Trae',           icon: null, color: '#3b82f6' },
+  void:       { label: 'Void',           icon: null, color: '#6366f1' },
+  pearai:     { label: 'PearAI',         icon: null, color: '#84cc16' },
+  sweep:      { label: 'Sweep AI',       icon: null, color: '#8b5cf6' },
+  blackbox:   { label: 'BLACKBOX AI',    icon: null, color: '#111111' },
+  coderabbit: { label: 'CodeRabbit',     icon: null, color: '#f97316' },
+  greptile:   { label: 'Greptile',       icon: null, color: '#047857' },
+  qodo:       { label: 'Qodo',           icon: null, color: '#3b82f6' },
+  ellipsis:   { label: 'Ellipsis',       icon: null, color: '#7c3aed' },
+  mintlify:   { label: 'Mintlify',       icon: null, color: '#0d9373' },
+  wisprflow:  { label: 'Wispr Flow',     icon: null, color: '#6366f1' },
+  superwhisper: { label: 'Superwhisper', icon: null, color: '#f43f5e' },
+  sourcery:   { label: 'Sourcery',       icon: null, color: '#f59e0b' },
+  phind:      { label: 'Phind',          icon: null, color: '#6366f1' },
 };
 
+// Normalize tool IDs for matching (strip spaces, dashes, underscores, lowercase)
 export function normalizeToolId(toolId) {
   return String(toolId || '')
     .trim()
     .toLowerCase()
     .replace(/\s+/g, '')
-    .replace(/_/g, '')
-    .replace(/-/g, '');
+    .replace(/[_\-\.]/g, '');
 }
+
+// Aliases: map various ID forms to canonical TOOL_META keys
+const ALIASES = {
+  claudecode: 'claude',
+  amazonqdeveloper: 'amazonq',
+  visualstudiocode: 'vscode',
+  githubcopilot: 'copilot',
+  codexcli: 'codex',
+  goosebyblock: 'goose',
+  ampbysourcegraph: 'amp',
+  codybysourcegraph: 'cody',
+  augmentcode: 'augment',
+  roocode: 'roocode',
+  traeide: 'trae',
+  sweepai: 'sweep',
+  blackboxai: 'blackbox',
+  wisprflow: 'wisprflow',
+  piecesfordevelopers: 'pieces',
+  boltnew: 'boltnew',
+  v0byvercel: 'v0',
+  windsurf: 'windsurf',
+  windsurfeditor: 'windsurf',
+};
 
 export function getToolMeta(toolId) {
   const normalized = normalizeToolId(toolId);
-  if (normalized === 'claudecode') {
-    return { id: 'claude', ...TOOL_META.claude };
-  }
-  if (normalized === 'amazonq' || normalized === 'amazonqdeveloper') {
-    return { id: 'amazonq', ...TOOL_META.amazonq };
-  }
-  if (normalized === 'visualstudiocode') {
-    return { id: 'vscode', ...TOOL_META.vscode };
-  }
-  const matched = TOOL_META[normalized];
-  if (matched) {
-    return { id: normalized, ...matched };
+
+  // Check aliases first
+  const aliasKey = ALIASES[normalized];
+  if (aliasKey && TOOL_META[aliasKey]) {
+    return { id: aliasKey, ...TOOL_META[aliasKey] };
   }
 
+  // Direct match
+  if (TOOL_META[normalized]) {
+    return { id: normalized, ...TOOL_META[normalized] };
+  }
+
+  // Partial match (e.g., "jetbrainsaiassistant" → "jetbrains")
+  for (const [key, meta] of Object.entries(TOOL_META)) {
+    if (normalized.startsWith(key) || normalized.includes(key)) {
+      return { id: key, ...meta };
+    }
+  }
+
+  // Fallback: auto-format the name
   const pretty = String(toolId || 'tool')
     .replace(/[-_]/g, ' ')
     .replace(/\b\w/g, (char) => char.toUpperCase());
@@ -94,6 +112,6 @@ export function getToolMeta(toolId) {
     id: normalized || 'tool',
     label: pretty,
     icon: null,
-    color: '#1d46ff',
+    color: '#6366f1',
   };
 }

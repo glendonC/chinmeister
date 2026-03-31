@@ -68,7 +68,7 @@ function DirectoryRow({ evaluation, categories, isExpanded, onToggle }) {
         aria-expanded={isExpanded}
       >
         <div className={styles.rowIdentity}>
-          <ToolIcon tool={evaluation.id} size={18} />
+          <ToolIcon tool={evaluation.id} website={evaluation.metadata?.website} size={18} />
           <span className={styles.rowLabel}>{evaluation.name || meta.label}</span>
         </div>
         <VerdictBadge verdict={evaluation.verdict} />
@@ -92,69 +92,61 @@ function DirectoryRow({ evaluation, categories, isExpanded, onToggle }) {
             <p className={styles.detailTagline}>{evaluation.tagline}</p>
           ) : null}
 
-          <div className={styles.detailLinks}>
-            {evaluation.metadata?.website ? (
-              <a
-                href={evaluation.metadata.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.detailLink}
-              >
-                Website
-              </a>
-            ) : null}
-            {evaluation.metadata?.github ? (
-              <a
-                href={evaluation.metadata.github}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={styles.detailLink}
-              >
-                GitHub
-              </a>
-            ) : null}
-          </div>
-
-          {evaluation.metadata?.install_command ? (
-            <code className={styles.detailInstall}>
-              {evaluation.metadata.install_command}
-            </code>
-          ) : null}
-
           {evaluation.metadata?.notable ? (
             <p className={styles.detailNotable}>{evaluation.metadata.notable}</p>
           ) : null}
 
+          <div className={styles.detailMeta}>
+            {evaluation.metadata?.website ? (
+              <div className={styles.detailMetaItem}>
+                <span className={styles.detailMetaLabel}>Website</span>
+                <a href={evaluation.metadata.website} target="_blank" rel="noopener noreferrer" className={styles.detailLink}>
+                  {evaluation.metadata.website.replace(/^https?:\/\/(www\.)?/, '')}
+                </a>
+              </div>
+            ) : null}
+            {evaluation.metadata?.github ? (
+              <div className={styles.detailMetaItem}>
+                <span className={styles.detailMetaLabel}>GitHub</span>
+                <a href={evaluation.metadata.github} target="_blank" rel="noopener noreferrer" className={styles.detailLink}>
+                  {evaluation.metadata.github.replace('https://github.com/', '')}
+                </a>
+              </div>
+            ) : null}
+            {evaluation.metadata?.install_command ? (
+              <div className={styles.detailMetaItem}>
+                <span className={styles.detailMetaLabel}>Install</span>
+                <code className={styles.detailInstall}>{evaluation.metadata.install_command}</code>
+              </div>
+            ) : null}
+          </div>
+
           {evaluation.sources?.length > 0 ? (
-            <div className={styles.detailSources}>
-              <span className={styles.detailSourcesLabel}>Sources</span>
-              {evaluation.sources.map((source, si) => (
-                <div key={si} className={styles.sourceEntry}>
-                  <span className={styles.sourceClaim}>{source.claim}</span>
-                  {source.citations?.map((cite, ci) => (
-                    <a
-                      key={ci}
-                      href={cite.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={styles.citationLink}
-                    >
-                      {cite.title || cite.url}
-                    </a>
-                  ))}
-                </div>
-              ))}
-            </div>
+            <details className={styles.sourcesCollapsible}>
+              <summary className={styles.sourcesToggle}>
+                {evaluation.sources.reduce((n, s) => n + (s.citations?.length || 0), 0)} sources cited
+              </summary>
+              <div className={styles.sourcesList}>
+                {evaluation.sources.filter(s => s.citations?.length > 0).map((source, si) => (
+                  <div key={si} className={styles.sourceEntry}>
+                    <span className={styles.sourceClaim}>{source.claim}</span>
+                    <div className={styles.sourceCitations}>
+                      {source.citations.map((cite, ci) => (
+                        <a key={ci} href={cite.url} target="_blank" rel="noopener noreferrer" className={styles.citationLink}>
+                          {cite.title || new URL(cite.url).hostname}
+                        </a>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </details>
           ) : null}
 
           <div className={styles.detailFooter}>
-            <span className={styles.detailEvaluatedBy}>
-              {evaluation.evaluated_by || 'unknown'}
-            </span>
+            <span className={styles.detailEvaluatedBy}>{evaluation.evaluated_by || 'unknown'}</span>
             {evaluation.evaluated_at ? (
-              <span className={styles.detailDate}>
-                {new Date(evaluation.evaluated_at).toLocaleDateString()}
-              </span>
+              <span className={styles.detailDate}>{new Date(evaluation.evaluated_at).toLocaleDateString()}</span>
             ) : null}
           </div>
         </div>
@@ -172,6 +164,8 @@ export default function ToolsView() {
   const [activeVerdict, setActiveVerdict] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedId, setExpandedId] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  const INITIAL_COUNT = 15;
   const [dashboardSnapshot, setDashboardSnapshot] = useState(null);
 
   useEffect(() => {
@@ -470,7 +464,7 @@ export default function ToolsView() {
         </div>
 
         <div className={styles.directoryList}>
-          {filteredEvaluations.map((ev) => (
+          {(showAll ? filteredEvaluations : filteredEvaluations.slice(0, INITIAL_COUNT)).map((ev) => (
             <DirectoryRow
               key={ev.id}
               evaluation={ev}
@@ -481,6 +475,16 @@ export default function ToolsView() {
           ))}
           {filteredEvaluations.length === 0 ? (
             <p className={styles.emptyHint}>No tools match the current filters.</p>
+          ) : null}
+          {!showAll && filteredEvaluations.length > INITIAL_COUNT ? (
+            <button className={styles.showMoreButton} onClick={() => setShowAll(true)}>
+              Show {filteredEvaluations.length - INITIAL_COUNT} more tools
+            </button>
+          ) : null}
+          {showAll && filteredEvaluations.length > INITIAL_COUNT ? (
+            <button className={styles.showMoreButton} onClick={() => setShowAll(false)}>
+              Show less
+            </button>
           ) : null}
         </div>
       </section>

@@ -18,7 +18,7 @@ import {
   handleUpdateColor,
   handleUpdateHandle,
 } from './routes/user.js';
-import { handleListDirectory, handleGetDirectoryEntry, handleTriggerEvaluation, handleBatchEvaluate } from './routes/directory.js';
+import { handleListDirectory, handleGetDirectoryEntry, handleTriggerEvaluation, handleBatchEvaluate, handleAdminDelete } from './routes/directory.js';
 import {
   handleTeamActivity,
   handleTeamClaimFiles,
@@ -101,6 +101,8 @@ export default {
         response = await handleListDirectory(request, env);
       } else if (method === 'POST' && path === '/tools/batch-evaluate') {
         response = await handleBatchEvaluate(request, env);
+      } else if (method === 'POST' && path === '/tools/admin-delete') {
+        response = await handleAdminDelete(request, env);
       } else if (method === 'GET' && path.startsWith('/tools/directory/')) {
         const toolId = path.slice('/tools/directory/'.length);
         if (toolId && !toolId.includes('/')) {

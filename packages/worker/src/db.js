@@ -359,6 +359,13 @@ export class DatabaseDO extends DurableObject {
     return { evaluations: rows.map(r => this.#parseEvaluation(r)) };
   }
 
+  async deleteEvaluation(toolId) {
+    this.#ensureSchema();
+    this.sql.exec('DELETE FROM tool_evaluations WHERE id = ?', toolId);
+    const changed = this.sql.exec('SELECT changes() as c').toArray();
+    return { ok: true, deleted: changed[0].c > 0 };
+  }
+
   async hasEvaluations() {
     this.#ensureSchema();
     const rows = this.sql.exec('SELECT COUNT(*) as count FROM tool_evaluations').toArray();

@@ -120,6 +120,9 @@ function toEvaluation(output, grounding, searchResults) {
       github: output.github || null,
       install_command: output.install_command || null,
       notable: output.notable || null,
+      // Favicon from the first search result (typically the official site)
+      favicon: searchResults.find(r => r.favicon)?.favicon || null,
+      image: searchResults.find(r => r.image)?.image || null,
       search_results: searchResults.slice(0, 10),
     },
     sources: mapGrounding(grounding),

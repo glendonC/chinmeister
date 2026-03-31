@@ -43,6 +43,25 @@ export async function handleGetDirectoryEntry(request, env, toolId) {
   return json({ evaluation: result.evaluation }, 200, CACHE_HEADERS);
 }
 
+// Admin-only delete — remove duplicate/stale evaluations.
+export async function handleAdminDelete(request, env) {
+  const body = await parseBody(request);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
+  const { ids, admin_key } = body;
+  if (admin_key !== env.EXA_API_KEY) return json({ error: 'Forbidden' }, 403);
+  if (!Array.isArray(ids) || ids.length === 0) return json({ error: 'ids array required' }, 400);
+
+  const db = getDB(env);
+  const results = [];
+  for (const id of ids) {
+    const r = await db.deleteEvaluation(id);
+    results.push({ id, deleted: r.deleted });
+  }
+  return json({ results }, 200);
+}
+
 // Admin-only batch evaluation — no auth, secured by secret key in body.
 // Used for seed scans and monthly re-evaluations.
 export async function handleBatchEvaluate(request, env) {

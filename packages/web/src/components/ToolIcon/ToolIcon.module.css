@@ -13,14 +13,17 @@
   display: block;
 }
 
+.favicon {
+  border-radius: 3px;
+}
+
 .monochrome img {
   filter: grayscale(1) contrast(1.05) opacity(0.88);
 }
 
 .fallback {
-  background: currentColor;
-  color: #fff !important;
+  color: #fff;
   font-size: 0.65rem;
-  font-weight: 500;
-  letter-spacing: -0.03em;
+  font-weight: 600;
+  letter-spacing: -0.02em;
 }

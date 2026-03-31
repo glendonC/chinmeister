@@ -48,7 +48,7 @@ export async function deepSearchEvaluate(toolName, outputSchema, env) {
     return {
       output: data.output?.content || null,
       grounding: data.output?.grounding || [],
-      results: (data.results || []).map(r => ({ title: r.title, url: r.url })),
+      results: (data.results || []).map(r => ({ title: r.title, url: r.url, favicon: r.favicon || null, image: r.image || null })),
     };
   } catch (err) {
     return { error: err.name === 'AbortError' ? 'Exa search timed out' : err.message };
