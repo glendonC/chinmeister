@@ -25,7 +25,7 @@ function catalogEntryToEvaluation(entry) {
     channel_support: null,
     process_detectable: null,
     open_source: null,
-    verdict: entry.mcpCompatible ? 'compatible' : 'incompatible',
+    verdict: entry.mcpCompatible ? 'integrated' : (entry.installCmd ? 'installable' : 'listed'),
     integration_tier: integrationTier,
     blocking_issues: [],
     metadata: {

@@ -6,10 +6,14 @@
 
 import { deepSearchEvaluate } from './search.js';
 
-const VALID_VERDICTS = ['compatible', 'partial', 'incompatible'];
+// Verdicts describe integration depth, not quality. Every tool belongs in the directory.
+// - integrated: chinwag coordinates with it (MCP support)
+// - installable: chinwag can help set it up (has CLI/install command)
+// - listed: chinwag tells you about it (discovery, no direct integration yet)
+const VALID_VERDICTS = ['integrated', 'installable', 'listed'];
 const VALID_CATEGORIES = ['ide', 'coding-agent', 'terminal', 'review', 'voice', 'docs', 'other'];
 const VALID_CONFIDENCE = ['high', 'medium', 'low'];
-const VALID_TIERS = ['managed', 'connected', 'discovery-only', 'incompatible'];
+const VALID_TIERS = ['managed', 'connected', 'installable', 'listed'];
 
 // JSON Schema (draft-07) sent to Exa's outputSchema parameter.
 // Exa fills this in from crawled pages and provides per-field grounding.
@@ -49,16 +53,17 @@ function generateId(name) {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
-// Derive verdict and integration tier from Exa's structured output
+// Derive verdict (integration depth) and tier from Exa's structured output.
+// Every tool belongs — the question is how deeply chinwag integrates with it.
 function deriveVerdict(output) {
   if (output.mcp_support === true) {
-    if (output.hooks_support === true) return { verdict: 'compatible', tier: 'managed' };
-    return { verdict: 'compatible', tier: 'connected' };
+    if (output.hooks_support === true) return { verdict: 'integrated', tier: 'managed' };
+    return { verdict: 'integrated', tier: 'connected' };
   }
-  if (output.has_cli === true || output.process_detectable === true) {
-    return { verdict: 'partial', tier: 'discovery-only' };
+  if (output.has_cli === true || output.install_command) {
+    return { verdict: 'installable', tier: 'installable' };
   }
-  return { verdict: 'incompatible', tier: 'incompatible' };
+  return { verdict: 'listed', tier: 'listed' };
 }
 
 // Derive overall confidence from Exa's per-field grounding
@@ -93,8 +98,8 @@ function toEvaluation(output, grounding, searchResults) {
   const confidence = deriveConfidence(grounding);
 
   const blocking = [];
-  if (output.mcp_support === false) blocking.push('No MCP support detected');
-  if (output.has_cli === false) blocking.push('No CLI available');
+  if (output.mcp_support === false) blocking.push('No MCP support — coordination not available yet');
+  if (output.has_cli === false && !output.install_command) blocking.push('No CLI — manual install required');
 
   return {
     id: generateId(output.name),

@@ -237,8 +237,8 @@ export function Discover({ config, navigate }) {
                   const desc = descAvail > 10 && tool.description.length > descAvail
                     ? tool.description.slice(0, descAvail - 1) + '…'
                     : tool.description;
-                  const verdictColor = tool.verdict === 'compatible' ? 'green'
-                    : tool.verdict === 'partial' ? 'yellow' : undefined;
+                  const verdictColor = (tool.verdict === 'integrated' || tool.verdict === 'compatible') ? 'green'
+                    : (tool.verdict === 'installable' || tool.verdict === 'partial') ? 'yellow' : undefined;
                   return (
                     <Text key={tool.id}>
                       <Text color="cyan" bold>[{i + 1}]</Text>
@@ -293,8 +293,8 @@ export function Discover({ config, navigate }) {
               const desc = descAvail > 10 && tool.description.length > descAvail
                 ? tool.description.slice(0, descAvail - 1) + '…'
                 : tool.description;
-              const verdictColor = tool.verdict === 'compatible' ? 'green'
-                : tool.verdict === 'partial' ? 'yellow' : undefined;
+              const verdictColor = (tool.verdict === 'integrated' || tool.verdict === 'compatible') ? 'green'
+                : (tool.verdict === 'installable' || tool.verdict === 'partial') ? 'yellow' : undefined;
               return (
                 <Text key={tool.id}>
                   <Text dimColor>○</Text>

@@ -23,18 +23,22 @@ function summarizeProjects(projects) {
 
 const VERDICT_OPTIONS = [
   { value: 'all', label: 'All' },
-  { value: 'compatible', label: 'Compatible' },
-  { value: 'partial', label: 'Partial' },
-  { value: 'incompatible', label: 'Incompatible' },
+  { value: 'integrated', label: 'Integrated' },
+  { value: 'installable', label: 'Installable' },
+  { value: 'listed', label: 'Listed' },
 ];
 
 function VerdictBadge({ verdict }) {
   const map = {
-    compatible: { className: styles.verdictCompatible, label: 'Compatible' },
-    partial: { className: styles.verdictPartial, label: 'Partial' },
-    incompatible: { className: styles.verdictIncompatible, label: 'Incompatible' },
+    integrated: { className: styles.verdictCompatible, label: 'Integrated' },
+    installable: { className: styles.verdictPartial, label: 'Installable' },
+    listed: { className: styles.verdictIncompatible, label: 'Listed' },
+    // Legacy verdicts from cached data
+    compatible: { className: styles.verdictCompatible, label: 'Integrated' },
+    partial: { className: styles.verdictPartial, label: 'Installable' },
+    incompatible: { className: styles.verdictIncompatible, label: 'Listed' },
   };
-  const config = map[verdict] || map.incompatible;
+  const config = map[verdict] || map.listed;
   return <span className={config.className}>{config.label}</span>;
 }
 
@@ -249,7 +253,7 @@ export default function ToolsView() {
       const bConfigured =
         userToolIds.has(bId) || userHostIds.has(bId) || seenSurfaceIds.has(bId) ? 1 : 0;
       if (aConfigured !== bConfigured) return bConfigured - aConfigured;
-      const verdictOrder = { compatible: 0, partial: 1, incompatible: 2 };
+      const verdictOrder = { integrated: 0, compatible: 0, installable: 1, partial: 1, listed: 2, incompatible: 2 };
       const aV = verdictOrder[a.verdict] ?? 3;
       const bV = verdictOrder[b.verdict] ?? 3;
       if (aV !== bV) return aV - bV;
