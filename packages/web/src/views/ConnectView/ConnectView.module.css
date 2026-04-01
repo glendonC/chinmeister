@@ -1,54 +1,92 @@
+/* ── Split layout ── */
+
 .connectScreen {
   height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
+  display: grid;
+  grid-template-columns: minmax(280px, 0.45fr) minmax(320px, 0.55fr);
   position: relative;
   z-index: 1;
 }
 
-.connectCard {
-  width: 100%;
-  max-width: 520px;
+/* ── Left: brand ── */
+
+.brandSide {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  text-align: center;
+  justify-content: flex-end;
+  padding: 48px 64px 48px 48px;
   animation: fadeSlideIn 0.5s var(--motion) both;
 }
 
-.connectLogo {
+.brandContent {
+  max-width: 340px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 40px;
+  flex-direction: column;
 }
 
-.connectBrand {
-  font-family: var(--display);
-  font-size: 1.2rem;
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.03em;
+.brandMark {
+  margin-bottom: 32px;
 }
 
-.connectTitle {
+.brandHeadline {
   font-family: var(--display);
-  font-size: clamp(2rem, 5vw, 3.6rem);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
   font-weight: 300;
   color: var(--ink);
-  line-height: 0.98;
-  margin-bottom: 10px;
-  letter-spacing: -0.07em;
-  max-width: 12ch;
+  line-height: var(--display-line);
+  letter-spacing: var(--display-spacing);
+  max-width: 16ch;
 }
 
-.connectSubtitle {
+/* ── Right: auth ── */
+
+.authSide {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 48px 48px 48px 64px;
+  animation: fadeSlideIn 0.5s var(--motion) 0.08s both;
+}
+
+.authContent {
+  max-width: 400px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+}
+
+/* ── Primary: CLI ── */
+
+.authBlock {
+  display: flex;
+  flex-direction: column;
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+
+.authTitle {
+  font-family: var(--display);
+  font-size: clamp(1.4rem, 2.5vw, 1.8rem);
+  font-weight: 300;
+  color: var(--ink);
+  line-height: var(--display-line);
+  letter-spacing: var(--display-spacing);
+  margin-bottom: 8px;
+}
+
+.authHint {
   font-size: var(--text-md);
   color: var(--muted);
-  margin-bottom: 28px;
   line-height: 1.5;
+  margin-bottom: 20px;
 }
 
 .commandBox {
@@ -56,7 +94,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 18px;
+  padding: 14px 16px;
   background: transparent;
   border: 1px solid var(--hairline);
   border-radius: 12px;
@@ -95,67 +133,40 @@
   color: var(--muted);
 }
 
-.connectNote {
+.commandNote {
   font-size: var(--text-sm);
   color: var(--soft);
-  margin-top: 14px;
+  margin-top: 12px;
   line-height: 1.5;
-  max-width: 420px;
 }
 
-.connectNote code {
-  font-size: 0.9em;
+/* ── Fallback: token ── */
+
+.tokenBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.tokenSection {
-  width: 100%;
-  margin-top: 36px;
-}
-
-.tokenToggle {
-  font-size: var(--text-xs);
+.tokenLabel {
+  font-size: var(--text-sm);
   color: var(--soft);
-  cursor: pointer;
-  transition: color 0.15s ease;
-  list-style: none;
-  user-select: none;
+  line-height: 1.5;
 }
 
-.tokenToggle::-webkit-details-marker {
-  display: none;
-}
-
-.tokenToggle::before {
-  content: '';
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid var(--soft);
-  border-bottom: 1.5px solid var(--soft);
-  transform: rotate(-45deg);
-  margin-right: 6px;
-  transition: transform 0.2s ease;
-  vertical-align: middle;
-}
-
-.tokenSection[open] .tokenToggle::before {
-  transform: rotate(45deg);
-}
-
-.tokenToggle:hover {
+.tokenLabel code {
+  font-size: 0.9em;
   color: var(--muted);
 }
 
 .tokenForm {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 16px;
-  animation: fadeSlideIn 0.3s var(--motion) both;
+  gap: 8px;
 }
 
 .tokenInput {
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 10px 14px;
   font-family: var(--mono);
   font-size: var(--text-sm);
@@ -177,16 +188,16 @@
 }
 
 .tokenSubmit {
-  width: 100%;
-  padding: 13px 24px;
+  padding: 10px 22px;
   font-family: var(--sans);
-  font-size: 14px;
+  font-size: var(--text-sm);
   font-weight: 400;
   color: #fff;
   background: var(--accent);
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-xs);
   cursor: pointer;
+  white-space: nowrap;
   transition: opacity 0.15s ease, transform 0.1s ease;
 }
 
@@ -206,28 +217,68 @@
 .tokenError {
   font-size: var(--text-xs);
   color: var(--danger);
-  text-align: left;
   line-height: 1.4;
 }
 
-.connectPrivacy {
-  margin-top: 40px;
+/* ── Privacy ── */
+
+.privacy {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   font-size: var(--text-xs);
   color: var(--soft);
   text-decoration: none;
   transition: color 0.15s ease;
 }
 
-.connectPrivacy:hover {
+.privacy:hover {
   color: var(--muted);
 }
 
-@media (max-width: 767px) {
-  .connectTitle {
-    font-size: 2rem;
+/* ── Responsive ── */
+
+@media (max-width: 768px) {
+  .connectScreen {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
   }
 
-  .connectCard {
-    max-width: 360px;
+  .brandSide {
+    justify-content: flex-start;
+    padding: 48px 24px 0;
+    align-items: flex-start;
+  }
+
+  .brandContent {
+    max-width: none;
+  }
+
+  .brandMark {
+    margin-bottom: 20px;
+  }
+
+  .brandHeadline {
+    font-size: 1.6rem;
+  }
+
+  .authSide {
+    justify-content: flex-start;
+    padding: 28px 24px 72px;
+    align-items: flex-start;
+  }
+
+  .authContent {
+    max-width: none;
+    gap: 32px;
+  }
+
+  .authTitle {
+    font-size: 1.4rem;
+  }
+
+  .privacy {
+    bottom: 16px;
   }
 }
