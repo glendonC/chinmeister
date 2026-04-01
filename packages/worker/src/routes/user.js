@@ -23,6 +23,11 @@ export async function authenticate(request, env) {
   return db.getUser(userId);
 }
 
+export async function handleUnlinkGithub(user, env) {
+  const result = await getDB(env).unlinkGithub(user.id);
+  return json(result);
+}
+
 export async function handleUpdateHandle(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);

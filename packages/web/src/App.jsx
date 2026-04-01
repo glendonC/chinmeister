@@ -63,6 +63,10 @@ export default function App() {
       setBootState('loading');
       setBootError(null);
       let t = authActions.readTokenFromHash();
+      // Clean up non-token hash params (e.g. github_linked=1)
+      if (!t && window.location.hash) {
+        history.replaceState(null, '', window.location.pathname);
+      }
       if (!t) t = authActions.getStoredToken();
       if (!t) { setBootState('unauthenticated'); return; }
       try {
@@ -82,12 +86,12 @@ export default function App() {
     return (
       <div className={styles.bootScreen}>
         <div className={styles.bootSpinner}>
-          <svg className={styles.spinnerMark} width="32" height="32" viewBox="0 0 32 32">
-            <path fill="#d49aae" d="M4 24 20 24 24 20 8 20z" />
-            <path fill="#a896d4" d="M6 18 22 18 26 14 10 14z" />
-            <path fill="#8ec0a4" d="M8 12 24 12 28 8 12 8z" />
+          <svg className={styles.spinnerMark} width="48" height="48" viewBox="0 0 32 32">
+            <path className={styles.chevron1} fill="#8ec0a4" d="M8 12 24 12 28 8 12 8z" />
+            <path className={styles.chevron2} fill="#a896d4" d="M6 18 22 18 26 14 10 14z" />
+            <path className={styles.chevron3} fill="#d49aae" d="M4 24 20 24 24 20 8 20z" />
           </svg>
-          <span className={styles.bootText}>Loading...</span>
+          <span className={styles.bootBrand}>chinwag</span>
         </div>
       </div>
     );

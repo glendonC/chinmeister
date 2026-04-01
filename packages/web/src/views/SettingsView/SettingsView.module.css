@@ -196,6 +196,104 @@
   opacity: 0.5;
 }
 
+/* ── GitHub ── */
+
+.githubSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+  animation: fadeSlideIn var(--motion-slow) var(--motion) 0.05s both;
+}
+
+.githubConnected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.githubIdentity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.githubAvatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+
+.githubLogin {
+  font-size: var(--text-md);
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.githubBadge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--success, #34c759);
+  background: color-mix(in srgb, var(--success, #34c759) 10%, transparent);
+  padding: 3px 8px;
+  border-radius: 4px;
+}
+
+.githubUnlink {
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 0;
+  transition: color var(--motion-fast) var(--motion);
+}
+
+.githubUnlink:hover:not(:disabled) {
+  color: var(--danger);
+}
+
+.githubUnlink:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.githubLinkButton {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  padding: 10px 20px;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: #fff;
+  background: #24292f;
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.1s ease;
+}
+
+.githubLinkButton:hover {
+  background: #1b1f23;
+}
+
+.githubLinkButton:active {
+  transform: scale(0.98);
+}
+
+.linkError {
+  font-size: 11px;
+  color: var(--danger);
+}
+
 .signoutBtn {
   margin-top: 30px;
   border: none;

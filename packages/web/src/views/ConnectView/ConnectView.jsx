@@ -1,17 +1,42 @@
 import { useState, useEffect } from 'react';
 import { authActions } from '../../lib/stores/auth.js';
 import { teamActions } from '../../lib/stores/teams.js';
+import { getApiUrl } from '../../lib/api.js';
 import styles from './ConnectView.module.css';
 
 export default function ConnectView({ error: initialError = null }) {
   const [tokenInput, setTokenInput] = useState('');
-  const [connectError, setConnectError] = useState(null);
+  const [githubError, setGithubError] = useState(null);
+  const [tokenError, setTokenError] = useState(null);
   const [connecting, setConnecting] = useState(false);
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (initialError) setConnectError(friendlyError(initialError));
+    if (initialError) setGithubError(friendlyError(initialError));
+    // Check for GitHub OAuth errors in hash
+    const hash = window.location.hash;
+    if (hash.includes('error=')) {
+      const match = hash.match(/error=([^&]+)/);
+      if (match) {
+        setGithubError(friendlyGithubError(match[1]));
+        history.replaceState(null, '', window.location.pathname);
+      }
+    }
   }, [initialError]);
+
+  function friendlyGithubError(code) {
+    const map = {
+      github_denied: 'GitHub sign-in was cancelled.',
+      github_invalid: 'Invalid response from GitHub. Try again.',
+      github_expired: 'Sign-in session expired. Try again.',
+      github_token_failed: 'Could not complete GitHub sign-in. Try again.',
+      github_profile_failed: 'Could not fetch your GitHub profile. Try again.',
+      github_already_linked: 'That GitHub account is already linked to another user.',
+      rate_limited: 'Too many accounts created today. Try again tomorrow.',
+      account_failed: 'Could not create your account. Try again.',
+    };
+    return map[code] || 'Something went wrong with GitHub sign-in. Try again.';
+  }
 
   function friendlyError(msg) {
     const m = (msg || '').toLowerCase();
@@ -29,18 +54,18 @@ export default function ConnectView({ error: initialError = null }) {
   async function handleConnect() {
     const t = tokenInput.trim();
     if (!t) {
-      setConnectError('Paste a token first.');
+      setTokenError('Paste a token first.');
       return;
     }
 
     setConnecting(true);
-    setConnectError(null);
+    setTokenError(null);
 
     try {
       await authActions.authenticate(t);
       await teamActions.loadTeams();
     } catch (err) {
-      setConnectError(friendlyError(err.message));
+      setTokenError(friendlyError(err.message));
     } finally {
       setConnecting(false);
     }
@@ -84,6 +109,26 @@ export default function ConnectView({ error: initialError = null }) {
           <div className={styles.authBlock}>
             <span className={styles.eyebrow}>Connect</span>
             <h2 className={styles.authTitle}>Open your dashboard</h2>
+
+            <a className={styles.githubButton} href={`${getApiUrl()}/auth/github`}>
+              <svg className={styles.githubIcon} width="20" height="20" viewBox="0 0 16 16" fill="currentColor">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              Sign in with GitHub
+            </a>
+
+            {githubError && (
+              <p className={styles.githubError}>{githubError}</p>
+            )}
+          </div>
+
+          <div className={styles.dividerRow}>
+            <span className={styles.dividerLine} />
+            <span className={styles.dividerLabel}>or use the CLI</span>
+            <span className={styles.dividerLine} />
+          </div>
+
+          <div className={styles.cliBlock}>
             <p className={styles.authHint}>Run this in any repo that uses chinwag:</p>
 
             <button className={styles.commandBox} onClick={copyCommand} title="Copy to clipboard">
@@ -103,8 +148,6 @@ export default function ConnectView({ error: initialError = null }) {
                 )}
               </span>
             </button>
-
-            <p className={styles.commandNote}>This opens the dashboard and signs you in automatically.</p>
           </div>
 
           <div className={styles.tokenBlock}>
@@ -130,8 +173,8 @@ export default function ConnectView({ error: initialError = null }) {
                 {connecting ? 'Connecting...' : 'Connect'}
               </button>
             </div>
-            {connectError && (
-              <p className={styles.tokenError}>{connectError}</p>
+            {tokenError && (
+              <p className={styles.tokenError}>{tokenError}</p>
             )}
           </div>
         </div>

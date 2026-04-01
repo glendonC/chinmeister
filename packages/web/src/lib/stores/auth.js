@@ -17,7 +17,7 @@ const authStore = createStore((set, get) => ({
   },
 
   getStoredToken() {
-    return sessionStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY);
   },
 
   async authenticate(t) {
@@ -25,18 +25,18 @@ const authStore = createStore((set, get) => ({
     try {
       const userData = await api('GET', '/me', null, t);
       set({ user: userData });
-      sessionStorage.setItem(TOKEN_KEY, t);
+      localStorage.setItem(TOKEN_KEY, t);
       return true;
     } catch (err) {
       set({ token: null, user: null });
-      sessionStorage.removeItem(TOKEN_KEY);
+      localStorage.removeItem(TOKEN_KEY);
       throw err;
     }
   },
 
   logout() {
     set({ token: null, user: null });
-    sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
   },
 }));
 

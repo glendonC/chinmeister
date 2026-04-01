@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuthStore, authActions } from '../../lib/stores/auth.js';
 import { stopPolling } from '../../lib/stores/polling.js';
-import { api } from '../../lib/api.js';
+import { api, getApiUrl } from '../../lib/api.js';
 import { COLOR_PALETTE, getColorHex } from '../../lib/utils.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import styles from './SettingsView.module.css';
@@ -16,6 +16,8 @@ export default function SettingsView() {
   const [handleSaving, setHandleSaving] = useState(false);
   const [colorSaving, setColorSaving] = useState(false);
   const [hoveredColor, setHoveredColor] = useState(null);
+  const [unlinking, setUnlinking] = useState(false);
+  const [linkError, setLinkError] = useState(null);
 
   const previewColorName = hoveredColor || user?.color || 'white';
   const previewColor = getColorHex(previewColorName) || '#98989d';
@@ -55,6 +57,29 @@ export default function SettingsView() {
       authActions.updateUser({ color: colorName });
     } catch {} finally {
       setColorSaving(false);
+    }
+  }
+
+  async function handleGithubLink() {
+    setLinkError(null);
+    try {
+      const result = await api('POST', '/auth/github/link', null, token);
+      if (result.url) window.location.href = result.url;
+    } catch (err) {
+      setLinkError(err.message || 'Could not start GitHub linking');
+    }
+  }
+
+  async function handleGithubUnlink() {
+    setUnlinking(true);
+    setLinkError(null);
+    try {
+      await api('PUT', '/me/github', { action: 'unlink' }, token);
+      authActions.updateUser({ github_id: null, github_login: null, avatar_url: null });
+    } catch (err) {
+      setLinkError(err.message || 'Could not unlink GitHub');
+    } finally {
+      setUnlinking(false);
     }
   }
 
@@ -130,6 +155,38 @@ export default function SettingsView() {
             })}
           </div>
         </div>
+      </section>
+
+      <section className={styles.githubSection}>
+        <span className={styles.sectionLabel}>GitHub</span>
+
+        {user?.github_login ? (
+          <div className={styles.githubConnected}>
+            <div className={styles.githubIdentity}>
+              {user.avatar_url && (
+                <img src={user.avatar_url} alt="" className={styles.githubAvatar} />
+              )}
+              <span className={styles.githubLogin}>{user.github_login}</span>
+              <span className={styles.githubBadge}>Connected</span>
+            </div>
+            <button
+              className={styles.githubUnlink}
+              onClick={handleGithubUnlink}
+              disabled={unlinking}
+            >
+              {unlinking ? 'Unlinking...' : 'Disconnect'}
+            </button>
+          </div>
+        ) : (
+          <button className={styles.githubLinkButton} onClick={handleGithubLink}>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            Connect GitHub
+          </button>
+        )}
+
+        {linkError && <p className={styles.linkError}>{linkError}</p>}
       </section>
 
       <button className={styles.signoutBtn} onClick={handleLogout}>

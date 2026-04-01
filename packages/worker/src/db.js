@@ -104,13 +104,30 @@ export class DatabaseDO extends DurableObject {
       );
       CREATE INDEX IF NOT EXISTS idx_eval_category ON tool_evaluations(category);
       CREATE INDEX IF NOT EXISTS idx_eval_verdict ON tool_evaluations(verdict);
+
+      CREATE TABLE IF NOT EXISTS web_sessions (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        expires_at TEXT NOT NULL,
+        last_used TEXT DEFAULT (datetime('now')),
+        user_agent TEXT,
+        revoked INTEGER DEFAULT 0
+      );
     `);
 
     // Migrate: add team_name column for tables created before this column existed
     try { this.sql.exec('ALTER TABLE user_teams ADD COLUMN team_name TEXT'); } catch {}
 
-    // Prune stale rate limit rows
+    // Migrate: add GitHub OAuth columns
+    try { this.sql.exec('ALTER TABLE users ADD COLUMN github_id TEXT'); } catch {}
+    try { this.sql.exec('ALTER TABLE users ADD COLUMN github_login TEXT'); } catch {}
+    try { this.sql.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT'); } catch {}
+    try { this.sql.exec('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)'); } catch {}
+
+    // Prune stale rate limit rows and expired sessions
     this.sql.exec("DELETE FROM account_limits WHERE date < date('now', '-7 days')");
+    this.sql.exec("DELETE FROM web_sessions WHERE expires_at < datetime('now') OR revoked = 1");
 
     this.#schemaReady = true;
   }
@@ -148,7 +165,7 @@ export class DatabaseDO extends DurableObject {
   async getUser(id) {
     this.#ensureSchema();
     const rows = this.sql.exec(
-      'SELECT id, handle, color, status, created_at, last_active FROM users WHERE id = ?', id
+      'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE id = ?', id
     ).toArray();
     const user = rows[0] || null;
     if (user) {
@@ -202,6 +219,122 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
     this.sql.exec('UPDATE users SET status = ? WHERE id = ?', status, userId);
     return { ok: true };
+  }
+
+  // --- GitHub OAuth ---
+
+  async getUserByGithubId(githubId) {
+    this.#ensureSchema();
+    const rows = this.sql.exec(
+      'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE github_id = ?',
+      String(githubId)
+    ).toArray();
+    return rows[0] || null;
+  }
+
+  async createUserFromGithub(githubId, githubLogin, avatarUrl) {
+    this.#ensureSchema();
+
+    const id = crypto.randomUUID();
+    const token = crypto.randomUUID();
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    const now = new Date().toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+
+    let handle = githubLogin.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
+    if (handle.length < 3) handle = this.#generateHandle();
+    let attempts = 0;
+    while (this.#handleExists(handle) && attempts < 10) {
+      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
+      attempts++;
+    }
+    if (this.#handleExists(handle)) {
+      return { error: 'Could not generate unique handle' };
+    }
+
+    this.sql.exec(
+      `INSERT INTO users (id, handle, color, token, status, github_id, github_login, avatar_url, created_at, last_active)
+       VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+      id, handle, color, token, String(githubId), githubLogin, avatarUrl || null, now, now
+    );
+
+    return { id, handle, color, token };
+  }
+
+  async linkGithub(userId, githubId, githubLogin, avatarUrl) {
+    this.#ensureSchema();
+
+    // Check if this GitHub account is already linked to another user
+    const existing = this.sql.exec(
+      'SELECT id FROM users WHERE github_id = ? AND id != ?', String(githubId), userId
+    ).toArray();
+    if (existing.length > 0) {
+      return { error: 'This GitHub account is already linked to another user' };
+    }
+
+    this.sql.exec(
+      'UPDATE users SET github_id = ?, github_login = ?, avatar_url = ? WHERE id = ?',
+      String(githubId), githubLogin, avatarUrl || null, userId
+    );
+    return { ok: true };
+  }
+
+  async unlinkGithub(userId) {
+    this.#ensureSchema();
+    this.sql.exec(
+      'UPDATE users SET github_id = NULL, github_login = NULL, avatar_url = NULL WHERE id = ?',
+      userId
+    );
+    return { ok: true };
+  }
+
+  // --- Web sessions ---
+
+  async createWebSession(userId, userAgent) {
+    this.#ensureSchema();
+    const token = crypto.randomUUID();
+    const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+      .toISOString().replace('T', ' ').replace(/\.\d{3}Z$/, '');
+
+    this.sql.exec(
+      `INSERT INTO web_sessions (token, user_id, expires_at, user_agent) VALUES (?, ?, ?, ?)`,
+      token, userId, expiresAt, userAgent || null
+    );
+    return { token, expires_at: expiresAt };
+  }
+
+  async getWebSession(token) {
+    this.#ensureSchema();
+    const rows = this.sql.exec(
+      `SELECT token, user_id, expires_at, last_used, user_agent, revoked
+       FROM web_sessions
+       WHERE token = ? AND revoked = 0 AND expires_at > datetime('now')`,
+      token
+    ).toArray();
+    if (rows.length === 0) return null;
+
+    // Slide the window — refresh expiry and last_used on access
+    this.sql.exec(
+      `UPDATE web_sessions SET last_used = datetime('now') WHERE token = ?`,
+      token
+    );
+    return rows[0];
+  }
+
+  async revokeWebSession(token) {
+    this.#ensureSchema();
+    this.sql.exec('UPDATE web_sessions SET revoked = 1 WHERE token = ?', token);
+    return { ok: true };
+  }
+
+  async getUserWebSessions(userId) {
+    this.#ensureSchema();
+    return this.sql.exec(
+      `SELECT token, created_at, expires_at, last_used, user_agent
+       FROM web_sessions
+       WHERE user_id = ? AND revoked = 0 AND expires_at > datetime('now')
+       ORDER BY last_used DESC LIMIT 20`,
+      userId
+    ).toArray();
   }
 
   // --- Rate limiting ---

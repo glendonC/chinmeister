@@ -4,7 +4,7 @@
 
 import { json } from './lib/http.js';
 import { parseTeamPath, getToolFromAgentId, sanitizeTags, teamErrorStatus } from './lib/request-utils.js';
-import { handleInit, handleStats, handleToolCatalog } from './routes/public.js';
+import { handleInit, handleStats, handleToolCatalog, handleGithubAuth, handleGithubCallback, handleGithubLink, handleGithubLinkCallback } from './routes/public.js';
 import {
   authenticate,
   handleChatUpgrade,
@@ -16,6 +16,7 @@ import {
   handleSetStatus,
   handleUpdateAgentProfile,
   handleUpdateColor,
+  handleUnlinkGithub,
   handleUpdateHandle,
 } from './routes/user.js';
 import { handleListDirectory, handleGetDirectoryEntry, handleTriggerEvaluation, handleBatchEvaluate, handleAdminDelete } from './routes/directory.js';
@@ -110,6 +111,12 @@ export default {
         } else {
           response = json({ error: 'Not found' }, 404);
         }
+      } else if (method === 'GET' && path === '/auth/github') {
+        response = await handleGithubAuth(request, env);
+      } else if (method === 'GET' && path === '/auth/github/callback') {
+        response = await handleGithubCallback(request, env);
+      } else if (method === 'GET' && path === '/auth/github/callback/link') {
+        response = await handleGithubLinkCallback(request, env);
       } else {
         const user = await authenticate(request, env);
         if (!user) {
@@ -135,6 +142,10 @@ export default {
           response = await handleClearStatus(user, env);
         } else if (method === 'GET' && path === '/ws/chat') {
           return handleChatUpgrade(request, user, env);
+        } else if (method === 'POST' && path === '/auth/github/link') {
+          response = await handleGithubLink(request, user, env);
+        } else if (method === 'PUT' && path === '/me/github') {
+          response = await handleUnlinkGithub(user, env);
         } else if (method === 'PUT' && path === '/agent/profile') {
           response = await handleUpdateAgentProfile(request, user, env);
         } else if (method === 'POST' && path === '/tools/evaluate') {
