@@ -118,7 +118,7 @@ if (process.argv[2] === 'dashboard') {
 
 const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 const PRIMARY_MODES = [
-  { key: 'dashboard', label: 'main', shortLabel: 'main', accent: 'cyan' },
+  { key: 'dashboard', label: 'dashboard', shortLabel: 'dashboard', accent: 'cyan' },
   { key: 'discover', label: 'tools', shortLabel: 'tools', accent: 'yellow' },
   { key: 'chat', label: 'chat', shortLabel: 'chat', accent: 'magenta' },
   { key: 'customize', label: 'settings', shortLabel: 'settings', accent: 'green' },
