@@ -10,13 +10,26 @@ export default function ConnectView({ error: initialError = null }) {
   const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    if (initialError) setConnectError(initialError);
+    if (initialError) setConnectError(friendlyError(initialError));
   }, [initialError]);
+
+  function friendlyError(msg) {
+    const m = (msg || '').toLowerCase();
+    if (m.includes('unauthorized'))
+      return 'That token is invalid or expired. Generate a fresh one with npx chinwag token.';
+    if (m.includes('timed out') || m.includes('timeout'))
+      return 'Could not reach the server. Check your connection and try again.';
+    if (m.includes('500') || m.includes('server error'))
+      return 'Something went wrong on our end. Try again in a moment.';
+    if (m.includes('fetch') || m.includes('network') || m.includes('econnrefused'))
+      return 'Could not reach the server. Check your connection and try again.';
+    return msg || 'Something went wrong. Try again.';
+  }
 
   async function handleConnect() {
     const t = tokenInput.trim();
     if (!t) {
-      setConnectError('Please enter a token.');
+      setConnectError('Paste a token first.');
       return;
     }
 
@@ -27,7 +40,7 @@ export default function ConnectView({ error: initialError = null }) {
       await authActions.authenticate(t);
       await teamActions.loadTeams();
     } catch (err) {
-      setConnectError(err.message || 'Invalid token. Try generating a new one.');
+      setConnectError(friendlyError(err.message));
     } finally {
       setConnecting(false);
     }
