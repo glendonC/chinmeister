@@ -124,7 +124,8 @@ export function Dashboard({ config, navigate, layout, projectLabel = null, appVe
   const hasMemories = memories.length > 0;
   const projectDisplayName = formatProjectPath(projectRoot);
   const liveAgentNameCounts = liveAgents.reduce((counts, agent) => {
-    counts.set(agent._display, (counts.get(agent._display) || 0) + 1);
+    const label = agent._display || agent.toolName || agent.tool || 'agent';
+    counts.set(label, (counts.get(label) || 0) + 1);
     return counts;
   }, new Map());
   const visibleSessionRows = getVisibleWindow(allVisibleAgents, selectedIdx, Math.max(4, viewportRows - 11));

@@ -72,7 +72,7 @@ export function AgentFocusView({
     <Box flexDirection="column" paddingTop={1}>
       {/* Agent header */}
       <Box>
-        <Text color={statusColor} bold>{getAgentDisplayLabel(freshAgent, liveAgentNameCounts)}</Text>
+        <Text color={statusColor} bold>{getAgentDisplayLabel(freshAgent, liveAgentNameCounts, combinedAgents)}</Text>
         {freshAgent.handle && <Text dimColor>  @{freshAgent.handle}</Text>}
       </Box>
       <Box>

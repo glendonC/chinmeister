@@ -1,4 +1,4 @@
-import { formatFiles, shortAgentId } from './dashboard-view.js';
+import { formatFiles } from './dashboard-view.js';
 
 export function isAgentAddressable(agent) {
   if (!agent?.agent_id) return false;
@@ -17,8 +17,8 @@ export function getAgentIntent(agent) {
   if (agent._managed && agent._dead && agent.outputPreview) return agent.outputPreview;
   if (agent._summary) return agent._summary;
   const files = formatFiles(agent.activity?.files || []);
-  if (files) return `Working in ${files}`;
-  if (agent._managed && agent.task) return `Delegated task: ${agent.task}`;
+  if (files) return files;
+  if (agent._managed && agent.task) return agent.task;
   return 'Idle';
 }
 
@@ -30,12 +30,18 @@ export function getAgentOriginLabel(agent) {
   return 'joined automatically';
 }
 
-export function getAgentDisplayLabel(agent, nameCounts) {
+export function getAgentDisplayLabel(agent, nameCounts, allAgents) {
   if (!agent) return 'agent';
   const baseLabel = agent._display || agent.toolName || agent.tool || 'agent';
-  if ((nameCounts?.get(baseLabel) || 0) <= 1) return baseLabel;
-  const suffix = shortAgentId(agent.agent_id) || String(agent.id || '').slice(-4);
-  return suffix ? `${baseLabel} #${suffix}` : baseLabel;
+  if (!allAgents) {
+    if ((nameCounts?.get(baseLabel) || 0) <= 1) return baseLabel;
+    return baseLabel;
+  }
+  const sameNameAgents = allAgents.filter(a => (a._display || a.toolName || a.tool || 'agent') === baseLabel);
+  if (sameNameAgents.length <= 1) return baseLabel;
+  const agentKey = agent.agent_id || agent.id;
+  const idx = sameNameAgents.findIndex(a => (a.agent_id || a.id) === agentKey);
+  return idx <= 0 ? baseLabel : `${baseLabel} #${idx + 1}`;
 }
 
 export function getIntentColor(intent) {

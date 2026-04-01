@@ -179,7 +179,7 @@ export function MainPane({
         {allVisibleAgents.length === 0 ? (
           <Text dimColor>  No agents connected. Press [n] to start one.</Text>
         ) : (() => {
-          const toolColWidth = Math.max(4, ...allVisibleAgents.map(a => getAgentDisplayLabel(a, liveAgentNameCounts).length)) + 1;
+          const toolColWidth = Math.max(4, ...allVisibleAgents.map(a => getAgentDisplayLabel(a, liveAgentNameCounts, allVisibleAgents).length)) + 1;
           const maxActivity = cols ? cols - 4 - 2 - 10 - toolColWidth : Infinity;
           return (
             <Box flexDirection="column" marginTop={1}>
@@ -200,13 +200,13 @@ export function MainPane({
                 const statusColor = { active: 'green', idle: 'yellow', done: 'green', failed: 'red' }[status] || 'gray';
                 const activity = isDone
                   ? (agent.outputPreview || (isFailed ? 'exited with error' : 'completed'))
-                  : (intent && !/idle/i.test(intent) ? intent : (agent._duration || '-'));
+                  : (intent && !/idle/i.test(intent) ? intent : (agent._duration ? `connected ${agent._duration}` : '-'));
                 const activityColor = isDone ? undefined : (status === 'active' ? 'cyan' : 'gray');
                 return (
                   <Text key={agent.agent_id || agent.id}>
                     <Text color={sel ? 'cyan' : 'gray'}>{sel ? '\u203A ' : '  '}</Text>
                     <Text color={statusColor}>{status.padEnd(10)}</Text>
-                    <Text bold={sel} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts).padEnd(toolColWidth)}</Text>
+                    <Text bold={sel} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts, allVisibleAgents).padEnd(toolColWidth)}</Text>
                     <Text color={activityColor} dimColor={isDone}>{truncateText(activity, maxActivity)}</Text>
                   </Text>
                 );
