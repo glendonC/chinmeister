@@ -78,7 +78,12 @@ export function AgentFocusView({
       <Box>
         <Text color={statusColor}>{statusLabel}</Text>
         {freshAgent._duration && <Text dimColor>  {freshAgent._duration}</Text>}
-        <Text dimColor>  {getAgentOriginLabel(freshAgent)}</Text>
+      </Box>
+
+      {/* Source */}
+      <Box marginTop={1}>
+        <Text dimColor>source</Text>
+        <Text>  {freshAgent._managed ? 'Spawned by chinwag — full control (stop, restart, diagnostics)' : 'Connected externally — observe and message only'}</Text>
       </Box>
 
       {/* Exit info */}
