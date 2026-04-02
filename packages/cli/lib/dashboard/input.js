@@ -1,8 +1,6 @@
 import { isAgentAddressable } from './agent-display.js';
 import { MIN_WIDTH } from './utils.js';
-
-// ── Constants ───────────────────────────────────────
-const COMMAND_SUGGESTION_LIMIT = 5;
+import { KEYS, COMMAND_SUGGESTION_LIMIT } from './constants.js';
 
 // ── Mode-specific input handlers ────────────────────
 
@@ -19,7 +17,7 @@ function handleAgentFocusInput(input, key, ctx) {
     setShowDiagnostics(false);
     return true;
   }
-  if (input === 'x' && focusedAgent?._managed) {
+  if (input === KEYS.KILL && focusedAgent?._managed) {
     if (focusedAgent._dead) {
       const removed = agents.handleRemoveAgent(focusedAgent, liveAgentNameCounts);
       if (removed) { setView('home'); setFocusedAgent(null); }
@@ -30,16 +28,16 @@ function handleAgentFocusInput(input, key, ctx) {
     }
     return true;
   }
-  if (input === 'r' && focusedAgent?._managed && focusedAgent._dead) {
+  if (input === KEYS.RESTART && focusedAgent?._managed && focusedAgent._dead) {
     const restarted = agents.handleRestartAgent(focusedAgent);
     if (restarted) { setView('home'); setFocusedAgent(null); }
     return true;
   }
-  if (input === 'l' && focusedAgent?._managed) {
+  if (input === KEYS.DIAGNOSTICS && focusedAgent?._managed) {
     setShowDiagnostics(prev => !prev);
     return true;
   }
-  if (input === 'm' && isAgentAddressable(focusedAgent)) {
+  if (input === KEYS.MESSAGE && isAgentAddressable(focusedAgent)) {
     setView('home');
     setFocusedAgent(null);
     setShowDiagnostics(false);
@@ -100,7 +98,7 @@ function handleHomeViewInput(input, key, ctx) {
     agents, composer,
   } = ctx;
 
-  if (input === 'n') {
+  if (input === KEYS.NEW) {
     agents.openToolPicker();
     return true;
   }
@@ -131,11 +129,11 @@ function handleHomeViewInput(input, key, ctx) {
     setShowDiagnostics(false);
     return true;
   }
-  if (input === 'm' && mainSelectedAgent && isAgentAddressable(mainSelectedAgent)) {
+  if (input === KEYS.MESSAGE && mainSelectedAgent && isAgentAddressable(mainSelectedAgent)) {
     composer.beginTargetedMessage(mainSelectedAgent);
     return true;
   }
-  if (input === 'x' && mainSelectedAgent?._managed && !mainSelectedAgent._dead) {
+  if (input === KEYS.KILL && mainSelectedAgent?._managed && !mainSelectedAgent._dead) {
     agents.handleKillAgent(mainSelectedAgent, liveAgentNameCounts);
     return true;
   }
@@ -169,7 +167,7 @@ function handleSessionsViewInput(input, key, ctx) {
     }
     return true;
   }
-  if (input === 'x' && selectedIdx >= 0) {
+  if (input === KEYS.KILL && selectedIdx >= 0) {
     const agent = liveAgents[selectedIdx];
     if (agent?._managed) {
       if (agent._dead) {
@@ -180,7 +178,7 @@ function handleSessionsViewInput(input, key, ctx) {
       return true;
     }
   }
-  if (input === 'r' && selectedIdx >= 0) {
+  if (input === KEYS.RESTART && selectedIdx >= 0) {
     const agent = liveAgents[selectedIdx];
     if (agent?._managed && agent._dead) {
       agents.handleRestartAgent(agent);
@@ -231,25 +229,25 @@ function handleGlobalShortcuts(input, key, ctx) {
   const isSessionsView = view === 'sessions';
   const isMemoryView = view === 'memory';
 
-  if (input === 's' && hasLiveAgents) {
+  if (input === KEYS.SESSIONS && hasLiveAgents) {
     setView('sessions');
     setSelectedIdx(prev => prev >= 0 ? prev : 0);
     return true;
   }
 
-  if (input === 'w') {
+  if (input === KEYS.WEB) {
     handleOpenWebDashboard();
     return true;
   }
 
-  if (input === 'k' && hasMemories) {
+  if (input === KEYS.KNOWLEDGE && hasMemories) {
     setView(prev => prev === 'memory' ? 'home' : 'memory');
     setSelectedIdx(-1);
     memory.resetMemorySelection();
     return true;
   }
 
-  if (input === 'f') {
+  if (input === KEYS.FIX) {
     const fixableTool = agents.unavailableCliAgents.find(tool => agents.getManagedToolState(tool.id).recoveryCommand);
     if (fixableTool) {
       agents.handleFixLauncher(fixableTool);
@@ -262,7 +260,7 @@ function handleGlobalShortcuts(input, key, ctx) {
     return true;
   }
 
-  if (input === '/') {
+  if (input === KEYS.COMMAND) {
     if (isHomeView || isSessionsView) {
       composer.beginCommandInput('');
       return true;
@@ -273,19 +271,19 @@ function handleGlobalShortcuts(input, key, ctx) {
     }
   }
 
-  if (input === 'a' && isMemoryView) {
+  if (input === KEYS.ADD_MEMORY && isMemoryView) {
     composer.beginMemoryAdd();
     memory.setMemoryInput('');
     return true;
   }
 
-  if (input === 'd' && isMemoryView && memory.memorySelectedIdx >= 0) {
+  if (input === KEYS.DELETE_MEMORY && isMemoryView && memory.memorySelectedIdx >= 0) {
     if (!memory.deleteConfirm) { memory.setDeleteConfirm(true); return true; }
     memory.deleteMemoryItem(visibleMemories[memory.memorySelectedIdx]);
     return true;
   }
 
-  if (input === 'q') { navigate('quit'); return true; }
+  if (input === KEYS.QUIT) { navigate('quit'); return true; }
 
   return false;
 }
@@ -342,12 +340,12 @@ export function createInputHandler({
   return function handleInput(input, key) {
     // ── Narrow terminal guard ──────────────────
     if (cols < MIN_WIDTH) {
-      if (input === 'q') navigate('quit');
+      if (input === KEYS.QUIT) navigate('quit');
       return;
     }
 
     // ── Connection retry (error / loading states) ──
-    if (input === 'r' && (error || !context)) {
+    if (input === KEYS.RETRY && (error || !context)) {
       connectionRetry();
       return;
     }

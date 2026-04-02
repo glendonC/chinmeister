@@ -1,6 +1,7 @@
 import { basename } from 'path';
+import { MAX_MEMORIES } from './constants.js';
 
-export const MAX_MEMORIES = 8;
+export { MAX_MEMORIES };
 
 export function createToolNameResolver(detectedTools) {
   const toolNameMap = new Map((detectedTools || []).map(t => [t.id, t.name]));

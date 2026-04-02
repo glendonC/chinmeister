@@ -11,17 +11,10 @@ import { basename, join } from 'path';
 import { configExists, loadConfig, saveConfig } from '../config.js';
 import { api, initAccount } from '../api.js';
 import { detectTools, configureTool } from '../mcp-config.js';
-
-// Map chinwag color names to chalk methods
-const CHALK_COLORS = {
-  red: 'red', cyan: 'cyan', yellow: 'yellow', green: 'green',
-  magenta: 'magenta', blue: 'blue', orange: 'redBright', lime: 'greenBright',
-  pink: 'magentaBright', sky: 'cyanBright', lavender: 'blueBright', white: 'white',
-};
+import { getChalkColor } from '../colors.js';
 
 function colorize(text, colorName) {
-  const fn = CHALK_COLORS[colorName] || 'white';
-  return chalk[fn](text);
+  return chalk[getChalkColor(colorName)](text);
 }
 
 // Terminal hyperlink (OSC 8) — clickable in iTerm2, Warp, modern terminals; plain text fallback

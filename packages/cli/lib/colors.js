@@ -25,6 +25,10 @@ export function getInkColor(colorName) {
   return COLOR_MAP[colorName] || 'white';
 }
 
+// Chalk uses the same ANSI color names as Ink.
+// Alias for callers that need chalk-compatible color names.
+export const getChalkColor = getInkColor;
+
 export function getColorList() {
   return COLOR_LIST;
 }

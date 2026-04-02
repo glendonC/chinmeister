@@ -5,8 +5,9 @@ import { getProjectContext } from '../project.js';
 import { SPINNER } from './utils.js';
 import { applyDelta } from '../../../shared/dashboard-ws.js';
 
+import { SPINNER_INTERVAL_MS } from './constants.js';
+
 // ── Constants ───────────────────────────────────────
-const SPINNER_INTERVAL_MS = 80;
 const OFFLINE_THRESHOLD = 6;           // consecutive failures before going offline
 const POLL_FAST_MS = 5_000;
 const POLL_MEDIUM_MS = 15_000;

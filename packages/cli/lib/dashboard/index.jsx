@@ -20,11 +20,10 @@ import {
 } from './utils.js';
 import { isAgentAddressable } from './agent-display.js';
 
-// ── Constants ───────────────────────────────────────
-const RECENTLY_FINISHED_LIMIT = 3;
-const MIN_VIEWPORT_ROWS = 4;
-const VIEWPORT_CHROME_ROWS = 11;
-const COMMAND_SUGGESTION_LIMIT = 5;
+import {
+  RECENTLY_FINISHED_LIMIT, MIN_VIEWPORT_ROWS,
+  VIEWPORT_CHROME_ROWS, COMMAND_SUGGESTION_LIMIT,
+} from './constants.js';
 
 // ── View management hook ────────────────────────────
 

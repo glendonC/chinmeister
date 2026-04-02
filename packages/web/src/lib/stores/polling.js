@@ -31,8 +31,9 @@ const pollingStore = createStore((set, get) => ({
   lastUpdate: null,
 }));
 
-/** Single poll cycle. */
+/** Single poll cycle. Checks abort signal to bail early on team switches. */
 async function poll() {
+  const signal = _internal.abortController?.signal;
   const snapshotTeamId = teamActions.getState().activeTeamId;
   const { token } = authActions.getState();
   if (!token) return;
@@ -46,6 +47,7 @@ async function poll() {
         dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
       }));
       const data = await api('GET', '/me/dashboard', null, token);
+      if (signal?.aborted) return;
       if (data.failed_teams?.length > 0) {
         await teamActions.loadTeams();
       }
@@ -69,8 +71,9 @@ async function poll() {
         };
       });
       await teamActions.ensureJoined(snapshotTeamId);
+      if (signal?.aborted) return;
       const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token);
-      if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
+      if (signal?.aborted || teamActions.getState().activeTeamId !== snapshotTeamId) return;
       pollingStore.setState({
         contextData: data,
         contextStatus: 'ready',
@@ -232,6 +235,7 @@ function formatError(err) {
 /** Start polling. Attempts WebSocket for project view, falls back to polling. */
 export function startPolling() {
   stopPolling();
+  _internal.abortController = new AbortController();
   poll(); // immediate first poll
 
   const { activeTeamId } = teamActions.getState();
@@ -249,6 +253,10 @@ export function startPolling() {
 
 /** Stop polling and close WebSocket. */
 export function stopPolling() {
+  if (_internal.abortController) {
+    _internal.abortController.abort();
+    _internal.abortController = null;
+  }
   if (_internal.pollTimer) {
     clearInterval(_internal.pollTimer);
     _internal.pollTimer = null;
