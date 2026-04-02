@@ -8,16 +8,6 @@ import { inferHostToolFromAgentId } from './runtime.js';
 
 /** Read all telemetry metrics, grouped by type. */
 export function getTelemetryBreakdown(sql) {
-  const toolMetrics = sql
-    .exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10",
-    )
-    .toArray();
-  const tools_configured = toolMetrics.map((t) => ({
-    tool: t.metric.replace('tool:', ''),
-    joins: t.count,
-  }));
-
   const hostMetrics = sql
     .exec(
       "SELECT metric, count FROM telemetry WHERE metric LIKE 'host:%' ORDER BY count DESC LIMIT 10",
@@ -44,17 +34,19 @@ export function getTelemetryBreakdown(sql) {
     )
     .toArray();
   const models_seen = modelMetrics.map((t) => ({
-    model: t.metric.replace('model:', ''),
+    agent_model: t.metric.replace('model:', ''),
     count: t.count,
   }));
 
   const keyMetrics = sql
-    .exec("SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'")
+    .exec(
+      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%' AND metric NOT LIKE 'host:%' AND metric NOT LIKE 'surface:%' AND metric NOT LIKE 'model:%'",
+    )
     .toArray();
   const usage = {};
   for (const m of keyMetrics) usage[m.metric] = m.count;
 
-  return { tools_configured, hosts_configured, surfaces_seen, models_seen, usage };
+  return { hosts_configured, surfaces_seen, models_seen, usage };
 }
 
 /**
@@ -66,7 +58,7 @@ export function getTelemetryBreakdown(sql) {
 export function queryTeamContext(sql, connectedIds) {
   const members = sql
     .exec(
-      `SELECT m.agent_id, m.owner_handle, m.tool, m.host_tool, m.agent_surface, m.transport, m.agent_model,
+      `SELECT m.agent_id, m.handle, m.host_tool, m.agent_surface, m.transport, m.agent_model,
             m.last_tool_use, a.files, a.summary, a.updated_at,
             s.framework, s.started_at as session_started,
             ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
@@ -83,7 +75,7 @@ export function queryTeamContext(sql, connectedIds) {
 
   const memories = sql
     .exec(
-      `SELECT id, text, tags, source_handle, source_tool, source_host_tool, source_agent_surface, source_model, created_at, updated_at
+      `SELECT id, text, tags, handle, host_tool, agent_surface, agent_model, created_at, updated_at
      FROM memories
      ORDER BY updated_at DESC, created_at DESC
      LIMIT 20`,
@@ -94,10 +86,10 @@ export function queryTeamContext(sql, connectedIds) {
       tags: safeParseJSON(m.tags, [], 'context.memory.tags'),
     }));
 
-  const recentSessions = sql
+  const sessions = sql
     .exec(
       `
-    SELECT agent_id, owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
+    SELECT agent_id, handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
            ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
     FROM sessions
@@ -114,9 +106,8 @@ export function queryTeamContext(sql, connectedIds) {
     const status = wsConnected ? 'active' : m.heartbeat_active ? 'active' : 'offline';
     return {
       agent_id: m.agent_id,
-      handle: m.owner_handle,
-      tool: m.tool || m.host_tool || 'unknown',
-      host_tool: m.host_tool || m.tool || 'unknown',
+      handle: m.handle,
+      host_tool: m.host_tool || 'unknown',
       agent_surface: m.agent_surface || null,
       transport: m.transport || null,
       agent_model: m.agent_model || null,
@@ -149,14 +140,16 @@ export function queryTeamContext(sql, connectedIds) {
     if (m.status !== 'active' || !m.activity?.files) continue;
     for (const f of m.activity.files) {
       if (!fileOwners.has(f)) fileOwners.set(f, []);
-      fileOwners.get(f).push({ handle: m.handle, tool: m.tool });
+      fileOwners.get(f).push({ handle: m.handle, host_tool: m.host_tool });
     }
   }
   for (const [file, owners] of fileOwners) {
     if (owners.length > 1) {
       conflicts.push({
         file,
-        agents: owners.map((o) => (o.tool !== 'unknown' ? `${o.handle} (${o.tool})` : o.handle)),
+        agents: owners.map((o) =>
+          o.host_tool !== 'unknown' ? `${o.handle} (${o.host_tool})` : o.handle,
+        ),
       });
     }
   }
@@ -164,7 +157,7 @@ export function queryTeamContext(sql, connectedIds) {
   // Active file locks
   const locks = sql
     .exec(
-      `SELECT l.file_path, l.owner_handle, l.tool, l.host_tool, l.agent_surface,
+      `SELECT l.file_path, l.agent_id, l.handle, l.host_tool, l.agent_surface,
             ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
      FROM locks l
      JOIN members m ON m.agent_id = l.agent_id
@@ -181,12 +174,11 @@ export function queryTeamContext(sql, connectedIds) {
     locks,
     memories,
     ...telemetry,
-    recentSessions: recentSessions.map((s) => {
-      const toolFromAgent = s.host_tool || inferHostToolFromAgentId(s.agent_id);
+    sessions: sessions.map((s) => {
+      const hostTool = s.host_tool || inferHostToolFromAgentId(s.agent_id);
       return {
         ...s,
-        tool: toolFromAgent && toolFromAgent !== 'unknown' ? toolFromAgent : null,
-        host_tool: s.host_tool || toolFromAgent || 'unknown',
+        host_tool: hostTool || 'unknown',
         agent_surface: s.agent_surface || null,
         transport: s.transport || null,
         agent_model: s.agent_model || null,

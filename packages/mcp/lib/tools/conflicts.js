@@ -38,7 +38,7 @@ export function registerConflictsTool(addTool, { team, state }) {
             if (m.status !== 'active' || !m.activity?.files) continue;
             const overlap = m.activity.files.map(normalizePath).filter((f) => myFiles.has(f));
             if (overlap.length > 0) {
-              const who = formatWho(m.handle, m.tool);
+              const who = formatWho(m.handle, m.host_tool);
               warnings.push(`\u26A0 ${who} was working on ${overlap.join(', ')} (cached)`);
             }
           }

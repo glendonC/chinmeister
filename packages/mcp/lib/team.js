@@ -2,7 +2,7 @@ import {
   TEAM_ID_PATTERN,
   isValidTeamId,
   findTeamFile as findTeamFileShared,
-} from '../../shared/team-utils.js';
+} from '@chinwag/shared/team-utils.js';
 
 export { TEAM_ID_PATTERN, isValidTeamId };
 

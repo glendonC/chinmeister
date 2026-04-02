@@ -1,4 +1,4 @@
-import { createJsonApiClient, DEFAULT_API_URL } from '../../shared/api-client.js';
+import { createJsonApiClient, DEFAULT_API_URL } from '@chinwag/shared/api-client.js';
 
 // During development, point this at wrangler dev's local URL.
 export function getApiUrl() {
@@ -13,7 +13,8 @@ export function api(config, { agentId } = {}) {
     timeoutMs: 10_000,
     maxRetryAttempts: 2,
     maxTimeoutRetryAttempts: 1,
-    httpErrorMessage: ({ method, path, status, data }) => data?.error || `${method} ${path} → HTTP ${status}`,
+    httpErrorMessage: ({ method, path, status, data }) =>
+      data?.error || `${method} ${path} → HTTP ${status}`,
     timeoutErrorMessage: ({ method, path }) => `Request timed out: ${method} ${path}`,
   });
 }

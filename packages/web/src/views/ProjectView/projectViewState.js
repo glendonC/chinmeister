@@ -1,6 +1,8 @@
-export function selectRecentSessions(recentSessions = []) {
-  return recentSessions
-    .filter((session) => session.edit_count > 0 || session.files_touched?.length > 0 || !session.ended_at)
+export function selectRecentSessions(sessions = []) {
+  return sessions
+    .filter(
+      (session) => session.edit_count > 0 || session.files_touched?.length > 0 || !session.ended_at,
+    )
     .slice(0, 24);
 }
 
@@ -16,8 +18,8 @@ export function buildProjectConflicts(contextConflicts = [], members = []) {
   members.forEach((member) => {
     if (member.status !== 'active' || !member.activity?.files) return;
     const label =
-      member.tool && member.tool !== 'unknown'
-        ? `${member.handle} (${member.tool})`
+      member.host_tool && member.host_tool !== 'unknown'
+        ? `${member.handle} (${member.host_tool})`
         : member.handle;
 
     member.activity.files.forEach((file) => {
@@ -58,11 +60,11 @@ export function buildMemoryBreakdown(memories = []) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-function buildProjectUsageSummaries(members = [], configuredEntries = [], {
-  configuredKey,
-  memberKey,
-  outputKey,
-} = {}) {
+function buildProjectUsageSummaries(
+  members = [],
+  configuredEntries = [],
+  { configuredKey, memberKey, outputKey } = {},
+) {
   const byEntity = new Map();
 
   configuredEntries.forEach((entry) => {
@@ -93,16 +95,16 @@ function buildProjectUsageSummaries(members = [], configuredEntries = [], {
       share: totalJoins > 0 ? item.joins / totalJoins : 0,
     }))
     .sort((a, b) => {
-      const aScore = (a.live * 100) + a.joins;
-      const bScore = (b.live * 100) + b.joins;
+      const aScore = a.live * 100 + a.joins;
+      const bScore = b.live * 100 + b.joins;
       return bScore - aScore;
     });
 }
 
 export function buildProjectToolSummaries(members = [], toolsConfigured = []) {
   return buildProjectUsageSummaries(members, toolsConfigured, {
-    configuredKey: 'tool',
-    memberKey: 'tool',
+    configuredKey: 'host_tool',
+    memberKey: 'host_tool',
     outputKey: 'tool',
   });
 }

@@ -31,7 +31,7 @@ export function registerLockTools(addTool, { team, state }) {
         if (result.claimed?.length > 0) lines.push(`Claimed: ${result.claimed.join(', ')}`);
         if (result.blocked?.length > 0) {
           for (const b of result.blocked) {
-            const who = formatWho(b.held_by, b.tool);
+            const who = formatWho(b.handle, b.host_tool);
             lines.push(`Blocked: ${b.file} — held by ${who}`);
           }
         }

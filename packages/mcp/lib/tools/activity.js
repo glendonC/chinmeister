@@ -2,7 +2,7 @@
 
 import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
-import { setTerminalTitle } from '../../../shared/session-registry.js';
+import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import { noTeam, errorResult } from '../utils/responses.js';
 import { normalizeFiles } from '../utils/paths.js';
 

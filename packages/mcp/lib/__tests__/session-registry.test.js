@@ -9,7 +9,7 @@ import {
   resolveSessionAgentId,
   safeAgentId,
   writeSessionRecord,
-} from '../../../shared/session-registry.js';
+} from '@chinwag/shared/session-registry.js';
 
 let tempHome;
 
@@ -27,13 +27,17 @@ describe('session registry', () => {
   });
 
   it('writes, reads, and deletes exact session records', () => {
-    writeSessionRecord('cursor:abc123:def456', {
-      tool: 'cursor',
-      tty: '/tmp/fake-tty',
-      pid: 12345,
-      cwd: '/repo',
-      createdAt: 1,
-    }, { homeDir: tempHome });
+    writeSessionRecord(
+      'cursor:abc123:def456',
+      {
+        tool: 'cursor',
+        tty: '/tmp/fake-tty',
+        pid: 12345,
+        cwd: '/repo',
+        createdAt: 1,
+      },
+      { homeDir: tempHome },
+    );
 
     expect(readSessionRecord('cursor:abc123:def456', { homeDir: tempHome })).toMatchObject({
       agentId: 'cursor:abc123:def456',
@@ -46,30 +50,42 @@ describe('session registry', () => {
   });
 
   it('resolves the matching live session for tool, cwd, and tty', () => {
-    writeSessionRecord('claude-code:hash:1111', {
-      tool: 'claude-code',
-      tty: '/dev/ttys001',
-      pid: 111,
-      cwd: '/repo-a',
-      createdAt: 1,
-      commandMarker: 'chinwag-mcp',
-    }, { homeDir: tempHome });
-    writeSessionRecord('claude-code:hash:2222', {
-      tool: 'claude-code',
-      tty: '/dev/ttys001',
-      pid: 222,
-      cwd: '/repo-a',
-      createdAt: 2,
-      commandMarker: 'chinwag-mcp',
-    }, { homeDir: tempHome });
-    writeSessionRecord('claude-code:hash:3333', {
-      tool: 'claude-code',
-      tty: '/dev/ttys002',
-      pid: 333,
-      cwd: '/repo-a',
-      createdAt: 3,
-      commandMarker: 'chinwag-mcp',
-    }, { homeDir: tempHome });
+    writeSessionRecord(
+      'claude-code:hash:1111',
+      {
+        tool: 'claude-code',
+        tty: '/dev/ttys001',
+        pid: 111,
+        cwd: '/repo-a',
+        createdAt: 1,
+        commandMarker: 'chinwag-mcp',
+      },
+      { homeDir: tempHome },
+    );
+    writeSessionRecord(
+      'claude-code:hash:2222',
+      {
+        tool: 'claude-code',
+        tty: '/dev/ttys001',
+        pid: 222,
+        cwd: '/repo-a',
+        createdAt: 2,
+        commandMarker: 'chinwag-mcp',
+      },
+      { homeDir: tempHome },
+    );
+    writeSessionRecord(
+      'claude-code:hash:3333',
+      {
+        tool: 'claude-code',
+        tty: '/dev/ttys002',
+        pid: 333,
+        cwd: '/repo-a',
+        createdAt: 3,
+        commandMarker: 'chinwag-mcp',
+      },
+      { homeDir: tempHome },
+    );
 
     const resolved = resolveSessionAgentId({
       tool: 'claude-code',
@@ -99,13 +115,17 @@ describe('session registry', () => {
   it('pings the terminal for an exact agent id', () => {
     const fakeTty = path.join(tempHome, 'tty.txt');
     fs.writeFileSync(fakeTty, '');
-    writeSessionRecord('cursor:abc123:def456', {
-      tool: 'cursor',
-      tty: fakeTty,
-      pid: 12345,
-      cwd: '/repo',
-      createdAt: 1,
-    }, { homeDir: tempHome });
+    writeSessionRecord(
+      'cursor:abc123:def456',
+      {
+        tool: 'cursor',
+        tty: fakeTty,
+        pid: 12345,
+        cwd: '/repo',
+        createdAt: 1,
+      },
+      { homeDir: tempHome },
+    );
 
     const pinged = pingAgentTerminal('cursor:abc123:def456', {
       homeDir: tempHome,

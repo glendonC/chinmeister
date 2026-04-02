@@ -11,14 +11,36 @@ import { z } from 'zod';
 
 // ── Shared primitives ───────────────────────────────
 
+const hostMetricSchema = z
+  .object({
+    host_tool: z.string(),
+    joins: z.number().default(0),
+  })
+  .passthrough();
+
+const surfaceMetricSchema = z
+  .object({
+    agent_surface: z.string(),
+    joins: z.number().default(0),
+  })
+  .passthrough();
+
+const modelMetricSchema = z
+  .object({
+    agent_model: z.string(),
+    count: z.number().default(0),
+  })
+  .passthrough();
+
 const memberSchema = z
   .object({
     agent_id: z.string(),
     handle: z.string(),
     status: z.string().default('unknown'),
-    tool: z.string().optional(),
-    host_tool: z.string().optional(),
+    host_tool: z.string().default('unknown'),
     agent_surface: z.string().optional(),
+    transport: z.string().nullable().optional(),
+    agent_model: z.string().nullable().optional(),
     activity: z
       .object({
         files: z.array(z.string()).default([]),
@@ -35,30 +57,112 @@ const memorySchema = z
     id: z.string(),
     text: z.string(),
     tags: z.array(z.string()).default([]),
-    source_handle: z.string().optional(),
+    handle: z.string().nullable().optional(),
+    host_tool: z.string().nullable().optional(),
+    agent_surface: z.string().nullable().optional(),
+    agent_model: z.string().nullable().optional(),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
   })
   .passthrough();
 
 const lockSchema = z
   .object({
     file_path: z.string(),
-    owner_handle: z.string().optional(),
+    agent_id: z.string().optional(),
+    handle: z.string().nullable().optional(),
+    host_tool: z.string().nullable().optional(),
+    agent_surface: z.string().nullable().optional(),
+    minutes_held: z.number().nullable().optional(),
   })
   .passthrough();
 
 const messageSchema = z
   .object({
+    id: z.string().optional(),
+    agent_id: z.string().nullable().optional(),
+    handle: z.string(),
+    host_tool: z.string().nullable().optional(),
+    agent_surface: z.string().nullable().optional(),
     text: z.string(),
-    from_handle: z.string(),
     created_at: z.string().optional(),
   })
   .passthrough();
 
 const sessionSchema = z
   .object({
-    agent_id: z.string().optional(),
-    started_at: z.string().optional(),
+    agent_id: z.string(),
+    handle: z.string(),
+    framework: z.string().optional(),
+    host_tool: z.string().default('unknown'),
+    agent_surface: z.string().nullable().optional(),
+    transport: z.string().nullable().optional(),
+    agent_model: z.string().nullable().optional(),
+    started_at: z.string(),
     ended_at: z.string().nullable().optional(),
+    edit_count: z.number().default(0),
+    files_touched: z.array(z.string()).default([]),
+    conflicts_hit: z.number().default(0),
+    memories_saved: z.number().default(0),
+    duration_minutes: z.number().nullable().optional(),
+  })
+  .passthrough();
+
+const conflictSchema = z
+  .object({
+    file: z.string(),
+    agents: z.array(z.string()).default([]),
+  })
+  .passthrough();
+
+const teamSchema = z
+  .object({
+    team_id: z.string(),
+    team_name: z.string().optional(),
+    joined_at: z.string().optional(),
+  })
+  .passthrough();
+
+const userSchema = z
+  .object({
+    handle: z.string(),
+    color: z.string(),
+    created_at: z.string().optional(),
+    github_id: z.string().nullable().optional(),
+    github_login: z.string().nullable().optional(),
+    avatar_url: z.string().nullable().optional(),
+  })
+  .passthrough();
+
+const wsTicketSchema = z
+  .object({
+    ticket: z.string(),
+    expires_at: z.string().optional(),
+  })
+  .passthrough();
+
+const toolCatalogEntrySchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string().optional(),
+    description: z.string().optional(),
+    featured: z.boolean().optional(),
+    installCmd: z.string().nullable().optional(),
+    mcp_support: z.boolean().optional(),
+  })
+  .passthrough();
+
+const toolDirectoryEvaluationSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    category: z.string().optional(),
+    verdict: z.string().optional(),
+    tagline: z.string().optional(),
+    integration_tier: z.string().optional(),
+    mcp_support: z.union([z.boolean(), z.string()]).optional(),
+    metadata: z.record(z.any()).optional(),
   })
   .passthrough();
 
@@ -71,7 +175,11 @@ export const teamContextSchema = z
     locks: z.array(lockSchema).default([]),
     messages: z.array(messageSchema).default([]),
     sessions: z.array(sessionSchema).default([]),
-    conflicts: z.array(z.any()).default([]),
+    conflicts: z.array(conflictSchema).default([]),
+    hosts_configured: z.array(hostMetricSchema).default([]),
+    surfaces_seen: z.array(surfaceMetricSchema).default([]),
+    models_seen: z.array(modelMetricSchema).default([]),
+    usage: z.record(z.number()).default({}),
   })
   .passthrough();
 
@@ -83,6 +191,14 @@ const teamSummarySchema = z
     team_name: z.string().optional(),
     active_agents: z.number().default(0),
     memory_count: z.number().default(0),
+    conflict_count: z.number().default(0),
+    total_members: z.number().default(0),
+    live_sessions: z.number().default(0),
+    recent_sessions_24h: z.number().default(0),
+    hosts_configured: z.array(hostMetricSchema).default([]),
+    surfaces_seen: z.array(surfaceMetricSchema).default([]),
+    models_seen: z.array(modelMetricSchema).default([]),
+    usage: z.record(z.number()).default({}),
   })
   .passthrough();
 
@@ -95,25 +211,90 @@ export const dashboardSummarySchema = z
   })
   .passthrough();
 
+export const userTeamsSchema = z
+  .object({
+    teams: z.array(teamSchema).default([]),
+  })
+  .passthrough();
+
+export const userProfileSchema = userSchema;
+export const webSocketTicketSchema = wsTicketSchema;
+
+export const toolCatalogSchema = z
+  .object({
+    tools: z.array(toolCatalogEntrySchema).default([]),
+    categories: z.record(z.string()).default({}),
+  })
+  .passthrough();
+
+export const toolDirectorySchema = z
+  .object({
+    evaluations: z.array(toolDirectoryEvaluationSchema).default([]),
+    categories: z.record(z.string()).default({}),
+  })
+  .passthrough();
+
+export function createEmptyTeamContext() {
+  return {
+    members: [],
+    memories: [],
+    locks: [],
+    messages: [],
+    sessions: [],
+    conflicts: [],
+    hosts_configured: [],
+    surfaces_seen: [],
+    models_seen: [],
+    usage: {},
+  };
+}
+
+export function createEmptyDashboardSummary() {
+  return {
+    teams: [],
+    degraded: true,
+    failed_teams: [],
+    truncated: false,
+  };
+}
+
+export function createEmptyUserTeams() {
+  return { teams: [] };
+}
+
+export function createEmptyToolCatalog() {
+  return { tools: [], categories: {} };
+}
+
+export function createEmptyToolDirectory() {
+  return { evaluations: [], categories: {} };
+}
+
 // ── Safe parse wrapper ──────────────────────────────
 
 /**
  * Validate an API response against a schema. On success, returns the parsed
- * (and defaulted) data. On failure, logs a warning and returns the raw data
- * unchanged — the UI may still work if the mismatch is minor.
+ * data. On failure, either throws or returns a caller-provided safe fallback.
  *
  * @param {z.ZodSchema} schema
  * @param {*} data - Raw API response
  * @param {string} label - For log identification
- * @returns {*} Parsed data or raw fallback
+ * @param {{ fallback?: *, throwOnError?: boolean }} [options]
+ * @returns {*} Parsed data or safe fallback
  */
-export function validateResponse(schema, data, label) {
+export function validateResponse(schema, data, label, options = {}) {
   const result = schema.safeParse(data);
   if (result.success) return result.data;
 
-  console.warn(
-    `[chinwag] API response validation warning (${label}):`,
-    result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
-  );
-  return data;
+  const detail = result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ');
+  console.warn(`[chinwag] API response validation warning (${label}):`, detail);
+
+  if (options.throwOnError) {
+    const error = new Error(`Invalid API response (${label})`);
+    error.name = 'SchemaValidationError';
+    error.details = detail;
+    throw error;
+  }
+
+  return typeof options.fallback === 'function' ? options.fallback() : options.fallback;
 }

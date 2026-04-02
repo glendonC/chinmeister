@@ -12,14 +12,16 @@ import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import KeyboardHint, { useKeyboardHint } from '../../components/KeyboardHint/KeyboardHint.jsx';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
 import StatusState from '../../components/StatusState/StatusState.jsx';
-import { ShimmerText, SkeletonStatGrid, SkeletonRows } from '../../components/Skeleton/Skeleton.jsx';
+import {
+  ShimmerText,
+  SkeletonStatGrid,
+  SkeletonRows,
+} from '../../components/Skeleton/Skeleton.jsx';
 import { arcPath, CX, CY, R, SW, GAP, DEG } from '../../lib/svgArcs.js';
 import styles from './OverviewView.module.css';
 
 function summarizeNames(items) {
-  const names = items
-    .map((item) => item?.team_name || item?.team_id)
-    .filter(Boolean);
+  const names = items.map((item) => item?.team_name || item?.team_id).filter(Boolean);
   if (names.length <= 2) return names.join(', ');
   return `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
 }
@@ -51,17 +53,26 @@ export default function OverviewView() {
   const lastSynced = formatRelativeTime(lastUpdate);
   const failedLabel = failedTeams.length > 0 ? summarizeNames(failedTeams) : '';
 
-  const totalActive = useMemo(() => summaries.reduce((s, t) => s + (t.active_agents || 0), 0), [summaries]);
-  const totalMemories = useMemo(() => summaries.reduce((s, t) => s + (t.memory_count || 0), 0), [summaries]);
+  const totalActive = useMemo(
+    () => summaries.reduce((s, t) => s + (t.active_agents || 0), 0),
+    [summaries],
+  );
+  const totalMemories = useMemo(
+    () => summaries.reduce((s, t) => s + (t.memory_count || 0), 0),
+    [summaries],
+  );
   const hostShare = useMemo(() => buildHostJoinShare(summaries), [summaries]);
   const surfaceShare = useMemo(() => buildSurfaceJoinShare(summaries), [summaries]);
 
   const toolUsage = useMemo(() => {
     const totals = new Map();
     for (const team of summaries)
-      for (const { tool, joins } of team.tools_configured || [])
-        if (getToolMeta(tool).icon) totals.set(tool, (totals.get(tool) || 0) + joins);
-    const entries = [...totals.entries()].map(([tool, joins]) => ({ tool, joins })).sort((a, b) => b.joins - a.joins);
+      for (const { host_tool, joins } of team.hosts_configured || [])
+        if (getToolMeta(host_tool).icon)
+          totals.set(host_tool, (totals.get(host_tool) || 0) + joins);
+    const entries = [...totals.entries()]
+      .map(([tool, joins]) => ({ tool, joins }))
+      .sort((a, b) => b.joins - a.joins);
     const total = entries.reduce((s, e) => s + e.joins, 0);
     return entries.map((e) => ({ ...e, share: total > 0 ? e.joins / total : 0 }));
   }, [summaries]);
@@ -70,17 +81,24 @@ export default function OverviewView() {
 
   const arcs = useMemo(() => {
     if (!toolUsage.length) return [];
-    const totalGap = GAP * toolUsage.length, available = 360 - totalGap;
+    const totalGap = GAP * toolUsage.length,
+      available = 360 - totalGap;
     let offset = 0;
     return toolUsage.map((entry) => {
       const sweep = Math.max(entry.share * available, 4);
       const midDeg = (offset + sweep / 2 - 90) * DEG;
       const labelR = R + SW / 2 + 22;
       const anchorR = R + SW / 2 + 5;
-      const arc = { ...entry, startDeg: offset, sweepDeg: sweep,
-        labelX: CX + labelR * Math.cos(midDeg), labelY: CY + labelR * Math.sin(midDeg),
-        anchorX: CX + anchorR * Math.cos(midDeg), anchorY: CY + anchorR * Math.sin(midDeg),
-        side: Math.cos(midDeg) >= 0 ? 'right' : 'left' };
+      const arc = {
+        ...entry,
+        startDeg: offset,
+        sweepDeg: sweep,
+        labelX: CX + labelR * Math.cos(midDeg),
+        labelY: CY + labelR * Math.sin(midDeg),
+        anchorX: CX + anchorR * Math.cos(midDeg),
+        anchorY: CY + anchorR * Math.sin(midDeg),
+        side: Math.cos(midDeg) >= 0 ? 'right' : 'left',
+      };
       offset += sweep + GAP;
       return arc;
     });
@@ -90,8 +108,15 @@ export default function OverviewView() {
   const agentRows = useMemo(() => {
     const rows = [];
     for (const team of summaries)
-      for (const t of (team.tools_configured || []).filter((t) => getToolMeta(t.tool).icon && t.joins > 0))
-        rows.push({ tool: t.tool, teamName: team.team_name || team.team_id, teamId: team.team_id, joins: t.joins });
+      for (const t of (team.hosts_configured || []).filter(
+        (t) => getToolMeta(t.host_tool).icon && t.joins > 0,
+      ))
+        rows.push({
+          tool: t.host_tool,
+          teamName: team.team_name || team.team_id,
+          teamId: team.team_id,
+          joins: t.joins,
+        });
     return rows.sort((a, b) => b.joins - a.joins);
   }, [summaries]);
 
@@ -105,14 +130,19 @@ export default function OverviewView() {
   const statsRef = useTabKeyboard(statIds, setActiveViz);
 
   const isLoading = !dashboardData && (dashboardStatus === 'idle' || dashboardStatus === 'loading');
-  const isUnavailable = dashboardStatus === 'error' || (!pollError && hasKnownProjects && summaries.length === 0);
-  const unavailableHint = knownTeamCount === 0
-    ? 'We could not load your project overview right now.'
-    : knownTeamCount === 1
-      ? `We found ${teams[0]?.team_name || teams[0]?.team_id || 'a connected project'}, but its overview data is unavailable right now.`
-      : `We found ${knownTeamCount} connected projects, but none of their overview data could be loaded.`;
-  const unavailableDetail = pollError
-    || (failedLabel ? `Unavailable now: ${failedLabel}` : 'Project summaries are temporarily unavailable.');
+  const isUnavailable =
+    dashboardStatus === 'error' || (!pollError && hasKnownProjects && summaries.length === 0);
+  const unavailableHint =
+    knownTeamCount === 0
+      ? 'We could not load your project overview right now.'
+      : knownTeamCount === 1
+        ? `We found ${teams[0]?.team_name || teams[0]?.team_id || 'a connected project'}, but its overview data is unavailable right now.`
+        : `We found ${knownTeamCount} connected projects, but none of their overview data could be loaded.`;
+  const unavailableDetail =
+    pollError ||
+    (failedLabel
+      ? `Unavailable now: ${failedLabel}`
+      : 'Project summaries are temporarily unavailable.');
 
   if (isLoading) {
     return (
@@ -140,7 +170,13 @@ export default function OverviewView() {
           title="Could not load project overview"
           hint={unavailableHint}
           detail={unavailableDetail}
-          meta={lastSynced ? `Last synced ${lastSynced}` : knownTeamCount > 0 ? `${knownTeamCount} connected ${knownTeamCount === 1 ? 'project' : 'projects'}` : 'Overview'}
+          meta={
+            lastSynced
+              ? `Last synced ${lastSynced}`
+              : knownTeamCount > 0
+                ? `${knownTeamCount} connected ${knownTeamCount === 1 ? 'project' : 'projects'}`
+                : 'Overview'
+          }
           actionLabel="Retry"
           onAction={forceRefresh}
         />
@@ -151,15 +187,29 @@ export default function OverviewView() {
   if (summaries.length === 0) {
     return (
       <div className={styles.overview}>
-        <EmptyState large title={teamsError ? 'Could not load projects' : 'No projects yet'}
-          hint={teamsError || <>Run <code>npx chinwag init</code> in a repo to add one.</>} />
+        <EmptyState
+          large
+          title={teamsError ? 'Could not load projects' : 'No projects yet'}
+          hint={
+            teamsError || (
+              <>
+                Run <code>npx chinwag init</code> in a repo to add one.
+              </>
+            )
+          }
+        />
       </div>
     );
   }
 
   const stats = [
     { id: 'projects', label: 'Projects', value: knownTeamCount || summaries.length, tone: '' },
-    { id: 'agents', label: 'Agents live', value: totalActive, tone: totalActive > 0 ? 'accent' : '' },
+    {
+      id: 'agents',
+      label: 'Agents live',
+      value: totalActive,
+      tone: totalActive > 0 ? 'accent' : '',
+    },
     { id: 'tools', label: 'Stack', value: uniqueTools, tone: '' },
     { id: 'memories', label: 'Memories', value: totalMemories, tone: '' },
   ];
@@ -170,7 +220,14 @@ export default function OverviewView() {
         <div className={styles.welcomeBlock}>
           <span className={styles.eyebrow}>Overview</span>
           <h1 className={styles.title}>
-            Welcome back{user?.handle ? <>{', '}<span style={{ color: userColor }}>{user.handle}</span></> : null}.
+            Welcome back
+            {user?.handle ? (
+              <>
+                {', '}
+                <span style={{ color: userColor }}>{user.handle}</span>
+              </>
+            ) : null}
+            .
           </h1>
         </div>
         {failedTeams.length > 0 && (
@@ -188,7 +245,9 @@ export default function OverviewView() {
           aria-label="Overview sections"
         >
           {stats.map((s, i) => (
-            <button key={s.id} type="button"
+            <button
+              key={s.id}
+              type="button"
               role="tab"
               aria-selected={activeViz === s.id}
               aria-controls={`panel-${s.id}`}
@@ -196,25 +255,37 @@ export default function OverviewView() {
               tabIndex={activeViz === s.id ? 0 : -1}
               className={`${styles.statButton} ${activeViz === s.id ? styles.statActive : ''}`}
               style={{ '--stat-index': i }}
-              onClick={(e) => { e.currentTarget.focus(); setActiveViz(s.id); }}>
+              onClick={(e) => {
+                e.currentTarget.focus();
+                setActiveViz(s.id);
+              }}
+            >
               <span className={styles.statLabel}>
                 {s.label}
                 {activeViz === s.id && <KeyboardHint {...hint} />}
               </span>
-              <span className={`${styles.statValue} ${s.tone === 'accent' ? styles.statAccent : ''}`}>{s.value}</span>
+              <span
+                className={`${styles.statValue} ${s.tone === 'accent' ? styles.statAccent : ''}`}
+              >
+                {s.value}
+              </span>
             </button>
           ))}
         </div>
       </section>
 
       <section className={styles.vizArea}>
-
         {/* ── PROJECTS ── */}
         {activeViz === 'projects' && (
           <div className={styles.vizPanel} role="tabpanel" id="panel-projects">
             {summaries.length > 3 && (
-              <input type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search projects" className={styles.searchInput} />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search projects"
+                className={styles.searchInput}
+              />
             )}
             <div className={styles.tableWrap}>
               <div className={styles.tableHead}>
@@ -226,14 +297,27 @@ export default function OverviewView() {
               <div className={styles.tableBody}>
                 {filteredProjects.map((team, i) => {
                   const agents = team.active_agents || 0;
-                  const toolCount = (team.tools_configured || []).filter((t) => getToolMeta(t.tool).icon).length;
+                  const toolCount = (team.hosts_configured || []).filter(
+                    (t) => getToolMeta(t.host_tool).icon,
+                  ).length;
                   return (
-                    <button key={team.team_id} type="button" className={styles.tableRow} style={{ '--row-index': i }} onClick={() => selectTeam(team.team_id)}>
+                    <button
+                      key={team.team_id}
+                      type="button"
+                      className={styles.tableRow}
+                      style={{ '--row-index': i }}
+                      onClick={() => selectTeam(team.team_id)}
+                    >
                       <span className={styles.tdLeft}>
-                        <span className={styles.squircle} style={{ background: projectGradient(team.team_id) }} />
+                        <span
+                          className={styles.squircle}
+                          style={{ background: projectGradient(team.team_id) }}
+                        />
                         {team.team_name || team.team_id}
                       </span>
-                      <span className={`${styles.td} ${agents > 0 ? styles.tdAccent : ''}`}>{agents}</span>
+                      <span className={`${styles.td} ${agents > 0 ? styles.tdAccent : ''}`}>
+                        {agents}
+                      </span>
                       <span className={styles.td}>{team.memory_count || 0}</span>
                       <span className={styles.td}>{toolCount}</span>
                     </button>
@@ -258,7 +342,11 @@ export default function OverviewView() {
                   {agentRows.map((agent, i) => {
                     const meta = getToolMeta(agent.tool);
                     return (
-                      <div key={`${agent.teamId}-${agent.tool}-${i}`} className={styles.tableRow} style={{ '--row-index': i }}>
+                      <div
+                        key={`${agent.teamId}-${agent.tool}-${i}`}
+                        className={styles.tableRow}
+                        style={{ '--row-index': i }}
+                      >
                         <span className={styles.tdLeft}>
                           <span className={styles.toolDot} style={{ background: meta.color }} />
                           <ToolIcon tool={agent.tool} size={16} />
@@ -288,15 +376,73 @@ export default function OverviewView() {
                       const meta = getToolMeta(arc.tool);
                       return (
                         <g key={arc.tool}>
-                          <path d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)} fill="none" stroke={meta.color} strokeWidth={SW} strokeLinecap="round" opacity="0.8" />
-                          <line x1={arc.anchorX} y1={arc.anchorY} x2={arc.labelX} y2={arc.labelY} stroke="var(--faint)" strokeWidth="1" strokeDasharray="2 3" />
-                          <text x={arc.labelX} y={arc.labelY - 4} textAnchor={arc.side === 'right' ? 'start' : 'end'} fill={meta.color} fontSize="16" fontWeight="400" fontFamily="var(--display)" letterSpacing="-0.04em">{Math.round(arc.share * 100)}%</text>
-                          <text x={arc.labelX} y={arc.labelY + 10} textAnchor={arc.side === 'right' ? 'start' : 'end'} fill="var(--muted)" fontSize="9" fontFamily="var(--sans)" fontWeight="500">{meta.label}</text>
+                          <path
+                            d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)}
+                            fill="none"
+                            stroke={meta.color}
+                            strokeWidth={SW}
+                            strokeLinecap="round"
+                            opacity="0.8"
+                          />
+                          <line
+                            x1={arc.anchorX}
+                            y1={arc.anchorY}
+                            x2={arc.labelX}
+                            y2={arc.labelY}
+                            stroke="var(--faint)"
+                            strokeWidth="1"
+                            strokeDasharray="2 3"
+                          />
+                          <text
+                            x={arc.labelX}
+                            y={arc.labelY - 4}
+                            textAnchor={arc.side === 'right' ? 'start' : 'end'}
+                            fill={meta.color}
+                            fontSize="16"
+                            fontWeight="400"
+                            fontFamily="var(--display)"
+                            letterSpacing="-0.04em"
+                          >
+                            {Math.round(arc.share * 100)}%
+                          </text>
+                          <text
+                            x={arc.labelX}
+                            y={arc.labelY + 10}
+                            textAnchor={arc.side === 'right' ? 'start' : 'end'}
+                            fill="var(--muted)"
+                            fontSize="9"
+                            fontFamily="var(--sans)"
+                            fontWeight="500"
+                          >
+                            {meta.label}
+                          </text>
                         </g>
                       );
                     })}
-                    <text x={CX} y={CY - 2} textAnchor="middle" dominantBaseline="central" fill="var(--ink)" fontSize="28" fontWeight="200" fontFamily="var(--display)" letterSpacing="-0.06em">{uniqueTools}</text>
-                    <text x={CX} y={CY + 16} textAnchor="middle" fill="var(--muted)" fontSize="8.5" fontFamily="var(--mono)" letterSpacing="0.1em">STACK</text>
+                    <text
+                      x={CX}
+                      y={CY - 2}
+                      textAnchor="middle"
+                      dominantBaseline="central"
+                      fill="var(--ink)"
+                      fontSize="28"
+                      fontWeight="200"
+                      fontFamily="var(--display)"
+                      letterSpacing="-0.06em"
+                    >
+                      {uniqueTools}
+                    </text>
+                    <text
+                      x={CX}
+                      y={CY + 16}
+                      textAnchor="middle"
+                      fill="var(--muted)"
+                      fontSize="8.5"
+                      fontFamily="var(--mono)"
+                      letterSpacing="0.1em"
+                    >
+                      STACK
+                    </text>
                   </svg>
                 </div>
 
@@ -304,7 +450,9 @@ export default function OverviewView() {
                   {toolUsage.map((entry) => {
                     const meta = getToolMeta(entry.tool);
                     const projects = summaries
-                      .filter((t) => (t.tools_configured || []).some((tc) => tc.tool === entry.tool))
+                      .filter((t) =>
+                        (t.hosts_configured || []).some((tc) => tc.host_tool === entry.tool),
+                      )
                       .map((t) => t.team_name || t.team_id);
                     return (
                       <div key={entry.tool} className={styles.legendRow}>
@@ -312,7 +460,9 @@ export default function OverviewView() {
                         <span className={styles.legendName}>{meta.label}</span>
                         <span className={styles.legendProjects}>{projects.join(', ')}</span>
                         <span className={styles.legendShare}>{Math.round(entry.share * 100)}%</span>
-                        <span className={styles.legendSessions}>{entry.joins} session{entry.joins === 1 ? '' : 's'}</span>
+                        <span className={styles.legendSessions}>
+                          {entry.joins} session{entry.joins === 1 ? '' : 's'}
+                        </span>
                       </div>
                     );
                   })}
@@ -335,8 +485,12 @@ export default function OverviewView() {
                                   <ToolIcon tool={entry.host_tool} size={16} />
                                   {meta.label}
                                 </span>
-                                <span className={styles.signalValue}>{Math.round(entry.share * 100)}%</span>
-                                <span className={styles.signalProjects}>{summarizeProjects(entry.projects)}</span>
+                                <span className={styles.signalValue}>
+                                  {Math.round(entry.share * 100)}%
+                                </span>
+                                <span className={styles.signalProjects}>
+                                  {summarizeProjects(entry.projects)}
+                                </span>
                               </div>
                             );
                           })}
@@ -356,19 +510,28 @@ export default function OverviewView() {
                           {surfaceShare.map((entry) => {
                             const meta = getToolMeta(entry.agent_surface);
                             return (
-                              <div key={`surface:${entry.agent_surface}`} className={styles.signalRow}>
+                              <div
+                                key={`surface:${entry.agent_surface}`}
+                                className={styles.signalRow}
+                              >
                                 <span className={styles.signalIdentity}>
                                   <ToolIcon tool={entry.agent_surface} size={16} />
                                   {meta.label}
                                 </span>
-                                <span className={styles.signalValue}>{Math.round(entry.share * 100)}%</span>
-                                <span className={styles.signalProjects}>{summarizeProjects(entry.projects)}</span>
+                                <span className={styles.signalValue}>
+                                  {Math.round(entry.share * 100)}%
+                                </span>
+                                <span className={styles.signalProjects}>
+                                  {summarizeProjects(entry.projects)}
+                                </span>
                               </div>
                             );
                           })}
                         </div>
                       ) : (
-                        <p className={styles.emptyHint}>No extension-level surfaces observed yet.</p>
+                        <p className={styles.emptyHint}>
+                          No extension-level surfaces observed yet.
+                        </p>
                       )}
                     </section>
                   </div>
@@ -396,11 +559,21 @@ export default function OverviewView() {
                     .sort((a, b) => (b.memory_count || 0) - (a.memory_count || 0))
                     .map((team, i) => {
                       const count = team.memory_count || 0;
-                      const share = totalMemories > 0 ? Math.round((count / totalMemories) * 100) : 0;
+                      const share =
+                        totalMemories > 0 ? Math.round((count / totalMemories) * 100) : 0;
                       return (
-                        <button key={team.team_id} type="button" className={styles.tableRow} style={{ '--row-index': i }} onClick={() => selectTeam(team.team_id)}>
+                        <button
+                          key={team.team_id}
+                          type="button"
+                          className={styles.tableRow}
+                          style={{ '--row-index': i }}
+                          onClick={() => selectTeam(team.team_id)}
+                        >
                           <span className={styles.tdLeft}>
-                            <span className={styles.squircle} style={{ background: projectGradient(team.team_id) }} />
+                            <span
+                              className={styles.squircle}
+                              style={{ background: projectGradient(team.team_id) }}
+                            />
                             {team.team_name || team.team_id}
                           </span>
                           <span className={styles.td}>{count}</span>
@@ -415,7 +588,6 @@ export default function OverviewView() {
             )}
           </div>
         )}
-
       </section>
     </div>
   );

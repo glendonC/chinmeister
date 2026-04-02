@@ -55,14 +55,14 @@ function buildJoinShare(teams = [], { entryKey, valueKey, outputKey }) {
         projectCount: item.projects.size,
         projects: [...item.projects].sort(),
       }))
-      .sort(sortByValueDesc)
+      .sort(sortByValueDesc),
   );
 }
 
 export function buildToolJoinShare(teams = []) {
   return buildJoinShare(teams, {
-    entryKey: 'tools_configured',
-    valueKey: 'tool',
+    entryKey: 'hosts_configured',
+    valueKey: 'host_tool',
     outputKey: 'tool',
   });
 }
@@ -85,7 +85,7 @@ export function buildSurfaceJoinShare(teams = []) {
 
 export function buildCategoryJoinShare(toolEntries = [], catalog = [], categories = {}) {
   const categoryByTool = new Map(
-    (catalog || []).map((tool) => [normalizeToolId(tool.id), tool.category || 'other'])
+    (catalog || []).map((tool) => [normalizeToolId(tool.id), tool.category || 'other']),
   );
   const byCategory = new Map();
 
@@ -124,7 +124,9 @@ export function buildProjectStates(teams = []) {
     {
       id: 'quiet',
       label: 'Quiet',
-      value: teams.filter((team) => (team.active_agents || 0) === 0 && (team.conflict_count || 0) === 0).length,
+      value: teams.filter(
+        (team) => (team.active_agents || 0) === 0 && (team.conflict_count || 0) === 0,
+      ).length,
       hint: 'no live work',
     },
   ];
@@ -135,11 +137,11 @@ export function buildLiveToolMix(members = []) {
   const byTool = new Map();
 
   activeMembers.forEach((member) => {
-    const toolId = normalizeToolId(member.tool) || 'unknown';
+    const toolId = normalizeToolId(member.host_tool) || 'unknown';
     if (!byTool.has(toolId)) {
       byTool.set(toolId, {
         tool: toolId,
-        label: member.tool || 'Unknown',
+        label: member.host_tool || 'Unknown',
         value: 0,
       });
     }
@@ -152,10 +154,18 @@ export function buildLiveToolMix(members = []) {
 export function buildUsageEntries(usage = {}) {
   return [
     usage.joins > 0 ? { id: 'joins', label: 'Recorded joins', value: usage.joins } : null,
-    usage.conflict_checks > 0 ? { id: 'conflict_checks', label: 'Conflict checks', value: usage.conflict_checks } : null,
-    usage.conflicts_found > 0 ? { id: 'conflicts_found', label: 'Conflicts found', value: usage.conflicts_found } : null,
-    usage.memories_saved > 0 ? { id: 'memories_saved', label: 'Memories saved', value: usage.memories_saved } : null,
-    usage.messages_sent > 0 ? { id: 'messages_sent', label: 'Messages sent', value: usage.messages_sent } : null,
+    usage.conflict_checks > 0
+      ? { id: 'conflict_checks', label: 'Conflict checks', value: usage.conflict_checks }
+      : null,
+    usage.conflicts_found > 0
+      ? { id: 'conflicts_found', label: 'Conflicts found', value: usage.conflicts_found }
+      : null,
+    usage.memories_saved > 0
+      ? { id: 'memories_saved', label: 'Memories saved', value: usage.memories_saved }
+      : null,
+    usage.messages_sent > 0
+      ? { id: 'messages_sent', label: 'Messages sent', value: usage.messages_sent }
+      : null,
   ]
     .filter(Boolean)
     .sort(sortByValueDesc);

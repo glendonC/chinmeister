@@ -5,12 +5,12 @@ import path from 'node:path';
 import {
   configureHostIntegration,
   scanHostIntegrations,
-} from '../../../shared/integration-doctor.js';
+} from '@chinwag/shared/integration-doctor.js';
 import {
   AGENT_SURFACES,
   HOST_INTEGRATIONS,
   buildAgentSurfaceCatalogEntries,
-} from '../../../shared/integration-model.js';
+} from '@chinwag/shared/integration-model.js';
 
 let tmpDir;
 
@@ -34,7 +34,9 @@ describe('shared integration model', () => {
 
   it('builds discovery entries for every known surface', () => {
     const entries = buildAgentSurfaceCatalogEntries();
-    expect(entries.map((entry) => entry.id).sort()).toEqual(AGENT_SURFACES.map((surface) => surface.id).sort());
+    expect(entries.map((entry) => entry.id).sort()).toEqual(
+      AGENT_SURFACES.map((surface) => surface.id).sort(),
+    );
   });
 });
 
@@ -65,7 +67,11 @@ describe('shared integration doctor', () => {
     const result = configureHostIntegration(tmpDir, 'claude-code');
     expect(result).toMatchObject({ ok: true, name: 'Claude Code' });
 
-    const content = JSON.parse(fs.readFileSync(path.join(tmpDir, '.claude', 'settings.json'), 'utf-8'));
-    expect(content.hooks.SessionStart[0].hooks[0].command).toBe('npx -y chinwag hook session-start');
+    const content = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, '.claude', 'settings.json'), 'utf-8'),
+    );
+    expect(content.hooks.SessionStart[0].hooks[0].command).toBe(
+      'npx -y chinwag hook session-start',
+    );
   });
 });

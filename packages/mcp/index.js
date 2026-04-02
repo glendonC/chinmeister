@@ -9,7 +9,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename } from 'path';
 import { loadConfig, configExists } from './lib/config.js';
-import { CONFIG_DIR, CONFIG_FILE } from '../shared/config.js';
+import { CONFIG_DIR, CONFIG_FILE } from '@chinwag/shared/config.js';
 import { api, getApiUrl } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
@@ -21,8 +21,11 @@ import {
 import { cleanupProcessSession, registerProcessSession } from './lib/lifecycle.js';
 import { registerTools, registerResources } from './lib/tools/index.js';
 import { createAgentState } from './lib/state.js';
-import { isProcessAlive, setTerminalTitle } from '../shared/session-registry.js';
-import { scanHostIntegrations, configureHostIntegration } from '../shared/integration-doctor.js';
+import { isProcessAlive, setTerminalTitle } from '@chinwag/shared/session-registry.js';
+import {
+  scanHostIntegrations,
+  configureHostIntegration,
+} from '@chinwag/shared/integration-doctor.js';
 
 // --- Constants ---
 const WS_PING_MS = 60_000;
@@ -64,7 +67,11 @@ async function main() {
         const refreshResult = await preflightClient.post('/auth/refresh', {
           refresh_token: config.refresh_token,
         });
-        config = { ...config, token: refreshResult.token, refresh_token: refreshResult.refresh_token };
+        config = {
+          ...config,
+          token: refreshResult.token,
+          refresh_token: refreshResult.refresh_token,
+        };
         // Persist the new tokens to disk so subsequent startups use the fresh token
         try {
           mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });

@@ -1,4 +1,7 @@
-import { buildAgentSurfaceCatalogEntries, buildHostIntegrationCatalogEntries } from '../../shared/integration-model.js';
+import {
+  buildAgentSurfaceCatalogEntries,
+  buildHostIntegrationCatalogEntries,
+} from '@chinwag/shared/integration-model.js';
 
 // Tool Catalog — discovery surface for the full AI dev tool catalog.
 // MCP-configurable tools are derived from the shared canonical registry so
@@ -16,9 +19,9 @@ export const TOOL_CATALOG = [
 
 export const CATEGORY_NAMES = {
   'coding-agent': 'Coding agents',
-  'ide': 'IDEs',
-  'voice': 'Voice-to-code',
-  'review': 'Code review',
-  'terminal': 'Terminal tools',
-  'docs': 'Documentation',
+  ide: 'IDEs',
+  voice: 'Voice-to-code',
+  review: 'Code review',
+  terminal: 'Terminal tools',
+  docs: 'Documentation',
 };

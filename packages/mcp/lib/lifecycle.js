@@ -4,7 +4,7 @@ import {
   resolveSessionAgentId,
   SESSION_COMMAND_MARKER,
   writeSessionRecord,
-} from '../../shared/session-registry.js';
+} from '@chinwag/shared/session-registry.js';
 import { generateAgentId, getConfiguredAgentId } from './identity.js';
 
 export function resolveAgentIdentity(token, toolName, options = {}) {

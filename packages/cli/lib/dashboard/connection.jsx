@@ -3,31 +3,35 @@ import { api, getApiUrl } from '../api.js';
 import { detectTools } from '../mcp-config.js';
 import { getProjectContext } from '../project.js';
 import { SPINNER } from './utils.js';
-import { applyDelta } from '../../../shared/dashboard-ws.js';
+import { applyDelta } from '@chinwag/shared/dashboard-ws.js';
 
 import { SPINNER_INTERVAL_MS } from './constants.js';
 
 // ── Constants ───────────────────────────────────────
-const OFFLINE_THRESHOLD = 6;           // consecutive failures before going offline
+const OFFLINE_THRESHOLD = 6; // consecutive failures before going offline
 const POLL_FAST_MS = 5_000;
 const POLL_MEDIUM_MS = 15_000;
 const POLL_SLOW_MS = 30_000;
 const POLL_IDLE_MS = 60_000;
-const IDLE_TIER_1 = 6;                 // 30s idle -> medium poll
-const IDLE_TIER_2 = 12;                // 1min idle -> slow poll
-const IDLE_TIER_3 = 60;                // 5min idle -> idle poll
+const IDLE_TIER_1 = 6; // 30s idle -> medium poll
+const IDLE_TIER_2 = 12; // 1min idle -> slow poll
+const IDLE_TIER_3 = 60; // 5min idle -> idle poll
 const RECONCILE_INTERVAL_MS = 60_000;
 
 export function classifyError(err) {
   const msg = err.message || '';
   const status = err.status;
-  if (status === 401) return { state: 'offline', detail: 'Session expired. Re-run chinwag init.', fatal: true };
-  if (status === 403) return { state: 'offline', detail: 'Access denied. You may have been removed from this team.' };
-  if (status === 404) return { state: 'offline', detail: 'Team not found. The .chinwag file may be stale.' };
+  if (status === 401)
+    return { state: 'offline', detail: 'Session expired. Re-run chinwag init.', fatal: true };
+  if (status === 403)
+    return { state: 'offline', detail: 'Access denied. You may have been removed from this team.' };
+  if (status === 404)
+    return { state: 'offline', detail: 'Team not found. The .chinwag file may be stale.' };
   if (status === 429) return { state: 'reconnecting', detail: 'Rate limited. Retrying shortly.' };
   if (status >= 500) return { state: 'reconnecting', detail: 'Server error. Retrying...' };
-  if (status === 408 || msg.includes('timed out')) return { state: 'reconnecting', detail: 'Request timed out. Retrying...' };
-  if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some(c => msg.includes(c))) {
+  if (status === 408 || msg.includes('timed out'))
+    return { state: 'reconnecting', detail: 'Request timed out. Retrying...' };
+  if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some((c) => msg.includes(c))) {
     return { state: 'offline', detail: 'Cannot reach server. Check your connection.' };
   }
   return { state: 'reconnecting', detail: msg || 'Connection issue. Retrying...' };
@@ -36,9 +40,12 @@ export function classifyError(err) {
 // Minimal fingerprint of context for change detection (avoids JSON.stringify on every poll)
 export function contextFingerprint(ctx) {
   if (!ctx) return '';
-  const members = (ctx.members || []).map(m =>
-    `${m.agent_id}:${m.status}:${m.activity?.summary || ''}:${(m.activity?.files || []).length}`
-  ).join('|');
+  const members = (ctx.members || [])
+    .map(
+      (m) =>
+        `${m.agent_id}:${m.status}:${m.activity?.summary || ''}:${(m.activity?.files || []).length}`,
+    )
+    .join('|');
   const memCount = (ctx.memories || []).length;
   const msgCount = (ctx.messages || []).length;
   const lockCount = (ctx.locks || []).length;
@@ -82,7 +89,10 @@ export function useDashboardConnection({ config, stdout }) {
   // ── Spinner ──────────────────────────────────────────
   useEffect(() => {
     if (connState === 'connected' || connState === 'offline') return;
-    const t = setInterval(() => setSpinnerFrame(f => (f + 1) % SPINNER.length), SPINNER_INTERVAL_MS);
+    const t = setInterval(
+      () => setSpinnerFrame((f) => (f + 1) % SPINNER.length),
+      SPINNER_INTERVAL_MS,
+    );
     return () => clearInterval(t);
   }, [connState]);
 
@@ -113,7 +123,9 @@ export function useDashboardConnection({ config, stdout }) {
 
     try {
       setDetectedTools(detectTools(project.root));
-    } catch (err) { console.error('[chinwag]', err?.message || err); }
+    } catch (err) {
+      console.error('[chinwag]', err?.message || err);
+    }
   }, []);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -160,7 +172,11 @@ export function useDashboardConnection({ config, stdout }) {
       const classified = classifyError(err);
       if (consecutiveFailures.current >= OFFLINE_THRESHOLD && classified.state === 'reconnecting') {
         setConnState('offline');
-        setConnDetail(classified.detail.replace('Retrying...', 'Press [r] to retry.').replace('Retrying shortly.', 'Press [r] to retry.'));
+        setConnDetail(
+          classified.detail
+            .replace('Retrying...', 'Press [r] to retry.')
+            .replace('Retrying shortly.', 'Press [r] to retry.'),
+        );
       } else {
         setConnState(classified.state);
         setConnDetail(classified.detail);
@@ -177,8 +193,11 @@ export function useDashboardConnection({ config, stdout }) {
       function schedulePoll() {
         pollInterval = setTimeout(async () => {
           if (destroyed) return;
-          try { await fetchContextOnce(); }
-          catch (err) { handleFetchError(err); }
+          try {
+            await fetchContextOnce();
+          } catch (err) {
+            handleFetchError(err);
+          }
           if (!destroyed) schedulePoll();
         }, getPollInterval());
       }
@@ -186,14 +205,22 @@ export function useDashboardConnection({ config, stdout }) {
     }
 
     function stopPolling() {
-      if (pollInterval) { clearTimeout(pollInterval); pollInterval = null; }
+      if (pollInterval) {
+        clearTimeout(pollInterval);
+        pollInterval = null;
+      }
     }
 
     // ── WebSocket connection ──────────────────────
     async function connect() {
       // Join team + fetch initial context via HTTP
-      try { await fetchContextOnce(); }
-      catch (err) { handleFetchError(err); startPolling(); return; }
+      try {
+        await fetchContextOnce();
+      } catch (err) {
+        handleFetchError(err);
+        startPolling();
+        return;
+      }
 
       // Fetch short-lived ticket — keeps real token out of WS URL
       let wsTicket;
@@ -213,14 +240,21 @@ export function useDashboardConnection({ config, stdout }) {
         const ws = new WebSocket(wsUrl);
 
         ws.onopen = () => {
-          if (destroyed) { ws.close(); return; }
+          if (destroyed) {
+            ws.close();
+            return;
+          }
           stopPolling();
           setConnState('connected');
           setConnDetail(null);
           // Full reconciliation every 60s to correct drift
           if (reconcileInterval) clearInterval(reconcileInterval);
           reconcileInterval = setInterval(async () => {
-            try { await fetchContextOnce(); } catch (err) { console.error('[chinwag]', err?.message || err); }
+            try {
+              await fetchContextOnce();
+            } catch (err) {
+              console.error('[chinwag]', err?.message || err);
+            }
           }, RECONCILE_INTERVAL_MS);
         };
 
@@ -231,19 +265,26 @@ export function useDashboardConnection({ config, stdout }) {
             if (event.type === 'context') {
               setContext(event.data);
             } else {
-              setContext(prev => prev ? applyDelta(prev, event) : prev);
+              setContext((prev) => (prev ? applyDelta(prev, event) : prev));
             }
-          } catch (err) { console.error('[chinwag]', err?.message || err); }
+          } catch (err) {
+            console.error('[chinwag]', err?.message || err);
+          }
         };
 
         ws.onclose = () => {
           if (destroyed) return;
           wsRef.current = null;
-          if (reconcileInterval) { clearInterval(reconcileInterval); reconcileInterval = null; }
+          if (reconcileInterval) {
+            clearInterval(reconcileInterval);
+            reconcileInterval = null;
+          }
           startPolling();
         };
 
-        ws.onerror = () => { /* onclose fires after onerror */ };
+        ws.onerror = () => {
+          /* onclose fires after onerror */
+        };
 
         wsRef.current = ws;
       } catch (err) {
@@ -259,7 +300,11 @@ export function useDashboardConnection({ config, stdout }) {
       stopPolling();
       if (reconcileInterval) clearInterval(reconcileInterval);
       if (wsRef.current) {
-        try { wsRef.current.close(); } catch (err) { console.error('[chinwag]', err?.message || err); }
+        try {
+          wsRef.current.close();
+        } catch (err) {
+          console.error('[chinwag]', err?.message || err);
+        }
         wsRef.current = null;
       }
     };
@@ -271,11 +316,11 @@ export function useDashboardConnection({ config, stdout }) {
     consecutiveFailures.current = 0;
     unchangedPolls.current = 0;
     lastFingerprint.current = '';
-    setRefreshKey(k => k + 1);
+    setRefreshKey((k) => k + 1);
   }
 
   function bumpRefreshKey() {
-    setRefreshKey(k => k + 1);
+    setRefreshKey((k) => k + 1);
   }
 
   return {

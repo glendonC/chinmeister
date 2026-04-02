@@ -16,9 +16,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            packages/web/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npx eslint .
       - run: npx prettier --check .
@@ -32,13 +30,24 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            packages/web/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
       # Worker tests run in the workerd runtime via @cloudflare/vitest-pool-workers.
       # V8 coverage is not supported in workerd (no node:inspector/promises).
       - run: npm run test:worker
+
+  test-shared:
+    name: Test Shared
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run test:shared
 
   test-mcp:
     name: Test MCP
@@ -49,9 +58,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            packages/web/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
       # Coverage thresholds enforced in vitest.config.js — fails if coverage drops below baseline.
       - run: npm run test:coverage:mcp
@@ -72,9 +79,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            packages/web/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run test:coverage:cli
       - name: Upload CLI coverage
@@ -94,11 +99,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            packages/web/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm ci --prefix packages/web
       - run: npm run test:coverage:web
       - name: Upload web coverage
         if: always()
@@ -107,6 +109,20 @@ jobs:
           name: coverage-web
           path: packages/web/coverage/
           retention-days: 7
+
+  test-web-e2e:
+    name: Web E2E
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e:web
 
   build:
     name: Build
@@ -117,11 +133,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            packages/web/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm ci --prefix packages/web
       - run: cd packages/cli && npm run build
       - run: npm run build --prefix packages/web
       - run: cd packages/worker && npx wrangler deploy --dry-run

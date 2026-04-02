@@ -2,10 +2,7 @@ import { useMemo } from 'react';
 import { usePollingStore } from '../../lib/stores/polling.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { formatRelativeTime } from '../../lib/relativeTime.js';
-import {
-  buildLiveToolMix,
-  buildUsageEntries,
-} from '../../lib/toolAnalytics.js';
+import { buildLiveToolMix, buildUsageEntries } from '../../lib/toolAnalytics.js';
 import {
   buildFilesInPlay,
   buildFilesTouched,
@@ -35,30 +32,33 @@ export function useProjectData() {
   const members = contextData?.members || [];
   const memories = contextData?.memories || [];
   const allSessions = useMemo(
-    () => selectRecentSessions(contextData?.recentSessions || []),
-    [contextData]
+    () => selectRecentSessions(contextData?.sessions || []),
+    [contextData],
   );
   const sessions = allSessions.slice(0, 8);
   const locks = contextData?.locks || [];
-  const toolsConfigured = contextData?.tools_configured || [];
+  const toolsConfigured = contextData?.hosts_configured || [];
   const hostsConfigured = contextData?.hosts_configured || [];
   const surfacesSeen = contextData?.surfaces_seen || [];
   const usage = contextData?.usage || {};
 
   const activeAgents = useMemo(
     () => members.filter((member) => member.status === 'active'),
-    [members]
+    [members],
   );
   const offlineAgents = useMemo(
     () => members.filter((member) => member.status === 'offline'),
-    [members]
+    [members],
   );
-  const sortedAgents = useMemo(() => [...activeAgents, ...offlineAgents], [activeAgents, offlineAgents]);
+  const sortedAgents = useMemo(
+    () => [...activeAgents, ...offlineAgents],
+    [activeAgents, offlineAgents],
+  );
   const liveToolMix = useMemo(() => buildLiveToolMix(members), [members]);
   const usageEntries = useMemo(() => buildUsageEntries(usage), [usage]);
   const conflicts = useMemo(
     () => buildProjectConflicts(contextData?.conflicts || [], members),
-    [contextData, members]
+    [contextData, members],
   );
   const filesInPlay = useMemo(() => buildFilesInPlay(activeAgents, locks), [activeAgents, locks]);
   const filesTouched = useMemo(() => buildFilesTouched(allSessions), [allSessions]);
@@ -68,15 +68,15 @@ export function useProjectData() {
   const liveSessionCount = useMemo(() => countLiveSessions(allSessions), [allSessions]);
   const toolSummaries = useMemo(
     () => buildProjectToolSummaries(members, toolsConfigured),
-    [members, toolsConfigured]
+    [members, toolsConfigured],
   );
   const hostSummaries = useMemo(
     () => buildProjectHostSummaries(members, hostsConfigured),
-    [members, hostsConfigured]
+    [members, hostsConfigured],
   );
   const surfaceSummaries = useMemo(
     () => buildProjectSurfaceSummaries(members, surfacesSeen),
-    [members, surfacesSeen]
+    [members, surfacesSeen],
   );
   const modelsSeen = contextData?.models_seen || [];
 

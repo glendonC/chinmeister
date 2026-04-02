@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { useAuthStore, authActions } from '../../lib/stores/auth.js';
 import { stopPolling } from '../../lib/stores/polling.js';
-import { api, getApiUrl } from '../../lib/api.js';
+import { api } from '../../lib/api.js';
 import { COLOR_PALETTE, getColorHex } from '../../lib/utils.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import styles from './SettingsView.module.css';
+
+const HANDLE_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
+
+function validateHandleInput(value) {
+  if (!value) return 'Handle is required.';
+  if (value.length < 3 || value.length > 20) return 'Handle must be 3-20 characters.';
+  if (!HANDLE_PATTERN.test(value)) return 'Handle may use letters, numbers, and underscores only.';
+  return null;
+}
 
 export default function SettingsView() {
   const token = useAuthStore((s) => s.token);
@@ -31,7 +40,15 @@ export default function SettingsView() {
 
   async function saveHandle() {
     const val = handleValue.trim();
-    if (!val || val === user?.handle) { setEditingHandle(false); return; }
+    if (!val || val === user?.handle) {
+      setEditingHandle(false);
+      return;
+    }
+    const validationError = validateHandleInput(val);
+    if (validationError) {
+      setHandleError(validationError);
+      return;
+    }
     setHandleSaving(true);
     setHandleError(null);
     try {
@@ -68,7 +85,10 @@ export default function SettingsView() {
     setLinkError(null);
     try {
       const result = await api('POST', '/auth/github/link', null, token);
-      if (result.url) window.location.href = result.url;
+      if (typeof result?.url !== 'string' || !/^https?:\/\//.test(result.url)) {
+        throw new Error('Received an invalid GitHub link response');
+      }
+      window.location.href = result.url;
     } catch (err) {
       setLinkError(err.message || 'Could not start GitHub linking');
     }
@@ -89,7 +109,7 @@ export default function SettingsView() {
 
   function handleLogout() {
     stopPolling();
-    try { authActions.logout(); } catch {}
+    authActions.logout();
   }
 
   return (
@@ -113,21 +133,38 @@ export default function SettingsView() {
                   disabled={handleSaving}
                   placeholder="3-20 chars"
                 />
-                <button className={`${styles.actionButton} ${styles.actionButtonPrimary}`} onClick={saveHandle} disabled={handleSaving}>
+                <button
+                  className={`${styles.actionButton} ${styles.actionButtonPrimary}`}
+                  onClick={saveHandle}
+                  disabled={handleSaving}
+                >
                   {handleSaving ? 'Saving...' : 'Save'}
                 </button>
-                <button className={styles.actionButton} onClick={() => setEditingHandle(false)} disabled={handleSaving}>
+                <button
+                  className={styles.actionButton}
+                  onClick={() => setEditingHandle(false)}
+                  disabled={handleSaving}
+                >
                   Cancel
                 </button>
               </div>
               {handleError ? <span className={styles.handleError}>{handleError}</span> : null}
             </div>
           ) : (
-            <button className={styles.handleButton} onClick={startEditHandle} aria-label="Edit handle">
+            <button
+              className={styles.handleButton}
+              onClick={startEditHandle}
+              aria-label="Edit handle"
+            >
               <span className={styles.handleValue}>{user?.handle || 'Unknown user'}</span>
               <span className={styles.handleAction}>
                 <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path d="M11.5 1.5l3 3L5 14H2v-3z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
+                  <path
+                    d="M11.5 1.5l3 3L5 14H2v-3z"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    strokeLinejoin="round"
+                  />
                 </svg>
                 <span>Edit</span>
               </span>
@@ -142,19 +179,19 @@ export default function SettingsView() {
               const isCurrent = user?.color === color.name;
               const isPreview = previewColorName === color.name;
               return (
-              <button
-                key={color.name}
-                className={`${styles.colorDot} ${isCurrent ? styles.colorDotCurrent : ''} ${isPreview ? styles.colorDotPreview : ''}`}
-                style={{ '--dot-color': color.hex }}
-                onClick={() => selectColor(color.name)}
-                onMouseEnter={() => setHoveredColor(color.name)}
-                onMouseLeave={() => setHoveredColor(null)}
-                onFocus={() => setHoveredColor(color.name)}
-                onBlur={() => setHoveredColor(null)}
-                disabled={colorSaving}
-                title={color.name}
-                aria-label={`Select ${color.name}`}
-              />
+                <button
+                  key={color.name}
+                  className={`${styles.colorDot} ${isCurrent ? styles.colorDotCurrent : ''} ${isPreview ? styles.colorDotPreview : ''}`}
+                  style={{ '--dot-color': color.hex }}
+                  onClick={() => selectColor(color.name)}
+                  onMouseEnter={() => setHoveredColor(color.name)}
+                  onMouseLeave={() => setHoveredColor(null)}
+                  onFocus={() => setHoveredColor(color.name)}
+                  onBlur={() => setHoveredColor(null)}
+                  disabled={colorSaving}
+                  title={color.name}
+                  aria-label={`Select ${color.name}`}
+                />
               );
             })}
           </div>

@@ -1,5 +1,5 @@
 import { TOOL_CATALOG } from '../catalog.js';
-import { HOST_INTEGRATIONS } from '../../../shared/integration-model.js';
+import { HOST_INTEGRATIONS } from '@chinwag/shared/integration-model.js';
 
 // Seeds the evaluation DB with registry-derived tools on first access.
 // Discovery-only tools (Goose, Warp, CodeRabbit, etc.) are NOT seeded here.
@@ -9,7 +9,7 @@ import { HOST_INTEGRATIONS } from '../../../shared/integration-model.js';
 // To seed discovery tools after deploy:
 //   POST /tools/batch-evaluate { admin_key, tools: ["Goose by Block", "Warp Terminal", ...] }
 
-const registryIds = new Set(HOST_INTEGRATIONS.map(h => h.id));
+const registryIds = new Set(HOST_INTEGRATIONS.map((h) => h.id));
 
 function catalogEntryToEvaluation(entry) {
   const inRegistry = registryIds.has(entry.id) ? 1 : 0;
@@ -18,7 +18,7 @@ function catalogEntryToEvaluation(entry) {
 
   let integrationTier = 'discovery-only';
   if (inRegistry) {
-    const host = HOST_INTEGRATIONS.find(h => h.id === entry.id);
+    const host = HOST_INTEGRATIONS.find((h) => h.id === entry.id);
     integrationTier = host?.tier || 'connected';
   }
 
@@ -33,7 +33,7 @@ function catalogEntryToEvaluation(entry) {
     channel_support: null,
     process_detectable: null,
     open_source: null,
-    verdict: entry.mcpCompatible ? 'integrated' : (entry.installCmd ? 'installable' : 'listed'),
+    verdict: entry.mcpCompatible ? 'integrated' : entry.installCmd ? 'installable' : 'listed',
     integration_tier: integrationTier,
     blocking_issues: [],
     metadata: {

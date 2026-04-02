@@ -3,7 +3,7 @@ import {
   configureHostIntegration,
   scanHostIntegrations,
   summarizeIntegrationScan,
-} from '../../../shared/integration-doctor.js';
+} from '@chinwag/shared/integration-doctor.js';
 
 export function useIntegrationDoctor({ projectRoot, flash }) {
   const [integrationStatuses, setIntegrationStatuses] = useState([]);
@@ -30,8 +30,11 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
   }, [projectRoot]);
 
   const integrationIssues = useMemo(
-    () => integrationStatuses.filter((item) => item.detected && item.repairable && item.status !== 'ready'),
-    [integrationStatuses]
+    () =>
+      integrationStatuses.filter(
+        (item) => item.detected && item.repairable && item.status !== 'ready',
+      ),
+    [integrationStatuses],
   );
 
   function repairIntegrations(hostIds = null) {
@@ -60,7 +63,9 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
     refreshIntegrationStatuses();
 
     if (repaired.length > 0 && failed.length === 0) {
-      flash(`Repaired ${repaired.join(', ')}. Restart affected tools to reconnect.`, { tone: 'success' });
+      flash(`Repaired ${repaired.join(', ')}. Restart affected tools to reconnect.`, {
+        tone: 'success',
+      });
       return true;
     }
 

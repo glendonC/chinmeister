@@ -2,6 +2,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { useAuthStore } from '../../lib/stores/auth.js';
 import { usePollingStore } from '../../lib/stores/polling.js';
 import { api } from '../../lib/api.js';
+import {
+  createEmptyDashboardSummary,
+  dashboardSummarySchema,
+  validateResponse,
+} from '../../lib/apiSchemas.js';
 import { useToolCatalog } from '../../lib/useToolCatalog.js';
 import {
   buildCategoryJoinShare,
@@ -40,20 +45,20 @@ export default function ToolsView() {
   const [expandedId, setExpandedId] = useState(null);
   const [showAll, setShowAll] = useState(false);
   const INITIAL_COUNT = 15;
-  const [dashboardSnapshot, setDashboardSnapshot] = useState(null);
+  const [fallbackDashboardSnapshot, setFallbackDashboardSnapshot] = useState(null);
 
   useEffect(() => {
-    if (dashboardData) {
-      setDashboardSnapshot(dashboardData);
-      return;
-    }
+    if (dashboardData) return;
     let cancelled = false;
     async function fetchDashboard() {
       try {
-        const data = await api('GET', '/me/dashboard', null, token);
-        if (!cancelled) setDashboardSnapshot(data);
+        const rawData = await api('GET', '/me/dashboard', null, token);
+        const data = validateResponse(dashboardSummarySchema, rawData, 'tools-dashboard', {
+          fallback: createEmptyDashboardSummary(),
+        });
+        if (!cancelled) setFallbackDashboardSnapshot(data);
       } catch {
-        if (!cancelled) setDashboardSnapshot({ teams: [] });
+        if (!cancelled) setFallbackDashboardSnapshot(createEmptyDashboardSummary());
       }
     }
     fetchDashboard();
@@ -62,33 +67,29 @@ export default function ToolsView() {
     };
   }, [dashboardData, token]);
 
+  const dashboardSnapshot = dashboardData || fallbackDashboardSnapshot;
+
   const toolShare = useMemo(
     () => buildToolJoinShare(dashboardSnapshot?.teams || []),
-    [dashboardSnapshot]
+    [dashboardSnapshot],
   );
   const hostShare = useMemo(
     () => buildHostJoinShare(dashboardSnapshot?.teams || []),
-    [dashboardSnapshot]
+    [dashboardSnapshot],
   );
   const surfaceShare = useMemo(
     () => buildSurfaceJoinShare(dashboardSnapshot?.teams || []),
-    [dashboardSnapshot]
+    [dashboardSnapshot],
   );
   const categoryShare = useMemo(
     () => buildCategoryJoinShare(toolShare, catalog, categories),
-    [toolShare, catalog, categories]
+    [toolShare, catalog, categories],
   );
-  const userToolIds = useMemo(
-    () => new Set(toolShare.map((tool) => tool.tool)),
-    [toolShare]
-  );
-  const userHostIds = useMemo(
-    () => new Set(hostShare.map((host) => host.host_tool)),
-    [hostShare]
-  );
+  const userToolIds = useMemo(() => new Set(toolShare.map((tool) => tool.tool)), [toolShare]);
+  const userHostIds = useMemo(() => new Set(hostShare.map((host) => host.host_tool)), [hostShare]);
   const seenSurfaceIds = useMemo(
     () => new Set(surfaceShare.map((surface) => surface.agent_surface)),
-    [surfaceShare]
+    [surfaceShare],
   );
 
   const categoryList = useMemo(() => Object.entries(categories), [categories]);
@@ -109,7 +110,7 @@ export default function ToolsView() {
         (ev) =>
           (ev.name || '').toLowerCase().includes(q) ||
           (ev.id || '').toLowerCase().includes(q) ||
-          (ev.tagline || '').toLowerCase().includes(q)
+          (ev.tagline || '').toLowerCase().includes(q),
       );
     }
 
@@ -121,13 +122,28 @@ export default function ToolsView() {
       const bConfigured =
         userToolIds.has(bId) || userHostIds.has(bId) || seenSurfaceIds.has(bId) ? 1 : 0;
       if (aConfigured !== bConfigured) return bConfigured - aConfigured;
-      const verdictOrder = { integrated: 0, compatible: 0, installable: 1, partial: 1, listed: 2, incompatible: 2 };
+      const verdictOrder = {
+        integrated: 0,
+        compatible: 0,
+        installable: 1,
+        partial: 1,
+        listed: 2,
+        incompatible: 2,
+      };
       const aV = verdictOrder[a.verdict] ?? 3;
       const bV = verdictOrder[b.verdict] ?? 3;
       if (aV !== bV) return aV - bV;
       return (a.name || '').localeCompare(b.name || '');
     });
-  }, [evaluations, activeCategory, activeVerdict, searchQuery, userToolIds, userHostIds, seenSurfaceIds]);
+  }, [
+    evaluations,
+    activeCategory,
+    activeVerdict,
+    searchQuery,
+    userToolIds,
+    userHostIds,
+    seenSurfaceIds,
+  ]);
 
   if (loading && evaluations.length === 0) {
     return (
@@ -142,7 +158,8 @@ export default function ToolsView() {
       <ViewHeader eyebrow="Across projects" title="Tools" />
 
       <p className={styles.intro}>
-        Discover your full Chinwag tool stack across projects: configured hosts, observed agent surfaces, and the wider directory of evaluated tools.
+        Discover your full Chinwag tool stack across projects: configured hosts, observed agent
+        surfaces, and the wider directory of evaluated tools.
       </p>
 
       <div className={styles.hero}>
@@ -244,8 +261,12 @@ export default function ToolsView() {
                     <div className={styles.rowIdentity}>
                       <ToolIcon tool={surface.agent_surface} size={18} />
                       <div className={styles.rowCopy}>
-                        <span className={styles.rowLabel}>{getToolMeta(surface.agent_surface).label}</span>
-                        <span className={styles.rowMeta}>{summarizeProjects(surface.projects)}</span>
+                        <span className={styles.rowLabel}>
+                          {getToolMeta(surface.agent_surface).label}
+                        </span>
+                        <span className={styles.rowMeta}>
+                          {summarizeProjects(surface.projects)}
+                        </span>
                       </div>
                     </div>
                     <div className={styles.signalValueBlock}>
@@ -256,7 +277,9 @@ export default function ToolsView() {
                 ))}
               </div>
             ) : (
-              <p className={styles.emptyHint}>No extension-level surfaces have been observed yet.</p>
+              <p className={styles.emptyHint}>
+                No extension-level surfaces have been observed yet.
+              </p>
             )}
           </section>
 
@@ -338,15 +361,17 @@ export default function ToolsView() {
         </div>
 
         <div className={styles.directoryList}>
-          {(showAll ? filteredEvaluations : filteredEvaluations.slice(0, INITIAL_COUNT)).map((ev) => (
-            <DirectoryRow
-              key={ev.id}
-              evaluation={ev}
-              categories={categories}
-              isExpanded={expandedId === ev.id}
-              onToggle={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
-            />
-          ))}
+          {(showAll ? filteredEvaluations : filteredEvaluations.slice(0, INITIAL_COUNT)).map(
+            (ev) => (
+              <DirectoryRow
+                key={ev.id}
+                evaluation={ev}
+                categories={categories}
+                isExpanded={expandedId === ev.id}
+                onToggle={() => setExpandedId(expandedId === ev.id ? null : ev.id)}
+              />
+            ),
+          )}
           {filteredEvaluations.length === 0 ? (
             <p className={styles.emptyHint}>No tools match the current filters.</p>
           ) : null}

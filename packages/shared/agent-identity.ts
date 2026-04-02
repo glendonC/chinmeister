@@ -1,37 +1,27 @@
-import { createHash, randomBytes } from 'crypto';
-import { execFileSync } from 'child_process';
-import { basename } from 'path';
+import { execFileSync } from 'node:child_process';
+import { createHash, randomBytes } from 'node:crypto';
+import { basename } from 'node:path';
 import { HOST_INTEGRATIONS, getHostIntegrationById } from './integration-model.js';
+import type { RuntimeIdentityContract } from './contracts.js';
 
-/**
- * @typedef {Object} RuntimeIdentity
- * @property {string} hostTool - Detected host tool ID
- * @property {string|null} agentSurface - Agent surface ID or null
- * @property {string} transport - e.g. 'mcp', 'managed-cli'
- * @property {'managed'|'connected'} tier
- * @property {string[]} capabilities - Sorted capability list
- * @property {'explicit'|'parent-process'|'fallback'} detectionSource
- * @property {number} detectionConfidence - 0 to 1
- */
+export interface RuntimeIdentity extends RuntimeIdentityContract {}
 
-/**
- * @typedef {Object} DetectRuntimeOptions
- * @property {string[]} [argv] - Process args (defaults to process.argv)
- * @property {(pid: number) => {ppid: number, command: string}|null} [readProcessInfoFn]
- * @property {number} [parentPid] - Starting PID (defaults to process.ppid)
- * @property {number} [maxParentHops] - Max process tree hops (default 5)
- * @property {string} [defaultTransport] - Override default transport
- */
+export interface DetectRuntimeOptions {
+  argv?: string[];
+  readProcessInfoFn?: (pid: number) => { ppid: number; command: string } | null;
+  parentPid?: number;
+  maxParentHops?: number;
+  defaultTransport?: string;
+}
 
-/**
- * @typedef {Object} RuntimeIdentityLike
- * @property {string} [hostTool]
- * @property {string} [tool]
- */
+export interface RuntimeIdentityLike {
+  hostTool?: string;
+  tool?: string;
+}
 
 const EXEC_TIMEOUT_MS = 5000;
 
-function defaultReadProcessInfo(pid) {
+function defaultReadProcessInfo(pid: number): { ppid: number; command: string } | null {
   if (!pid || pid <= 0 || process.platform === 'win32') return null;
 
   try {
@@ -52,15 +42,17 @@ function defaultReadProcessInfo(pid) {
   }
 }
 
-function extractExecutableName(command = '') {
-  const match = String(command).trim().match(/^("[^"]+"|'[^']+'|\S+)/);
+function extractExecutableName(command = ''): string {
+  const match = String(command)
+    .trim()
+    .match(/^("[^"]+"|'[^']+'|\S+)/);
   if (!match) return '';
 
   const token = match[1].replace(/^['"]|['"]$/g, '');
   return basename(token).toLowerCase();
 }
 
-function includesAlias(command = '', alias = '') {
+function includesAlias(command = '', alias = ''): boolean {
   const normalizedCommand = String(command).toLowerCase();
   const normalizedAlias = String(alias).toLowerCase().trim();
   if (!normalizedCommand || !normalizedAlias) return false;
@@ -69,12 +61,12 @@ function includesAlias(command = '', alias = '') {
   return new RegExp(`(^|[^a-z0-9])${escaped}([^a-z0-9]|$)`, 'i').test(normalizedCommand);
 }
 
-function getArgValue(flag, argv = process.argv) {
+function getArgValue(flag: string, argv = process.argv): string | null {
   const idx = argv.indexOf(flag);
   return idx !== -1 && argv[idx + 1] ? argv[idx + 1] : null;
 }
 
-function inferToolFromCommand(command = '') {
+function inferToolFromCommand(command = ''): string | null {
   const normalized = command.toLowerCase();
   if (!normalized || normalized.includes('chinwag-mcp') || normalized.includes('chinwag-channel')) {
     return null;
@@ -82,10 +74,11 @@ function inferToolFromCommand(command = '') {
 
   const executableName = extractExecutableName(command);
   for (const tool of HOST_INTEGRATIONS) {
-    const executables = new Set([
-      ...(tool.detect?.cmds || []),
-      ...(tool.processDetection?.executables || []),
-    ].map((candidate) => String(candidate).toLowerCase()));
+    const executables = new Set(
+      [...(tool.detect?.cmds || []), ...(tool.processDetection?.executables || [])].map(
+        (candidate) => String(candidate).toLowerCase(),
+      ),
+    );
 
     if (executableName && executables.has(executableName)) {
       return tool.id;
@@ -100,14 +93,16 @@ function inferToolFromCommand(command = '') {
   return null;
 }
 
-function getRuntimeTransport(defaultTransport = 'mcp', options = {}) {
-  return getArgValue('--transport', options.argv)
-    || process.env.CHINWAG_TRANSPORT
-    || options.defaultTransport
-    || defaultTransport;
+function getRuntimeTransport(defaultTransport = 'mcp', options: DetectRuntimeOptions = {}): string {
+  return (
+    getArgValue('--transport', options.argv) ||
+    process.env.CHINWAG_TRANSPORT ||
+    options.defaultTransport ||
+    defaultTransport
+  );
 }
 
-function getDetectionConfidence(source) {
+function getDetectionConfidence(source: RuntimeIdentity['detectionSource']): number {
   switch (source) {
     case 'explicit':
       return 1;
@@ -118,26 +113,26 @@ function getDetectionConfidence(source) {
   }
 }
 
-function normalizeToolName(toolNameOrRuntime) {
+function normalizeToolName(
+  toolNameOrRuntime: string | RuntimeIdentityLike | null | undefined,
+): string | null {
   if (!toolNameOrRuntime) return null;
   if (typeof toolNameOrRuntime === 'string') return toolNameOrRuntime;
   return toolNameOrRuntime.hostTool || toolNameOrRuntime.tool || null;
 }
 
-/**
- * @param {string} [defaultHost] - Fallback host tool ID
- * @param {DetectRuntimeOptions} [options]
- * @returns {RuntimeIdentity}
- */
-export function detectRuntimeIdentity(defaultHost = 'unknown', options = {}) {
+export function detectRuntimeIdentity(
+  defaultHost = 'unknown',
+  options: DetectRuntimeOptions = {},
+): RuntimeIdentity {
   const argv = options.argv || process.argv;
-  const explicitTool = getArgValue('--tool', argv) || process.env.CHINWAG_TOOL;
+  const explicitTool = getArgValue('--tool', argv) || process.env.CHINWAG_TOOL || null;
   const explicitSurface = getArgValue('--surface', argv) || process.env.CHINWAG_SURFACE || null;
   const readProcessInfo = options.readProcessInfoFn || defaultReadProcessInfo;
   const maxParentHops = options.maxParentHops ?? 5;
 
-  let hostTool = explicitTool || null;
-  let detectionSource = explicitTool ? 'explicit' : 'fallback';
+  let hostTool = explicitTool;
+  let detectionSource: RuntimeIdentity['detectionSource'] = explicitTool ? 'explicit' : 'fallback';
 
   if (!hostTool) {
     let pid = options.parentPid ?? process.ppid;
@@ -176,42 +171,34 @@ export function detectRuntimeIdentity(defaultHost = 'unknown', options = {}) {
   };
 }
 
-/**
- * @param {string} [defaultTool] - Fallback tool name
- * @param {DetectRuntimeOptions} [options]
- * @returns {string}
- */
-export function detectToolName(defaultTool = 'unknown', options = {}) {
+export function detectToolName(
+  defaultTool = 'unknown',
+  options: DetectRuntimeOptions = {},
+): string {
   return detectRuntimeIdentity(defaultTool, options).hostTool;
 }
 
-/**
- * @param {string} token - Authentication token
- * @param {string|RuntimeIdentityLike|null} toolNameOrRuntime - Tool name string or runtime identity object
- * @returns {string}
- */
-export function generateAgentId(token, toolNameOrRuntime) {
+export function generateAgentId(
+  token: string,
+  toolNameOrRuntime: string | RuntimeIdentityLike | null,
+): string {
   const toolName = normalizeToolName(toolNameOrRuntime) || 'unknown';
   const hash = createHash('sha256').update(token).digest('hex').slice(0, 12);
   return `${toolName}:${hash}`;
 }
 
-/**
- * @param {string} token - Authentication token
- * @param {string|RuntimeIdentityLike|null} toolNameOrRuntime - Tool name string or runtime identity object
- * @returns {string}
- */
-export function generateSessionAgentId(token, toolNameOrRuntime) {
+export function generateSessionAgentId(
+  token: string,
+  toolNameOrRuntime: string | RuntimeIdentityLike | null,
+): string {
   const base = generateAgentId(token, toolNameOrRuntime);
   const suffix = randomBytes(4).toString('hex');
   return `${base}:${suffix}`;
 }
 
-/**
- * @param {string|RuntimeIdentityLike|null} [toolNameOrRuntime] - Tool name string or runtime identity object
- * @returns {string|null}
- */
-export function getConfiguredAgentId(toolNameOrRuntime = null) {
+export function getConfiguredAgentId(
+  toolNameOrRuntime: string | RuntimeIdentityLike | null = null,
+): string | null {
   const agentId = process.env.CHINWAG_AGENT_ID?.trim();
   if (!agentId || agentId.length > 60) return null;
   const toolName = normalizeToolName(toolNameOrRuntime);

@@ -66,9 +66,9 @@ const baseMemory = {
   id: 'mem_1',
   text: 'Always use TypeScript for new modules',
   tags: ['convention', 'typescript'],
-  source_tool: 'claude-code',
-  source_handle: 'alice',
-  source_model: 'claude-4',
+  host_tool: 'claude-code',
+  handle: 'alice',
+  agent_model: 'claude-4',
   updated_at: '2025-01-01T00:00:00Z',
 };
 
@@ -120,7 +120,7 @@ describe('MemoryRow display', () => {
   it('renders without source tool', async () => {
     const MemoryRow = await loadMemoryRow();
     const { container, unmount } = renderComponent(MemoryRow, {
-      memory: { ...baseMemory, source_tool: null },
+      memory: { ...baseMemory, host_tool: null },
     });
 
     expect(container.textContent).toContain('alice');
@@ -166,7 +166,7 @@ describe('MemoryRow edit mode', () => {
     });
 
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -186,7 +186,7 @@ describe('MemoryRow edit mode', () => {
     });
 
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -209,7 +209,7 @@ describe('MemoryRow edit mode', () => {
 
     // Enter edit mode
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -219,7 +219,8 @@ describe('MemoryRow edit mode', () => {
     const textarea = container.querySelector('textarea');
     act(() => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       ).set;
       nativeInputValueSetter.call(textarea, 'Updated text');
       textarea.dispatchEvent(new Event('change', { bubbles: true }));
@@ -227,7 +228,7 @@ describe('MemoryRow edit mode', () => {
 
     // Save
     const saveBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Save'
+      (b) => b.textContent.trim() === 'Save',
     );
     await act(async () => {
       saveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -248,7 +249,7 @@ describe('MemoryRow edit mode', () => {
 
     // Enter edit mode
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -256,7 +257,7 @@ describe('MemoryRow edit mode', () => {
 
     // Cancel
     const cancelBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Cancel'
+      (b) => b.textContent.trim() === 'Cancel',
     );
     act(() => {
       cancelBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -279,7 +280,7 @@ describe('MemoryRow edit mode', () => {
 
     // Enter edit mode
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -287,7 +288,7 @@ describe('MemoryRow edit mode', () => {
 
     // Save without changes
     const saveBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Save'
+      (b) => b.textContent.trim() === 'Save',
     );
     await act(async () => {
       saveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -309,7 +310,7 @@ describe('MemoryRow edit mode', () => {
 
     // Enter edit mode
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -340,7 +341,7 @@ describe('MemoryRow edit mode', () => {
 
     // Enter edit mode
     const editBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Edit'
+      (b) => b.textContent.trim() === 'Edit',
     );
     act(() => {
       editBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -350,7 +351,8 @@ describe('MemoryRow edit mode', () => {
     const textarea = container.querySelector('textarea');
     act(() => {
       const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-        window.HTMLTextAreaElement.prototype, 'value'
+        window.HTMLTextAreaElement.prototype,
+        'value',
       ).set;
       nativeInputValueSetter.call(textarea, 'Changed');
       textarea.dispatchEvent(new Event('change', { bubbles: true }));
@@ -358,7 +360,7 @@ describe('MemoryRow edit mode', () => {
 
     // Save
     const saveBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Save'
+      (b) => b.textContent.trim() === 'Save',
     );
     await act(async () => {
       saveBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -382,7 +384,7 @@ describe('MemoryRow delete', () => {
     });
 
     const deleteBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Delete'
+      (b) => b.textContent.trim() === 'Delete',
     );
     act(() => {
       deleteBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -408,15 +410,15 @@ describe('MemoryRow delete', () => {
 
     // First click: show confirmation
     const deleteBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Delete'
+      (b) => b.textContent.trim() === 'Delete',
     );
     act(() => {
       deleteBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
     // Second click: confirm deletion
-    const confirmBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.includes('Confirm')
+    const confirmBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent.includes('Confirm'),
     );
     await act(async () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -437,7 +439,7 @@ describe('MemoryRow delete', () => {
 
     // First click to show confirmation
     const deleteBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.trim() === 'Delete'
+      (b) => b.textContent.trim() === 'Delete',
     );
     act(() => {
       deleteBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -445,8 +447,8 @@ describe('MemoryRow delete', () => {
     expect(container.textContent).toContain('Confirm?');
 
     // Confirm - will fail
-    const confirmBtn = [...container.querySelectorAll('button')].find(
-      (b) => b.textContent.includes('Confirm')
+    const confirmBtn = [...container.querySelectorAll('button')].find((b) =>
+      b.textContent.includes('Confirm'),
     );
     await act(async () => {
       confirmBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));

@@ -72,18 +72,20 @@ async function checkConflict(team, teamId, input) {
 
     if (result.conflicts && result.conflicts.length > 0) {
       for (const c of result.conflicts) {
-        issues.push(`${formatWho(c.owner_handle, c.tool)} is editing ${c.files.join(', ')} — "${c.summary}"`);
+        issues.push(
+          `${formatWho(c.handle, c.host_tool)} is editing ${c.files.join(', ')} — "${c.summary}"`,
+        );
       }
     }
 
     if (result.locked && result.locked.length > 0) {
       for (const l of result.locked) {
-        issues.push(`${l.file} is locked by ${formatWho(l.held_by, l.tool)}`);
+        issues.push(`${l.file} is locked by ${formatWho(l.handle, l.host_tool)}`);
       }
     }
 
     if (issues.length > 0) {
-      console.log(`CONFLICT: ${issues.join('; ')}`);
+      process.stdout.write(`CONFLICT: ${issues.join('; ')}\n`);
       process.exit(1);
     }
 
@@ -101,10 +103,7 @@ async function reportEdit(team, teamId, input) {
 
   try {
     // Update current activity + record in session history (parallel)
-    await Promise.all([
-      team.reportFile(teamId, filePath),
-      team.recordEdit(teamId, filePath),
-    ]);
+    await Promise.all([team.reportFile(teamId, filePath), team.recordEdit(teamId, filePath)]);
   } catch (err) {
     console.error(`[chinwag] Activity report failed: ${err.message}`);
   }
@@ -123,12 +122,12 @@ async function sessionStart(team, teamId, hasExactSession) {
     const ctx = await team.getTeamContext(teamId);
 
     if (ctx.members && ctx.members.length > 0) {
-      console.log('=== chinwag team context ===');
+      process.stdout.write('=== chinwag team context ===\n');
       const lines = formatTeamContextDisplay(ctx, { showInsights: true });
       for (const line of lines) {
-        console.log(line);
+        process.stdout.write(`${line}\n`);
       }
-      console.log('===========================');
+      process.stdout.write('===========================\n');
     }
   } catch (err) {
     console.error(`[chinwag] Context fetch failed: ${err.message}`);
@@ -143,7 +142,12 @@ function readStdin() {
   return new Promise((resolve) => {
     let data = '';
     let resolved = false;
-    const done = (value) => { if (!resolved) { resolved = true; resolve(value); } };
+    const done = (value) => {
+      if (!resolved) {
+        resolved = true;
+        resolve(value);
+      }
+    };
 
     const timeout = setTimeout(() => {
       process.stdin.removeAllListeners('data');
@@ -152,7 +156,7 @@ function readStdin() {
     }, STDIN_TIMEOUT_MS);
 
     process.stdin.setEncoding('utf-8');
-    process.stdin.on('data', chunk => {
+    process.stdin.on('data', (chunk) => {
       data += chunk;
       if (data.length > STDIN_MAX_BYTES) {
         clearTimeout(timeout);
@@ -168,7 +172,9 @@ function readStdin() {
       } catch (err) {
         // Log with context so parse failures are diagnosable — include truncated raw data
         const preview = data.length > 200 ? data.slice(0, 200) + '...' : data;
-        console.error(`[chinwag] stdin parse failed (${data.length} bytes, subcommand=${subcommand}): ${err?.message || 'unknown error'} — data: ${preview}`);
+        console.error(
+          `[chinwag] stdin parse failed (${data.length} bytes, subcommand=${subcommand}): ${err?.message || 'unknown error'} — data: ${preview}`,
+        );
         done({});
       }
     });

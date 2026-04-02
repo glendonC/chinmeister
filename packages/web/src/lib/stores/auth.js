@@ -1,9 +1,10 @@
 import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
+import { userProfileSchema, validateResponse } from '../apiSchemas.js';
 
 const TOKEN_KEY = 'chinwag_token';
 
-const authStore = createStore((set, get) => ({
+const authStore = createStore((set) => ({
   token: null,
   user: null,
 
@@ -12,7 +13,7 @@ const authStore = createStore((set, get) => ({
     if (!hash.includes('token=')) return null;
     const match = hash.match(/token=([^&]+)/);
     if (!match) return null;
-    history.replaceState(null, '', window.location.pathname);
+    window.history.replaceState(null, '', window.location.pathname);
     return match[1];
   },
 
@@ -23,7 +24,8 @@ const authStore = createStore((set, get) => ({
   async authenticate(t) {
     set({ token: t });
     try {
-      const userData = await api('GET', '/me', null, t);
+      const rawUser = await api('GET', '/me', null, t);
+      const userData = validateResponse(userProfileSchema, rawUser, 'me', { throwOnError: true });
       set({ user: userData });
       localStorage.setItem(TOKEN_KEY, t);
       return true;

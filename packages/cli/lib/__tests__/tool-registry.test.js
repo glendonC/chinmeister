@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { MCP_TOOLS } from '../../../shared/tool-registry.js';
+import { MCP_TOOLS } from '@chinwag/shared/tool-registry.js';
 
 describe('shared MCP tool registry', () => {
   it('uses unique ids for every configurable tool', () => {

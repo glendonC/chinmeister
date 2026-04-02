@@ -10,9 +10,16 @@ export function registerContextTool(addTool, { team, state }) {
   addTool(
     'chinwag_get_team_context',
     {
-      description: 'Get the full state of your team: who is online, what everyone is working on, and any file overlaps. Use this to orient yourself before starting work.',
+      description:
+        'Get the full state of your team: who is online, what everyone is working on, and any file overlaps. Use this to orient yourself before starting work.',
       inputSchema: z.object({
-        model: z.string().max(100).optional().describe('Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.'),
+        model: z
+          .string()
+          .max(100)
+          .optional()
+          .describe(
+            'Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.',
+          ),
       }),
     },
     async ({ model } = {}) => {
@@ -33,7 +40,12 @@ export function registerContextTool(addTool, { team, state }) {
       }
       const ctx = await refreshContext(team, state.teamId);
       if (!ctx) {
-        return { content: [{ type: 'text', text: 'No team context available (API unreachable, no cached data).' }], isError: true };
+        return {
+          content: [
+            { type: 'text', text: 'No team context available (API unreachable, no cached data).' },
+          ],
+          isError: true,
+        };
       }
 
       const lines = [];
@@ -60,7 +72,7 @@ export function registerContextTool(addTool, { team, state }) {
         lines.push('');
         lines.push('Messages:');
         for (const msg of ctx.messages) {
-          const from = formatWho(msg.from_handle, msg.from_tool);
+          const from = formatWho(msg.handle, msg.host_tool);
           lines.push(`  ${from}: ${msg.text}`);
         }
       }
@@ -74,6 +86,6 @@ export function registerContextTool(addTool, { team, state }) {
       }
 
       return { content: [{ type: 'text', text: lines.join('\n') }] };
-    }
+    },
   );
 }

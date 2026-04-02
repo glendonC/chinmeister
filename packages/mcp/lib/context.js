@@ -29,7 +29,10 @@ export async function refreshContext(team, teamId) {
   } catch (err) {
     if (!isOffline) {
       isOffline = true;
-      console.error('[chinwag] API unreachable — using cached context:', err?.message || 'unknown error');
+      console.error(
+        '[chinwag] API unreachable — using cached context:',
+        err?.message || 'unknown error',
+      );
     }
     return cachedContext; // may be null if never fetched
   }
@@ -52,14 +55,16 @@ export function clearContextCache() {
 export async function teamPreamble(team, teamId) {
   const ctx = await refreshContext(team, teamId);
   if (!ctx) return isOffline ? '[offline] ' : '';
-  const active = ctx.members?.filter(m => m.status === 'active') || [];
+  const active = ctx.members?.filter((m) => m.status === 'active') || [];
   if (active.length === 0) return offlinePrefix();
 
-  const summary = active.map(m => {
-    const toolTag = formatToolTag(m.tool);
-    const files = m.activity?.files?.join(', ') || 'idle';
-    return `${m.handle}${toolTag}: ${files}`;
-  }).join(' | ');
+  const summary = active
+    .map((m) => {
+      const toolTag = formatToolTag(m.host_tool);
+      const files = m.activity?.files?.join(', ') || 'idle';
+      return `${m.handle}${toolTag}: ${files}`;
+    })
+    .join(' | ');
 
   const lockCount = ctx.locks?.length || 0;
   const msgCount = ctx.messages?.length || 0;

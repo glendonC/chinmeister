@@ -1,4 +1,4 @@
-import { generateSessionAgentId } from '../../shared/agent-identity.js';
+import { generateSessionAgentId } from '@chinwag/shared/agent-identity.js';
 import { commandExists } from './mcp-config.js';
 import { MCP_TOOLS, getMcpToolById } from './tools.js';
 import { execFile } from 'child_process';
@@ -19,24 +19,15 @@ function toManagedTool(tool) {
 }
 
 export function listManagedAgentTools() {
-  return MCP_TOOLS
-    .filter(tool => tool.spawn && commandExists(tool.spawn.cmd))
-    .map(toManagedTool);
+  return MCP_TOOLS.filter((tool) => tool.spawn && commandExists(tool.spawn.cmd)).map(toManagedTool);
 }
 
 export function getManagedAgentTool(toolId) {
-  const tool = MCP_TOOLS.find(item => item.id === toolId && item.spawn);
+  const tool = MCP_TOOLS.find((item) => item.id === toolId && item.spawn);
   return tool ? toManagedTool(tool) : null;
 }
 
-export function createManagedAgentLaunch({
-  tool,
-  task,
-  cwd,
-  token,
-  cols,
-  rows,
-}) {
+export function createManagedAgentLaunch({ tool, task, cwd, token, cols, rows }) {
   if (!tool?.id || !tool?.cmd) {
     throw new Error('Missing managed agent tool metadata');
   }
@@ -77,7 +68,7 @@ export function createTerminalAgentLaunch({ tool, task = '', cwd, token }) {
   if (!token) throw new Error('Missing chinwag auth token');
 
   const agentId = generateSessionAgentId(token, tool.id);
-  const fullTool = MCP_TOOLS.find(t => t.id === tool.id);
+  const fullTool = MCP_TOOLS.find((t) => t.id === tool.id);
   const args = fullTool?.spawn?.interactiveArgs ?? tool.args ?? [];
 
   return {
@@ -93,7 +84,10 @@ export function createTerminalAgentLaunch({ tool, task = '', cwd, token }) {
   };
 }
 
-export async function checkManagedAgentToolAvailability(tool, { cwd = process.cwd(), timeoutMs = 4000 } = {}) {
+export async function checkManagedAgentToolAvailability(
+  tool,
+  { cwd = process.cwd(), timeoutMs = 4000 } = {},
+) {
   if (!tool?.id || !tool?.cmd) {
     return { toolId: tool?.id || 'unknown', state: 'unavailable', detail: 'Missing tool metadata' };
   }

@@ -31,17 +31,19 @@ describe('display utilities', () => {
       const line = formatMemberLine({
         handle: 'alice',
         status: 'active',
-        tool: 'cursor',
+        host_tool: 'cursor',
         activity: { files: ['auth.js', 'db.js'], summary: 'Fixing login' },
       });
-      expect(line).toBe('  alice (active, cursor): working on auth.js, db.js \u2014 "Fixing login"');
+      expect(line).toBe(
+        '  alice (active, cursor): working on auth.js, db.js \u2014 "Fixing login"',
+      );
     });
 
     it('formats idle member without activity', () => {
       const line = formatMemberLine({
         handle: 'bob',
         status: 'active',
-        tool: 'unknown',
+        host_tool: 'unknown',
       });
       expect(line).toBe('  bob (active): idle');
     });
@@ -50,7 +52,7 @@ describe('display utilities', () => {
       const line = formatMemberLine({
         handle: 'carol',
         status: 'idle',
-        tool: 'unknown',
+        host_tool: 'unknown',
       });
       expect(line).not.toMatch(/unknown/);
     });
@@ -59,7 +61,7 @@ describe('display utilities', () => {
       const line = formatMemberLine({
         handle: 'dave',
         status: 'active',
-        tool: 'aider',
+        host_tool: 'aider',
         activity: { files: ['test.js'] },
       });
       expect(line).toBe('  dave (active, aider): working on test.js');
@@ -70,8 +72,8 @@ describe('display utilities', () => {
     it('formats a lock with tool', () => {
       const line = formatLockLine({
         file_path: 'auth.js',
-        owner_handle: 'alice',
-        tool: 'cursor',
+        handle: 'alice',
+        host_tool: 'cursor',
         minutes_held: 5.8,
       });
       expect(line).toBe('  auth.js \u2014 alice (cursor) (6m)');
@@ -80,8 +82,8 @@ describe('display utilities', () => {
     it('omits tool when tool is "unknown"', () => {
       const line = formatLockLine({
         file_path: 'db.js',
-        owner_handle: 'bob',
-        tool: 'unknown',
+        handle: 'bob',
+        host_tool: 'unknown',
         minutes_held: 3,
       });
       expect(line).toBe('  db.js \u2014 bob (3m)');
@@ -113,7 +115,7 @@ describe('display utilities', () => {
 
     it('formats conflicts with tool info', () => {
       const lines = formatConflictsList(
-        [{ owner_handle: 'alice', tool: 'cursor', files: ['auth.js'], summary: 'Fixing login' }],
+        [{ handle: 'alice', host_tool: 'cursor', files: ['auth.js'], summary: 'Fixing login' }],
         [],
       );
       expect(lines.length).toBe(1);
@@ -121,10 +123,7 @@ describe('display utilities', () => {
     });
 
     it('formats locked files', () => {
-      const lines = formatConflictsList(
-        [],
-        [{ file: 'db.js', held_by: 'bob', tool: 'aider' }],
-      );
+      const lines = formatConflictsList([], [{ file: 'db.js', handle: 'bob', host_tool: 'aider' }]);
       expect(lines.length).toBe(1);
       expect(lines[0]).toMatch(/db\.js is locked by bob \(aider\)/);
     });
@@ -137,40 +136,47 @@ describe('display utilities', () => {
 
     it('uses formatMemberLine for consistent output', () => {
       const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor', activity: { files: ['a.js'] } }],
+        members: [
+          { handle: 'alice', status: 'active', host_tool: 'cursor', activity: { files: ['a.js'] } },
+        ],
       });
       expect(lines[0]).toBe('  alice (active, cursor): working on a.js');
     });
 
     it('uses formatLockLine for consistent lock output', () => {
       const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor' }],
-        locks: [{ file_path: 'auth.js', owner_handle: 'alice', tool: 'cursor', minutes_held: 5 }],
+        members: [{ handle: 'alice', status: 'active', host_tool: 'cursor' }],
+        locks: [{ file_path: 'auth.js', handle: 'alice', host_tool: 'cursor', minutes_held: 5 }],
       });
-      const lockLine = lines.find(l => l.includes('auth.js'));
+      const lockLine = lines.find((l) => l.includes('auth.js'));
       expect(lockLine).toBe('  auth.js \u2014 alice (cursor) (5m)');
     });
 
     it('uses formatMemoryLine for consistent memory output', () => {
       const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor' }],
+        members: [{ handle: 'alice', status: 'active', host_tool: 'cursor' }],
         memories: [{ text: 'Use Redis', tags: ['config'] }],
       });
-      const memLine = lines.find(l => l.includes('Use Redis'));
+      const memLine = lines.find((l) => l.includes('Use Redis'));
       expect(memLine).toBe('  Use Redis [config]');
     });
 
     it('shows stuckness insights when enabled and threshold exceeded', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{
-          handle: 'alice',
-          status: 'active',
-          tool: 'cursor',
-          activity: { files: ['stuck.js'], updated_at: '2026-01-01T00:00:00Z' },
-          minutes_since_update: 20,
-        }],
-      }, { showInsights: true });
-      const insight = lines.find(l => l.includes('may need help'));
+      const lines = formatTeamContextDisplay(
+        {
+          members: [
+            {
+              handle: 'alice',
+              status: 'active',
+              host_tool: 'cursor',
+              activity: { files: ['stuck.js'], updated_at: '2026-01-01T00:00:00Z' },
+              minutes_since_update: 20,
+            },
+          ],
+        },
+        { showInsights: true },
+      );
+      const insight = lines.find((l) => l.includes('may need help'));
       expect(insight).toMatch(/alice has been on stuck\.js for 20m/);
     });
   });

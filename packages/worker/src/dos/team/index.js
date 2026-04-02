@@ -16,10 +16,29 @@ import { toSQLDateTime } from '../../lib/text-utils.js';
 import { ensureSchema } from './schema.js';
 import { queryTeamContext, queryTeamSummary } from './context.js';
 import { join, leave, heartbeat as heartbeatFn } from './membership.js';
-import { updateActivity as updateActivityFn, checkConflicts as checkConflictsFn, reportFile as reportFileFn } from './activity.js';
-import { saveMemory as saveMemoryFn, searchMemories as searchMemoriesFn, updateMemory as updateMemoryFn, deleteMemory as deleteMemoryFn } from './memory.js';
-import { claimFiles as claimFilesFn, releaseFiles as releaseFilesFn, getLockedFiles as getLockedFilesFn } from './locks.js';
-import { startSession as startSessionFn, endSession as endSessionFn, recordEdit as recordEditFn, getSessionHistory, enrichSessionModel as enrichSessionModelFn } from './sessions.js';
+import {
+  updateActivity as updateActivityFn,
+  checkConflicts as checkConflictsFn,
+  reportFile as reportFileFn,
+} from './activity.js';
+import {
+  saveMemory as saveMemoryFn,
+  searchMemories as searchMemoriesFn,
+  updateMemory as updateMemoryFn,
+  deleteMemory as deleteMemoryFn,
+} from './memory.js';
+import {
+  claimFiles as claimFilesFn,
+  releaseFiles as releaseFilesFn,
+  getLockedFiles as getLockedFilesFn,
+} from './locks.js';
+import {
+  startSession as startSessionFn,
+  endSession as endSessionFn,
+  recordEdit as recordEditFn,
+  getSessionHistory,
+  enrichSessionModel as enrichSessionModelFn,
+} from './sessions.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import {
   HEARTBEAT_STALE_WINDOW_S,
@@ -86,7 +105,10 @@ export class TeamDO extends DurableObject {
 
     // Agents: bump heartbeat on connect (WS keeps them alive going forward)
     if (role === 'agent') {
-      this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", resolved);
+      this.sql.exec(
+        "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
+        resolved,
+      );
       this.#broadcastToWatchers({ type: 'status_change', agent_id: resolved, status: 'active' });
     }
 
@@ -105,7 +127,7 @@ export class TeamDO extends DurableObject {
     try {
       const data = JSON.parse(rawMessage);
       const tags = this.ctx.getTags(ws);
-      const agentId = tags.find(t => !t.startsWith('role:'));
+      const agentId = tags.find((t) => !t.startsWith('role:'));
       const isAgent = tags.includes('role:agent');
 
       if (data.type === 'ping') {
@@ -117,13 +139,20 @@ export class TeamDO extends DurableObject {
               const ts = toSQLDateTime(parsed);
               this.sql.exec(
                 "UPDATE members SET last_heartbeat = datetime('now'), last_tool_use = ? WHERE agent_id = ?",
-                ts, agentId
+                ts,
+                agentId,
               );
             } else {
-              this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", agentId);
+              this.sql.exec(
+                "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
+                agentId,
+              );
             }
           } else {
-            this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", agentId);
+            this.sql.exec(
+              "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
+              agentId,
+            );
           }
         }
         ws.send(JSON.stringify({ type: 'pong' }));
@@ -131,7 +160,12 @@ export class TeamDO extends DurableObject {
         this.#ensureSchema();
         const result = updateActivityFn(this.sql, agentId, data.files || [], data.summary || '');
         if (!result.error) {
-          this.#broadcastToWatchers({ type: 'activity', agent_id: agentId, files: data.files, summary: data.summary });
+          this.#broadcastToWatchers({
+            type: 'activity',
+            agent_id: agentId,
+            files: data.files,
+            summary: data.summary,
+          });
         }
       } else if (data.type === 'file' && isAgent && agentId) {
         this.#ensureSchema();
@@ -140,13 +174,15 @@ export class TeamDO extends DurableObject {
           this.#broadcastToWatchers({ type: 'file', agent_id: agentId, file: data.file });
         }
       }
-    } catch { /* ignore malformed messages */ }
+    } catch {
+      /* ignore malformed messages */
+    }
   }
 
   async webSocketClose(ws) {
     const tags = this.ctx.getTags(ws);
     const isAgent = tags.includes('role:agent');
-    const agentId = tags.find(t => !t.startsWith('role:'));
+    const agentId = tags.find((t) => !t.startsWith('role:'));
 
     if (isAgent && agentId) {
       this.#ensureSchema();
@@ -157,7 +193,7 @@ export class TeamDO extends DurableObject {
     }
   }
 
-  async webSocketError(ws) {
+  async webSocketError(_ws) {
     // webSocketClose fires after — cleanup happens there
   }
 
@@ -166,9 +202,10 @@ export class TeamDO extends DurableObject {
   /** Agent IDs with an active 'role:agent' WebSocket connection. */
   #getConnectedAgentIds() {
     return new Set(
-      this.ctx.getWebSockets('role:agent')
-        .flatMap(ws => this.ctx.getTags(ws))
-        .filter(tag => !tag.startsWith('role:'))
+      this.ctx
+        .getWebSockets('role:agent')
+        .flatMap((ws) => this.ctx.getTags(ws))
+        .filter((tag) => !tag.startsWith('role:')),
     );
   }
 
@@ -180,8 +217,14 @@ export class TeamDO extends DurableObject {
   // Events that change data returned by getContext() — membership, activity, locks, sessions.
   // Messages are fetched per-agent (not cached team-wide), so they don't invalidate.
   static #CONTEXT_INVALIDATING_EVENTS = new Set([
-    'member_joined', 'member_left', 'activity', 'file', 'lock_change',
-    'status_change', 'heartbeat', 'memory',
+    'member_joined',
+    'member_left',
+    'activity',
+    'file',
+    'lock_change',
+    'status_change',
+    'heartbeat',
+    'memory',
   ]);
 
   #broadcastToWatchers(event) {
@@ -192,7 +235,11 @@ export class TeamDO extends DurableObject {
     if (!sockets.length) return;
     const data = JSON.stringify(event);
     for (const ws of sockets) {
-      try { ws.send(data); } catch { /* dead connection */ }
+      try {
+        ws.send(data);
+      } catch {
+        /* dead connection */
+      }
     }
   }
 
@@ -214,17 +261,19 @@ export class TeamDO extends DurableObject {
         WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
           AND agent_id NOT IN (${wsPlaceholders})
       )`,
-      HEARTBEAT_STALE_WINDOW_S, ...wsParams
+      HEARTBEAT_STALE_WINDOW_S,
+      ...wsParams,
     );
     this.sql.exec(
       `DELETE FROM members
        WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
          AND agent_id NOT IN (${wsPlaceholders})`,
-      HEARTBEAT_STALE_WINDOW_S, ...wsParams
+      HEARTBEAT_STALE_WINDOW_S,
+      ...wsParams,
     );
     this.sql.exec(
       `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
-      SESSION_RETENTION_DAYS
+      SESSION_RETENTION_DAYS,
     );
     // Expire messages older than 1 hour
     this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')");
@@ -235,7 +284,8 @@ export class TeamDO extends DurableObject {
         WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
           OR agent_id IN (${wsPlaceholders})
       )`,
-      HEARTBEAT_STALE_WINDOW_S, ...wsParams
+      HEARTBEAT_STALE_WINDOW_S,
+      ...wsParams,
     );
     // Auto-close orphaned sessions
     this.sql.exec(
@@ -246,7 +296,8 @@ export class TeamDO extends DurableObject {
          WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
            OR agent_id IN (${wsPlaceholders})
        )`,
-      HEARTBEAT_STALE_WINDOW_S, ...wsParams
+      HEARTBEAT_STALE_WINDOW_S,
+      ...wsParams,
     );
     // Prune stale telemetry
     this.sql.exec("DELETE FROM telemetry WHERE last_at < datetime('now', '-30 days')");
@@ -256,33 +307,36 @@ export class TeamDO extends DurableObject {
     this.sql.exec(
       `INSERT INTO telemetry (metric, count, last_at) VALUES (?, 1, datetime('now'))
        ON CONFLICT(metric) DO UPDATE SET count = count + 1, last_at = datetime('now')`,
-      metric
+      metric,
     );
   }
 
   // ── Identity resolution ──
 
   #findExactMember(agentId) {
-    const rows = this.sql.exec(
-      'SELECT agent_id, owner_id FROM members WHERE agent_id = ?',
-      agentId
-    ).toArray();
+    const rows = this.sql
+      .exec('SELECT agent_id, owner_id FROM members WHERE agent_id = ?', agentId)
+      .toArray();
     return rows[0] || null;
   }
 
   #findPrefixedMember(agentId) {
-    const rows = this.sql.exec(
-      "SELECT agent_id, owner_id FROM members WHERE agent_id LIKE ? || ':%' ORDER BY last_heartbeat DESC LIMIT 1",
-      agentId
-    ).toArray();
+    const rows = this.sql
+      .exec(
+        "SELECT agent_id, owner_id FROM members WHERE agent_id LIKE ? || ':%' ORDER BY last_heartbeat DESC LIMIT 1",
+        agentId,
+      )
+      .toArray();
     return rows[0] || null;
   }
 
   #findLatestMemberForOwner(ownerId) {
-    const rows = this.sql.exec(
-      "SELECT agent_id, owner_id FROM members WHERE owner_id = ? ORDER BY last_heartbeat DESC LIMIT 1",
-      ownerId
-    ).toArray();
+    const rows = this.sql
+      .exec(
+        'SELECT agent_id, owner_id FROM members WHERE owner_id = ? ORDER BY last_heartbeat DESC LIMIT 1',
+        ownerId,
+      )
+      .toArray();
     return rows[0] || null;
   }
 
@@ -306,10 +360,6 @@ export class TeamDO extends DurableObject {
     return null;
   }
 
-  #isMember(agentId, ownerId = null) {
-    return Boolean(this.#resolveOwnedAgentId(agentId, ownerId));
-  }
-
   // --- Bound helper for submodules that need to record telemetry ---
   #boundRecordMetric = (metric) => this.#recordMetric(metric);
 
@@ -317,10 +367,22 @@ export class TeamDO extends DurableObject {
 
   async join(agentId, ownerId, ownerHandle, runtimeOrTool = 'unknown') {
     this.#ensureSchema();
-    const result = join(this.sql, agentId, ownerId, ownerHandle, runtimeOrTool, this.#boundRecordMetric);
+    const result = join(
+      this.sql,
+      agentId,
+      ownerId,
+      ownerHandle,
+      runtimeOrTool,
+      this.#boundRecordMetric,
+    );
     if (!result.error) {
-      const tool = typeof runtimeOrTool === 'object' ? runtimeOrTool?.host_tool : runtimeOrTool;
-      this.#broadcastToWatchers({ type: 'member_joined', agent_id: agentId, handle: ownerHandle, tool: tool || 'unknown' });
+      const hostTool = typeof runtimeOrTool === 'object' ? runtimeOrTool?.hostTool : runtimeOrTool;
+      this.#broadcastToWatchers({
+        type: 'member_joined',
+        agent_id: agentId,
+        handle: ownerHandle,
+        host_tool: hostTool || 'unknown',
+      });
     }
     return result;
   }
@@ -367,7 +429,13 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return checkConflictsFn(this.sql, resolved, files, this.#boundRecordMetric, this.#getConnectedAgentIds());
+    return checkConflictsFn(
+      this.sql,
+      resolved,
+      files,
+      this.#boundRecordMetric,
+      this.#getConnectedAgentIds(),
+    );
   }
 
   async reportFile(agentId, filePath, ownerId = null) {
@@ -389,17 +457,22 @@ export class TeamDO extends DurableObject {
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
 
     // Always bump calling agent's heartbeat
-    this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", resolved);
+    this.sql.exec(
+      "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
+      resolved,
+    );
 
     // Per-agent messages (always fresh — has target_agent filter, can't be cached team-wide)
-    const messages = this.sql.exec(
-      `SELECT from_handle, from_tool, from_host_tool, from_agent_surface, text, created_at
+    const messages = this.sql
+      .exec(
+        `SELECT agent_id, handle, host_tool, agent_surface, text, created_at
        FROM messages
        WHERE created_at > datetime('now', '-1 hour')
          AND (target_agent IS NULL OR target_agent = ?)
        ORDER BY created_at DESC LIMIT 10`,
-      resolved
-    ).toArray();
+        resolved,
+      )
+      .toArray();
 
     // Return cached team-wide context if fresh
     const now = Date.now();
@@ -422,7 +495,8 @@ export class TeamDO extends DurableObject {
 
   async startSession(agentId, handle, framework, runtimeOrOwnerId = null, ownerId = null) {
     this.#ensureSchema();
-    const runtime = runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
+    const runtime =
+      runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
     const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
     const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
@@ -445,7 +519,8 @@ export class TeamDO extends DurableObject {
 
   async getHistory(agentId, days, ownerId = null) {
     this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    if (!this.#resolveOwnedAgentId(agentId, ownerId))
+      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     return getSessionHistory(this.sql, days);
   }
 
@@ -460,20 +535,37 @@ export class TeamDO extends DurableObject {
 
   async saveMemory(agentId, text, tags, handle, runtimeOrOwnerId = null, ownerId = null) {
     this.#ensureSchema();
-    const runtime = runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
+    const runtime =
+      runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
     const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
     const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = saveMemoryFn(this.sql, resolved, text, tags, handle, runtime, this.#boundRecordMetric);
+    const result = saveMemoryFn(
+      this.sql,
+      resolved,
+      text,
+      tags,
+      handle,
+      runtime,
+      this.#boundRecordMetric,
+    );
     if (!result.error) {
-      this.#broadcastToWatchers({ type: 'memory', text, tags });
+      this.#broadcastToWatchers({
+        type: 'memory',
+        id: result.id,
+        text,
+        tags,
+        handle,
+        host_tool: runtime?.hostTool || 'unknown',
+      });
     }
     return result;
   }
 
   async searchMemories(agentId, query, tags, limit = 20, ownerId = null) {
     this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    if (!this.#resolveOwnedAgentId(agentId, ownerId))
+      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     return searchMemoriesFn(this.sql, query, tags, limit);
   }
 
@@ -499,7 +591,12 @@ export class TeamDO extends DurableObject {
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool);
     if (!result.error) {
-      this.#broadcastToWatchers({ type: 'lock_change', action: 'claim', agent_id: resolved, files });
+      this.#broadcastToWatchers({
+        type: 'lock_change',
+        action: 'claim',
+        agent_id: resolved,
+        files,
+      });
     }
     return result;
   }
@@ -510,14 +607,20 @@ export class TeamDO extends DurableObject {
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = releaseFilesFn(this.sql, resolved, files);
     if (!result.error) {
-      this.#broadcastToWatchers({ type: 'lock_change', action: 'release', agent_id: resolved, files });
+      this.#broadcastToWatchers({
+        type: 'lock_change',
+        action: 'release',
+        agent_id: resolved,
+        files,
+      });
     }
     return result;
   }
 
   async getLockedFiles(agentId, ownerId = null) {
     this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    if (!this.#resolveOwnedAgentId(agentId, ownerId))
+      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     return getLockedFilesFn(this.sql, this.#getConnectedAgentIds());
   }
 
@@ -527,9 +630,23 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = sendMessageFn(this.sql, resolved, handle, runtimeOrTool, text, targetAgent, this.#boundRecordMetric);
+    const result = sendMessageFn(
+      this.sql,
+      resolved,
+      handle,
+      runtimeOrTool,
+      text,
+      targetAgent,
+      this.#boundRecordMetric,
+    );
     if (!result.error) {
-      this.#broadcastToWatchers({ type: 'message', from_handle: handle, text });
+      const hostTool = typeof runtimeOrTool === 'object' ? runtimeOrTool?.hostTool : runtimeOrTool;
+      this.#broadcastToWatchers({
+        type: 'message',
+        handle,
+        host_tool: hostTool || 'unknown',
+        text,
+      });
     }
     return result;
   }
@@ -545,7 +662,8 @@ export class TeamDO extends DurableObject {
 
   async getSummary(agentId, ownerId = null) {
     this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId)) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    if (!this.#resolveOwnedAgentId(agentId, ownerId))
+      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     this.#maybeCleanup();
     return queryTeamSummary(this.sql);
   }

@@ -1,5 +1,12 @@
 import { useEffect, useState } from 'react';
 import { api } from './api.js';
+import {
+  createEmptyToolCatalog,
+  createEmptyToolDirectory,
+  toolCatalogSchema,
+  toolDirectorySchema,
+  validateResponse,
+} from './apiSchemas.js';
 
 let cachedCatalog = null;
 let cachedCategories = null;
@@ -36,7 +43,6 @@ export function useToolCatalog(token) {
     let cancelled = false;
 
     if (cachedCatalog != null) {
-      setState(getCachedState());
       return () => {
         cancelled = true;
       };
@@ -44,20 +50,34 @@ export function useToolCatalog(token) {
 
     if (!inflightRequest) {
       inflightRequest = api('GET', '/tools/directory?limit=200', null, token)
-        .then((data) => {
+        .then((rawData) => {
+          const data = validateResponse(toolDirectorySchema, rawData, 'tools-directory', {
+            fallback: createEmptyToolDirectory(),
+          });
           cachedEvaluations = data.evaluations || [];
           cachedCategories = data.categories || {};
           cachedCatalog = cachedEvaluations.map(evaluationToCatalogItem);
-          return { catalog: cachedCatalog, categories: cachedCategories, evaluations: cachedEvaluations };
+          return {
+            catalog: cachedCatalog,
+            categories: cachedCategories,
+            evaluations: cachedEvaluations,
+          };
         })
         .catch(() =>
           // Fallback to old catalog endpoint if directory isn't deployed yet
-          api('GET', '/tools/catalog', null, token).then((data) => {
+          api('GET', '/tools/catalog', null, token).then((rawData) => {
+            const data = validateResponse(toolCatalogSchema, rawData, 'tools-catalog', {
+              fallback: createEmptyToolCatalog(),
+            });
             cachedCatalog = data.tools || [];
             cachedCategories = data.categories || {};
             cachedEvaluations = [];
-            return { catalog: cachedCatalog, categories: cachedCategories, evaluations: cachedEvaluations };
-          })
+            return {
+              catalog: cachedCatalog,
+              categories: cachedCategories,
+              evaluations: cachedEvaluations,
+            };
+          }),
         )
         .finally(() => {
           inflightRequest = null;

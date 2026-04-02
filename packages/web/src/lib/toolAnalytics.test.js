@@ -1,35 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildHostJoinShare,
-  buildSurfaceJoinShare,
-  buildToolJoinShare,
-} from './toolAnalytics.js';
+import { buildHostJoinShare, buildSurfaceJoinShare, buildToolJoinShare } from './toolAnalytics.js';
 
 const teams = [
   {
     team_id: 't_one',
     team_name: 'alpha',
-    tools_configured: [
-      { tool: 'cursor', joins: 4 },
-      { tool: 'claude-code', joins: 2 },
-    ],
     hosts_configured: [
       { host_tool: 'cursor', joins: 4 },
       { host_tool: 'claude-code', joins: 2 },
     ],
-    surfaces_seen: [
-      { agent_surface: 'cline', joins: 3 },
-    ],
+    surfaces_seen: [{ agent_surface: 'cline', joins: 3 }],
   },
   {
     team_id: 't_two',
     team_name: 'beta',
-    tools_configured: [
-      { tool: 'cursor', joins: 1 },
-    ],
-    hosts_configured: [
-      { host_tool: 'cursor', joins: 1 },
-    ],
+    hosts_configured: [{ host_tool: 'cursor', joins: 1 }],
     surfaces_seen: [
       { agent_surface: 'continue', joins: 2 },
       { agent_surface: 'cline', joins: 1 },

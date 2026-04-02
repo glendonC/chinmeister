@@ -48,12 +48,18 @@ describe('Membership', () => {
     });
     expect(joinRes.ok).toBe(true);
 
-    const sessionRes = await runtimeTeam().startSession(runtimeAgent, 'alice', 'react', {
-      hostTool: 'cursor',
-      agentSurface: 'cline',
-      transport: 'mcp',
-      tier: 'connected',
-    }, runtimeOwner);
+    const sessionRes = await runtimeTeam().startSession(
+      runtimeAgent,
+      'alice',
+      'react',
+      {
+        hostTool: 'cursor',
+        agentSurface: 'cline',
+        transport: 'mcp',
+        tier: 'connected',
+      },
+      runtimeOwner,
+    );
     expect(sessionRes.ok).toBe(true);
 
     const memoryRes = await runtimeTeam().saveMemory(
@@ -62,7 +68,7 @@ describe('Membership', () => {
       ['runtime'],
       'alice',
       { hostTool: 'cursor', agentSurface: 'cline', transport: 'mcp', tier: 'connected' },
-      runtimeOwner
+      runtimeOwner,
     );
     expect(memoryRes.ok).toBe(true);
 
@@ -72,7 +78,7 @@ describe('Membership', () => {
       { hostTool: 'cursor', agentSurface: 'cline', transport: 'mcp', tier: 'connected' },
       'Runtime hello',
       null,
-      runtimeOwner
+      runtimeOwner,
     );
     expect(messageRes.ok).toBe(true);
 
@@ -81,37 +87,33 @@ describe('Membership', () => {
       ['src/runtime.js'],
       'alice',
       { hostTool: 'cursor', agentSurface: 'cline', transport: 'mcp', tier: 'connected' },
-      runtimeOwner
+      runtimeOwner,
     );
     expect(lockRes.ok).toBe(true);
 
     const ctx = await runtimeTeam().getContext(runtimeAgent, runtimeOwner);
-    const me = ctx.members.find(m => m.agent_id === runtimeAgent);
-    expect(me.tool).toBe('cursor');
+    const me = ctx.members.find((m) => m.agent_id === runtimeAgent);
     expect(me.host_tool).toBe('cursor');
     expect(me.agent_surface).toBe('cline');
     expect(me.transport).toBe('mcp');
 
-    expect(ctx.memories[0].source_tool).toBe('cursor');
-    expect(ctx.memories[0].source_host_tool).toBe('cursor');
-    expect(ctx.memories[0].source_agent_surface).toBe('cline');
+    expect(ctx.memories[0].host_tool).toBe('cursor');
+    expect(ctx.memories[0].agent_surface).toBe('cline');
 
-    expect(ctx.messages[0].from_tool).toBe('cursor');
-    expect(ctx.messages[0].from_host_tool).toBe('cursor');
-    expect(ctx.messages[0].from_agent_surface).toBe('cline');
+    expect(ctx.messages[0].host_tool).toBe('cursor');
+    expect(ctx.messages[0].agent_surface).toBe('cline');
 
-    expect(ctx.locks[0].tool).toBe('cursor');
     expect(ctx.locks[0].host_tool).toBe('cursor');
     expect(ctx.locks[0].agent_surface).toBe('cline');
 
-    const session = ctx.recentSessions.find(s => s.agent_id === runtimeAgent);
+    const session = ctx.sessions.find((s) => s.agent_id === runtimeAgent);
     expect(session.host_tool).toBe('cursor');
     expect(session.agent_surface).toBe('cline');
     expect(session.transport).toBe('mcp');
 
     const summary = await runtimeTeam().getSummary(runtimeAgent, runtimeOwner);
-    expect(summary.hosts_configured.some(item => item.host_tool === 'cursor')).toBe(true);
-    expect(summary.surfaces_seen.some(item => item.agent_surface === 'cline')).toBe(true);
+    expect(summary.hosts_configured.some((item) => item.host_tool === 'cursor')).toBe(true);
+    expect(summary.surfaces_seen.some((item) => item.agent_surface === 'cline')).toBe(true);
   });
 });
 
@@ -201,7 +203,7 @@ describe('Locks', () => {
     const res = await team().claimFiles(agent2, ['src/main.js'], 'bob', 'claude', owner2);
     expect(res.blocked.length).toBeGreaterThan(0);
     expect(res.blocked[0].file).toBe('src/main.js');
-    expect(res.blocked[0].held_by).toBe('alice');
+    expect(res.blocked[0].handle).toBe('alice');
     expect(res.claimed).toHaveLength(0);
   });
 
@@ -229,7 +231,13 @@ describe('Memory', () => {
   });
 
   it('saveMemory returns ok with id', async () => {
-    const res = await team().saveMemory(agentId, 'Always run tests before deploying', ['pattern'], 'alice', ownerId);
+    const res = await team().saveMemory(
+      agentId,
+      'Always run tests before deploying',
+      ['pattern'],
+      'alice',
+      ownerId,
+    );
     expect(res.ok).toBe(true);
     expect(res.id).toBeDefined();
     savedMemoryId = res.id;
@@ -244,7 +252,7 @@ describe('Memory', () => {
   it('searchMemories filters by tags', async () => {
     const res = await team().searchMemories(agentId, null, ['pattern'], 10, ownerId);
     expect(res.memories.length).toBeGreaterThan(0);
-    expect(res.memories.every(m => m.tags.includes('pattern'))).toBe(true);
+    expect(res.memories.every((m) => m.tags.includes('pattern'))).toBe(true);
   });
 
   it('deleteMemory removes memory', async () => {
@@ -252,18 +260,36 @@ describe('Memory', () => {
     expect(res.ok).toBe(true);
 
     // Searching should no longer find it
-    const search = await team().searchMemories(agentId, 'Always run tests before deploying', null, 10, ownerId);
+    const search = await team().searchMemories(
+      agentId,
+      'Always run tests before deploying',
+      null,
+      10,
+      ownerId,
+    );
     expect(search.memories.length).toBe(0);
   });
 
   it('saves similar text as separate entries (no dedup)', async () => {
     // Save original
-    const first = await team().saveMemory(agentId, 'The database connection pool should be sized at 10', ['config'], 'alice', ownerId);
+    const first = await team().saveMemory(
+      agentId,
+      'The database connection pool should be sized at 10',
+      ['config'],
+      'alice',
+      ownerId,
+    );
     expect(first.ok).toBe(true);
     expect(first.id).toBeDefined();
 
     // Save very similar text — both should succeed as separate entries
-    const second = await team().saveMemory(agentId, 'The database connection pool should be sized at 10 connections', ['config'], 'alice', ownerId);
+    const second = await team().saveMemory(
+      agentId,
+      'The database connection pool should be sized at 10 connections',
+      ['config'],
+      'alice',
+      ownerId,
+    );
     expect(second.ok).toBe(true);
     expect(second.id).toBeDefined();
     expect(second.id).not.toBe(first.id);
@@ -291,8 +317,8 @@ describe('Messages', () => {
     const res = await team().getMessages(agentId, null, ownerId);
     expect(res.messages.length).toBeGreaterThan(0);
     expect(res.messages[0].text).toBe('Hello team!');
-    expect(res.messages[0].from_handle).toBe('alice');
-    expect(res.messages[0].from_tool).toBe('cursor');
+    expect(res.messages[0].handle).toBe('alice');
+    expect(res.messages[0].host_tool).toBe('cursor');
   });
 });
 
@@ -326,7 +352,7 @@ describe('Sessions', () => {
 
     // Verify via getHistory
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find(s => s.owner_handle === 'alice');
+    const session = history.sessions.find((s) => s.handle === 'alice');
     expect(session).toBeDefined();
     expect(session.edit_count).toBe(2);
     expect(session.files_touched).toContain('src/app.js');
@@ -437,7 +463,13 @@ describe('Leave cleans up locks and activities', () => {
     await team().leave(agentId, ownerId);
 
     // Other agent should now be able to claim the file
-    const claim = await team().claimFiles(otherAgent, ['src/cleanup.js'], 'bob', 'claude', otherOwner);
+    const claim = await team().claimFiles(
+      otherAgent,
+      ['src/cleanup.js'],
+      'bob',
+      'claude',
+      otherOwner,
+    );
     expect(claim.claimed).toContain('src/cleanup.js');
     expect(claim.blocked).toHaveLength(0);
   });
@@ -480,7 +512,13 @@ describe('Lock path normalization consistency', () => {
     await team().releaseFiles(agent2, null, owner2); // release all
 
     // Double slashes collapse: 'src//lib//utils.js' → 'src/lib/utils.js'
-    const claim1 = await team().claimFiles(agent1, ['src//lib//utils.js'], 'alice', 'cursor', owner1);
+    const claim1 = await team().claimFiles(
+      agent1,
+      ['src//lib//utils.js'],
+      'alice',
+      'cursor',
+      owner1,
+    );
     expect(claim1.claimed).toContain('src/lib/utils.js');
 
     const claim2 = await team().claimFiles(agent2, ['src/lib/utils.js'], 'bob', 'claude', owner2);
@@ -520,7 +558,7 @@ describe('Conflict detection — edge cases', () => {
 
     const res = await team().checkConflicts(agent1, ['src/shared.js'], owner1);
     expect(res.conflicts.length).toBe(2); // two others on same file
-    const conflictHandles = res.conflicts.map(c => c.owner_handle);
+    const conflictHandles = res.conflicts.map((c) => c.handle);
     expect(conflictHandles).toContain('bob');
     expect(conflictHandles).toContain('carol');
   });
@@ -571,7 +609,7 @@ describe('Lock release — edge cases', () => {
     // agent1's lock should still be in place
     const claim = await team().claimFiles(agent2, ['src/owned.js'], 'bob', 'claude', owner2);
     expect(claim.blocked).toHaveLength(1);
-    expect(claim.blocked[0].held_by).toBe('alice');
+    expect(claim.blocked[0].handle).toBe('alice');
   });
 
   it('releasing a file nobody holds is a no-op', async () => {
@@ -580,12 +618,24 @@ describe('Lock release — edge cases', () => {
   });
 
   it('release all with null files releases all locks for the agent', async () => {
-    await team().claimFiles(agent1, ['src/f1.js', 'src/f2.js', 'src/f3.js'], 'alice', 'cursor', owner1);
+    await team().claimFiles(
+      agent1,
+      ['src/f1.js', 'src/f2.js', 'src/f3.js'],
+      'alice',
+      'cursor',
+      owner1,
+    );
     const res = await team().releaseFiles(agent1, null, owner1);
     expect(res.ok).toBe(true);
 
     // All should be claimable by agent2 now
-    const claim = await team().claimFiles(agent2, ['src/f1.js', 'src/f2.js', 'src/f3.js'], 'bob', 'claude', owner2);
+    const claim = await team().claimFiles(
+      agent2,
+      ['src/f1.js', 'src/f2.js', 'src/f3.js'],
+      'bob',
+      'claude',
+      owner2,
+    );
     expect(claim.claimed).toHaveLength(3);
     expect(claim.blocked).toHaveLength(0);
   });

@@ -10,7 +10,7 @@ describe('dashboard-ws', () => {
         {
           agent_id: 'agent-1',
           handle: 'alice',
-          tool: 'claude-code',
+          host_tool: 'claude-code',
           status: 'active',
           seconds_since_update: 10,
           activity: { files: ['src/a.js'], summary: 'working on stuff' },
@@ -18,7 +18,7 @@ describe('dashboard-ws', () => {
         {
           agent_id: 'agent-2',
           handle: 'bob',
-          tool: 'cursor',
+          host_tool: 'cursor',
           status: 'idle',
           seconds_since_update: 120,
           activity: null,
@@ -56,14 +56,14 @@ describe('dashboard-ws', () => {
   describe('heartbeat', () => {
     it('resets seconds_since_update and sets status to active for matching agent', () => {
       const result = applyDelta(baseContext, { type: 'heartbeat', agent_id: 'agent-2' });
-      const bob = result.members.find(m => m.agent_id === 'agent-2');
+      const bob = result.members.find((m) => m.agent_id === 'agent-2');
       expect(bob.status).toBe('active');
       expect(bob.seconds_since_update).toBe(0);
     });
 
     it('does not affect other members', () => {
       const result = applyDelta(baseContext, { type: 'heartbeat', agent_id: 'agent-2' });
-      const alice = result.members.find(m => m.agent_id === 'agent-1');
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
       expect(alice.seconds_since_update).toBe(10);
     });
 
@@ -83,7 +83,7 @@ describe('dashboard-ws', () => {
         summary: 'refactoring',
       };
       const result = applyDelta(baseContext, event);
-      const alice = result.members.find(m => m.agent_id === 'agent-1');
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
       expect(alice.activity.files).toEqual(['src/b.js', 'src/c.js']);
       expect(alice.activity.summary).toBe('refactoring');
       expect(alice.status).toBe('active');
@@ -93,7 +93,7 @@ describe('dashboard-ws', () => {
     it('defaults files to empty array and summary to null when missing', () => {
       const event = { type: 'activity', agent_id: 'agent-1' };
       const result = applyDelta(baseContext, event);
-      const alice = result.members.find(m => m.agent_id === 'agent-1');
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
       expect(alice.activity.files).toEqual([]);
       expect(alice.activity.summary).toBeNull();
     });
@@ -103,7 +103,7 @@ describe('dashboard-ws', () => {
     it('adds a new file to the activity files list', () => {
       const event = { type: 'file', agent_id: 'agent-1', file: 'src/new.js' };
       const result = applyDelta(baseContext, event);
-      const alice = result.members.find(m => m.agent_id === 'agent-1');
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
       expect(alice.activity.files).toContain('src/new.js');
       expect(alice.activity.files).toContain('src/a.js');
     });
@@ -111,14 +111,14 @@ describe('dashboard-ws', () => {
     it('does not add duplicate files', () => {
       const event = { type: 'file', agent_id: 'agent-1', file: 'src/a.js' };
       const result = applyDelta(baseContext, event);
-      const alice = result.members.find(m => m.agent_id === 'agent-1');
-      expect(alice.activity.files.filter(f => f === 'src/a.js')).toHaveLength(1);
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
+      expect(alice.activity.files.filter((f) => f === 'src/a.js')).toHaveLength(1);
     });
 
     it('initializes files array when activity is null', () => {
       const event = { type: 'file', agent_id: 'agent-2', file: 'src/x.js' };
       const result = applyDelta(baseContext, event);
-      const bob = result.members.find(m => m.agent_id === 'agent-2');
+      const bob = result.members.find((m) => m.agent_id === 'agent-2');
       expect(bob.activity.files).toEqual(['src/x.js']);
     });
   });
@@ -129,13 +129,13 @@ describe('dashboard-ws', () => {
         type: 'member_joined',
         agent_id: 'agent-3',
         handle: 'charlie',
-        tool: 'windsurf',
+        host_tool: 'windsurf',
       };
       const result = applyDelta(baseContext, event);
       expect(result.members).toHaveLength(3);
-      const charlie = result.members.find(m => m.agent_id === 'agent-3');
+      const charlie = result.members.find((m) => m.agent_id === 'agent-3');
       expect(charlie.handle).toBe('charlie');
-      expect(charlie.tool).toBe('windsurf');
+      expect(charlie.host_tool).toBe('windsurf');
       expect(charlie.status).toBe('active');
       expect(charlie.seconds_since_update).toBe(0);
       expect(charlie.activity).toBeNull();
@@ -146,26 +146,29 @@ describe('dashboard-ws', () => {
         type: 'member_joined',
         agent_id: 'agent-2',
         handle: 'bob_v2',
-        tool: 'vscode',
+        host_tool: 'vscode',
       };
       const result = applyDelta(baseContext, event);
       expect(result.members).toHaveLength(2);
-      const bob = result.members.find(m => m.agent_id === 'agent-2');
+      const bob = result.members.find((m) => m.agent_id === 'agent-2');
       expect(bob.handle).toBe('bob_v2');
-      expect(bob.tool).toBe('vscode');
+      expect(bob.host_tool).toBe('vscode');
       expect(bob.status).toBe('active');
     });
 
-    it('defaults handle and tool to "unknown" when not provided', () => {
+    it('defaults handle and host tool to "unknown" when not provided', () => {
       const event = { type: 'member_joined', agent_id: 'agent-4' };
       const result = applyDelta(baseContext, event);
-      const newMember = result.members.find(m => m.agent_id === 'agent-4');
+      const newMember = result.members.find((m) => m.agent_id === 'agent-4');
       expect(newMember.handle).toBe('unknown');
-      expect(newMember.tool).toBe('unknown');
+      expect(newMember.host_tool).toBe('unknown');
     });
 
     it('handles context with no members array', () => {
-      const result = applyDelta({}, { type: 'member_joined', agent_id: 'x', handle: 'h', tool: 't' });
+      const result = applyDelta(
+        {},
+        { type: 'member_joined', agent_id: 'x', handle: 'h', host_tool: 't' },
+      );
       expect(result.members).toHaveLength(1);
       expect(result.members[0].agent_id).toBe('x');
     });
@@ -186,14 +189,22 @@ describe('dashboard-ws', () => {
 
   describe('status_change', () => {
     it('updates status for matching agent', () => {
-      const result = applyDelta(baseContext, { type: 'status_change', agent_id: 'agent-1', status: 'idle' });
-      const alice = result.members.find(m => m.agent_id === 'agent-1');
+      const result = applyDelta(baseContext, {
+        type: 'status_change',
+        agent_id: 'agent-1',
+        status: 'idle',
+      });
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
       expect(alice.status).toBe('idle');
     });
 
     it('does not affect other members', () => {
-      const result = applyDelta(baseContext, { type: 'status_change', agent_id: 'agent-1', status: 'idle' });
-      const bob = result.members.find(m => m.agent_id === 'agent-2');
+      const result = applyDelta(baseContext, {
+        type: 'status_change',
+        agent_id: 'agent-1',
+        status: 'idle',
+      });
+      const bob = result.members.find((m) => m.agent_id === 'agent-2');
       expect(bob.status).toBe('idle');
     });
   });
@@ -246,7 +257,7 @@ describe('dashboard-ws', () => {
       };
       const result = applyDelta(ctx, event);
       expect(result.locks).toHaveLength(2);
-      expect(result.locks.find(l => l.file_path === 'src/a.js')).toBeUndefined();
+      expect(result.locks.find((l) => l.file_path === 'src/a.js')).toBeUndefined();
     });
 
     it('only releases locks owned by the requesting agent', () => {
@@ -313,10 +324,10 @@ describe('dashboard-ws', () => {
 
   describe('message', () => {
     it('appends a message to the messages array', () => {
-      const event = { type: 'message', from_handle: 'alice', text: 'hello' };
+      const event = { type: 'message', handle: 'alice', text: 'hello' };
       const result = applyDelta(baseContext, event);
       expect(result.messages).toHaveLength(1);
-      expect(result.messages[0].from_handle).toBe('alice');
+      expect(result.messages[0].handle).toBe('alice');
       expect(result.messages[0].text).toBe('hello');
       expect(result.messages[0].created_at).toBeDefined();
     });
@@ -325,12 +336,12 @@ describe('dashboard-ws', () => {
       const ctx = {
         ...baseContext,
         messages: Array.from({ length: 50 }, (_, i) => ({
-          from_handle: 'user',
+          handle: 'user',
           text: `msg ${i}`,
           created_at: new Date().toISOString(),
         })),
       };
-      const event = { type: 'message', from_handle: 'alice', text: 'new message' };
+      const event = { type: 'message', handle: 'alice', text: 'new message' };
       const result = applyDelta(ctx, event);
       expect(result.messages).toHaveLength(50);
       expect(result.messages[49].text).toBe('new message');
@@ -338,7 +349,7 @@ describe('dashboard-ws', () => {
     });
 
     it('handles context with no messages array', () => {
-      const result = applyDelta({ members: [] }, { type: 'message', from_handle: 'x', text: 'hi' });
+      const result = applyDelta({ members: [] }, { type: 'message', handle: 'x', text: 'hi' });
       expect(result.messages).toHaveLength(1);
     });
   });

@@ -3,8 +3,15 @@ import { api, getApiUrl } from '../api.js';
 import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
-import { applyDelta } from '../../../../shared/dashboard-ws.js';
-import { dashboardSummarySchema, teamContextSchema, validateResponse } from '../apiSchemas.js';
+import { applyDelta, normalizeDashboardDeltaEvent } from '@chinwag/shared/dashboard-ws.js';
+import {
+  createEmptyDashboardSummary,
+  createEmptyTeamContext,
+  dashboardSummarySchema,
+  teamContextSchema,
+  validateResponse,
+  webSocketTicketSchema,
+} from '../apiSchemas.js';
 
 const POLL_MS = 5000;
 const SLOW_POLL_MS = 30000;
@@ -42,7 +49,9 @@ async function pollOverview(signal, token) {
   }));
   const raw = await api('GET', '/me/dashboard', null, token);
   if (signal?.aborted) return;
-  const data = validateResponse(dashboardSummarySchema, raw, 'dashboard');
+  const data = validateResponse(dashboardSummarySchema, raw, 'dashboard', {
+    fallback: createEmptyDashboardSummary(),
+  });
   if (data.failed_teams?.length > 0) {
     await teamActions.loadTeams();
   }
@@ -72,7 +81,9 @@ async function pollProject(signal, token, teamId) {
   if (signal?.aborted) return;
   const raw = await api('GET', `/teams/${teamId}/context`, null, token);
   if (signal?.aborted || teamActions.getState().activeTeamId !== teamId) return;
-  const data = validateResponse(teamContextSchema, raw, 'context');
+  const data = validateResponse(teamContextSchema, raw, 'context', {
+    fallback: createEmptyTeamContext(),
+  });
   pollingStore.setState({
     contextData: data,
     contextStatus: 'ready',
@@ -176,7 +187,10 @@ async function connectTeamWebSocket(teamId) {
   // Fetch a short-lived ticket — keeps the real token out of the WS URL
   let ticket;
   try {
-    const data = await api('POST', '/auth/ws-ticket', null, token);
+    const rawData = await api('POST', '/auth/ws-ticket', null, token);
+    const data = validateResponse(webSocketTicketSchema, rawData, 'ws-ticket', {
+      throwOnError: true,
+    });
     ticket = data.ticket;
   } catch {
     return; // polling continues as fallback
@@ -215,7 +229,9 @@ async function connectTeamWebSocket(teamId) {
         const event = JSON.parse(evt.data);
         if (event.type === 'context') {
           pollingStore.setState({
-            contextData: validateResponse(teamContextSchema, event.data, 'ws-context'),
+            contextData: validateResponse(teamContextSchema, event.data, 'ws-context', {
+              fallback: createEmptyTeamContext(),
+            }),
             contextStatus: 'ready',
             contextTeamId: teamId,
             pollError: null,
@@ -223,10 +239,15 @@ async function connectTeamWebSocket(teamId) {
             lastUpdate: new Date(),
           });
         } else {
+          const normalizedEvent = normalizeDashboardDeltaEvent(event);
+          if (!normalizedEvent) {
+            console.warn('[chinwag] Ignoring malformed WS delta event');
+            return;
+          }
           pollingStore.setState((state) => {
             if (state.contextTeamId !== teamId || !state.contextData) return state;
             return {
-              contextData: applyDelta(state.contextData, event),
+              contextData: applyDelta(state.contextData, normalizedEvent),
               lastUpdate: new Date(),
             };
           });

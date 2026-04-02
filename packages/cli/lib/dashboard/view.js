@@ -4,7 +4,7 @@ import { MAX_MEMORIES } from './constants.js';
 export { MAX_MEMORIES };
 
 export function createToolNameResolver(detectedTools) {
-  const toolNameMap = new Map((detectedTools || []).map(t => [t.id, t.name]));
+  const toolNameMap = new Map((detectedTools || []).map((t) => [t.id, t.name]));
   return (toolId) => {
     if (!toolId || toolId === 'unknown') return null;
     return toolNameMap.get(toolId) || toolId;
@@ -23,8 +23,22 @@ export function formatDuration(minutes) {
 }
 
 const MEDIA_EXTS = new Set([
-  '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp', '.ico', '.bmp', '.tiff',
-  '.mp4', '.mov', '.avi', '.webm', '.mp3', '.wav', '.ogg',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.svg',
+  '.webp',
+  '.ico',
+  '.bmp',
+  '.tiff',
+  '.mp4',
+  '.mov',
+  '.avi',
+  '.webm',
+  '.mp3',
+  '.wav',
+  '.ogg',
 ]);
 
 function isMediaFile(name) {
@@ -34,13 +48,16 @@ function isMediaFile(name) {
 
 export function formatFiles(files) {
   if (!files?.length) return null;
-  const names = files.map(f => basename(f));
-  const code = names.filter(n => !isMediaFile(n));
+  const names = files.map((f) => basename(f));
+  const code = names.filter((n) => !isMediaFile(n));
   const mediaCount = names.length - code.length;
 
   // Show code files first, collapse media to a count
   const display = code.length > 0 ? code : names;
-  const shown = display.length <= 3 ? display.join(', ') : `${display[0]}, ${display[1]} + ${display.length - 2} more`;
+  const shown =
+    display.length <= 3
+      ? display.join(', ')
+      : `${display[0]}, ${display[1]} + ${display.length - 2} more`;
 
   if (mediaCount > 0 && code.length > 0) {
     return `${shown} + ${mediaCount} image${mediaCount > 1 ? 's' : ''}`;
@@ -136,7 +153,7 @@ export function buildCombinedAgentRows({
   now = Date.now(),
 } = {}) {
   const managedRows = buildManagedAgentRows(managedAgents, getToolName, now);
-  const connectedById = new Map((connectedAgents || []).map(agent => [agent.agent_id, agent]));
+  const connectedById = new Map((connectedAgents || []).map((agent) => [agent.agent_id, agent]));
   const usedConnected = new Set();
 
   const mergedManaged = managedRows.map((managed) => {
@@ -148,25 +165,29 @@ export function buildCombinedAgentRows({
       ...connected,
       ...managed,
       handle: connected.handle || managed.handle || null,
-      tool: managed.tool || connected.tool,
+      tool: managed.tool || connected.host_tool,
       activity: connected.activity || managed.activity || null,
       session_minutes: connected.session_minutes ?? managed.session_minutes ?? null,
       minutes_since_update: connected.minutes_since_update ?? null,
       _connected: true,
       _summary: smartSummary(connected.activity) || managed._summary,
-      _duration: managed.status === 'running'
-        ? (connected.session_minutes != null ? formatDuration(connected.session_minutes) : managed._duration)
-        : managed._duration,
+      _duration:
+        managed.status === 'running'
+          ? connected.session_minutes != null
+            ? formatDuration(connected.session_minutes)
+            : managed._duration
+          : managed._duration,
     };
   });
 
   const remainingConnected = (connectedAgents || [])
-    .filter(agent => !usedConnected.has(agent.agent_id))
+    .filter((agent) => !usedConnected.has(agent.agent_id))
     .map((agent) => ({
       ...agent,
+      tool: agent.host_tool || 'unknown',
       _managed: false,
       _connected: true,
-      _display: getToolName(agent.tool) || 'Unknown',
+      _display: getToolName(agent.host_tool) || 'Unknown',
       _summary: smartSummary(agent.activity),
       _duration: formatDuration(agent.session_minutes),
     }));
@@ -206,14 +227,22 @@ export function buildDashboardView({
 
   const members = context?.members || [];
   // Show all active agents except dashboard observers (tool='dashboard' or 'unknown')
-  const activeAgents = members.filter(m => m.status === 'active' && m.tool && m.tool !== 'unknown' && m.tool !== 'dashboard');
-  const agentsWithWork = activeAgents.filter(m => m.activity?.files?.length > 0);
-  const uniqueHandles = new Set(activeAgents.map(m => m.handle));
+  const activeAgents = members.filter(
+    (m) =>
+      m.status === 'active' &&
+      m.host_tool &&
+      m.host_tool !== 'unknown' &&
+      m.host_tool !== 'dashboard',
+  );
+  const agentsWithWork = activeAgents.filter((m) => m.activity?.files?.length > 0);
+  const uniqueHandles = new Set(activeAgents.map((m) => m.handle));
   const isTeam = uniqueHandles.size > 1;
 
   const fileOwners = new Map();
   for (const member of agentsWithWork) {
-    const label = getToolName(member.tool) ? `${member.handle} (${getToolName(member.tool)})` : member.handle;
+    const label = getToolName(member.host_tool)
+      ? `${member.handle} (${getToolName(member.host_tool)})`
+      : member.handle;
     for (const file of member.activity.files) {
       if (!fileOwners.has(file)) fileOwners.set(file, []);
       fileOwners.get(file).push(label);
@@ -224,21 +253,20 @@ export function buildDashboardView({
   const memories = context?.memories || [];
   const q = (memorySearch || '').toLowerCase();
   const filteredMemories = q
-    ? memories.filter(m =>
-        m.text.toLowerCase().includes(q) ||
-        m.tags?.some(t => t.toLowerCase().includes(q))
+    ? memories.filter(
+        (m) => m.text.toLowerCase().includes(q) || m.tags?.some((t) => t.toLowerCase().includes(q)),
       )
     : memoryFilter
-      ? memories.filter(memory => memory.tags?.includes(memoryFilter))
+      ? memories.filter((memory) => memory.tags?.includes(memoryFilter))
       : memories;
   const visibleMemories = filteredMemories.slice(0, MAX_MEMORIES);
   const memoryOverflow = filteredMemories.length - MAX_MEMORIES;
 
   const messages = context?.messages || [];
-  const toolsConfigured = context?.tools_configured || [];
+  const toolsConfigured = context?.hosts_configured || [];
   const usage = context?.usage || {};
 
-  const recentSessions = (context?.recentSessions || []).filter(hasVisibleSessionActivity);
+  const recentSessions = (context?.sessions || []).filter(hasVisibleSessionActivity);
   const showRecent = recentSessions.length > 0 && activeAgents.length === 0;
 
   const visibleAgents = activeAgents;

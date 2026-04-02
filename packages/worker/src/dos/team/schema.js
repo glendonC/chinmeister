@@ -1,130 +1,213 @@
 // Schema DDL and migrations for TeamDO.
-// Called once per DO instance to ensure tables exist and run any pending migrations.
-// Migrations are idempotent ALTERs that always run; CREATE TABLE is gated by caller.
+// Called once per DO instance to ensure tables exist and reconcile legacy schemas.
 
-import { runMigrations } from '../../lib/migrate.js';
+const LABEL = 'TeamDO';
 
-const MIGRATIONS = [
-  ["ALTER TABLE members ADD COLUMN host_tool TEXT DEFAULT 'unknown'", "UPDATE members SET host_tool = tool WHERE host_tool IS NULL"],
-  ["ALTER TABLE members ADD COLUMN agent_surface TEXT", null],
-  ["ALTER TABLE members ADD COLUMN transport TEXT", null],
-  ["ALTER TABLE locks ADD COLUMN host_tool TEXT DEFAULT 'unknown'", "UPDATE locks SET host_tool = tool WHERE host_tool IS NULL"],
-  ["ALTER TABLE locks ADD COLUMN agent_surface TEXT", null],
-  ["ALTER TABLE messages ADD COLUMN from_host_tool TEXT DEFAULT 'unknown'", "UPDATE messages SET from_host_tool = from_tool WHERE from_host_tool IS NULL"],
-  ["ALTER TABLE messages ADD COLUMN from_agent_surface TEXT", null],
-  ["ALTER TABLE memories ADD COLUMN source_host_tool TEXT DEFAULT 'unknown'", "UPDATE memories SET source_host_tool = source_tool WHERE source_host_tool IS NULL"],
-  ["ALTER TABLE memories ADD COLUMN source_agent_surface TEXT", null],
-  ["ALTER TABLE sessions ADD COLUMN host_tool TEXT DEFAULT 'unknown'", "UPDATE sessions SET host_tool = CASE WHEN instr(agent_id, ':') > 0 THEN substr(agent_id, 1, instr(agent_id, ':') - 1) ELSE 'unknown' END WHERE host_tool IS NULL"],
-  ["ALTER TABLE sessions ADD COLUMN agent_surface TEXT", null],
-  ["ALTER TABLE sessions ADD COLUMN transport TEXT", null],
-  ["ALTER TABLE sessions ADD COLUMN agent_model TEXT", null],
-  ["ALTER TABLE members ADD COLUMN agent_model TEXT", null],
-  ["ALTER TABLE members ADD COLUMN signal_level INTEGER DEFAULT 1", null],
-  ["ALTER TABLE members ADD COLUMN last_tool_use TEXT", null],
-  ["ALTER TABLE memories ADD COLUMN source_model TEXT", null],
-];
+function logMigrationError(statement, error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error(
+    `[${LABEL}] migration failed: ${message} | SQL: ${statement.replace(/\s+/g, ' ').trim()}`,
+  );
+}
 
-/**
- * Run migrations (always) and create tables + indexes (only if not yet created).
- * @param {object} sql - DO SQL handle (ctx.storage.sql)
- * @param {boolean} tablesCreated - true if CREATE TABLE has already run this instance
- */
+function getColumns(sql, table) {
+  try {
+    return new Set(
+      sql
+        .exec(`PRAGMA table_info(${table})`)
+        .toArray()
+        .map((row) => row.name),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function hasColumn(sql, table, column) {
+  return getColumns(sql, table).has(column);
+}
+
+function renameColumnIfNeeded(sql, table, fromColumn, toColumn) {
+  if (hasColumn(sql, table, toColumn) || !hasColumn(sql, table, fromColumn)) return;
+  const statement = `ALTER TABLE ${table} RENAME COLUMN ${fromColumn} TO ${toColumn}`;
+  try {
+    sql.exec(statement);
+  } catch (error) {
+    logMigrationError(statement, error);
+  }
+}
+
+function addColumnIfMissing(sql, table, definition, backfill = null) {
+  const columnName = definition.trim().split(/\s+/, 1)[0];
+  if (hasColumn(sql, table, columnName)) return;
+  const statement = `ALTER TABLE ${table} ADD COLUMN ${definition}`;
+  try {
+    sql.exec(statement);
+    if (backfill) sql.exec(backfill);
+  } catch (error) {
+    logMigrationError(statement, error);
+  }
+}
+
+function reconcileLegacySchema(sql) {
+  renameColumnIfNeeded(sql, 'members', 'owner_handle', 'handle');
+  addColumnIfMissing(
+    sql,
+    'members',
+    "host_tool TEXT DEFAULT 'unknown'",
+    'UPDATE members SET host_tool = tool WHERE host_tool IS NULL',
+  );
+  addColumnIfMissing(sql, 'members', 'agent_surface TEXT');
+  addColumnIfMissing(sql, 'members', 'transport TEXT');
+  addColumnIfMissing(sql, 'members', 'agent_model TEXT');
+  addColumnIfMissing(sql, 'members', 'last_tool_use TEXT');
+
+  const memoryColumns = getColumns(sql, 'memories');
+  const memoryHostSource = memoryColumns.has('source_host_tool')
+    ? 'source_host_tool'
+    : memoryColumns.has('source_tool')
+      ? 'source_tool'
+      : "'unknown'";
+  renameColumnIfNeeded(sql, 'memories', 'source_agent', 'agent_id');
+  renameColumnIfNeeded(sql, 'memories', 'source_handle', 'handle');
+  renameColumnIfNeeded(sql, 'memories', 'source_agent_surface', 'agent_surface');
+  renameColumnIfNeeded(sql, 'memories', 'source_model', 'agent_model');
+  addColumnIfMissing(
+    sql,
+    'memories',
+    "host_tool TEXT DEFAULT 'unknown'",
+    `UPDATE memories SET host_tool = COALESCE(${memoryHostSource}, 'unknown') WHERE host_tool IS NULL`,
+  );
+
+  renameColumnIfNeeded(sql, 'sessions', 'owner_handle', 'handle');
+  addColumnIfMissing(
+    sql,
+    'sessions',
+    "host_tool TEXT DEFAULT 'unknown'",
+    "UPDATE sessions SET host_tool = CASE WHEN instr(agent_id, ':') > 0 THEN substr(agent_id, 1, instr(agent_id, ':') - 1) ELSE 'unknown' END WHERE host_tool IS NULL",
+  );
+  addColumnIfMissing(sql, 'sessions', 'agent_surface TEXT');
+  addColumnIfMissing(sql, 'sessions', 'transport TEXT');
+  addColumnIfMissing(sql, 'sessions', 'agent_model TEXT');
+
+  const messageColumns = getColumns(sql, 'messages');
+  const messageHostSource = messageColumns.has('from_host_tool')
+    ? 'from_host_tool'
+    : messageColumns.has('from_tool')
+      ? 'from_tool'
+      : "'unknown'";
+  renameColumnIfNeeded(sql, 'locks', 'owner_handle', 'handle');
+  addColumnIfMissing(
+    sql,
+    'locks',
+    "host_tool TEXT DEFAULT 'unknown'",
+    'UPDATE locks SET host_tool = tool WHERE host_tool IS NULL',
+  );
+  addColumnIfMissing(sql, 'locks', 'agent_surface TEXT');
+
+  renameColumnIfNeeded(sql, 'messages', 'from_agent', 'agent_id');
+  renameColumnIfNeeded(sql, 'messages', 'from_handle', 'handle');
+  renameColumnIfNeeded(sql, 'messages', 'from_agent_surface', 'agent_surface');
+  addColumnIfMissing(
+    sql,
+    'messages',
+    "host_tool TEXT DEFAULT 'unknown'",
+    `UPDATE messages SET host_tool = COALESCE(${messageHostSource}, 'unknown') WHERE host_tool IS NULL`,
+  );
+}
+
 export function ensureSchema(sql, tablesCreated) {
-  runMigrations(sql, MIGRATIONS, 'TeamDO');
+  if (!tablesCreated) {
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS members (
+        agent_id TEXT PRIMARY KEY,
+        owner_id TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        host_tool TEXT DEFAULT 'unknown',
+        agent_surface TEXT,
+        transport TEXT,
+        agent_model TEXT,
+        joined_at TEXT DEFAULT (datetime('now')),
+        last_heartbeat TEXT DEFAULT (datetime('now')),
+        last_tool_use TEXT
+      );
 
-  if (tablesCreated) return;
+      CREATE TABLE IF NOT EXISTS activities (
+        agent_id TEXT PRIMARY KEY,
+        files TEXT NOT NULL DEFAULT '[]',
+        summary TEXT NOT NULL DEFAULT '',
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
 
-  sql.exec(`
-    CREATE TABLE IF NOT EXISTS members (
-      agent_id TEXT PRIMARY KEY,
-      owner_id TEXT NOT NULL,
-      owner_handle TEXT NOT NULL,
-      tool TEXT DEFAULT 'unknown',
-      host_tool TEXT DEFAULT 'unknown',
-      agent_surface TEXT,
-      transport TEXT,
-      agent_model TEXT,
-      joined_at TEXT DEFAULT (datetime('now')),
-      last_heartbeat TEXT DEFAULT (datetime('now')),
-      last_tool_use TEXT
-    );
+      CREATE TABLE IF NOT EXISTS memories (
+        id TEXT PRIMARY KEY,
+        text TEXT NOT NULL,
+        tags TEXT DEFAULT '[]',
+        agent_id TEXT NOT NULL,
+        handle TEXT,
+        host_tool TEXT DEFAULT 'unknown',
+        agent_surface TEXT,
+        agent_model TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
 
-    CREATE TABLE IF NOT EXISTS activities (
-      agent_id TEXT PRIMARY KEY,
-      files TEXT NOT NULL DEFAULT '[]',
-      summary TEXT NOT NULL DEFAULT '',
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
+      CREATE TABLE IF NOT EXISTS sessions (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        framework TEXT DEFAULT 'unknown',
+        host_tool TEXT DEFAULT 'unknown',
+        agent_surface TEXT,
+        transport TEXT,
+        agent_model TEXT,
+        started_at TEXT DEFAULT (datetime('now')),
+        ended_at TEXT,
+        edit_count INTEGER DEFAULT 0,
+        files_touched TEXT DEFAULT '[]',
+        conflicts_hit INTEGER DEFAULT 0,
+        memories_saved INTEGER DEFAULT 0
+      );
+    `);
 
-    CREATE TABLE IF NOT EXISTS memories (
-      id TEXT PRIMARY KEY,
-      text TEXT NOT NULL,
-      tags TEXT DEFAULT '[]',
-      source_agent TEXT NOT NULL,
-      source_handle TEXT,
-      source_tool TEXT DEFAULT 'unknown',
-      source_host_tool TEXT DEFAULT 'unknown',
-      source_agent_surface TEXT,
-      source_model TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS locks (
+        file_path TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        host_tool TEXT DEFAULT 'unknown',
+        agent_surface TEXT,
+        claimed_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
 
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      agent_id TEXT NOT NULL,
-      owner_handle TEXT NOT NULL,
-      framework TEXT DEFAULT 'unknown',
-      host_tool TEXT DEFAULT 'unknown',
-      agent_surface TEXT,
-      transport TEXT,
-      agent_model TEXT,
-      started_at TEXT DEFAULT (datetime('now')),
-      ended_at TEXT,
-      edit_count INTEGER DEFAULT 0,
-      files_touched TEXT DEFAULT '[]',
-      conflicts_hit INTEGER DEFAULT 0,
-      memories_saved INTEGER DEFAULT 0
-    );
-  `);
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS messages (
+        id TEXT PRIMARY KEY,
+        agent_id TEXT NOT NULL,
+        handle TEXT NOT NULL,
+        host_tool TEXT DEFAULT 'unknown',
+        agent_surface TEXT,
+        target_agent TEXT,
+        text TEXT NOT NULL,
+        created_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
 
-  sql.exec(`
-    CREATE TABLE IF NOT EXISTS locks (
-      file_path TEXT PRIMARY KEY,
-      agent_id TEXT NOT NULL,
-      owner_handle TEXT NOT NULL,
-      tool TEXT DEFAULT 'unknown',
-      host_tool TEXT DEFAULT 'unknown',
-      agent_surface TEXT,
-      claimed_at TEXT DEFAULT (datetime('now'))
-    );
-  `);
+    sql.exec(`
+      CREATE TABLE IF NOT EXISTS telemetry (
+        metric TEXT PRIMARY KEY,
+        count INTEGER DEFAULT 0,
+        last_at TEXT DEFAULT (datetime('now'))
+      );
+    `);
 
-  sql.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      from_agent TEXT NOT NULL,
-      from_handle TEXT NOT NULL,
-      from_tool TEXT DEFAULT 'unknown',
-      from_host_tool TEXT DEFAULT 'unknown',
-      from_agent_surface TEXT,
-      target_agent TEXT,
-      text TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
-  `);
+    sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
+    sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
+    sql.exec('CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)');
+    sql.exec('CREATE INDEX IF NOT EXISTS idx_locks_agent ON locks(agent_id)');
+    sql.exec('CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at)');
+  }
 
-  sql.exec(`
-    CREATE TABLE IF NOT EXISTS telemetry (
-      metric TEXT PRIMARY KEY,
-      count INTEGER DEFAULT 0,
-      last_at TEXT DEFAULT (datetime('now'))
-    );
-  `);
-
-  sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_agent ON sessions(agent_id, ended_at)');
-  sql.exec('CREATE INDEX IF NOT EXISTS idx_sessions_started ON sessions(started_at)');
-  sql.exec('CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at)');
-  sql.exec('CREATE INDEX IF NOT EXISTS idx_locks_agent ON locks(agent_id)');
-  sql.exec('CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at)');
+  reconcileLegacySchema(sql);
 }

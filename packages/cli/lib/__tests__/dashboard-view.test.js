@@ -27,12 +27,16 @@ describe('dashboard view helpers', () => {
   it('formats durations and file summaries compactly', () => {
     expect(formatDuration(42)).toBe('42 min');
     expect(formatDuration(90)).toBe('1h 30m');
-    expect(formatFiles(['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js'])).toBe('a.js, b.js + 2 more');
+    expect(formatFiles(['src/a.js', 'src/b.js', 'src/c.js', 'src/d.js'])).toBe(
+      'a.js, b.js + 2 more',
+    );
   });
 
   it('suppresses redundant editing summaries', () => {
     expect(smartSummary({ summary: 'Editing src/app.js', files: ['src/app.js'] })).toBeNull();
-    expect(smartSummary({ summary: 'Refactor auth flow', files: ['src/app.js'] })).toBe('Refactor auth flow');
+    expect(smartSummary({ summary: 'Refactor auth flow', files: ['src/app.js'] })).toBe(
+      'Refactor auth flow',
+    );
   });
 
   it('extracts the short session suffix from agent ids', () => {
@@ -41,10 +45,30 @@ describe('dashboard view helpers', () => {
   });
 
   it('keeps active or meaningful recent sessions visible', () => {
-    expect(hasVisibleSessionActivity({ ended_at: null, edit_count: 0, files_touched: [] })).toBe(true);
-    expect(hasVisibleSessionActivity({ ended_at: '2026-03-26T00:00:00Z', edit_count: 2, files_touched: [] })).toBe(true);
-    expect(hasVisibleSessionActivity({ ended_at: '2026-03-26T00:00:00Z', edit_count: 0, files_touched: ['src/app.js'] })).toBe(true);
-    expect(hasVisibleSessionActivity({ ended_at: '2026-03-26T00:00:00Z', edit_count: 0, files_touched: [] })).toBe(false);
+    expect(hasVisibleSessionActivity({ ended_at: null, edit_count: 0, files_touched: [] })).toBe(
+      true,
+    );
+    expect(
+      hasVisibleSessionActivity({
+        ended_at: '2026-03-26T00:00:00Z',
+        edit_count: 2,
+        files_touched: [],
+      }),
+    ).toBe(true);
+    expect(
+      hasVisibleSessionActivity({
+        ended_at: '2026-03-26T00:00:00Z',
+        edit_count: 0,
+        files_touched: ['src/app.js'],
+      }),
+    ).toBe(true);
+    expect(
+      hasVisibleSessionActivity({
+        ended_at: '2026-03-26T00:00:00Z',
+        edit_count: 0,
+        files_touched: [],
+      }),
+    ).toBe(false);
   });
 
   it('builds a dashboard view model with conflicts and memory filtering', () => {
@@ -61,7 +85,7 @@ describe('dashboard view helpers', () => {
           {
             agent_id: 'claude-code:aaa:1111',
             handle: 'alice',
-            tool: 'claude-code',
+            host_tool: 'claude-code',
             status: 'active',
             session_minutes: 10,
             activity: { files: ['src/shared.js'], summary: 'Refactor auth flow' },
@@ -69,7 +93,7 @@ describe('dashboard view helpers', () => {
           {
             agent_id: 'cursor:bbb:2222',
             handle: 'bob',
-            tool: 'cursor',
+            host_tool: 'cursor',
             status: 'active',
             session_minutes: 5,
             activity: { files: ['src/shared.js'], summary: 'Fix login bug' },
@@ -79,23 +103,28 @@ describe('dashboard view helpers', () => {
           { id: 'm1', tags: ['decision'], text: 'Use TeamDO for coordination' },
           { id: 'm2', tags: ['config'], text: 'Run worker on port 8787' },
         ],
-        recentSessions: [
-          { owner_handle: 'alice', duration_minutes: 12, edit_count: 2, files_touched: ['src/shared.js'] },
+        sessions: [
+          {
+            handle: 'alice',
+            duration_minutes: 12,
+            edit_count: 2,
+            files_touched: ['src/shared.js'],
+          },
         ],
       },
     });
 
     expect(view.activeAgents).toHaveLength(2);
     expect(view.conflicts).toEqual([['src/shared.js', ['alice (Claude Code)', 'bob (Cursor)']]]);
-    expect(view.filteredMemories).toEqual([{ id: 'm1', tags: ['decision'], text: 'Use TeamDO for coordination' }]);
+    expect(view.filteredMemories).toEqual([
+      { id: 'm1', tags: ['decision'], text: 'Use TeamDO for coordination' },
+    ]);
     expect(view.showRecent).toBe(false);
     expect(view.projectDir).toBe('chinwag');
   });
 
   it('merges managed agents with matching backend sessions', () => {
-    const getToolName = createToolNameResolver([
-      { id: 'claude-code', name: 'Claude Code' },
-    ]);
+    const getToolName = createToolNameResolver([{ id: 'claude-code', name: 'Claude Code' }]);
 
     const managed = [
       {
@@ -120,7 +149,7 @@ describe('dashboard view helpers', () => {
         {
           agent_id: 'claude-code:abc123:def45678',
           handle: 'alice',
-          tool: 'claude-code',
+          host_tool: 'claude-code',
           status: 'active',
           session_minutes: 5,
           activity: { files: ['src/auth.js'], summary: 'Tighten login flow' },
@@ -128,7 +157,7 @@ describe('dashboard view helpers', () => {
         {
           agent_id: 'cursor:bbb:2222',
           handle: 'bob',
-          tool: 'cursor',
+          host_tool: 'cursor',
           status: 'active',
           session_minutes: 4,
           activity: { files: ['src/app.js'], summary: 'Review app shell' },

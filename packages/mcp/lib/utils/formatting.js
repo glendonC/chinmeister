@@ -12,11 +12,11 @@ export function formatToolTag(tool) {
 
 /**
  * Format an agent's display label: handle + optional (tool) suffix.
- * @param {{ handle: string, tool?: string }} member
+ * @param {{ handle: string, tool?: string, host_tool?: string }} member
  * @returns {string} e.g. 'alice (cursor)' or 'alice'
  */
 export function formatAgentLabel(member) {
-  return `${member.handle}${formatToolTag(member.tool)}`;
+  return `${member.handle}${formatToolTag(member.host_tool || member.tool)}`;
 }
 
 /**

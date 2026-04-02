@@ -129,23 +129,23 @@ export function diffState(prev, curr, stucknessAlerted) {
   const currLocks = new Map((curr.locks || []).map((l) => [l.file_path, l]));
   for (const [file, lock] of currLocks) {
     if (!prevLocks.has(file)) {
-      events.push(`${formatWho(lock.owner_handle, lock.tool)} locked ${file}`);
+      events.push(`${formatWho(lock.handle, lock.host_tool)} locked ${file}`);
     }
   }
   for (const [file, lock] of prevLocks) {
     if (!currLocks.has(file)) {
-      events.push(`${formatWho(lock.owner_handle, lock.tool)} released lock on ${file}`);
+      events.push(`${formatWho(lock.handle, lock.host_tool)} released lock on ${file}`);
     }
   }
 
   // New messages — use a delimited composite key to prevent collisions
   // (e.g. timestamp "2024-01-01T10:30Z" + handle "alice" must not collide
   // with a different timestamp/handle pair that concatenates identically).
-  const msgKey = (m) => `${m.created_at}\0${m.from_handle}`;
+  const msgKey = (m) => `${m.created_at}\0${m.handle}`;
   const prevMsgIds = new Set((prev.messages || []).map(msgKey));
   for (const msg of curr.messages || []) {
     if (!prevMsgIds.has(msgKey(msg))) {
-      events.push(`Message from ${formatWho(msg.from_handle, msg.from_tool)}: ${msg.text}`);
+      events.push(`Message from ${formatWho(msg.handle, msg.host_tool)}: ${msg.text}`);
     }
   }
 

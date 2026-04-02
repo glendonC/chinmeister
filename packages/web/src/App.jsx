@@ -1,7 +1,13 @@
-import { useState, useEffect, Component } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuthStore, authActions } from './lib/stores/auth.js';
 import { useTeamStore, teamActions } from './lib/stores/teams.js';
-import { usePollingStore, startPolling, stopPolling, resetPollingState, forceRefresh } from './lib/stores/polling.js';
+import {
+  usePollingStore,
+  startPolling,
+  stopPolling,
+  resetPollingState,
+  forceRefresh,
+} from './lib/stores/polling.js';
 import { formatRelativeTime } from './lib/relativeTime.js';
 
 import ConnectView from './views/ConnectView/ConnectView.jsx';
@@ -10,42 +16,14 @@ import ProjectView from './views/ProjectView/ProjectView.jsx';
 import SettingsView from './views/SettingsView/SettingsView.jsx';
 import ToolsView from './views/ToolsView/ToolsView.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
+import RenderErrorBoundary from './components/RenderErrorBoundary/RenderErrorBoundary.jsx';
 
 import styles from './App.module.css';
-
-class AppErrorBoundary extends Component {
-  state = { hasError: false };
-
-  static getDerivedStateFromError() {
-    return { hasError: true };
-  }
-
-  componentDidCatch(error, info) {
-    console.error('[chinwag] Render error:', error, info.componentStack);
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div style={{ padding: '2rem', textAlign: 'center', color: '#b0b0b0', fontFamily: 'system-ui' }}>
-          <p style={{ fontSize: '1.1rem' }}>Something went wrong.</p>
-          <button
-            onClick={() => this.setState({ hasError: false })}
-            style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer', background: '#2a2a2a', color: '#e0e0e0', border: '1px solid #444', borderRadius: '6px' }}
-          >
-            Try again
-          </button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 export default function App() {
   const [bootState, setBootState] = useState('loading');
   const [bootError, setBootError] = useState(null);
-  const [errorDismissed, setErrorDismissed] = useState(false);
+  const [dismissedPollError, setDismissedPollError] = useState(null);
   const [activeNav, setActiveNav] = useState(null);
 
   const token = useAuthStore((s) => s.token);
@@ -60,32 +38,31 @@ export default function App() {
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
 
   const isAuthenticated = !!token && !!user;
-  const hasOverviewSnapshot = activeTeamId === null && dashboardStatus === 'stale' && !!dashboardData;
-  const hasProjectSnapshot = activeTeamId !== null
-    && contextStatus === 'stale'
-    && contextTeamId === activeTeamId
-    && !!contextData;
-  const showError = pollError && !errorDismissed && (hasOverviewSnapshot || hasProjectSnapshot);
+  const hasOverviewSnapshot =
+    activeTeamId === null && dashboardStatus === 'stale' && !!dashboardData;
+  const hasProjectSnapshot =
+    activeTeamId !== null &&
+    contextStatus === 'stale' &&
+    contextTeamId === activeTeamId &&
+    !!contextData;
+  const resolvedBootState =
+    bootState === 'loading' ? 'loading' : isAuthenticated ? 'ready' : 'unauthenticated';
+  const showError =
+    pollError && dismissedPollError !== pollError && (hasOverviewSnapshot || hasProjectSnapshot);
   const lastSynced = formatRelativeTime(lastUpdate);
 
   useEffect(() => {
-    if (pollError) setErrorDismissed(false);
-  }, [pollError]);
-
-  useEffect(() => {
-    if (bootState === 'ready' && !isAuthenticated) {
+    if (resolvedBootState !== 'ready') {
+      stopPolling();
       resetPollingState();
-      setBootState('unauthenticated');
-    } else if (bootState === 'unauthenticated' && isAuthenticated) {
-      setBootState('ready');
     }
-  }, [bootState, isAuthenticated]);
+  }, [resolvedBootState]);
 
   useEffect(() => {
-    if (bootState === 'ready' && isAuthenticated) {
+    if (resolvedBootState === 'ready' && isAuthenticated) {
       startPolling();
     }
-  }, [activeTeamId, bootState, isAuthenticated]);
+  }, [activeTeamId, resolvedBootState, isAuthenticated]);
 
   useEffect(() => {
     async function boot() {
@@ -94,10 +71,13 @@ export default function App() {
       let t = authActions.readTokenFromHash();
       // Clean up non-token hash params (e.g. github_linked=1)
       if (!t && window.location.hash) {
-        history.replaceState(null, '', window.location.pathname);
+        window.history.replaceState(null, '', window.location.pathname);
       }
       if (!t) t = authActions.getStoredToken();
-      if (!t) { setBootState('unauthenticated'); return; }
+      if (!t) {
+        setBootState('unauthenticated');
+        return;
+      }
       try {
         await authActions.authenticate(t);
         await teamActions.loadTeams();
@@ -111,7 +91,7 @@ export default function App() {
     return () => stopPolling();
   }, []);
 
-  if (bootState === 'loading') {
+  if (resolvedBootState === 'loading') {
     return (
       <div className={styles.bootScreen}>
         <div className={styles.bootSpinner}>
@@ -126,8 +106,12 @@ export default function App() {
     );
   }
 
-  if (bootState === 'unauthenticated') {
-    return <ConnectView error={bootError} />;
+  if (resolvedBootState === 'unauthenticated') {
+    return (
+      <RenderErrorBoundary label="Connect view" resetKey="connect">
+        <ConnectView error={bootError} />
+      </RenderErrorBoundary>
+    );
   }
 
   const activeView = activeNav || (activeTeamId !== null ? 'project' : 'overview');
@@ -153,9 +137,18 @@ export default function App() {
               <button type="button" className={styles.errorRetry} onClick={forceRefresh}>
                 Retry
               </button>
-              <button className={styles.errorDismiss} onClick={() => setErrorDismissed(true)} aria-label="Dismiss">
+              <button
+                className={styles.errorDismiss}
+                onClick={() => setDismissedPollError(pollError)}
+                aria-label="Dismiss"
+              >
                 <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
-                  <path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                  <path
+                    d="M3 3l8 8M11 3l-8 8"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </button>
             </div>
@@ -163,12 +156,12 @@ export default function App() {
         )}
 
         <div className={styles.content}>
-          <AppErrorBoundary>
+          <RenderErrorBoundary label={`${activeView} view`} resetKey={activeView}>
             {activeView === 'overview' && <OverviewView />}
             {activeView === 'project' && <ProjectView />}
             {activeView === 'tools' && <ToolsView />}
             {activeView === 'settings' && <SettingsView />}
-          </AppErrorBoundary>
+          </RenderErrorBoundary>
         </div>
       </div>
     </div>

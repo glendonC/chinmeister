@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "lib": ["ES2024", "WebWorker"],
+    "types": ["node", "vitest/globals", "@cloudflare/workers-types"]
+  },
+  "include": ["./src/**/*.js", "./src/**/*.ts", "./vitest.config.mts"],
+  "exclude": ["./dist", "./node_modules", "./.wrangler"]
+}

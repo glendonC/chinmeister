@@ -2,7 +2,62 @@
   "name": "@chinwag/shared",
   "private": true,
   "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./api-client.js": {
+      "types": "./dist/api-client.d.ts",
+      "import": "./dist/api-client.js"
+    },
+    "./agent-identity.js": {
+      "types": "./dist/agent-identity.d.ts",
+      "import": "./dist/agent-identity.js"
+    },
+    "./config.js": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./contracts.js": {
+      "types": "./dist/contracts.d.ts",
+      "import": "./dist/contracts.js"
+    },
+    "./dashboard-ws.js": {
+      "types": "./dist/dashboard-ws.d.ts",
+      "import": "./dist/dashboard-ws.js"
+    },
+    "./integration-doctor.js": {
+      "types": "./dist/integration-doctor.d.ts",
+      "import": "./dist/integration-doctor.js"
+    },
+    "./integration-model.js": {
+      "types": "./dist/integration-model.d.ts",
+      "import": "./dist/integration-model.js"
+    },
+    "./session-registry.js": {
+      "types": "./dist/session-registry.d.ts",
+      "import": "./dist/session-registry.js"
+    },
+    "./team-utils.js": {
+      "types": "./dist/team-utils.d.ts",
+      "import": "./dist/team-utils.js"
+    },
+    "./tool-registry.js": {
+      "types": "./dist/tool-registry.d.ts",
+      "import": "./dist/tool-registry.js"
+    }
+  },
   "scripts": {
-    "test": "vitest run"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage"
   }
 }

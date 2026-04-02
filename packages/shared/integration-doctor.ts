@@ -1,69 +1,89 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { execFileSync } from 'child_process';
-import { HOST_INTEGRATIONS, getHostIntegrationById } from './integration-model.js';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import {
+  HOST_INTEGRATIONS,
+  getHostIntegrationById,
+  type HostIntegration,
+} from './integration-model.js';
 import { MCP_TOOLS } from './tool-registry.js';
 
-/** Derived from the registry — the first tool that declares hooks support. */
-const DEFAULT_HOOK_HOST = MCP_TOOLS.find((t) => t.hooks)?.id || 'claude-code';
-
-/**
- * @typedef {Object} IntegrationScanResult
- * @property {string} id - Host integration ID
- * @property {string} name - Display name
- * @property {'managed'|'connected'} tier
- * @property {string[]} capabilities
- * @property {boolean} detected
- * @property {'ready'|'needs_setup'|'needs_repair'|'not_detected'} status
- * @property {string} configPath - Relative path to MCP config file
- * @property {boolean} mcpConfigured
- * @property {boolean} hooksConfigured
- * @property {string[]} issues
- * @property {boolean} repairable
- */
-
-/**
- * @typedef {Object} IntegrationScanSummary
- * @property {string} text
- * @property {'info'|'success'|'warning'} tone
- */
-
-/**
- * @typedef {Object} ConfigureResult
- * @property {boolean} [ok]
- * @property {string} [error]
- * @property {string} [name]
- * @property {string} [detail]
- */
-
-/**
- * @typedef {Object} WriteResult
- * @property {boolean} [ok]
- * @property {string} [error]
- */
-
+const DEFAULT_HOOK_HOST = MCP_TOOLS.find((tool) => tool.hooks)?.id || 'claude-code';
 const EXEC_TIMEOUT_MS = 5000;
 
-function readJson(filePath) {
+interface HookCommand {
+  type?: string;
+  command?: string;
+}
+
+interface HookConfigEntry {
+  matcher?: string;
+  hooks?: HookCommand[];
+  command?: string;
+}
+
+interface McpServerEntry {
+  command?: string;
+  args?: string[];
+}
+
+interface ConfigJson {
+  mcpServers?: Record<string, McpServerEntry>;
+  hooks?: Record<string, HookConfigEntry[]>;
+  [key: string]: unknown;
+}
+
+export interface IntegrationScanResult {
+  id: string;
+  name: string;
+  tier: 'managed' | 'connected';
+  capabilities: string[];
+  detected: boolean;
+  status: 'ready' | 'needs_setup' | 'needs_repair' | 'not_detected';
+  configPath: string;
+  mcpConfigured: boolean;
+  hooksConfigured: boolean;
+  issues: string[];
+  repairable: boolean;
+}
+
+export interface IntegrationScanSummary {
+  text: string;
+  tone: 'info' | 'success' | 'warning';
+}
+
+export interface ConfigureResult {
+  ok?: boolean;
+  error?: string;
+  name?: string;
+  detail?: string;
+}
+
+export interface WriteResult {
+  ok?: boolean;
+  error?: string;
+}
+
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function readJson(filePath: string): ConfigJson {
   if (!existsSync(filePath)) return {};
   try {
-    return JSON.parse(readFileSync(filePath, 'utf-8'));
+    return JSON.parse(readFileSync(filePath, 'utf-8')) as ConfigJson;
   } catch {
     return {};
   }
 }
 
-function writeJson(filePath, value) {
+function writeJson(filePath: string, value: ConfigJson): void {
   const dir = dirname(filePath);
   if (dir !== '.') mkdirSync(dir, { recursive: true });
   writeFileSync(filePath, JSON.stringify(value, null, 2) + '\n');
 }
 
-/**
- * @param {string} cmd - CLI command name
- * @returns {boolean}
- */
-export function commandExists(cmd) {
+export function commandExists(cmd: string): boolean {
   try {
     const bin = process.platform === 'win32' ? 'where' : 'which';
     execFileSync(bin, [cmd], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
@@ -73,63 +93,70 @@ export function commandExists(cmd) {
   }
 }
 
-/**
- * @param {string} subcommand
- * @param {Object} [options]
- * @param {string|null} [options.hostId]
- * @param {string|null} [options.surfaceId]
- * @returns {string[]}
- */
-export function buildChinwagCliArgs(subcommand, { hostId = null, surfaceId = null } = {}) {
+export function buildChinwagCliArgs(
+  subcommand: string,
+  { hostId = null, surfaceId = null }: { hostId?: string | null; surfaceId?: string | null } = {},
+): string[] {
   const args = ['-y', 'chinwag', subcommand];
   if (hostId) args.push('--tool', hostId);
   if (surfaceId) args.push('--surface', surfaceId);
   return args;
 }
 
-/**
- * @param {string} subcommand
- * @param {Object} [options]
- * @param {string} [options.hostId]
- * @param {string|null} [options.surfaceId]
- * @returns {string}
- */
-export function buildChinwagHookCommand(subcommand, { hostId = DEFAULT_HOOK_HOST, surfaceId = null } = {}) {
+export function buildChinwagHookCommand(
+  subcommand: string,
+  {
+    hostId = DEFAULT_HOOK_HOST,
+    surfaceId = null,
+  }: { hostId?: string; surfaceId?: string | null } = {},
+): string {
   const args = ['npx', '-y', 'chinwag', 'hook', subcommand];
   if (hostId && hostId !== DEFAULT_HOOK_HOST) args.push('--tool', hostId);
   if (surfaceId) args.push('--surface', surfaceId);
   return args.join(' ');
 }
 
-function isChinwagHookCommand(command) {
-  return typeof command === 'string'
-    && (command.includes('chinwag-hook') || command.includes('chinwag hook'));
+function isChinwagHookCommand(command: unknown): boolean {
+  return (
+    typeof command === 'string' &&
+    (command.includes('chinwag-hook') || command.includes('chinwag hook'))
+  );
 }
 
-function buildExpectedMcpArgs(hostId, { subcommand = 'mcp', sharedRoot = false } = {}) {
+function buildExpectedMcpArgs(
+  hostId: string,
+  { subcommand = 'mcp', sharedRoot = false }: { subcommand?: string; sharedRoot?: boolean } = {},
+): string[] {
   return buildChinwagCliArgs(subcommand, {
     hostId: sharedRoot ? null : hostId,
   });
 }
 
-function hasMatchingMcpEntry(config, hostId, { channel = false, sharedRoot = false } = {}) {
-  const servers = config?.mcpServers || {};
+function hasMatchingMcpEntry(
+  config: ConfigJson,
+  hostId: string,
+  { channel = false, sharedRoot = false }: { channel?: boolean; sharedRoot?: boolean } = {},
+): boolean {
+  const servers = config.mcpServers || {};
   const primary = servers.chinwag;
   const expectedPrimary = buildExpectedMcpArgs(hostId, { subcommand: 'mcp', sharedRoot });
-  const primaryOk = primary?.command === 'npx'
-    && JSON.stringify(primary.args || []) === JSON.stringify(expectedPrimary);
+  const primaryOk =
+    primary?.command === 'npx' &&
+    JSON.stringify(primary.args || []) === JSON.stringify(expectedPrimary);
   if (!primaryOk) return false;
 
   if (!channel) return true;
   const channelEntry = servers['chinwag-channel'];
   const expectedChannel = buildExpectedMcpArgs(hostId, { subcommand: 'channel', sharedRoot });
-  return channelEntry?.command === 'npx'
-    && JSON.stringify(channelEntry.args || []) === JSON.stringify(expectedChannel);
+  return (
+    channelEntry?.command === 'npx' &&
+    JSON.stringify(channelEntry.args || []) === JSON.stringify(expectedChannel)
+  );
 }
 
-function hasMatchingHookConfig(config) {
+function hasMatchingHookConfig(config: ConfigJson | null): boolean {
   const hooks = config?.hooks || {};
-  const expected = {
+  const expected: Record<string, string> = {
     PreToolUse: buildChinwagHookCommand('check-conflict'),
     PostToolUse: buildChinwagHookCommand('report-edit'),
     SessionStart: buildChinwagHookCommand('session-start'),
@@ -141,50 +168,40 @@ function hasMatchingHookConfig(config) {
   });
 }
 
-function detectHost(cwd, host) {
+function detectHost(cwd: string, host: HostIntegration): boolean {
   const dirs = host.detect?.dirs || [];
   const cmds = host.detect?.cmds || [];
   return dirs.some((dir) => existsSync(join(cwd, dir))) || cmds.some((cmd) => commandExists(cmd));
 }
 
-/**
- * @param {string} cwd - Working directory to scan
- * @returns {import('./integration-model.js').HostIntegration[]}
- */
-export function detectHostIntegrations(cwd) {
+export function detectHostIntegrations(cwd: string): HostIntegration[] {
   return HOST_INTEGRATIONS.filter((host) => detectHost(cwd, host));
 }
 
-/**
- * @param {IntegrationScanResult[]} scanResults
- * @param {Object} [options]
- * @param {boolean} [options.onlyDetected]
- * @returns {string}
- */
-export function formatIntegrationScanResults(scanResults, { onlyDetected = false } = {}) {
+export function formatIntegrationScanResults(
+  scanResults: IntegrationScanResult[],
+  { onlyDetected = false }: { onlyDetected?: boolean } = {},
+): string {
   const rows = onlyDetected ? scanResults.filter((item) => item.detected) : scanResults;
   if (rows.length === 0) return 'No supported integrations detected in this repo.';
 
   const lines = ['Integrations:'];
   for (const item of rows) {
     const summary = `${item.name} [${item.tier}] — ${item.status}`;
-    const capabilityText = item.capabilities?.length ? ` (${item.capabilities.join(', ')})` : '';
+    const capabilityText = item.capabilities.length ? ` (${item.capabilities.join(', ')})` : '';
     lines.push(`- ${summary}${capabilityText}`);
     if (item.detected) lines.push(`  config: ${item.configPath}`);
-    if (item.issues?.length) {
-      for (const issue of item.issues) lines.push(`  issue: ${issue}`);
+    for (const issue of item.issues) {
+      lines.push(`  issue: ${issue}`);
     }
   }
   return lines.join('\n');
 }
 
-/**
- * @param {IntegrationScanResult[]} scanResults
- * @param {Object} [options]
- * @param {boolean} [options.onlyDetected]
- * @returns {IntegrationScanSummary}
- */
-export function summarizeIntegrationScan(scanResults, { onlyDetected = true } = {}) {
+export function summarizeIntegrationScan(
+  scanResults: IntegrationScanResult[],
+  { onlyDetected = true }: { onlyDetected?: boolean } = {},
+): IntegrationScanSummary {
   const rows = onlyDetected ? scanResults.filter((item) => item.detected) : scanResults;
   if (rows.length === 0) return { text: 'No supported integrations detected.', tone: 'info' };
 
@@ -203,16 +220,15 @@ export function summarizeIntegrationScan(scanResults, { onlyDetected = true } = 
   };
 }
 
-/**
- * @param {string} cwd - Working directory
- * @param {string} relativePath - Relative path to MCP config file
- * @param {Object} [options]
- * @param {boolean} [options.channel]
- * @param {string|null} [options.hostId]
- * @param {string|null} [options.surfaceId]
- * @returns {WriteResult}
- */
-export function writeMcpConfig(cwd, relativePath, { channel = false, hostId = null, surfaceId = null } = {}) {
+export function writeMcpConfig(
+  cwd: string,
+  relativePath: string,
+  {
+    channel = false,
+    hostId = null,
+    surfaceId = null,
+  }: { channel?: boolean; hostId?: string | null; surfaceId?: string | null } = {},
+): WriteResult {
   const filePath = join(cwd, relativePath);
   const isSharedRootConfig = relativePath === '.mcp.json' || relativePath === 'mcp.json';
   const host = hostId ? getHostIntegrationById(hostId) : null;
@@ -248,44 +264,75 @@ export function writeMcpConfig(cwd, relativePath, { channel = false, hostId = nu
     };
   }
 
-  if (channel) {
+  if (channel && config.mcpServers) {
     config.mcpServers['chinwag-channel'] = {
       command: 'npx',
-      args: buildChinwagCliArgs('channel', { hostId: isSharedRootConfig ? null : host?.id || null, surfaceId }),
+      args: buildChinwagCliArgs('channel', {
+        hostId: isSharedRootConfig ? null : host?.id || null,
+        surfaceId,
+      }),
     };
   }
 
   try {
     writeJson(filePath, config);
-  } catch (err) {
-    return { error: `Failed to write ${relativePath}: ${err.message}` };
+  } catch (error) {
+    return { error: `Failed to write ${relativePath}: ${getErrorMessage(error)}` };
   }
 
   return { ok: true };
 }
 
-/**
- * @param {string} cwd - Working directory
- * @param {Object} [options]
- * @param {string} [options.hostId]
- * @param {string|null} [options.surfaceId]
- * @returns {WriteResult}
- */
-export function writeHooksConfig(cwd, { hostId = DEFAULT_HOOK_HOST, surfaceId = null } = {}) {
+export function writeHooksConfig(
+  cwd: string,
+  {
+    hostId = DEFAULT_HOOK_HOST,
+    surfaceId = null,
+  }: { hostId?: string; surfaceId?: string | null } = {},
+): WriteResult {
   const filePath = join(cwd, '.claude', 'settings.json');
   const config = readJson(filePath);
 
   if (!config.hooks) config.hooks = {};
 
-  const chinwagHooks = {
-    PreToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: buildChinwagHookCommand('check-conflict', { hostId, surfaceId }) }] }],
-    PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: buildChinwagHookCommand('report-edit', { hostId, surfaceId }) }] }],
-    SessionStart: [{ hooks: [{ type: 'command', command: buildChinwagHookCommand('session-start', { hostId, surfaceId }) }] }],
+  const chinwagHooks: Record<string, HookConfigEntry[]> = {
+    PreToolUse: [
+      {
+        matcher: 'Edit|Write',
+        hooks: [
+          {
+            type: 'command',
+            command: buildChinwagHookCommand('check-conflict', { hostId, surfaceId }),
+          },
+        ],
+      },
+    ],
+    PostToolUse: [
+      {
+        matcher: 'Edit|Write',
+        hooks: [
+          {
+            type: 'command',
+            command: buildChinwagHookCommand('report-edit', { hostId, surfaceId }),
+          },
+        ],
+      },
+    ],
+    SessionStart: [
+      {
+        hooks: [
+          {
+            type: 'command',
+            command: buildChinwagHookCommand('session-start', { hostId, surfaceId }),
+          },
+        ],
+      },
+    ],
   };
 
   for (const [event, entries] of Object.entries(chinwagHooks)) {
-    if (!config.hooks[event]) config.hooks[event] = [];
-    config.hooks[event] = config.hooks[event].filter((hook) => {
+    const currentEntries = config.hooks[event] || [];
+    config.hooks[event] = currentEntries.filter((hook) => {
       const existingCommand = hook.hooks?.[0]?.command || hook.command;
       return !isChinwagHookCommand(existingCommand);
     });
@@ -294,21 +341,18 @@ export function writeHooksConfig(cwd, { hostId = DEFAULT_HOOK_HOST, surfaceId = 
 
   try {
     writeJson(filePath, config);
-  } catch (err) {
-    return { error: `Failed to write .claude/settings.json: ${err.message}` };
+  } catch (error) {
+    return { error: `Failed to write .claude/settings.json: ${getErrorMessage(error)}` };
   }
 
   return { ok: true };
 }
 
-/**
- * @param {string} cwd - Working directory
- * @param {string} hostId - Host integration ID
- * @param {Object} [options]
- * @param {string|null} [options.surfaceId]
- * @returns {ConfigureResult}
- */
-export function configureHostIntegration(cwd, hostId, options = {}) {
+export function configureHostIntegration(
+  cwd: string,
+  hostId: string,
+  options: { surfaceId?: string | null } = {},
+): ConfigureResult {
   const host = getHostIntegrationById(hostId);
   if (!host) return { error: `Unknown host integration: ${hostId}` };
 
@@ -334,11 +378,7 @@ export function configureHostIntegration(cwd, hostId, options = {}) {
   return { ok: true, name: host.name, detail };
 }
 
-/**
- * @param {string} cwd - Working directory to scan
- * @returns {IntegrationScanResult[]}
- */
-export function scanHostIntegrations(cwd) {
+export function scanHostIntegrations(cwd: string): IntegrationScanResult[] {
   return HOST_INTEGRATIONS.map((host) => {
     const detected = detectHost(cwd, host);
     const mcpPath = join(cwd, host.mcpConfig);
@@ -352,12 +392,19 @@ export function scanHostIntegrations(cwd) {
     const hooksConfig = host.hooks ? readJson(hooksPath) : null;
     const hooksConfigured = host.hooks ? hasMatchingHookConfig(hooksConfig) : true;
 
-    const issues = [];
+    const issues: string[] = [];
     if (detected && !mcpConfigured) issues.push(`Missing or outdated config at ${host.mcpConfig}`);
     if (detected && host.hooks && !hooksConfigured) issues.push('Hooks are missing or outdated');
 
-    let status = 'not_detected';
-    if (detected) status = issues.length === 0 ? 'ready' : (mcpConfigured || (host.hooks && hooksConfigured) ? 'needs_repair' : 'needs_setup');
+    let status: IntegrationScanResult['status'] = 'not_detected';
+    if (detected) {
+      status =
+        issues.length === 0
+          ? 'ready'
+          : mcpConfigured || (host.hooks && hooksConfigured)
+            ? 'needs_repair'
+            : 'needs_setup';
+    }
 
     return {
       id: host.id,

@@ -1,1 +1,1 @@
-export { configExists, loadConfig } from '../../shared/config.js';
+export { configExists, loadConfig } from '@chinwag/shared/config.js';

@@ -9,7 +9,7 @@ import {
   summarizeIntegrationScan,
   writeHooksConfig as writeHostHooksConfig,
   writeMcpConfig as writeHostMcpConfig,
-} from '../../shared/integration-doctor.js';
+} from '@chinwag/shared/integration-doctor.js';
 
 export { commandExists };
 

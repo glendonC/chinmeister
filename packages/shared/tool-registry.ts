@@ -1,86 +1,86 @@
-/**
- * @typedef {Object} ToolDetect
- * @property {string[]} [dirs] - Directory markers to detect
- * @property {string[]} [cmds] - CLI command names to detect
- */
+export interface ToolDetect {
+  dirs?: string[];
+  cmds?: string[];
+}
 
-/**
- * @typedef {Object} ToolProcessDetection
- * @property {string[]} executables - Executable names to match in process tree
- * @property {string[]} aliases - Human-readable aliases for fuzzy matching
- */
+export interface ToolProcessDetection {
+  executables: string[];
+  aliases: string[];
+}
 
-/**
- * @typedef {Object} ToolSpawnConfig
- * @property {string} cmd - CLI command to run
- * @property {string[]} [args] - Default args for non-interactive mode
- * @property {string[]} [interactiveArgs] - Args for interactive mode
- * @property {string} [taskArg] - How the task text is passed (e.g. 'positional')
- */
+export interface ToolSpawnConfig {
+  cmd: string;
+  args?: string[];
+  interactiveArgs?: string[];
+  taskArg?: string;
+}
 
-/**
- * @typedef {Object} AvailabilityCheckResult
- * @property {'ready'|'needs_auth'|'unavailable'} state
- * @property {string} detail
- * @property {string} recoveryCommand
- */
+export interface AvailabilityCheckResult {
+  state: 'ready' | 'needs_auth' | 'unavailable';
+  detail: string;
+  recoveryCommand: string;
+}
 
-/**
- * @typedef {Object} ToolAvailabilityCheck
- * @property {string[]} args - CLI args to run for status check
- * @property {(output: string) => AvailabilityCheckResult} parse - Output parser
- */
+export interface ToolAvailabilityCheck {
+  args: string[];
+  parse: (output: string) => AvailabilityCheckResult;
+}
 
-/**
- * @typedef {Object} ToolFailurePattern
- * @property {RegExp} pattern - Regex to match against error output
- * @property {string} detail - Human-readable failure description
- * @property {string} recoveryCommand - Command to fix the issue
- */
+export interface ToolFailurePattern {
+  pattern: RegExp;
+  detail: string;
+  recoveryCommand: string;
+}
 
-/**
- * @typedef {Object} ToolCatalog
- * @property {string} description - Short description for catalog display
- * @property {string} category - e.g. 'coding-agent'
- * @property {string} [website] - Product URL
- * @property {string} [installCmd] - Installation command
- * @property {boolean} [mcpCompatible] - Whether this tool supports MCP
- * @property {boolean} [mcpConfigurable] - Whether chinwag can write its MCP config
- * @property {boolean} [featured] - Whether to feature in catalog
- */
+export interface ToolCatalog {
+  description: string;
+  category: string;
+  website?: string;
+  installCmd?: string;
+  mcpCompatible?: boolean;
+  mcpConfigurable?: boolean;
+  featured?: boolean;
+}
 
-/**
- * @typedef {Object} McpTool
- * @property {string} id - Unique tool identifier
- * @property {string} name - Display name
- * @property {string} color - Chalk color name for terminal display
- * @property {ToolDetect} detect - Detection markers
- * @property {ToolProcessDetection} processDetection - Process tree matching rules
- * @property {string} mcpConfig - Relative path to MCP config file
- * @property {boolean} [hooks] - Whether this tool supports hooks
- * @property {boolean} [channel] - Whether this tool supports channels
- * @property {ToolSpawnConfig} [spawn] - Spawn configuration (managed tools only)
- * @property {ToolAvailabilityCheck} [availabilityCheck] - Authentication check
- * @property {ToolFailurePattern[]} [failurePatterns] - Error diagnosis patterns
- * @property {'managed'|'connected'} [tier] - Override inferred tier (inferred from spawn)
- * @property {ToolCatalog} catalog - Catalog metadata
- */
+export interface McpTool {
+  id: string;
+  name: string;
+  color: string;
+  detect: ToolDetect;
+  processDetection: ToolProcessDetection;
+  mcpConfig: string;
+  hooks?: boolean;
+  channel?: boolean;
+  spawn?: ToolSpawnConfig;
+  availabilityCheck?: ToolAvailabilityCheck;
+  failurePatterns?: ToolFailurePattern[];
+  tier?: 'managed' | 'connected';
+  catalog: ToolCatalog;
+}
 
 const CLAUDE_AUTH_LOGIN = 'claude auth login';
 const CODEX_LOGIN = 'codex login';
 
-function parseClaudeCodeAvailability(output) {
+function parseClaudeCodeAvailability(output: string): AvailabilityCheckResult {
   try {
-    const data = JSON.parse(output);
+    const data = JSON.parse(output) as { loggedIn?: boolean };
     return data.loggedIn
       ? { state: 'ready', detail: 'Ready to start', recoveryCommand: CLAUDE_AUTH_LOGIN }
-      : { state: 'needs_auth', detail: 'Sign in to Claude Code', recoveryCommand: CLAUDE_AUTH_LOGIN };
+      : {
+          state: 'needs_auth',
+          detail: 'Sign in to Claude Code',
+          recoveryCommand: CLAUDE_AUTH_LOGIN,
+        };
   } catch {
-    return { state: 'unavailable', detail: 'Could not verify Claude Code', recoveryCommand: CLAUDE_AUTH_LOGIN };
+    return {
+      state: 'unavailable',
+      detail: 'Could not verify Claude Code',
+      recoveryCommand: CLAUDE_AUTH_LOGIN,
+    };
   }
 }
 
-function parseCodexAvailability(output) {
+function parseCodexAvailability(output: string): AvailabilityCheckResult {
   if (/logged in/i.test(output)) {
     return { state: 'ready', detail: 'Ready to start', recoveryCommand: CODEX_LOGIN };
   }
@@ -90,8 +90,7 @@ function parseCodexAvailability(output) {
   return { state: 'unavailable', detail: 'Could not verify Codex', recoveryCommand: CODEX_LOGIN };
 }
 
-/** @type {McpTool[]} */
-export const MCP_TOOLS = [
+export const MCP_TOOLS: McpTool[] = [
   {
     id: 'claude-code',
     name: 'Claude Code',
@@ -199,7 +198,8 @@ export const MCP_TOOLS = [
     },
     failurePatterns: [
       {
-        pattern: /refresh token.*already used|log out and sign in again|token expired|401 unauthorized|could not be refreshed/i,
+        pattern:
+          /refresh token.*already used|log out and sign in again|token expired|401 unauthorized|could not be refreshed/i,
         detail: 'Sign in to Codex again',
         recoveryCommand: CODEX_LOGIN,
       },
@@ -238,9 +238,21 @@ export const MCP_TOOLS = [
     id: 'jetbrains',
     name: 'JetBrains',
     color: 'redBright',
-    detect: { dirs: ['.idea'], cmds: ['idea', 'pycharm', 'webstorm', 'phpstorm', 'goland', 'rubymine', 'rider', 'clion'] },
+    detect: {
+      dirs: ['.idea'],
+      cmds: ['idea', 'pycharm', 'webstorm', 'phpstorm', 'goland', 'rubymine', 'rider', 'clion'],
+    },
     processDetection: {
-      executables: ['idea', 'pycharm', 'webstorm', 'phpstorm', 'goland', 'rubymine', 'rider', 'clion'],
+      executables: [
+        'idea',
+        'pycharm',
+        'webstorm',
+        'phpstorm',
+        'goland',
+        'rubymine',
+        'rider',
+        'clion',
+      ],
       aliases: ['intellij idea'],
     },
     mcpConfig: '.idea/mcp.json',
@@ -274,11 +286,6 @@ export const MCP_TOOLS = [
   },
 ];
 
-/**
- * @param {string} toolId
- * @returns {McpTool|undefined}
- */
-export function getMcpToolById(toolId) {
+export function getMcpToolById(toolId: string): McpTool | null {
   return MCP_TOOLS.find((tool) => tool.id === toolId) || null;
 }
-

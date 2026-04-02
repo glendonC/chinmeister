@@ -1,6 +1,8 @@
 import js from '@eslint/js';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
+import tsParser from '@typescript-eslint/parser';
+import tseslint from '@typescript-eslint/eslint-plugin';
 
 export default [
   js.configs.recommended,
@@ -50,9 +52,41 @@ export default [
     },
   },
 
+  // TypeScript config
+  {
+    files: ['**/*.ts', '**/*.tsx', '**/*.mts', '**/*.cts'],
+    languageOptions: {
+      parser: tsParser,
+      parserOptions: {
+        ecmaVersion: 2024,
+        sourceType: 'module',
+        ecmaFeatures: { jsx: true },
+      },
+    },
+    plugins: {
+      '@typescript-eslint': tseslint,
+    },
+    rules: {
+      'no-undef': 'off',
+      'no-unused-vars': 'off',
+      '@typescript-eslint/no-unused-vars': [
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
+      'prefer-const': 'warn',
+    },
+  },
+
   // React config for CLI (Ink) and Web packages
   {
-    files: ['packages/cli/**/*.jsx', 'packages/web/**/*.jsx', 'packages/web/**/*.js'],
+    files: [
+      'packages/cli/**/*.jsx',
+      'packages/cli/**/*.tsx',
+      'packages/web/**/*.jsx',
+      'packages/web/**/*.tsx',
+      'packages/web/**/*.js',
+      'packages/web/**/*.ts',
+    ],
     plugins: {
       react,
       'react-hooks': reactHooks,
@@ -75,20 +109,30 @@ export default [
 
   // Web package: browser globals
   {
-    files: ['packages/web/**/*.js', 'packages/web/**/*.jsx'],
+    files: [
+      'packages/web/**/*.js',
+      'packages/web/**/*.jsx',
+      'packages/web/**/*.ts',
+      'packages/web/**/*.tsx',
+    ],
     languageOptions: {
       globals: {
         document: 'readonly',
         window: 'readonly',
+        history: 'readonly',
         localStorage: 'readonly',
         location: 'readonly',
+        navigator: 'readonly',
+        Event: 'readonly',
+        MouseEvent: 'readonly',
+        KeyboardEvent: 'readonly',
       },
     },
   },
 
   // MCP package: no console.log (breaks stdio protocol)
   {
-    files: ['packages/mcp/**/*.js'],
+    files: ['packages/mcp/**/*.js', 'packages/mcp/**/*.ts'],
     rules: {
       'no-console': ['error', { allow: ['error', 'warn'] }],
     },
@@ -96,7 +140,7 @@ export default [
 
   // Test files: allow common test globals
   {
-    files: ['**/*.test.js', '**/*.test.jsx', '**/__tests__/**'],
+    files: ['**/*.test.js', '**/*.test.jsx', '**/*.test.ts', '**/*.test.tsx', '**/__tests__/**'],
     languageOptions: {
       globals: {
         describe: 'readonly',
@@ -108,16 +152,21 @@ export default [
         beforeAll: 'readonly',
         afterAll: 'readonly',
         vi: 'readonly',
+        history: 'readonly',
+        Event: 'readonly',
+        MouseEvent: 'readonly',
+        KeyboardEvent: 'readonly',
       },
     },
   },
 
   // Worker package: Cloudflare Workers globals
   {
-    files: ['packages/worker/**/*.js'],
+    files: ['packages/worker/**/*.js', 'packages/worker/**/*.ts'],
     languageOptions: {
       globals: {
         DurableObject: 'readonly',
+        WebSocketPair: 'readonly',
       },
     },
   },

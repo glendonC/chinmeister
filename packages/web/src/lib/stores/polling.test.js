@@ -99,7 +99,14 @@ describe('polling store', () => {
     const apiMock = vi
       .fn()
       .mockResolvedValueOnce({ teams: [{ team_id: 't_one' }] })
-      .mockResolvedValueOnce({ members: [{ handle: 'alice' }] });
+      .mockResolvedValueOnce({
+        members: [{ agent_id: 'agent-1', handle: 'alice', status: 'active', host_tool: 'cursor' }],
+        memories: [],
+        locks: [],
+        messages: [],
+        sessions: [],
+        conflicts: [],
+      });
     const ensureJoinedMock = vi.fn().mockResolvedValue({ ok: true });
     const { forceRefresh, pollingActions } = await loadPollingModule({
       teamState,

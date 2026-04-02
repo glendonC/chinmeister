@@ -1,4 +1,4 @@
-import { findTeamFile } from '../../shared/team-utils.js';
+import { findTeamFile } from '@chinwag/shared/team-utils.js';
 
 export function getProjectContext(cwd = process.cwd()) {
   const result = findTeamFile(cwd);

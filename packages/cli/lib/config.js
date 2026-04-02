@@ -1,7 +1,7 @@
 import { mkdirSync, writeFileSync, existsSync, unlinkSync } from 'fs';
-import { CONFIG_DIR, CONFIG_FILE } from '../../shared/config.js';
+import { CONFIG_DIR, CONFIG_FILE } from '@chinwag/shared/config.js';
 
-export { CONFIG_DIR, CONFIG_FILE, configExists, loadConfig } from '../../shared/config.js';
+export { CONFIG_DIR, CONFIG_FILE, configExists, loadConfig } from '@chinwag/shared/config.js';
 
 export function saveConfig(config) {
   mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });

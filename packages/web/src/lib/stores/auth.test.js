@@ -74,7 +74,7 @@ describe('auth store', () => {
   });
 
   it('logs out by clearing user state and session storage', async () => {
-    const apiMock = vi.fn().mockResolvedValue({ handle: 'alice' });
+    const apiMock = vi.fn().mockResolvedValue({ handle: 'alice', color: 'cyan' });
     const { authActions } = await loadAuthModule({ apiMock });
     await authActions.authenticate('tok_123');
 

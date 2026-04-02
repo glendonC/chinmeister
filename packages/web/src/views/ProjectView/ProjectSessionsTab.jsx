@@ -25,7 +25,7 @@ export default function ProjectSessionsTab({
         <div className={styles.sectionBody}>
           {sessions.map((session, index) => (
             <SessionRow
-              key={session.session_id || `${session.owner_handle}:${session.started_at || index}`}
+              key={session.id || `${session.handle}:${session.started_at || index}`}
               session={session}
             />
           ))}
@@ -52,7 +52,9 @@ export default function ProjectSessionsTab({
             </div>
             <div className={styles.pathList}>
               {filesTouched.map((file) => (
-                <span key={`history:${file}`} className={styles.pathRow}>{file}</span>
+                <span key={`history:${file}`} className={styles.pathRow}>
+                  {file}
+                </span>
               ))}
             </div>
           </section>

@@ -83,9 +83,7 @@ describe('buildProjectConflicts', () => {
       { handle: 'bob', status: 'active', activity: { files: ['b.js', 'c.js'] } },
     ];
     const result = buildProjectConflicts([], members);
-    expect(result).toEqual([
-      { file: 'b.js', owners: ['alice', 'bob'] },
-    ]);
+    expect(result).toEqual([{ file: 'b.js', owners: ['alice', 'bob'] }]);
   });
 
   it('ignores offline members', () => {
@@ -99,24 +97,25 @@ describe('buildProjectConflicts', () => {
 
   it('includes tool in label when known', () => {
     const members = [
-      { handle: 'alice', tool: 'claude-code', status: 'active', activity: { files: ['a.js'] } },
-      { handle: 'bob', tool: 'cursor', status: 'active', activity: { files: ['a.js'] } },
+      {
+        handle: 'alice',
+        host_tool: 'claude-code',
+        status: 'active',
+        activity: { files: ['a.js'] },
+      },
+      { handle: 'bob', host_tool: 'cursor', status: 'active', activity: { files: ['a.js'] } },
     ];
     const result = buildProjectConflicts([], members);
-    expect(result).toEqual([
-      { file: 'a.js', owners: ['alice (claude-code)', 'bob (cursor)'] },
-    ]);
+    expect(result).toEqual([{ file: 'a.js', owners: ['alice (claude-code)', 'bob (cursor)'] }]);
   });
 
   it('omits tool from label when unknown', () => {
     const members = [
-      { handle: 'alice', tool: 'unknown', status: 'active', activity: { files: ['a.js'] } },
+      { handle: 'alice', host_tool: 'unknown', status: 'active', activity: { files: ['a.js'] } },
       { handle: 'bob', status: 'active', activity: { files: ['a.js'] } },
     ];
     const result = buildProjectConflicts([], members);
-    expect(result).toEqual([
-      { file: 'a.js', owners: ['alice', 'bob'] },
-    ]);
+    expect(result).toEqual([{ file: 'a.js', owners: ['alice', 'bob'] }]);
   });
 
   it('skips members without activity.files', () => {
@@ -135,10 +134,7 @@ describe('buildFilesInPlay', () => {
   });
 
   it('collects files from active agents', () => {
-    const agents = [
-      { activity: { files: ['b.js', 'a.js'] } },
-      { activity: { files: ['c.js'] } },
-    ];
+    const agents = [{ activity: { files: ['b.js', 'a.js'] } }, { activity: { files: ['c.js'] } }];
     expect(buildFilesInPlay(agents, [])).toEqual(['a.js', 'b.js', 'c.js']);
   });
 
@@ -170,10 +166,7 @@ describe('buildFilesTouched', () => {
   });
 
   it('collects unique files from sessions', () => {
-    const sessions = [
-      { files_touched: ['a.js', 'b.js'] },
-      { files_touched: ['b.js', 'c.js'] },
-    ];
+    const sessions = [{ files_touched: ['a.js', 'b.js'] }, { files_touched: ['b.js', 'c.js'] }];
     expect(buildFilesTouched(sessions)).toEqual(['a.js', 'b.js', 'c.js']);
   });
 
@@ -194,11 +187,7 @@ describe('buildMemoryBreakdown', () => {
   });
 
   it('counts tag occurrences', () => {
-    const memories = [
-      { tags: ['api', 'bug'] },
-      { tags: ['api', 'feature'] },
-      { tags: ['bug'] },
-    ];
+    const memories = [{ tags: ['api', 'bug'] }, { tags: ['api', 'feature'] }, { tags: ['bug'] }];
     const result = buildMemoryBreakdown(memories);
     expect(result).toEqual([
       ['api', 2],
@@ -233,13 +222,13 @@ describe('buildProjectToolSummaries', () => {
 
   it('merges configured tools with live member counts', () => {
     const members = [
-      { tool: 'claude-code', status: 'active' },
-      { tool: 'claude-code', status: 'active' },
-      { tool: 'cursor', status: 'offline' },
+      { host_tool: 'claude-code', status: 'active' },
+      { host_tool: 'claude-code', status: 'active' },
+      { host_tool: 'cursor', status: 'offline' },
     ];
     const toolsConfigured = [
-      { tool: 'claude-code', joins: 10 },
-      { tool: 'cursor', joins: 5 },
+      { host_tool: 'claude-code', joins: 10 },
+      { host_tool: 'cursor', joins: 5 },
     ];
     const result = buildProjectToolSummaries(members, toolsConfigured);
     expect(result).toHaveLength(2);
@@ -255,7 +244,7 @@ describe('buildProjectToolSummaries', () => {
   });
 
   it('includes tools from members not in configured list', () => {
-    const members = [{ tool: 'windsurf', status: 'active' }];
+    const members = [{ host_tool: 'windsurf', status: 'active' }];
     const result = buildProjectToolSummaries(members, []);
     expect(result).toHaveLength(1);
     expect(result[0].tool).toBe('windsurf');
@@ -264,12 +253,10 @@ describe('buildProjectToolSummaries', () => {
   });
 
   it('sorts by live*100 + joins descending', () => {
-    const members = [
-      { tool: 'cursor', status: 'active' },
-    ];
+    const members = [{ host_tool: 'cursor', status: 'active' }];
     const toolsConfigured = [
-      { tool: 'claude-code', joins: 50 },
-      { tool: 'cursor', joins: 1 },
+      { host_tool: 'claude-code', joins: 50 },
+      { host_tool: 'cursor', joins: 1 },
     ];
     const result = buildProjectToolSummaries(members, toolsConfigured);
     // cursor: score = 100*1 + 1 = 101
@@ -280,8 +267,8 @@ describe('buildProjectToolSummaries', () => {
 
   it('calculates share based on total joins', () => {
     const toolsConfigured = [
-      { tool: 'a', joins: 3 },
-      { tool: 'b', joins: 7 },
+      { host_tool: 'a', joins: 3 },
+      { host_tool: 'b', joins: 7 },
     ];
     const result = buildProjectToolSummaries([], toolsConfigured);
     expect(result.find((t) => t.tool === 'a').share).toBeCloseTo(0.3);
@@ -289,7 +276,7 @@ describe('buildProjectToolSummaries', () => {
   });
 
   it('sets share to 0 when no joins exist', () => {
-    const members = [{ tool: 'x', status: 'active' }];
+    const members = [{ host_tool: 'x', status: 'active' }];
     const result = buildProjectToolSummaries(members, []);
     expect(result[0].share).toBe(0);
   });
@@ -316,9 +303,7 @@ describe('buildProjectHostSummaries', () => {
 
 describe('buildProjectSurfaceSummaries', () => {
   it('merges seen surfaces with live member counts', () => {
-    const members = [
-      { agent_surface: 'chat', status: 'active' },
-    ];
+    const members = [{ agent_surface: 'chat', status: 'active' }];
     const surfacesSeen = [
       { agent_surface: 'chat', joins: 4 },
       { agent_surface: 'inline', joins: 6 },
@@ -339,11 +324,7 @@ describe('sumSessionEdits', () => {
   });
 
   it('sums edit_count across sessions', () => {
-    const sessions = [
-      { edit_count: 5 },
-      { edit_count: 3 },
-      { edit_count: 0 },
-    ];
+    const sessions = [{ edit_count: 5 }, { edit_count: 3 }, { edit_count: 0 }];
     expect(sumSessionEdits(sessions)).toBe(8);
   });
 
@@ -360,12 +341,7 @@ describe('countLiveSessions', () => {
   });
 
   it('counts sessions without ended_at', () => {
-    const sessions = [
-      { ended_at: null },
-      { ended_at: '2025-01-01' },
-      { ended_at: undefined },
-      {},
-    ];
+    const sessions = [{ ended_at: null }, { ended_at: '2025-01-01' }, { ended_at: undefined }, {}];
     expect(countLiveSessions(sessions)).toBe(3);
   });
 });

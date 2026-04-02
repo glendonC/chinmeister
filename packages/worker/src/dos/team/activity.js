@@ -39,7 +39,7 @@ export function checkConflicts(
 
   const others = sql
     .exec(
-      `SELECT m.agent_id, m.owner_handle, m.tool, a.files, a.summary
+      `SELECT m.agent_id, m.handle, m.host_tool, a.files, a.summary
      FROM members m
      LEFT JOIN activities a ON a.agent_id = m.agent_id
      WHERE m.agent_id != ?
@@ -65,8 +65,8 @@ export function checkConflicts(
     const overlap = theirFiles.filter((f) => myFiles.has(f));
     if (overlap.length > 0) {
       conflicts.push({
-        owner_handle: row.owner_handle,
-        tool: row.tool || 'unknown',
+        handle: row.handle,
+        host_tool: row.host_tool || 'unknown',
         files: overlap,
         summary: row.summary || '',
       });
@@ -80,7 +80,7 @@ export function checkConflicts(
     const placeholders = fileList.map(() => '?').join(',');
     const lockRows = sql
       .exec(
-        `SELECT l.file_path, l.owner_handle, l.tool, l.claimed_at FROM locks l
+        `SELECT l.file_path, l.handle, l.host_tool, l.claimed_at FROM locks l
        JOIN members m ON m.agent_id = l.agent_id
        WHERE l.file_path IN (${placeholders}) AND l.agent_id != ?
          AND (m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
@@ -94,8 +94,8 @@ export function checkConflicts(
     for (const lock of lockRows) {
       lockedFiles.push({
         file: lock.file_path,
-        held_by: lock.owner_handle,
-        tool: lock.tool || 'unknown',
+        handle: lock.handle,
+        host_tool: lock.host_tool || 'unknown',
         claimed_at: lock.claimed_at,
       });
     }

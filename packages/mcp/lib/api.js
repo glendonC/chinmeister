@@ -1,4 +1,4 @@
-import { createJsonApiClient, DEFAULT_API_URL } from '../../shared/api-client.js';
+import { createJsonApiClient, DEFAULT_API_URL } from '@chinwag/shared/api-client.js';
 
 export function getApiUrl() {
   return process.env.CHINWAG_API_URL || DEFAULT_API_URL;

@@ -1,5 +1,6 @@
 import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
+import { createEmptyUserTeams, userTeamsSchema, validateResponse } from '../apiSchemas.js';
 import { authActions } from './auth.js';
 import { requestRefresh } from './refresh.js';
 
@@ -36,7 +37,10 @@ const teamStore = createStore((set) => ({
     const { token } = authActions.getState();
     syncJoinedTeamsCache(token);
     try {
-      const result = await api('GET', '/me/teams', null, token);
+      const rawResult = await api('GET', '/me/teams', null, token);
+      const result = validateResponse(userTeamsSchema, rawResult, 'me-teams', {
+        fallback: createEmptyUserTeams(),
+      });
       const teamList = result.teams || [];
       set({
         teams: teamList,

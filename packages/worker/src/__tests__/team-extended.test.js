@@ -49,7 +49,7 @@ describe('Atomic join ownership enforcement', () => {
     // Verify ownerA's data is still intact — not overwritten by the failed join
     const ctx = await team().getContext(agentId, ownerA);
     expect(ctx.error).toBeUndefined();
-    const me = ctx.members.find(m => m.agent_id === agentId);
+    const me = ctx.members.find((m) => m.agent_id === agentId);
     expect(me).toBeDefined();
     expect(me.handle).toBe('alice');
   });
@@ -63,7 +63,7 @@ describe('Atomic join ownership enforcement', () => {
     expect(res.ok).toBe(true);
 
     const ctx = await team().getContext(agentId, ownerA);
-    const me = ctx.members.find(m => m.agent_id === agentId);
+    const me = ctx.members.find((m) => m.agent_id === agentId);
     expect(me.handle).toBe('alice-updated');
     expect(me.agent_surface).toBe('copilot');
   });
@@ -94,7 +94,7 @@ describe('Atomic lock claim enforcement', () => {
     expect(claim2.claimed).toHaveLength(0);
     expect(claim2.blocked).toHaveLength(1);
     expect(claim2.blocked[0].file).toBe('src/atomic.js');
-    expect(claim2.blocked[0].held_by).toBe('alice');
+    expect(claim2.blocked[0].handle).toBe('alice');
   });
 
   it('same agent re-claiming refreshes lock (idempotent)', async () => {
@@ -149,7 +149,7 @@ describe('reportFile', () => {
   it('appends file to activity list', async () => {
     await team().reportFile(agentId, 'src/utils.js', ownerId);
     const ctx = await team().getContext(agentId, ownerId);
-    const me = ctx.members.find(m => m.agent_id === agentId);
+    const me = ctx.members.find((m) => m.agent_id === agentId);
     expect(me.activity.files).toContain('src/app.js');
     expect(me.activity.files).toContain('src/utils.js');
   });
@@ -157,15 +157,15 @@ describe('reportFile', () => {
   it('does not duplicate the same file', async () => {
     await team().reportFile(agentId, 'src/app.js', ownerId);
     const ctx = await team().getContext(agentId, ownerId);
-    const me = ctx.members.find(m => m.agent_id === agentId);
-    const count = me.activity.files.filter(f => f === 'src/app.js').length;
+    const me = ctx.members.find((m) => m.agent_id === agentId);
+    const count = me.activity.files.filter((f) => f === 'src/app.js').length;
     expect(count).toBe(1);
   });
 
   it('normalizes file paths', async () => {
     await team().reportFile(agentId, './src/normalized.js', ownerId);
     const ctx = await team().getContext(agentId, ownerId);
-    const me = ctx.members.find(m => m.agent_id === agentId);
+    const me = ctx.members.find((m) => m.agent_id === agentId);
     expect(me.activity.files).toContain('src/normalized.js');
     expect(me.activity.files).not.toContain('./src/normalized.js');
   });
@@ -187,7 +187,7 @@ describe('reportFile', () => {
     }
 
     const ctx = await freshTeam().getContext('cursor:cap1', 'user-cap1');
-    const me = ctx.members.find(m => m.agent_id === 'cursor:cap1');
+    const me = ctx.members.find((m) => m.agent_id === 'cursor:cap1');
     expect(me.activity.files.length).toBeLessThanOrEqual(50);
     // Earliest files should have been dropped
     expect(me.activity.files).not.toContain('src/file0.js');
@@ -206,13 +206,25 @@ describe('updateMemory', () => {
 
   it('setup: join and create memory', async () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
-    const res = await team().saveMemory(agentId, 'Original text about the config', ['config'], 'alice', ownerId);
+    const res = await team().saveMemory(
+      agentId,
+      'Original text about the config',
+      ['config'],
+      'alice',
+      ownerId,
+    );
     expect(res.ok).toBe(true);
     memoryId = res.id;
   });
 
   it('updates text and resets relevance', async () => {
-    const res = await team().updateMemory(agentId, memoryId, 'Updated text about the config', undefined, ownerId);
+    const res = await team().updateMemory(
+      agentId,
+      memoryId,
+      'Updated text about the config',
+      undefined,
+      ownerId,
+    );
     expect(res.ok).toBe(true);
 
     const search = await team().searchMemories(agentId, 'Updated text', null, 10, ownerId);
@@ -225,7 +237,7 @@ describe('updateMemory', () => {
     expect(res.ok).toBe(true);
 
     const search = await team().searchMemories(agentId, null, ['decision'], 10, ownerId);
-    expect(search.memories.some(m => m.id === memoryId)).toBe(true);
+    expect(search.memories.some((m) => m.id === memoryId)).toBe(true);
   });
 
   it('updates both text and tags', async () => {
@@ -240,7 +252,13 @@ describe('updateMemory', () => {
   // (handlers validate, DOs trust). DO-level tests verify handler-validated input only.
 
   it('returns error for nonexistent memory', async () => {
-    const res = await team().updateMemory(agentId, 'nonexistent-id', 'New text', undefined, ownerId);
+    const res = await team().updateMemory(
+      agentId,
+      'nonexistent-id',
+      'New text',
+      undefined,
+      ownerId,
+    );
     expect(res.error).toBe('Memory not found');
   });
 });
@@ -256,13 +274,25 @@ describe('memory team access', () => {
   it('setup: join author and peer, create memory', async () => {
     await team().join(authorAgent, authorOwner, 'alice', 'cursor');
     await team().join(peerAgent, peerOwner, 'bob', 'claude');
-    const res = await team().saveMemory(authorAgent, 'Author-owned memory', ['config'], 'alice', authorOwner);
+    const res = await team().saveMemory(
+      authorAgent,
+      'Author-owned memory',
+      ['config'],
+      'alice',
+      authorOwner,
+    );
     expect(res.ok).toBe(true);
     memoryId = res.id;
   });
 
   it('allows any team member to update memory', async () => {
-    const res = await team().updateMemory(peerAgent, memoryId, 'Peer updated text', undefined, peerOwner);
+    const res = await team().updateMemory(
+      peerAgent,
+      memoryId,
+      'Peer updated text',
+      undefined,
+      peerOwner,
+    );
     expect(res.ok).toBe(true);
   });
 
@@ -282,13 +312,25 @@ describe('memory ownership across tool sessions', () => {
   it('setup: join same owner from two tools and create memory', async () => {
     await team().join(cursorAgent, ownerId, 'alice', 'cursor');
     await team().join(claudeAgent, ownerId, 'alice', 'claude');
-    const res = await team().saveMemory(cursorAgent, 'Shared owner memory', ['pattern'], 'alice', ownerId);
+    const res = await team().saveMemory(
+      cursorAgent,
+      'Shared owner memory',
+      ['pattern'],
+      'alice',
+      ownerId,
+    );
     expect(res.ok).toBe(true);
     memoryId = res.id;
   });
 
   it('allows the same owner to update memory from another tool session', async () => {
-    const res = await team().updateMemory(claudeAgent, memoryId, 'Shared owner memory updated', undefined, ownerId);
+    const res = await team().updateMemory(
+      claudeAgent,
+      memoryId,
+      'Shared owner memory updated',
+      undefined,
+      ownerId,
+    );
     expect(res.ok).toBe(true);
   });
 });
@@ -305,7 +347,13 @@ describe('getSummary', () => {
   it('setup: join two agents and add data', async () => {
     await team().join(agent1, owner1, 'alice', 'cursor');
     await team().join(agent2, owner2, 'bob', 'claude');
-    await team().saveMemory(agent1, 'Summary test memory about indexing', ['config'], 'alice', owner1);
+    await team().saveMemory(
+      agent1,
+      'Summary test memory about indexing',
+      ['config'],
+      'alice',
+      owner1,
+    );
     await team().startSession(agent1, 'alice', 'react', owner1);
   });
 
@@ -318,7 +366,7 @@ describe('getSummary', () => {
     expect(typeof summary.memory_count).toBe('number');
     expect(typeof summary.live_sessions).toBe('number');
     expect(typeof summary.recent_sessions_24h).toBe('number');
-    expect(Array.isArray(summary.tools_configured)).toBe(true);
+    expect(Array.isArray(summary.hosts_configured)).toBe(true);
     expect(typeof summary.usage).toBe('object');
   });
 
@@ -340,7 +388,7 @@ describe('getSummary', () => {
 
   it('tracks tool usage', async () => {
     const summary = await team().getSummary(agent1, owner1);
-    const cursorTool = summary.tools_configured.find(t => t.tool === 'cursor');
+    const cursorTool = summary.hosts_configured.find((t) => t.host_tool === 'cursor');
     expect(cursorTool).toBeDefined();
     expect(cursorTool.joins).toBeGreaterThanOrEqual(1);
   });
@@ -370,7 +418,7 @@ describe('recordEdit extended', () => {
     await team().recordEdit(agentId, 'src/a.js', ownerId); // same file again
 
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find(s => s.owner_handle === 'alice');
+    const session = history.sessions.find((s) => s.handle === 'alice');
     expect(session).toBeDefined();
     expect(session.edit_count).toBe(3);
     // files_touched should have both unique files
@@ -382,7 +430,7 @@ describe('recordEdit extended', () => {
   it('normalizes paths on record', async () => {
     await team().recordEdit(agentId, './src//c.js', ownerId);
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find(s => s.owner_handle === 'alice');
+    const session = history.sessions.find((s) => s.handle === 'alice');
     expect(session.files_touched).toContain('src/c.js');
     expect(session.files_touched).not.toContain('./src//c.js');
   });
@@ -492,7 +540,7 @@ describe('Memory pruning', () => {
         `Unique memory number ${i} with random value ${Math.random()} and extra context for uniqueness`,
         ['config'],
         'alice',
-        ownerId
+        ownerId,
       );
     }
 
@@ -525,7 +573,7 @@ describe('Memory fuzzy dedup extended', () => {
       'The API rate limit should be configured to 100 requests per minute',
       ['config'],
       'alice',
-      ownerId
+      ownerId,
     );
     expect(original.ok).toBe(true);
     expect(original.id).toBeDefined();
@@ -536,7 +584,7 @@ describe('Memory fuzzy dedup extended', () => {
       'The API rate limit should be configured to 100 requests per minute for safety',
       ['config'],
       'alice',
-      ownerId
+      ownerId,
     );
     expect(second.ok).toBe(true);
     expect(second.id).toBeDefined();
@@ -549,7 +597,7 @@ describe('Memory fuzzy dedup extended', () => {
       'Always use TypeScript strict mode in production builds',
       ['pattern'],
       'alice',
-      ownerId
+      ownerId,
     );
     expect(mem1.ok).toBe(true);
 
@@ -558,7 +606,7 @@ describe('Memory fuzzy dedup extended', () => {
       'Database connection pools should timeout after 30 seconds',
       ['config'],
       'alice',
-      ownerId
+      ownerId,
     );
     expect(mem2.ok).toBe(true);
     expect(mem2.id).toBeDefined();
@@ -585,7 +633,7 @@ describe('saveMemory validation', () => {
         `Memory for tag ${tag} with more context to be unique ${Math.random()}`,
         [tag],
         'alice',
-        ownerId
+        ownerId,
       );
       expect(res.ok).toBe(true);
     }
@@ -597,7 +645,7 @@ describe('saveMemory validation', () => {
       `Memory with multiple tags ${Math.random()}`,
       ['pattern', 'config', 'important'],
       'alice',
-      ownerId
+      ownerId,
     );
     expect(res.ok).toBe(true);
   });
@@ -627,25 +675,32 @@ describe('Messages extended', () => {
 
     // agent2 should see it
     const msgs2 = await team().getMessages(agent2, null, owner2);
-    expect(msgs2.messages.some(m => m.text === 'Secret to bob')).toBe(true);
+    expect(msgs2.messages.some((m) => m.text === 'Secret to bob')).toBe(true);
 
     // agent1 should NOT see it (it's targeted to agent2, not broadcast)
     const msgs1 = await team().getMessages(agent1, null, owner1);
-    expect(msgs1.messages.some(m => m.text === 'Secret to bob')).toBe(false);
+    expect(msgs1.messages.some((m) => m.text === 'Secret to bob')).toBe(false);
   });
 
   it('broadcast message visible to all', async () => {
     await team().sendMessage(agent1, 'alice', 'cursor', 'Hello everyone', null, owner1);
 
     const msgs1 = await team().getMessages(agent1, null, owner1);
-    expect(msgs1.messages.some(m => m.text === 'Hello everyone')).toBe(true);
+    expect(msgs1.messages.some((m) => m.text === 'Hello everyone')).toBe(true);
 
     const msgs2 = await team().getMessages(agent2, null, owner2);
-    expect(msgs2.messages.some(m => m.text === 'Hello everyone')).toBe(true);
+    expect(msgs2.messages.some((m) => m.text === 'Hello everyone')).toBe(true);
   });
 
   it('rejects non-member sending', async () => {
-    const res = await team().sendMessage('cursor:unknown', 'anon', 'cursor', 'msg', null, 'bad-owner');
+    const res = await team().sendMessage(
+      'cursor:unknown',
+      'anon',
+      'cursor',
+      'msg',
+      null,
+      'bad-owner',
+    );
     expect(res.error).toContain('Not a member');
   });
 });
@@ -664,7 +719,13 @@ describe('getContext extended', () => {
     await team().join(agent2, owner2, 'bob', 'claude');
     await team().updateActivity(agent1, ['src/shared.js'], 'Working on shared module', owner1);
     await team().updateActivity(agent2, ['src/shared.js'], 'Also on shared', owner2);
-    await team().saveMemory(agent1, 'Context test memory about shared module architecture', ['decision'], 'alice', owner1);
+    await team().saveMemory(
+      agent1,
+      'Context test memory about shared module architecture',
+      ['decision'],
+      'alice',
+      owner1,
+    );
     await team().startSession(agent1, 'alice', 'react', owner1);
   });
 
@@ -676,9 +737,9 @@ describe('getContext extended', () => {
 
   it('members include expected fields', async () => {
     const ctx = await team().getContext(agent1, owner1);
-    const me = ctx.members.find(m => m.agent_id === agent1);
+    const me = ctx.members.find((m) => m.agent_id === agent1);
     expect(me.handle).toBe('alice');
-    expect(me.tool).toBe('cursor');
+    expect(me.host_tool).toBe('cursor');
     expect(me.status).toBeDefined();
     expect(me.activity).toBeDefined();
     expect(me.activity.files).toContain('src/shared.js');
@@ -696,17 +757,17 @@ describe('getContext extended', () => {
     expect(ctx.memories.length).toBeGreaterThan(0);
   });
 
-  it('includes recent sessions', async () => {
+  it('includes sessions', async () => {
     const ctx = await team().getContext(agent1, owner1);
-    expect(ctx.recentSessions).toBeDefined();
-    expect(ctx.recentSessions.length).toBeGreaterThan(0);
+    expect(ctx.sessions).toBeDefined();
+    expect(ctx.sessions.length).toBeGreaterThan(0);
   });
 
   it('includes messages', async () => {
     await team().sendMessage(agent1, 'alice', 'cursor', 'Context msg test', null, owner1);
     const ctx = await team().getContext(agent1, owner1);
     expect(ctx.messages).toBeDefined();
-    expect(ctx.messages.some(m => m.text === 'Context msg test')).toBe(true);
+    expect(ctx.messages.some((m) => m.text === 'Context msg test')).toBe(true);
   });
 });
 
@@ -729,8 +790,8 @@ describe('Lock management extended', () => {
     const result = await team().getLockedFiles(agent1, owner1);
     expect(result.locks).toBeDefined();
     expect(result.locks.length).toBe(2);
-    expect(result.locks.some(l => l.file_path === 'src/main.js')).toBe(true);
-    expect(result.locks.some(l => l.file_path === 'src/lib.js')).toBe(true);
+    expect(result.locks.some((l) => l.file_path === 'src/main.js')).toBe(true);
+    expect(result.locks.some((l) => l.file_path === 'src/lib.js')).toBe(true);
   });
 
   it('releaseFiles with no files releases all locks for agent', async () => {
@@ -739,7 +800,13 @@ describe('Lock management extended', () => {
     expect(res.ok).toBe(true);
 
     // agent2 can now claim them
-    const claim = await team().claimFiles(agent2, ['src/a.js', 'src/b.js'], 'bob', 'claude', owner2);
+    const claim = await team().claimFiles(
+      agent2,
+      ['src/a.js', 'src/b.js'],
+      'bob',
+      'claude',
+      owner2,
+    );
     expect(claim.claimed).toContain('src/a.js');
     expect(claim.claimed).toContain('src/b.js');
     expect(claim.blocked.length).toBe(0);
@@ -748,12 +815,18 @@ describe('Lock management extended', () => {
   it('lock normalizes file paths', async () => {
     await team().claimFiles(agent1, ['./src//dup.js'], 'alice', 'cursor', owner1);
     const result = await team().getLockedFiles(agent1, owner1);
-    expect(result.locks.some(l => l.file_path === 'src/dup.js')).toBe(true);
-    expect(result.locks.some(l => l.file_path === './src//dup.js')).toBe(false);
+    expect(result.locks.some((l) => l.file_path === 'src/dup.js')).toBe(true);
+    expect(result.locks.some((l) => l.file_path === './src//dup.js')).toBe(false);
   });
 
   it('rejects non-member claiming files', async () => {
-    const res = await team().claimFiles('cursor:stranger', ['file.js'], 'anon', 'cursor', 'bad-owner');
+    const res = await team().claimFiles(
+      'cursor:stranger',
+      ['file.js'],
+      'anon',
+      'cursor',
+      'bad-owner',
+    );
     expect(res.error).toContain('Not a member');
   });
 });
@@ -777,7 +850,7 @@ describe('Conflict detection with locks', () => {
     const res = await team().checkConflicts(agent2, ['src/locked.js'], owner2);
     expect(res.locked.length).toBeGreaterThan(0);
     expect(res.locked[0].file).toBe('src/locked.js');
-    expect(res.locked[0].held_by).toBe('alice');
+    expect(res.locked[0].handle).toBe('alice');
   });
 
   it('own lock does not show as conflict', async () => {
@@ -820,11 +893,11 @@ describe('Session lifecycle', () => {
       'Session lifecycle test memory about session counting mechanism',
       ['pattern'],
       'alice',
-      ownerId
+      ownerId,
     );
 
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find(ses => ses.owner_handle === 'alice' && !ses.ended_at);
+    const session = history.sessions.find((ses) => ses.handle === 'alice' && !ses.ended_at);
     if (session) {
       expect(session.memories_saved).toBeGreaterThanOrEqual(1);
     }
@@ -840,7 +913,13 @@ describe('Telemetry tracking', () => {
 
   it('setup: join and perform actions', async () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
-    await team().saveMemory(agentId, 'Telemetry test memory with unique content for the test', ['config'], 'alice', ownerId);
+    await team().saveMemory(
+      agentId,
+      'Telemetry test memory with unique content for the test',
+      ['config'],
+      'alice',
+      ownerId,
+    );
     await team().sendMessage(agentId, 'alice', 'cursor', 'Telemetry msg', null, ownerId);
     await team().checkConflicts(agentId, ['src/tel.js'], ownerId);
   });

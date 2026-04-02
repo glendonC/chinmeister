@@ -3,9 +3,23 @@ import { describe, it, expect, vi } from 'vitest';
 // Mock cloudflare:workers so DO class imports resolve outside the Workers runtime
 vi.mock('cloudflare:workers', () => ({ DurableObject: class {} }));
 
-import { parseTeamPath, getAgentRuntime, getToolFromAgentId, sanitizeTags, teamErrorStatus } from '../index.js';
+import {
+  parseTeamPath,
+  getAgentRuntime,
+  getToolFromAgentId,
+  sanitizeTags,
+  teamErrorStatus,
+} from '../index.js';
 import { normalizePath, toSQLDateTime } from '../lib/text-utils.js';
-import { requireString, requireArray, sqlChanges, validateFileArray, validateTagsArray, withRateLimit, requireJson } from '../lib/validation.js';
+import {
+  requireString,
+  requireArray,
+  sqlChanges,
+  validateFileArray,
+  validateTagsArray,
+  withRateLimit,
+  requireJson,
+} from '../lib/validation.js';
 
 // --- parseTeamPath ---
 
@@ -121,10 +135,7 @@ describe('getAgentRuntime', () => {
 
     expect(getAgentRuntime(request, { id: 'user-1' })).toEqual({
       agentId: 'cursor:abc123',
-      tool: 'vscode',
-      host_tool: 'vscode',
       hostTool: 'vscode',
-      agent_surface: 'cline',
       agentSurface: 'cline',
       transport: 'mcp',
       tier: 'connected',
@@ -140,10 +151,7 @@ describe('getAgentRuntime', () => {
 
     expect(getAgentRuntime(request, { id: 'user-1' })).toMatchObject({
       agentId: 'windsurf:def456',
-      tool: 'windsurf',
-      host_tool: 'windsurf',
       hostTool: 'windsurf',
-      agent_surface: null,
       agentSurface: null,
       transport: null,
       tier: null,
@@ -224,7 +232,9 @@ describe('teamErrorStatus', () => {
   });
 
   it('returns 400 for VALIDATION code', () => {
-    expect(teamErrorStatus({ error: 'Handle must be 3-20 characters', code: 'VALIDATION' })).toBe(400);
+    expect(teamErrorStatus({ error: 'Handle must be 3-20 characters', code: 'VALIDATION' })).toBe(
+      400,
+    );
   });
 
   it('returns 500 for INTERNAL code', () => {
@@ -552,15 +562,21 @@ describe('validateTagsArray', () => {
   });
 
   it('returns error for tags exceeding 50 chars', () => {
-    expect(validateTagsArray(['a'.repeat(51)], 10)).toEqual({ error: 'each tag must be a string of 50 chars or less' });
+    expect(validateTagsArray(['a'.repeat(51)], 10)).toEqual({
+      error: 'each tag must be a string of 50 chars or less',
+    });
   });
 
   it('returns error for non-string tags', () => {
-    expect(validateTagsArray([42], 10)).toEqual({ error: 'each tag must be a string of 50 chars or less' });
+    expect(validateTagsArray([42], 10)).toEqual({
+      error: 'each tag must be a string of 50 chars or less',
+    });
   });
 
   it('lowercases and trims valid tags', () => {
-    expect(validateTagsArray(['  Config  ', 'PATTERN'], 10)).toEqual({ tags: ['config', 'pattern'] });
+    expect(validateTagsArray(['  Config  ', 'PATTERN'], 10)).toEqual({
+      tags: ['config', 'pattern'],
+    });
   });
 
   it('filters out tags that become empty after trimming', () => {
@@ -612,7 +628,9 @@ describe('withRateLimit', () => {
     let consumed = false;
     const mockDb = {
       checkRateLimit: async () => ({ allowed: true, count: 2 }),
-      consumeRateLimit: async () => { consumed = true; },
+      consumeRateLimit: async () => {
+        consumed = true;
+      },
     };
     const handler = async () => new Response(JSON.stringify({ ok: true }), { status: 200 });
 
@@ -625,9 +643,12 @@ describe('withRateLimit', () => {
     let consumed = false;
     const mockDb = {
       checkRateLimit: async () => ({ allowed: true, count: 0 }),
-      consumeRateLimit: async () => { consumed = true; },
+      consumeRateLimit: async () => {
+        consumed = true;
+      },
     };
-    const handler = async () => new Response(JSON.stringify({ error: 'Bad input' }), { status: 400 });
+    const handler = async () =>
+      new Response(JSON.stringify({ error: 'Bad input' }), { status: 400 });
 
     const response = await withRateLimit(mockDb, 'test-key', 5, 'limit', handler);
     expect(response.status).toBe(400);
@@ -638,7 +659,9 @@ describe('withRateLimit', () => {
     let consumed = false;
     const mockDb = {
       checkRateLimit: async () => ({ allowed: true, count: 0 }),
-      consumeRateLimit: async () => { consumed = true; },
+      consumeRateLimit: async () => {
+        consumed = true;
+      },
     };
     const handler = async () => new Response('Internal error', { status: 500 });
 
@@ -651,7 +674,9 @@ describe('withRateLimit', () => {
     const counts = { 'key-a': 5, 'key-b': 0 };
     const mockDb = {
       checkRateLimit: async (key, max) => ({ allowed: counts[key] < max, count: counts[key] }),
-      consumeRateLimit: async (key) => { counts[key]++; },
+      consumeRateLimit: async (key) => {
+        counts[key]++;
+      },
     };
 
     const handler = async () => new Response('ok', { status: 200 });
@@ -671,7 +696,10 @@ describe('withRateLimit', () => {
       checkRateLimit: async () => ({ allowed: false, count: 10 }),
       consumeRateLimit: async () => {},
     };
-    const handler = async () => { handlerCalled = true; return new Response('ok', { status: 200 }); };
+    const handler = async () => {
+      handlerCalled = true;
+      return new Response('ok', { status: 200 });
+    };
 
     await withRateLimit(mockDb, 'test-key', 5, 'limit', handler);
     expect(handlerCalled).toBe(false);

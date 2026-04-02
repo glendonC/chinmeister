@@ -9,8 +9,12 @@
     "test": "vitest run",
     "test:coverage": "vitest run"
   },
+  "dependencies": {
+    "@chinwag/shared": "file:../shared"
+  },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.13.4",
+    "@cloudflare/workers-types": "^4.20260402.1",
     "vitest": "^4.1.2",
     "wrangler": "^4.0.0"
   }

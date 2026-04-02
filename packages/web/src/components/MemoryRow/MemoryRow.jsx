@@ -4,6 +4,10 @@ import { getToolMeta } from '../../lib/toolMeta.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './MemoryRow.module.css';
 
+const MAX_MEMORY_TEXT_LENGTH = 2000;
+const MAX_MEMORY_TAGS = 50;
+const MAX_MEMORY_TAG_LENGTH = 50;
+
 export default function MemoryRow({ memory, onUpdate, onDelete }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editText, setEditText] = useState(memory.text);
@@ -14,10 +18,10 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
 
   const tags = memory.tags || [];
   const when = formatRelativeTime(memory.updated_at || memory.created_at);
-  const rawTool = memory.source_tool || memory.source_host_tool;
+  const rawTool = memory.host_tool || null;
   const toolMeta = rawTool && rawTool !== 'unknown' ? getToolMeta(rawTool) : null;
-  const handle = memory.source_handle || null;
-  const model = memory.source_model || null;
+  const handle = memory.handle || null;
+  const model = memory.agent_model || null;
   const accentColor = toolMeta?.color || 'var(--soft)';
 
   function handleEdit() {
@@ -33,14 +37,16 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
   }
 
   async function handleSave() {
-    if (!editText.trim()) return;
+    const trimmedText = editText.trim();
+    if (!trimmedText) return;
     const newTags = editTags
       .split(',')
       .map((t) => t.trim().toLowerCase())
-      .filter(Boolean);
-    const textChanged = editText !== memory.text;
-    const tagsChanged =
-      JSON.stringify(newTags) !== JSON.stringify(memory.tags || []);
+      .map((t) => t.slice(0, MAX_MEMORY_TAG_LENGTH))
+      .filter(Boolean)
+      .slice(0, MAX_MEMORY_TAGS);
+    const textChanged = trimmedText !== memory.text;
+    const tagsChanged = JSON.stringify(newTags) !== JSON.stringify(memory.tags || []);
     if (!textChanged && !tagsChanged) {
       setIsEditing(false);
       return;
@@ -51,7 +57,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
     try {
       await onUpdate(
         memory.id,
-        textChanged ? editText.trim() : undefined,
+        textChanged ? trimmedText : undefined,
         tagsChanged ? newTags : undefined,
       );
       setIsEditing(false);
@@ -101,7 +107,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
               className={styles.editTextarea}
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              maxLength={2000}
+              maxLength={MAX_MEMORY_TEXT_LENGTH}
               rows={3}
               disabled={saving}
               autoFocus
@@ -110,7 +116,11 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
             <div className={styles.editFooter}>
               <span className={styles.editAuthor}>{handle}</span>
               <div className={styles.editActions}>
-                <button className={styles.btnSave} onClick={handleSave} disabled={saving || !editText.trim()}>
+                <button
+                  className={styles.btnSave}
+                  onClick={handleSave}
+                  disabled={saving || !editText.trim()}
+                >
                   {saving ? 'Saving\u2026' : 'Save'}
                 </button>
                 <button className={styles.btnCancel} onClick={handleCancel} disabled={saving}>
@@ -160,7 +170,9 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
               <>
                 <span className={styles.sep}>&middot;</span>
                 {tags.map((t) => (
-                  <span key={t} className={styles.tag}>{t}</span>
+                  <span key={t} className={styles.tag}>
+                    {t}
+                  </span>
                 ))}
               </>
             )}

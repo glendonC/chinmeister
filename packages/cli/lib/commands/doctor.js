@@ -4,7 +4,7 @@ import {
   formatIntegrationScanResults,
   scanHostIntegrations,
   summarizeIntegrationScan,
-} from '../../../shared/integration-doctor.js';
+} from '@chinwag/shared/integration-doctor.js';
 
 const ok = chalk.green('✔');
 const warn = chalk.yellow('!');
@@ -49,10 +49,12 @@ export async function runDoctor(argv = []) {
   console.log(`  ${chalk.cyan.bold('chinwag doctor')}`);
   console.log(`  ${dim('integration health and repair')}`);
   console.log('');
-  console.log(formatIntegrationScanResults(initialScan, { onlyDetected: parsed.onlyDetected })
-    .split('\n')
-    .map((line) => `  ${line}`)
-    .join('\n'));
+  console.log(
+    formatIntegrationScanResults(initialScan, { onlyDetected: parsed.onlyDetected })
+      .split('\n')
+      .map((line) => `  ${line}`)
+      .join('\n'),
+  );
   console.log('');
 
   const targets = selectRepairTargets(initialScan, parsed);

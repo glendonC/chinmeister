@@ -17,7 +17,7 @@ import { findTeamFile, teamHandlers } from './lib/team.js';
 import { detectRuntimeIdentity } from './lib/identity.js';
 import { resolveAgentIdentity } from './lib/lifecycle.js';
 import { diffState } from './lib/diff-state.js';
-import { isProcessAlive, pingAgentTerminal } from '../shared/session-registry.js';
+import { isProcessAlive, pingAgentTerminal } from '@chinwag/shared/session-registry.js';
 
 // --- Constants ---
 const POLL_INTERVAL_MS = 10_000;
@@ -27,7 +27,9 @@ const PARENT_WATCH_INTERVAL_MS = 5000;
 let PKG = { version: '0.0.0' };
 try {
   PKG = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
-} catch (err) { console.error('[chinwag-channel]', err?.message || 'failed to read package.json'); }
+} catch (err) {
+  console.error('[chinwag-channel]', err?.message || 'failed to read package.json');
+}
 
 async function main() {
   if (!configExists()) {
@@ -56,7 +58,9 @@ async function main() {
   const { agentId } = resolveAgentIdentity(config.token, toolName);
   const client = api(config, { agentId, runtimeIdentity: runtime });
   const team = teamHandlers(client);
-  console.error(`[chinwag-channel] Runtime: ${toolName} via ${runtime.transport}, Agent ID: ${agentId}`);
+  console.error(
+    `[chinwag-channel] Runtime: ${toolName} via ${runtime.transport}, Agent ID: ${agentId}`,
+  );
 
   const server = new Server(
     { name: 'chinwag-channel', version: PKG.version },
@@ -64,7 +68,7 @@ async function main() {
       capabilities: {
         experimental: { 'claude/channel': {} },
       },
-    }
+    },
   );
 
   const transport = new StdioServerTransport();
@@ -107,7 +111,11 @@ async function main() {
       await team.heartbeat(teamId);
     } catch (err) {
       if (err.message?.includes('Not a member')) {
-        try { await team.joinTeam(teamId); } catch (rejoinErr) { console.error('[chinwag-channel]', rejoinErr?.message || 'rejoin failed'); }
+        try {
+          await team.joinTeam(teamId);
+        } catch (rejoinErr) {
+          console.error('[chinwag-channel]', rejoinErr?.message || 'rejoin failed');
+        }
       }
     }
   }, HEARTBEAT_INTERVAL_MS);
@@ -133,9 +141,11 @@ async function main() {
 }
 
 function shouldRequestAttention(content) {
-  return content.startsWith('CONFLICT:')
-    || content.startsWith('Message from ')
-    || content.includes('may be stuck');
+  return (
+    content.startsWith('CONFLICT:') ||
+    content.startsWith('Message from ') ||
+    content.includes('may be stuck')
+  );
 }
 
 async function pushEvent(server, agentId, content) {

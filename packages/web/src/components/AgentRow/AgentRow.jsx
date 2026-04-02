@@ -4,15 +4,19 @@ import styles from './AgentRow.module.css';
 
 export default function AgentRow({ agent }) {
   const isActive = agent.status === 'active';
-  const tool = agent.tool && agent.tool !== 'unknown' ? agent.tool : null;
+  const tool = agent.host_tool && agent.host_tool !== 'unknown' ? agent.host_tool : null;
   const files = agent.activity?.files || [];
   const summary = agent.activity?.summary || '';
   const duration = formatDuration(agent.session_minutes);
 
   // Show first 2 file basenames
-  const fileDisplay = files.length > 0
-    ? files.slice(0, 2).map(f => f.split('/').pop()).join(', ') + (files.length > 2 ? ` +${files.length - 2}` : '')
-    : null;
+  const fileDisplay =
+    files.length > 0
+      ? files
+          .slice(0, 2)
+          .map((f) => f.split('/').pop())
+          .join(', ') + (files.length > 2 ? ` +${files.length - 2}` : '')
+      : null;
 
   // Filter out useless summaries
   const showSummary = summary && !/^editing\s/i.test(summary);

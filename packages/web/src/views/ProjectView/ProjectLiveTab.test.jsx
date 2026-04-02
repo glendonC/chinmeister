@@ -38,7 +38,11 @@ async function loadProjectLiveTab() {
 
   vi.doMock('../../components/AgentRow/AgentRow.jsx', () => ({
     default: function MockAgentRow({ agent }) {
-      return <div data-testid={`agent-${agent.handle}`}>{agent.handle} ({agent.status})</div>;
+      return (
+        <div data-testid={`agent-${agent.handle}`}>
+          {agent.handle} ({agent.status})
+        </div>
+      );
     },
   }));
 
@@ -142,9 +146,7 @@ describe('ProjectLiveTab', () => {
     const { container, unmount } = renderComponent(Tab, {
       sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', tool: 'cc' }],
       offlineAgents: [],
-      conflicts: [
-        { file: 'a.js', owners: ['alice', 'bob'] },
-      ],
+      conflicts: [{ file: 'a.js', owners: ['alice', 'bob'] }],
       filesInPlay: ['a.js'],
       locks: [],
       liveToolMix: [],
@@ -158,7 +160,7 @@ describe('ProjectLiveTab', () => {
   it('renders files in play', async () => {
     const Tab = await loadProjectLiveTab();
     const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', tool: 'cc' }],
+      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', host_tool: 'cc' }],
       offlineAgents: [],
       conflicts: [],
       filesInPlay: ['src/app.js', 'src/utils.js'],
@@ -175,11 +177,11 @@ describe('ProjectLiveTab', () => {
   it('renders lock rows', async () => {
     const Tab = await loadProjectLiveTab();
     const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', tool: 'cc' }],
+      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', host_tool: 'cc' }],
       offlineAgents: [],
       conflicts: [],
       filesInPlay: ['config.json'],
-      locks: [{ file_path: 'config.json', owner_handle: 'alice' }],
+      locks: [{ file_path: 'config.json', handle: 'alice' }],
       liveToolMix: [],
     });
 
@@ -191,7 +193,9 @@ describe('ProjectLiveTab', () => {
   it('renders live tool mix section', async () => {
     const Tab = await loadProjectLiveTab();
     const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', tool: 'claude-code' }],
+      sortedAgents: [
+        { agent_id: 'a1', handle: 'alice', status: 'active', host_tool: 'claude-code' },
+      ],
       offlineAgents: [],
       conflicts: [],
       filesInPlay: [],

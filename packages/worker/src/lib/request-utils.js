@@ -31,10 +31,7 @@ export function getAgentRuntime(request, user) {
 
   return {
     agentId,
-    tool: hostTool || 'unknown',
-    host_tool: hostTool || 'unknown',
     hostTool: hostTool || 'unknown',
-    agent_surface: agentSurface || null,
     agentSurface: agentSurface || null,
     transport: transport || null,
     tier: tier || null,
@@ -44,8 +41,8 @@ export function getAgentRuntime(request, user) {
 export function sanitizeTags(arr) {
   if (!Array.isArray(arr)) return [];
   return arr
-    .filter(t => typeof t === 'string')
-    .map(t => t.slice(0, 50).toLowerCase().trim())
+    .filter((t) => typeof t === 'string')
+    .map((t) => t.slice(0, 50).toLowerCase().trim())
     .filter(Boolean)
     .slice(0, 50);
 }
@@ -87,7 +84,11 @@ export function teamErrorStatus(result) {
 
   // Legacy fallback: sniff the error message string
   const msg = typeof result === 'string' ? result : result?.error;
-  if (msg?.includes('Not a member') || msg?.includes('Not your agent') || msg?.includes('Only the author')) {
+  if (
+    msg?.includes('Not a member') ||
+    msg?.includes('Not your agent') ||
+    msg?.includes('Only the author')
+  ) {
     return 403;
   }
   return 400;

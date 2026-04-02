@@ -39,7 +39,7 @@ export default function ProjectLiveTab({
           <div className={styles.sectionBody}>
             {sortedAgents.map((agent) => (
               <AgentRow
-                key={agent.agent_id || `${agent.handle}:${agent.tool}`}
+                key={agent.agent_id || `${agent.handle}:${agent.host_tool}`}
                 agent={agent}
               />
             ))}
@@ -63,7 +63,9 @@ export default function ProjectLiveTab({
               {hasFiles && (
                 <div className={styles.pathList}>
                   {filesInPlay.map((file) => (
-                    <span key={file} className={styles.pathRow}>{file}</span>
+                    <span key={file} className={styles.pathRow}>
+                      {file}
+                    </span>
                   ))}
                 </div>
               )}
@@ -72,7 +74,7 @@ export default function ProjectLiveTab({
                 <div className={hasFiles ? styles.lockList : undefined}>
                   {locks.map((lock, index) => (
                     <LockRow
-                      key={lock.file_path || `${lock.owner_handle || 'lock'}:${index}`}
+                      key={lock.file_path || `${lock.handle || 'lock'}:${index}`}
                       lock={lock}
                     />
                   ))}
