@@ -18,4 +18,14 @@ export default defineConfig({
   server: {
     port: 56790,
   },
+  test: {
+    environment: 'jsdom',
+    coverage: {
+      provider: 'v8',
+      include: ['src/**/*.js', 'src/**/*.jsx'],
+      exclude: ['src/**/*.test.*'],
+      reporter: ['text', 'json-summary'],
+      reportsDirectory: './coverage',
+    },
+  },
 });
