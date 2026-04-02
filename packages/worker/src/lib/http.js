@@ -1,3 +1,10 @@
+/**
+ * Create a JSON response.
+ * @param {any} data - Response body (will be JSON.stringified)
+ * @param {number} [status=200]
+ * @param {Record<string, string>} [extraHeaders={}]
+ * @returns {Response}
+ */
 export function json(data, status = 200, extraHeaders = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -7,6 +14,12 @@ export function json(data, status = 200, extraHeaders = {}) {
 
 import { MAX_BODY_SIZE } from './constants.js';
 
+/**
+ * Parse a JSON request body with Content-Type and size validation.
+ * Returns the parsed object, or an object with `_parseError` on failure.
+ * @param {Request} request
+ * @returns {Promise<Record<string, any>>}
+ */
 export async function parseBody(request) {
   const contentType = request.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) {

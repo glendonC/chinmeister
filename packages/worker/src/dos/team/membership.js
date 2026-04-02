@@ -1,8 +1,20 @@
 // Team membership — join, leave, heartbeat.
 // Each function takes `sql` as the first parameter and operates on the members table.
 
+/** @import { DOResult } from '../../types.js' */
 import { normalizeRuntimeMetadata } from './runtime.js';
 
+/**
+ * Join a team. Atomic ownership-safe upsert: re-joining refreshes heartbeat,
+ * but an agent_id owned by another user is rejected.
+ * @param {any} sql - DO SQL handle (ctx.storage.sql)
+ * @param {string} agentId
+ * @param {string} ownerId
+ * @param {string} ownerHandle
+ * @param {string | Record<string, any>} runtimeOrTool
+ * @param {(metric: string) => void} recordMetric
+ * @returns {DOResult}
+ */
 export function join(sql, agentId, ownerId, ownerHandle, runtimeOrTool, recordMetric) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, agentId);
 
@@ -38,6 +50,14 @@ export function join(sql, agentId, ownerId, ownerHandle, runtimeOrTool, recordMe
   return { ok: true };
 }
 
+/**
+ * Leave a team. Removes member, their activity, and their locks.
+ * If ownerId is provided, only removes if the agent belongs to that owner.
+ * @param {any} sql - DO SQL handle
+ * @param {string} agentId
+ * @param {string | null} ownerId
+ * @returns {DOResult}
+ */
 export function leave(sql, agentId, ownerId) {
   // Atomic ownership check: delete the member only if the owner matches (or no
   // ownerId was provided). Avoids a separate SELECT+check TOCTOU pattern.
@@ -69,6 +89,12 @@ export function leave(sql, agentId, ownerId) {
   return { ok: true };
 }
 
+/**
+ * Bump an agent's heartbeat timestamp.
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId - Already-resolved agent ID
+ * @returns {DOResult}
+ */
 export function heartbeat(sql, resolvedAgentId) {
   sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", resolvedAgentId);
   const row = sql.exec('SELECT changes() as c').toArray();

@@ -97,8 +97,8 @@ export async function handleBatchEvaluate(request, env) {
       continue;
     }
     const result = await evaluateTool(toolName.trim(), env);
-    if (result.error) {
-      results.push({ name: toolName, error: result.error });
+    if (result.error || !result.evaluation) {
+      results.push({ name: toolName, error: result.error || 'No evaluation returned' });
     } else {
       await db.saveEvaluation(result.evaluation);
       results.push({ name: result.evaluation.name, verdict: result.evaluation.verdict, confidence: result.evaluation.confidence });

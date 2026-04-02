@@ -1,9 +1,19 @@
 // Activity tracking — updateActivity, checkConflicts, reportFile.
 // Each function takes `sql` as the first parameter.
 
+/** @import { DOResult, ConflictResult } from '../../types.js' */
 import { normalizePath } from '../../lib/text-utils.js';
 import { HEARTBEAT_ACTIVE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
 
+/**
+ * Report the files an agent is currently working on, plus a summary.
+ * Normalizes file paths and bumps the agent's heartbeat.
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string[]} files - File paths the agent is editing
+ * @param {string} summary - Human-readable activity summary
+ * @returns {DOResult}
+ */
 export function updateActivity(sql, resolvedAgentId, files, summary) {
   const normalized = files.map(normalizePath);
 
@@ -20,6 +30,16 @@ export function updateActivity(sql, resolvedAgentId, files, summary) {
   return { ok: true };
 }
 
+/**
+ * Check if any active agents are editing the same files.
+ * Returns conflicts (activity overlap) and locked files (advisory locks).
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string[]} files - File paths to check
+ * @param {(metric: string) => void} recordMetric
+ * @param {Set<string>} [connectedAgentIds] - Agent IDs with active WebSocket connections
+ * @returns {ConflictResult}
+ */
 export function checkConflicts(sql, resolvedAgentId, files, recordMetric, connectedAgentIds = new Set()) {
   // Active = recent heartbeat OR live WebSocket connection
   const wsAlive = [...connectedAgentIds];
@@ -91,6 +111,14 @@ export function checkConflicts(sql, resolvedAgentId, files, recordMetric, connec
   return { conflicts, locked: lockedFiles };
 }
 
+/**
+ * Append a single file to an agent's activity list (used for real-time edit reporting).
+ * Creates activity row if none exists. Caps at ACTIVITY_MAX_FILES.
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string} filePath
+ * @returns {DOResult}
+ */
 export function reportFile(sql, resolvedAgentId, filePath) {
   const normalized = normalizePath(filePath);
 

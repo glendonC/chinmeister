@@ -4,6 +4,17 @@
 
 import { normalizeRuntimeMetadata } from './runtime.js';
 
+/**
+ * Send a message from one agent to another (or broadcast to all).
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string} handle - Sender's display handle
+ * @param {string | Record<string, any>} runtimeOrTool
+ * @param {string} text - Message content
+ * @param {string | null} targetAgent - Target agent ID, or null for broadcast
+ * @param {(metric: string) => void} recordMetric
+ * @returns {{ ok: boolean, id: string }}
+ */
 export function sendMessage(sql, resolvedAgentId, handle, runtimeOrTool, text, targetAgent, recordMetric) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
   const id = crypto.randomUUID();
@@ -16,6 +27,13 @@ export function sendMessage(sql, resolvedAgentId, handle, runtimeOrTool, text, t
   return { ok: true, id };
 }
 
+/**
+ * Get messages for an agent (broadcast + targeted). Defaults to last hour.
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string | null} since - ISO datetime cutoff, or null for last hour
+ * @returns {{ messages: import('../../types.js').AgentMessage[] }}
+ */
 export function getMessages(sql, resolvedAgentId, since) {
   const messages = sql.exec(
     `SELECT id, from_handle, from_tool, from_host_tool, from_agent_surface, target_agent, text, created_at

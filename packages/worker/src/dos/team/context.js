@@ -2,10 +2,15 @@
 // These are the two "wide" reads: getContext (full state for agents/dashboards)
 // and getSummary (lightweight counts for cross-project overview).
 
+/** @import { TeamSummary } from '../../types.js' */
 import { HEARTBEAT_ACTIVE_WINDOW_S } from '../../lib/constants.js';
 import { inferHostToolFromAgentId } from './runtime.js';
 
-/** Read all telemetry metrics, grouped by type. */
+/**
+ * Read all telemetry metrics, grouped by type (tools, hosts, surfaces, models, usage).
+ * @param {any} sql - DO SQL handle
+ * @returns {{ tools_configured: Array<{tool: string, joins: number}>, hosts_configured: Array<{host_tool: string, joins: number}>, surfaces_seen: Array<{agent_surface: string, joins: number}>, models_seen: Array<{model: string, count: number}>, usage: Record<string, number> }}
+ */
 export function getTelemetryBreakdown(sql) {
   const toolMetrics = sql.exec(
     "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
@@ -42,6 +47,7 @@ export function getTelemetryBreakdown(sql) {
   const keyMetrics = sql.exec(
     "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
   ).toArray();
+  /** @type {Record<string, number>} */
   const usage = {};
   for (const m of keyMetrics) usage[m.metric] = m.count;
 

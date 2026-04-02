@@ -5,8 +5,9 @@
 // enough context to debug remotely via `wrangler tail`.
 
 /**
- * Error messages that mean "this migration already ran" — not real failures.
+ * Error messages that mean "this migration already ran" -- not real failures.
  * SQLite uses these exact phrases; we match case-insensitively for safety.
+ * @type {string[]}
  */
 const IDEMPOTENT_PATTERNS = [
   'duplicate column name',  // ALTER TABLE ADD COLUMN that already exists
@@ -32,7 +33,7 @@ export function runMigration(sql, ddl, backfill, label) {
     sql.exec(ddl);
     if (backfill) sql.exec(backfill);
     return true;
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     if (isExpectedError(err.message)) {
       return false; // Already applied — this is fine
     }

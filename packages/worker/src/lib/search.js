@@ -50,7 +50,7 @@ export async function deepSearchEvaluate(toolName, outputSchema, env) {
       grounding: data.output?.grounding || [],
       results: (data.results || []).map(r => ({ title: r.title, url: r.url, favicon: r.favicon || null, image: r.image || null })),
     };
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     return { error: err.name === 'AbortError' ? 'Exa search timed out' : err.message };
   }
 }
@@ -77,7 +77,7 @@ export async function startResearch(instructions, env, model = 'exa-research') {
 
     const data = await res.json();
     return { researchId: data.researchId, status: data.status };
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     return { error: err.message };
   }
 }
@@ -102,7 +102,7 @@ export async function pollResearch(researchId, env) {
     }
 
     return await res.json();
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     return { error: err.message };
   }
 }

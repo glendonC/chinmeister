@@ -159,7 +159,11 @@ export class RoomDO extends DurableObject {
     await this.#updateLobbyCount();
   }
 
-  broadcast(message, exclude = null) {
+  /**
+   * @param {object} message
+   * @param {WebSocket} [exclude]
+   */
+  broadcast(message, exclude) {
     const data = JSON.stringify(message);
     for (const [ws] of this.sessions) {
       if (ws !== exclude) {

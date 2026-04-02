@@ -149,7 +149,7 @@ export async function evaluateTool(nameOrUrl, env) {
 
     const evaluation = toEvaluation(result.output, result.grounding, result.results || []);
     return { ok: true, evaluation };
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     return { error: err.message || 'Evaluation failed' };
   }
 }

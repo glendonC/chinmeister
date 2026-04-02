@@ -20,7 +20,11 @@ const BLOCKED_REGEXES = BLOCKED_PATTERNS.map(
   p => new RegExp(`\\b${p.replace(/\s+/g, '\\s+')}\\b`, 'i')
 );
 
-// Layer 1: instant blocklist check (sync, <1ms)
+/**
+ * Layer 1: instant blocklist check (sync, <1ms).
+ * @param {string} text
+ * @returns {boolean}
+ */
 export function isBlocked(text) {
   return BLOCKED_REGEXES.some(r => r.test(text));
 }
@@ -62,8 +66,12 @@ async function moderateWithAI(text, env) {
   }
 }
 
-// Combined check: blocklist first (instant), then AI if available.
-// Returns { blocked: boolean, reason?: string }
+/**
+ * Combined check: blocklist first (instant), then AI if available.
+ * @param {string} text
+ * @param {import('./types.js').Env} env
+ * @returns {Promise<import('./types.js').ModerationResult>}
+ */
 export async function checkContent(text, env) {
   // Layer 1: instant blocklist
   if (isBlocked(text)) {

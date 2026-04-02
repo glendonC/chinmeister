@@ -217,7 +217,7 @@ export default {
         headers.set(key, value);
       }
       return new Response(response.body, { status: response.status, headers });
-    } catch (err) {
+    } catch (/** @type {any} */ err) {
       const ref = crypto.randomUUID().slice(0, 8);
       console.error(`Request error (ref: ${ref}):`, { method, path, error: err.message, stack: err.stack });
       return json({ error: `Internal server error (ref: ${ref})` }, 500, corsHeaders);
