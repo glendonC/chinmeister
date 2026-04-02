@@ -382,3 +382,136 @@ describe('updateAgentProfile', () => {
     expect(result.ok).toBe(true);
   });
 });
+
+// --- Handle generation safety ---
+
+describe('Handle generation', () => {
+  it('generates handles matching expected format (adjective + noun)', async () => {
+    // Create multiple users and verify all handles are lowercase alpha
+    for (let i = 0; i < 10; i++) {
+      const user = await getDB().createUser();
+      expect(user.handle).toMatch(/^[a-z]+[a-z0-9]*$/);
+      // adjective + noun should be at least 4 chars (e.g. "aptfox")
+      expect(user.handle.length).toBeGreaterThanOrEqual(4);
+      // Should never exceed 20 + potential digits for collision avoidance
+      expect(user.handle.length).toBeLessThanOrEqual(25);
+    }
+  });
+
+  it('generates distinct handles across many users', async () => {
+    const handles = new Set();
+    for (let i = 0; i < 20; i++) {
+      const user = await getDB().createUser();
+      handles.add(user.handle);
+    }
+    // With 64 adjectives x 64 nouns = 4096 combinations, 20 should all be unique
+    expect(handles.size).toBe(20);
+  });
+
+  it('handle never contains special characters or uppercase', async () => {
+    for (let i = 0; i < 10; i++) {
+      const user = await getDB().createUser();
+      expect(user.handle).not.toMatch(/[A-Z]/);
+      expect(user.handle).not.toMatch(/[^a-z0-9]/);
+    }
+  });
+});
+
+// --- Rate limit edge cases ---
+
+describe('Rate limit edge cases', () => {
+  it('exactly at limit returns not allowed', async () => {
+    const key = `test-rl-exact-${Date.now()}-${Math.random()}`;
+    for (let i = 0; i < 5; i++) {
+      await getDB().consumeRateLimit(key);
+    }
+    const result = await getDB().checkRateLimit(key, 5);
+    expect(result.allowed).toBe(false);
+    expect(result.count).toBe(5);
+  });
+
+  it('one below limit returns allowed', async () => {
+    const key = `test-rl-below-${Date.now()}-${Math.random()}`;
+    for (let i = 0; i < 4; i++) {
+      await getDB().consumeRateLimit(key);
+    }
+    const result = await getDB().checkRateLimit(key, 5);
+    expect(result.allowed).toBe(true);
+    expect(result.count).toBe(4);
+  });
+
+  it('consume beyond limit still increments count', async () => {
+    const key = `test-rl-beyond-${Date.now()}-${Math.random()}`;
+    for (let i = 0; i < 10; i++) {
+      await getDB().consumeRateLimit(key);
+    }
+    const result = await getDB().checkRateLimit(key, 5);
+    expect(result.allowed).toBe(false);
+    expect(result.count).toBe(10);
+  });
+
+  it('limit of 0 means nothing is allowed', async () => {
+    const key = `test-rl-zero-${Date.now()}-${Math.random()}`;
+    const result = await getDB().checkRateLimit(key, 0);
+    expect(result.allowed).toBe(false);
+    expect(result.count).toBe(0);
+  });
+
+  it('limit of 1 allows exactly one', async () => {
+    const key = `test-rl-one-${Date.now()}-${Math.random()}`;
+    const first = await getDB().checkRateLimit(key, 1);
+    expect(first.allowed).toBe(true);
+
+    await getDB().consumeRateLimit(key);
+    const second = await getDB().checkRateLimit(key, 1);
+    expect(second.allowed).toBe(false);
+  });
+});
+
+// --- Web session edge cases ---
+
+describe('Web sessions', () => {
+  it('creates and retrieves a valid web session', async () => {
+    const user = await getDB().createUser();
+    const session = await getDB().createWebSession(user.id, 'Mozilla/5.0');
+    expect(session.token).toBeDefined();
+    expect(session.expires_at).toBeDefined();
+
+    const retrieved = await getDB().getWebSession(session.token);
+    expect(retrieved).not.toBeNull();
+    expect(retrieved.user_id).toBe(user.id);
+  });
+
+  it('returns null for nonexistent session token', async () => {
+    const result = await getDB().getWebSession('nonexistent-token');
+    expect(result).toBeNull();
+  });
+
+  it('returns null for revoked session', async () => {
+    const user = await getDB().createUser();
+    const session = await getDB().createWebSession(user.id, null);
+    await getDB().revokeWebSession(session.token);
+
+    const result = await getDB().getWebSession(session.token);
+    expect(result).toBeNull();
+  });
+
+  it('lists active sessions for a user', async () => {
+    const user = await getDB().createUser();
+    await getDB().createWebSession(user.id, 'Chrome');
+    await getDB().createWebSession(user.id, 'Firefox');
+
+    const sessions = await getDB().getUserWebSessions(user.id);
+    expect(sessions.length).toBe(2);
+  });
+
+  it('does not list revoked sessions', async () => {
+    const user = await getDB().createUser();
+    const s1 = await getDB().createWebSession(user.id, 'Chrome');
+    await getDB().createWebSession(user.id, 'Firefox');
+    await getDB().revokeWebSession(s1.token);
+
+    const sessions = await getDB().getUserWebSessions(user.id);
+    expect(sessions.length).toBe(1);
+  });
+});

@@ -3,6 +3,7 @@
 
 import { normalizePath } from '../../lib/text-utils.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
+import { sqlChanges } from '../../lib/validation.js';
 import { HEARTBEAT_ACTIVE_WINDOW_S } from '../../lib/constants.js';
 
 export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
@@ -31,8 +32,7 @@ export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
 
     // Use changes() to determine outcome: if 0 rows changed, the lock is held
     // by another agent (the WHERE clause prevented the update).
-    const changed = sql.exec('SELECT changes() as c').toArray()[0].c;
-    if (changed === 0) {
+    if (sqlChanges(sql) === 0) {
       // Lock held by another agent — fetch their details for the blocked response.
       const lock = sql.exec(
         'SELECT owner_handle, tool, host_tool, agent_surface, claimed_at FROM locks WHERE file_path = ?', file

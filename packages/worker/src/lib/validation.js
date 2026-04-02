@@ -2,6 +2,7 @@
 // Each returns null on success or an error string/response on failure.
 
 import { json } from './http.js';
+import { getDB } from './env.js';
 
 /**
  * Sanitize an optional string value: type-check, truncate, trim, and convert
@@ -99,4 +100,70 @@ export async function withRateLimit(db, key, max, errorMsg, handler) {
     }
   }
   return response;
+}
+
+/**
+ * Validate that `body[field]` is a non-empty string, optionally capping length.
+ * Returns the trimmed string on success, or null if invalid.
+ *
+ * @param {object} body - Parsed request body
+ * @param {string} field - Field name to check
+ * @param {number} [maxLength] - Optional max character length
+ * @returns {string|null} Trimmed string or null
+ */
+export function requireString(body, field, maxLength) {
+  const value = body[field];
+  if (typeof value !== 'string' || !value.trim()) return null;
+  if (maxLength && value.length > maxLength) return null;
+  return value.trim();
+}
+
+/**
+ * Validate that `body[field]` is an array with at most `maxItems` entries.
+ * Returns the array on success, or null if invalid.
+ *
+ * @param {object} body - Parsed request body
+ * @param {string} field - Field name to check
+ * @param {number} maxItems - Maximum allowed items
+ * @returns {Array|null} Validated array or null
+ */
+export function requireArray(body, field, maxItems) {
+  const value = body[field];
+  if (!Array.isArray(value) || value.length === 0) return null;
+  if (value.length > maxItems) return null;
+  return value;
+}
+
+/**
+ * Execute `SELECT changes()` on a DO SQL handle and return whether any rows changed.
+ * Replaces the repeated pattern: `sql.exec('SELECT changes() as c').toArray()[0].c`
+ *
+ * @param {object} sql - DO SQL handle
+ * @returns {number} Number of rows changed by the last statement
+ */
+export function sqlChanges(sql) {
+  return sql.exec('SELECT changes() as c').toArray()[0].c;
+}
+
+/**
+ * Rate limit a public (unauthenticated) endpoint by client IP.
+ * Uses CF-Connecting-IP for the key. Consumes on every request
+ * (not just success) since public endpoints are read-only and
+ * we want to limit abuse regardless of response status.
+ *
+ * @param {Request} request - Incoming request (for IP extraction)
+ * @param {object} env - Worker env (for DB access)
+ * @param {string} prefix - Rate limit key prefix (e.g. 'stats', 'catalog')
+ * @param {number} max - Max requests per IP per day
+ * @param {function} handler - Async function to run if allowed; should return a Response
+ * @returns {Promise<Response>}
+ */
+export async function withIpRateLimit(request, env, prefix, max, handler) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const key = `pub:${prefix}:${ip}`;
+  const db = getDB(env);
+  const limit = await db.checkRateLimit(key, max);
+  if (!limit.allowed) return json({ error: 'Rate limit exceeded. Try again tomorrow.' }, 429);
+  await db.consumeRateLimit(key);
+  return handler();
 }

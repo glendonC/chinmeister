@@ -18,7 +18,7 @@ const IDLE_TIER_2 = 12;                // 1min idle -> slow poll
 const IDLE_TIER_3 = 60;                // 5min idle -> idle poll
 const RECONCILE_INTERVAL_MS = 60_000;
 
-function classifyError(err) {
+export function classifyError(err) {
   const msg = err.message || '';
   const status = err.status;
   if (status === 401) return { state: 'offline', detail: 'Session expired. Re-run chinwag init.', fatal: true };
@@ -34,7 +34,7 @@ function classifyError(err) {
 }
 
 // Minimal fingerprint of context for change detection (avoids JSON.stringify on every poll)
-function contextFingerprint(ctx) {
+export function contextFingerprint(ctx) {
   if (!ctx) return '';
   const members = (ctx.members || []).map(m =>
     `${m.agent_id}:${m.status}:${m.activity?.summary || ''}:${(m.activity?.files || []).length}`
@@ -43,6 +43,19 @@ function contextFingerprint(ctx) {
   const msgCount = (ctx.messages || []).length;
   const lockCount = (ctx.locks || []).length;
   return `${members};${memCount};${msgCount};${lockCount}`;
+}
+
+/**
+ * Pure function that computes the poll interval based on failure count and idle polls.
+ * Extracted for testability — the hook closure delegates to this.
+ */
+export function computePollInterval(failures, idlePolls) {
+  if (failures >= OFFLINE_THRESHOLD) return POLL_SLOW_MS;
+  if (failures >= 3) return POLL_MEDIUM_MS;
+  if (idlePolls >= IDLE_TIER_3) return POLL_IDLE_MS;
+  if (idlePolls >= IDLE_TIER_2) return POLL_SLOW_MS;
+  if (idlePolls >= IDLE_TIER_1) return POLL_MEDIUM_MS;
+  return POLL_FAST_MS;
 }
 
 export function useDashboardConnection({ config, stdout }) {
@@ -81,7 +94,8 @@ export function useDashboardConnection({ config, stdout }) {
     return () => stdout.off('resize', onResize);
   }, [stdout]);
 
-  // ── .chinwag file discovery ──────────────────────────
+  // ── .chinwag file discovery (mount-only init, sets state synchronously) ──
+  /* eslint-disable react-hooks/set-state-in-effect -- init runs once on mount */
   useEffect(() => {
     const project = getProjectContext(process.cwd());
     if (!project) {
@@ -101,6 +115,7 @@ export function useDashboardConnection({ config, stdout }) {
       setDetectedTools(detectTools(project.root));
     } catch (err) { console.error('[chinwag]', err?.message || err); }
   }, []);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   // ── WebSocket connection with polling fallback ───
   const wsRef = useRef(null);
@@ -154,14 +169,7 @@ export function useDashboardConnection({ config, stdout }) {
 
     // ── Polling fallback ──────────────────────────
     function getPollInterval() {
-      if (consecutiveFailures.current >= OFFLINE_THRESHOLD) return POLL_SLOW_MS;
-      if (consecutiveFailures.current >= 3) return POLL_MEDIUM_MS;
-      // Progressive backoff when context is unchanged (idle team)
-      const idle = unchangedPolls.current;
-      if (idle >= IDLE_TIER_3) return POLL_IDLE_MS;
-      if (idle >= IDLE_TIER_2) return POLL_SLOW_MS;
-      if (idle >= IDLE_TIER_1) return POLL_MEDIUM_MS;
-      return POLL_FAST_MS;
+      return computePollInterval(consecutiveFailures.current, unchangedPolls.current);
     }
 
     function startPolling() {

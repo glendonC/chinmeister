@@ -2,6 +2,8 @@
 // Each evaluation records whether a tool is integrated, installable, or listed,
 // along with metadata, sources, and confidence level.
 
+import { sqlChanges } from '../../lib/validation.js';
+
 /**
  * Upsert a tool evaluation.
  * @param {object} sql - DO SQL handle
@@ -109,8 +111,7 @@ export function searchEvaluations(sql, query, limit = 20) {
 
 export function deleteEvaluation(sql, toolId) {
   sql.exec('DELETE FROM tool_evaluations WHERE id = ?', toolId);
-  const changed = sql.exec('SELECT changes() as c').toArray();
-  return { ok: true, deleted: changed[0].c > 0 };
+  return { ok: true, deleted: sqlChanges(sql) > 0 };
 }
 
 export function hasEvaluations(sql) {

@@ -6,6 +6,7 @@ import { json, parseBody } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
 import {
   requireJson,
+  requireString,
   sanitizeString,
   validateFileArray,
   withRateLimit,
@@ -35,7 +36,9 @@ export async function handleTeamActivity(request, user, env, teamId) {
   if (typeof summary !== 'string') return json({ error: 'summary must be a string' }, 400);
   if (summary.length > MAX_SUMMARY_LENGTH)
     return json({ error: `summary must be ${MAX_SUMMARY_LENGTH} characters or less` }, 400);
-  if (summary && isBlocked(summary)) return json({ error: 'Content blocked' }, 400);
+  // Moderation: sync blocklist on activity summary.
+  // isBlocked('') returns false, so no need to guard against empty strings.
+  if (isBlocked(summary)) return json({ error: 'Content blocked' }, 400);
 
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
@@ -56,7 +59,7 @@ export async function handleTeamConflicts(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.checkConflicts(agentId, files, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 
@@ -65,13 +68,8 @@ export async function handleTeamFile(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { file } = body;
-  if (typeof file !== 'string' || !file.trim()) {
-    return json({ error: 'file must be a non-empty string' }, 400);
-  }
-  if (file.length > MAX_FILE_PATH_LENGTH) {
-    return json({ error: 'file path too long' }, 400);
-  }
+  const file = requireString(body, 'file', MAX_FILE_PATH_LENGTH);
+  if (!file) return json({ error: 'file must be a non-empty string' }, 400);
 
   const db = getDB(env);
   const { agentId } = getAgentRuntime(request, user);
@@ -120,10 +118,8 @@ export async function handleTeamEndSession(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { session_id } = body;
-  if (typeof session_id !== 'string') {
-    return json({ error: 'session_id is required' }, 400);
-  }
+  const session_id = requireString(body, 'session_id');
+  if (!session_id) return json({ error: 'session_id is required' }, 400);
 
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
@@ -137,11 +133,8 @@ export async function handleTeamSessionEdit(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { file } = body;
-  if (typeof file !== 'string' || !file.trim()) {
-    return json({ error: 'file is required' }, 400);
-  }
-  if (file.length > MAX_FILE_PATH_LENGTH) return json({ error: 'file path too long' }, 400);
+  const file = requireString(body, 'file', MAX_FILE_PATH_LENGTH);
+  if (!file) return json({ error: 'file is required' }, 400);
 
   const db = getDB(env);
   const { agentId } = getAgentRuntime(request, user);
@@ -171,7 +164,7 @@ export async function handleTeamHistory(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getHistory(agentId, days, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 
@@ -180,17 +173,12 @@ export async function handleTeamEnrichModel(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { model } = body;
-  if (typeof model !== 'string' || !model.trim()) {
-    return json({ error: 'model is required' }, 400);
-  }
-  if (model.length > MAX_MODEL_LENGTH) {
-    return json({ error: `model must be ${MAX_MODEL_LENGTH} characters or less` }, 400);
-  }
+  const model = requireString(body, 'model', MAX_MODEL_LENGTH);
+  if (!model) return json({ error: 'model is required' }, 400);
 
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.enrichModel(agentId, model.trim(), user.id);
+  const result = await team.enrichModel(agentId, model, user.id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }

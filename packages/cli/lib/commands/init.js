@@ -49,7 +49,31 @@ export async function runInit() {
       color = me.color;
       accountVerb = null; // existing, verified
     } catch (err) {
-      if (err.status === 401 || err.status === 403) {
+      if ((err.status === 401 || err.status === 403) && config.refresh_token) {
+        // Token expired but we have a refresh token — try to renew
+        try {
+          const client = api(null);
+          const refreshResult = await client.post('/auth/refresh', {
+            refresh_token: config.refresh_token,
+          });
+          config = {
+            ...config,
+            token: refreshResult.token,
+            refresh_token: refreshResult.refresh_token,
+          };
+          saveConfig(config);
+          const me = await api(config).get('/me');
+          handle = me.handle;
+          color = me.color;
+          accountVerb = 'refreshed';
+        } catch {
+          // Refresh failed — fall through to account creation
+          config = await createAccount();
+          handle = config.handle;
+          color = config.color;
+          accountVerb = 'created';
+        }
+      } else if (err.status === 401 || err.status === 403) {
         config = await createAccount();
         handle = config.handle;
         color = config.color;
@@ -175,7 +199,12 @@ export async function runInit() {
 
 async function createAccount() {
   const result = await initAccount();
-  const config = { token: result.token, handle: result.handle, color: result.color };
+  const config = {
+    token: result.token,
+    handle: result.handle,
+    color: result.color,
+    ...(result.refresh_token ? { refresh_token: result.refresh_token } : {}),
+  };
   saveConfig(config);
   return config;
 }

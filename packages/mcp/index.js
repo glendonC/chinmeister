@@ -6,9 +6,10 @@
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { readFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { basename } from 'path';
 import { loadConfig, configExists } from './lib/config.js';
+import { CONFIG_DIR, CONFIG_FILE } from '../shared/config.js';
 import { api, getApiUrl } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
@@ -43,10 +44,46 @@ async function main() {
     process.exit(1);
   }
 
-  const config = loadConfig();
+  let config = loadConfig();
   if (!config?.token) {
     console.error('[chinwag] Invalid config — missing token. Run `npx chinwag` to re-initialize.');
     process.exit(1);
+  }
+
+  // Verify token is still valid; if expired, attempt transparent refresh.
+  // The access token has a 90-day sliding TTL in KV — if the MCP server hasn't
+  // run in >90 days, the token will be gone. The refresh token (180-day TTL)
+  // gives us a longer window to recover without forcing `chinwag init`.
+  const preflightClient = api(config);
+  try {
+    await preflightClient.get('/me');
+  } catch (err) {
+    if (err.status === 401 && config.refresh_token) {
+      console.error('[chinwag] Access token expired, attempting refresh...');
+      try {
+        const refreshResult = await preflightClient.post('/auth/refresh', {
+          refresh_token: config.refresh_token,
+        });
+        config = { ...config, token: refreshResult.token, refresh_token: refreshResult.refresh_token };
+        // Persist the new tokens to disk so subsequent startups use the fresh token
+        try {
+          mkdirSync(CONFIG_DIR, { recursive: true, mode: 0o700 });
+          writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + '\n', { mode: 0o600 });
+        } catch (writeErr) {
+          console.error('[chinwag] Warning: could not persist refreshed token:', writeErr.message);
+        }
+        console.error('[chinwag] Token refreshed successfully.');
+      } catch (refreshErr) {
+        console.error('[chinwag] Token refresh failed:', refreshErr.message);
+        console.error('[chinwag] Run `npx chinwag init` to re-authenticate.');
+        process.exit(1);
+      }
+    } else if (err.status === 401) {
+      console.error('[chinwag] Access token expired and no refresh token available.');
+      console.error('[chinwag] Run `npx chinwag init` to re-authenticate.');
+      process.exit(1);
+    }
+    // For non-401 errors (network issues), proceed anyway — the token might still be valid
   }
 
   const runtime = detectRuntimeIdentity('unknown', { defaultTransport: 'mcp' });

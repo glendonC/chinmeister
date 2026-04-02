@@ -342,3 +342,251 @@ describe('Sessions', () => {
     expect(res.error).toBeTruthy();
   });
 });
+
+// --- Session lifecycle edge cases ---
+
+describe('Session lifecycle — edge cases', () => {
+  const team = () => getTeam('session-edge-cases');
+  const agentId = 'cursor:se1';
+  const ownerId = 'user-se1';
+
+  it('setup: join', async () => {
+    const res = await team().join(agentId, ownerId, 'alice', 'cursor');
+    expect(res.ok).toBe(true);
+  });
+
+  it('full lifecycle: start → heartbeat → recordEdit → end', async () => {
+    const s = await team().startSession(agentId, 'alice', 'react', ownerId);
+    expect(s.ok).toBe(true);
+    expect(s.session_id).toBeDefined();
+
+    const hb = await team().heartbeat(agentId);
+    expect(hb.ok).toBe(true);
+
+    const edit = await team().recordEdit(agentId, 'src/lifecycle.js', ownerId);
+    expect(edit.ok).toBe(true);
+    expect(edit.skipped).toBeUndefined();
+
+    const end = await team().endSession(agentId, s.session_id, ownerId);
+    expect(end.ok).toBe(true);
+  });
+
+  it('heartbeat for non-existent agent returns error', async () => {
+    const res = await team().heartbeat('cursor:does-not-exist');
+    expect(res.error).toBeTruthy();
+    expect(res.error).toContain('Not a member');
+  });
+
+  it('duplicate session start auto-closes previous session', async () => {
+    const s1 = await team().startSession(agentId, 'alice', 'react', ownerId);
+    expect(s1.ok).toBe(true);
+
+    const s2 = await team().startSession(agentId, 'alice', 'next', ownerId);
+    expect(s2.ok).toBe(true);
+    expect(s2.session_id).not.toBe(s1.session_id);
+
+    // s1 should be auto-closed, can't end it again
+    const end1 = await team().endSession(agentId, s1.session_id, ownerId);
+    expect(end1.error).toBeTruthy();
+
+    // s2 should still be active
+    const end2 = await team().endSession(agentId, s2.session_id, ownerId);
+    expect(end2.ok).toBe(true);
+  });
+
+  it('endSession with wrong session_id returns error', async () => {
+    const s = await team().startSession(agentId, 'alice', 'react', ownerId);
+    expect(s.ok).toBe(true);
+
+    const res = await team().endSession(agentId, 'nonexistent-session-id', ownerId);
+    expect(res.error).toBeTruthy();
+  });
+
+  it('recordEdit without active session returns skipped', async () => {
+    // End any existing session first
+    const s = await team().startSession(agentId, 'alice', 'react', ownerId);
+    await team().endSession(agentId, s.session_id, ownerId);
+
+    const edit = await team().recordEdit(agentId, 'src/no-session.js', ownerId);
+    expect(edit.ok).toBe(true);
+    expect(edit.skipped).toBe(true);
+  });
+});
+
+// --- Membership cleanup on leave ---
+
+describe('Leave cleans up locks and activities', () => {
+  const team = () => getTeam('leave-cleanup');
+  const agentId = 'cursor:lc1';
+  const ownerId = 'user-lc1';
+  const otherAgent = 'claude:lc2';
+  const otherOwner = 'user-lc2';
+
+  it('setup: join, claim files, update activity', async () => {
+    await team().join(agentId, ownerId, 'alice', 'cursor');
+    await team().join(otherAgent, otherOwner, 'bob', 'claude');
+
+    const claim = await team().claimFiles(agentId, ['src/cleanup.js'], 'alice', 'cursor', ownerId);
+    expect(claim.ok).toBe(true);
+    expect(claim.claimed).toContain('src/cleanup.js');
+
+    await team().updateActivity(agentId, ['src/cleanup.js'], 'Working on cleanup', ownerId);
+  });
+
+  it('leaving releases locks so others can claim', async () => {
+    await team().leave(agentId, ownerId);
+
+    // Other agent should now be able to claim the file
+    const claim = await team().claimFiles(otherAgent, ['src/cleanup.js'], 'bob', 'claude', otherOwner);
+    expect(claim.claimed).toContain('src/cleanup.js');
+    expect(claim.blocked).toHaveLength(0);
+  });
+});
+
+// --- Lock path normalization consistency ---
+
+describe('Lock path normalization consistency', () => {
+  const team = () => getTeam('lock-normalization');
+  const agent1 = 'cursor:ln1';
+  const agent2 = 'claude:ln2';
+  const owner1 = 'user-ln1';
+  const owner2 = 'user-ln2';
+
+  it('setup: join two agents', async () => {
+    await team().join(agent1, owner1, 'alice', 'cursor');
+    await team().join(agent2, owner2, 'bob', 'claude');
+  });
+
+  it('claims ./src/api.js and blocks src/api.js (same file after normalization)', async () => {
+    const claim1 = await team().claimFiles(agent1, ['./src/api.js'], 'alice', 'cursor', owner1);
+    expect(claim1.claimed).toContain('src/api.js'); // normalized
+
+    const claim2 = await team().claimFiles(agent2, ['src/api.js'], 'bob', 'claude', owner2);
+    expect(claim2.claimed).toHaveLength(0);
+    expect(claim2.blocked).toHaveLength(1);
+    expect(claim2.blocked[0].file).toBe('src/api.js');
+  });
+
+  it('releases with different path format still works', async () => {
+    const rel = await team().releaseFiles(agent1, ['./src/api.js'], owner1);
+    expect(rel.ok).toBe(true);
+
+    // Now agent2 can claim it
+    const claim = await team().claimFiles(agent2, ['src/api.js'], 'bob', 'claude', owner2);
+    expect(claim.claimed).toContain('src/api.js');
+  });
+
+  it('conflicting paths with // normalize to same file', async () => {
+    await team().releaseFiles(agent2, null, owner2); // release all
+
+    // Double slashes collapse: 'src//lib//utils.js' → 'src/lib/utils.js'
+    const claim1 = await team().claimFiles(agent1, ['src//lib//utils.js'], 'alice', 'cursor', owner1);
+    expect(claim1.claimed).toContain('src/lib/utils.js');
+
+    const claim2 = await team().claimFiles(agent2, ['src/lib/utils.js'], 'bob', 'claude', owner2);
+    expect(claim2.blocked).toHaveLength(1);
+    expect(claim2.blocked[0].file).toBe('src/lib/utils.js');
+  });
+});
+
+// --- Conflict detection edge cases ---
+
+describe('Conflict detection — edge cases', () => {
+  const team = () => getTeam('conflict-edge');
+  const agent1 = 'cursor:ce1';
+  const agent2 = 'claude:ce2';
+  const agent3 = 'windsurf:ce3';
+  const owner1 = 'user-ce1';
+  const owner2 = 'user-ce2';
+  const owner3 = 'user-ce3';
+
+  it('setup: join three agents', async () => {
+    await team().join(agent1, owner1, 'alice', 'cursor');
+    await team().join(agent2, owner2, 'bob', 'claude');
+    await team().join(agent3, owner3, 'carol', 'windsurf');
+  });
+
+  it('no conflict when checking files nobody else touches', async () => {
+    await team().updateActivity(agent1, ['src/unique-a.js'], 'Only me', owner1);
+    const res = await team().checkConflicts(agent1, ['src/unique-a.js'], owner1);
+    expect(res.conflicts).toHaveLength(0);
+    expect(res.locked).toHaveLength(0);
+  });
+
+  it('three-way conflict: all three agents on same file', async () => {
+    await team().updateActivity(agent1, ['src/shared.js'], 'Agent 1 editing', owner1);
+    await team().updateActivity(agent2, ['src/shared.js'], 'Agent 2 editing', owner2);
+    await team().updateActivity(agent3, ['src/shared.js'], 'Agent 3 editing', owner3);
+
+    const res = await team().checkConflicts(agent1, ['src/shared.js'], owner1);
+    expect(res.conflicts.length).toBe(2); // two others on same file
+    const conflictHandles = res.conflicts.map(c => c.owner_handle);
+    expect(conflictHandles).toContain('bob');
+    expect(conflictHandles).toContain('carol');
+  });
+
+  it('conflict detection with normalized paths: ./src/x.js vs src/x.js', async () => {
+    await team().updateActivity(agent1, ['./src/norm.js'], 'Agent 1', owner1);
+    await team().updateActivity(agent2, ['src/norm.js'], 'Agent 2', owner2);
+
+    const res = await team().checkConflicts(agent1, ['src/norm.js'], owner1);
+    expect(res.conflicts.length).toBeGreaterThan(0);
+    expect(res.conflicts[0].files).toContain('src/norm.js');
+  });
+
+  it('checking empty file list returns no conflicts', async () => {
+    const res = await team().checkConflicts(agent1, [], owner1);
+    expect(res.conflicts).toHaveLength(0);
+    expect(res.locked).toHaveLength(0);
+  });
+
+  it('non-member cannot check conflicts', async () => {
+    const res = await team().checkConflicts('cursor:stranger', ['src/file.js'], 'bad-owner');
+    expect(res.error).toContain('Not a member');
+  });
+});
+
+// --- Lock release edge cases ---
+
+describe('Lock release — edge cases', () => {
+  const team = () => getTeam('lock-release-edge');
+  const agent1 = 'cursor:lre1';
+  const agent2 = 'claude:lre2';
+  const owner1 = 'user-lre1';
+  const owner2 = 'user-lre2';
+
+  it('setup: join', async () => {
+    await team().join(agent1, owner1, 'alice', 'cursor');
+    await team().join(agent2, owner2, 'bob', 'claude');
+  });
+
+  it('releasing a file not held by this agent is a no-op (not an error)', async () => {
+    // Claim with agent1
+    await team().claimFiles(agent1, ['src/owned.js'], 'alice', 'cursor', owner1);
+
+    // agent2 tries to release agent1's file — should succeed (no-op, not error)
+    const res = await team().releaseFiles(agent2, ['src/owned.js'], owner2);
+    expect(res.ok).toBe(true);
+
+    // agent1's lock should still be in place
+    const claim = await team().claimFiles(agent2, ['src/owned.js'], 'bob', 'claude', owner2);
+    expect(claim.blocked).toHaveLength(1);
+    expect(claim.blocked[0].held_by).toBe('alice');
+  });
+
+  it('releasing a file nobody holds is a no-op', async () => {
+    const res = await team().releaseFiles(agent1, ['src/nonexistent-file.js'], owner1);
+    expect(res.ok).toBe(true);
+  });
+
+  it('release all with null files releases all locks for the agent', async () => {
+    await team().claimFiles(agent1, ['src/f1.js', 'src/f2.js', 'src/f3.js'], 'alice', 'cursor', owner1);
+    const res = await team().releaseFiles(agent1, null, owner1);
+    expect(res.ok).toBe(true);
+
+    // All should be claimable by agent2 now
+    const claim = await team().claimFiles(agent2, ['src/f1.js', 'src/f2.js', 'src/f3.js'], 'bob', 'claude', owner2);
+    expect(claim.claimed).toHaveLength(3);
+    expect(claim.blocked).toHaveLength(0);
+  });
+});

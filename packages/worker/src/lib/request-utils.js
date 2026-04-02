@@ -56,19 +56,36 @@ export function parseTeamPath(path) {
   return { teamId: match[1], action: match[2] };
 }
 
-const ERROR_CODE_STATUS = {
-  NOT_MEMBER: 403,
-  NOT_OWNER: 403,
-  AGENT_CLAIMED: 409,
-  NOT_FOUND: 404,
-};
-
+/**
+ * Map a DO error result to an HTTP status code.
+ * Prefers the structured `code` field; falls back to message-sniffing
+ * for backwards compatibility with any callers that haven't migrated yet.
+ *
+ * @param {{ error: string, code?: string }} result - DO error result
+ * @returns {number} HTTP status code
+ */
 export function teamErrorStatus(result) {
-  // Structured error codes (preferred path)
-  if (result?.code && ERROR_CODE_STATUS[result.code]) {
-    return ERROR_CODE_STATUS[result.code];
+  // Structured code path (preferred)
+  const code = typeof result === 'object' && result !== null ? result.code : undefined;
+  if (code) {
+    switch (code) {
+      case 'FORBIDDEN':
+      case 'NOT_MEMBER':
+      case 'NOT_OWNER':
+        return 403;
+      case 'NOT_FOUND':
+        return 404;
+      case 'AGENT_CLAIMED':
+      case 'CONFLICT':
+        return 409;
+      case 'INTERNAL':
+        return 500;
+      default:
+        return 400;
+    }
   }
-  // Legacy fallback: string matching for callers that pass raw error messages
+
+  // Legacy fallback: sniff the error message string
   const msg = typeof result === 'string' ? result : result?.error;
   if (msg?.includes('Not a member') || msg?.includes('Not your agent') || msg?.includes('Only the author')) {
     return 403;

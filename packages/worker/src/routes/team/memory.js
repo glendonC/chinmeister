@@ -4,7 +4,7 @@ import { isBlocked } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import { requireJson, validateTagsArray, withRateLimit } from '../../lib/validation.js';
+import { requireJson, requireString, validateTagsArray, withRateLimit } from '../../lib/validation.js';
 import {
   MAX_MEMORY_TEXT_LENGTH,
   MAX_TAGS_PER_MEMORY,
@@ -21,18 +21,16 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { text } = body;
-  if (typeof text !== 'string' || !text.trim()) {
-    return json({ error: 'text is required' }, 400);
-  }
-  if (text.length > MAX_MEMORY_TEXT_LENGTH) {
-    return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
-  }
+  const text = requireString(body, 'text');
+  if (!text) return json({ error: 'text is required' }, 400);
+  if (text.length > MAX_MEMORY_TEXT_LENGTH) return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
   if (isBlocked(text)) return json({ error: 'Content blocked' }, 400);
 
   const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
   if (tagsResult.error) return json({ error: tagsResult.error }, 400);
   const tags = tagsResult.tags;
+  // Moderation: check tag content (tags are user-visible, persistent)
+  if (tags.some(t => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
 
   const db = getDB(env);
   const runtime = getAgentRuntime(request, user);
@@ -45,14 +43,7 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
     RATE_LIMIT_MEMORIES,
     'Memory save limit reached (20/day). Try again tomorrow.',
     async () => {
-      const result = await team.saveMemory(
-        agentId,
-        text.trim(),
-        tags,
-        user.handle,
-        runtime,
-        user.id,
-      );
+      const result = await team.saveMemory(agentId, text, tags, user.handle, runtime, user.id);
       if (result.error) return json({ error: result.error }, teamErrorStatus(result));
       return json(result, 201);
     },
@@ -86,7 +77,7 @@ export async function handleTeamSearchMemory(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.searchMemories(agentId, query, tags, limit, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 
@@ -95,22 +86,25 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { id, text } = body;
-  if (typeof id !== 'string' || !id.trim()) {
-    return json({ error: 'id is required' }, 400);
+  const id = requireString(body, 'id');
+  if (!id) return json({ error: 'id is required' }, 400);
+
+  let text;
+  if (body.text !== undefined) {
+    text = requireString(body, 'text');
+    if (!text) return json({ error: 'text must be a non-empty string' }, 400);
+    if (text.length > MAX_MEMORY_TEXT_LENGTH) return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
   }
-  if (text !== undefined && (typeof text !== 'string' || !text.trim())) {
-    return json({ error: 'text must be a non-empty string' }, 400);
-  }
-  if (text !== undefined && text.length > MAX_MEMORY_TEXT_LENGTH) {
-    return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
-  }
+  // Moderation: sync blocklist on updated text (same pattern as save)
+  if (text !== undefined && isBlocked(text)) return json({ error: 'Content blocked' }, 400);
 
   let tags = body.tags;
   if (tags !== undefined) {
     const tagsResult = validateTagsArray(tags, MAX_TAGS_PER_MEMORY);
     if (tagsResult.error) return json({ error: tagsResult.error }, 400);
     tags = tagsResult.tags;
+    // Moderation: check updated tag content
+    if (tags.some(t => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
   }
 
   if (text === undefined && tags === undefined) {
@@ -139,10 +133,8 @@ export async function handleTeamDeleteMemory(request, user, env, teamId) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { id } = body;
-  if (typeof id !== 'string' || !id.trim()) {
-    return json({ error: 'id is required' }, 400);
-  }
+  const id = requireString(body, 'id');
+  if (!id) return json({ error: 'id is required' }, 400);
 
   const db = getDB(env);
   const { agentId } = getAgentRuntime(request, user);

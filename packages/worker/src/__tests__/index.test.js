@@ -159,10 +159,55 @@ describe('POST /auth/init', () => {
 
 describe('GET /stats', () => {
   it('returns stats without auth', async () => {
-    const res = await SELF.fetch('http://localhost/stats');
+    const res = await SELF.fetch('http://localhost/stats', {
+      headers: { 'CF-Connecting-IP': `stats-ok-${Date.now()}-${Math.random()}` },
+    });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(typeof body.totalUsers).toBe('number');
+  });
+
+  it('rate limits by IP', async () => {
+    const ip = `stats-rl-${Date.now()}-${Math.random()}`;
+    // Exhaust the 1000/day limit by consuming directly via DB
+    const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+    for (let i = 0; i < 1000; i++) {
+      await db.consumeRateLimit(`pub:stats:${ip}`);
+    }
+
+    const res = await SELF.fetch('http://localhost/stats', {
+      headers: { 'CF-Connecting-IP': ip },
+    });
+    expect(res.status).toBe(429);
+    const body = await res.json();
+    expect(body.error).toContain('Rate limit exceeded');
+  });
+});
+
+// --- /tools/catalog ---
+
+describe('GET /tools/catalog', () => {
+  it('returns catalog without auth', async () => {
+    const res = await SELF.fetch('http://localhost/tools/catalog', {
+      headers: { 'CF-Connecting-IP': `catalog-ok-${Date.now()}-${Math.random()}` },
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.tools).toBeDefined();
+    expect(body.categories).toBeDefined();
+  });
+
+  it('rate limits by IP', async () => {
+    const ip = `catalog-rl-${Date.now()}-${Math.random()}`;
+    const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+    for (let i = 0; i < 500; i++) {
+      await db.consumeRateLimit(`pub:catalog:${ip}`);
+    }
+
+    const res = await SELF.fetch('http://localhost/tools/catalog', {
+      headers: { 'CF-Connecting-IP': ip },
+    });
+    expect(res.status).toBe(429);
   });
 });
 
@@ -1099,5 +1144,396 @@ describe('Team heartbeat endpoint', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
+  });
+});
+
+// --- Token lifecycle ---
+
+describe('Token lifecycle', () => {
+  it('auth/init returns a refresh_token alongside the access token', async () => {
+    const res = await SELF.fetch('http://localhost/auth/init', {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': `token-lifecycle-${Date.now()}` },
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.token).toBeDefined();
+    expect(body.refresh_token).toBeDefined();
+    expect(body.refresh_token).toMatch(/^rt_/);
+  });
+
+  it('refresh token issues new access token and new refresh token', async () => {
+    const initRes = await SELF.fetch('http://localhost/auth/init', {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': `token-refresh-${Date.now()}` },
+    });
+    const { token: oldToken, refresh_token: oldRefresh } = await initRes.json();
+
+    // Use refresh token to get new tokens
+    const refreshRes = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: oldRefresh }),
+    });
+    expect(refreshRes.status).toBe(200);
+    const refreshBody = await refreshRes.json();
+    expect(refreshBody.token).toBeDefined();
+    expect(refreshBody.token).not.toBe(oldToken);
+    expect(refreshBody.refresh_token).toBeDefined();
+    expect(refreshBody.refresh_token).not.toBe(oldRefresh);
+    expect(refreshBody.refresh_token).toMatch(/^rt_/);
+
+    // New token works for auth
+    const meRes = await SELF.fetch('http://localhost/me', {
+      headers: { Authorization: `Bearer ${refreshBody.token}` },
+    });
+    expect(meRes.status).toBe(200);
+  });
+
+  it('old refresh token is invalidated after rotation', async () => {
+    const initRes = await SELF.fetch('http://localhost/auth/init', {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': `token-rotation-${Date.now()}` },
+    });
+    const { refresh_token: oldRefresh } = await initRes.json();
+
+    // First refresh succeeds
+    const refreshRes = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: oldRefresh }),
+    });
+    expect(refreshRes.status).toBe(200);
+
+    // Reusing the old refresh token fails
+    const reuseRes = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: oldRefresh }),
+    });
+    expect(reuseRes.status).toBe(401);
+  });
+
+  it('rejects missing refresh_token', async () => {
+    const res = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('refresh_token is required');
+  });
+
+  it('rejects invalid refresh token format', async () => {
+    const res = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: 'not-a-refresh-token' }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Invalid refresh token format');
+  });
+
+  it('rejects nonexistent refresh token', async () => {
+    const res = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: 'rt_0000000000000000000000000000000' }),
+    });
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error).toBe('Invalid or expired refresh token');
+  });
+
+  it('chained refresh: new refresh token works for subsequent refresh', async () => {
+    const initRes = await SELF.fetch('http://localhost/auth/init', {
+      method: 'POST',
+      headers: { 'CF-Connecting-IP': `token-chain-${Date.now()}` },
+    });
+    const { refresh_token: rt1 } = await initRes.json();
+
+    // First refresh
+    const r1 = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: rt1 }),
+    });
+    const { refresh_token: rt2, token: t2 } = await r1.json();
+
+    // Second refresh with new token
+    const r2 = await SELF.fetch('http://localhost/auth/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh_token: rt2 }),
+    });
+    expect(r2.status).toBe(200);
+    const { token: t3 } = await r2.json();
+    expect(t3).not.toBe(t2);
+
+    // Latest access token works
+    const meRes = await SELF.fetch('http://localhost/me', {
+      headers: { Authorization: `Bearer ${t3}` },
+    });
+    expect(meRes.status).toBe(200);
+  });
+});
+
+// --- WebSocket Origin Validation ---
+
+describe('WebSocket origin validation', () => {
+  it('rejects chat WS upgrade from unknown origin', async () => {
+    const { token } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/ws/chat?ticket=fake', {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Origin: 'https://evil.com',
+        Upgrade: 'websocket',
+        Connection: 'Upgrade',
+      },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Origin not allowed');
+  });
+
+  it('rejects team WS upgrade from unknown origin', async () => {
+    const { headers: authHeaders } = await createAuthUser();
+
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers: authHeaders,
+      body: JSON.stringify({}),
+    });
+    const { team_id } = await createRes.json();
+
+    const res = await SELF.fetch(`http://localhost/teams/${team_id}/ws`, {
+      headers: {
+        ...authHeaders,
+        Origin: 'https://attacker.example',
+        Upgrade: 'websocket',
+        Connection: 'Upgrade',
+      },
+    });
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('Origin not allowed');
+  });
+});
+
+// --- Content moderation coverage ---
+// Verifies that all user-content surfaces enforce the sync blocklist.
+
+describe('Content moderation: handle updates', () => {
+  it('rejects handle containing blocked term', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/handle', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ handle: 'retard' }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Content blocked');
+  });
+
+  it('accepts clean handle', async () => {
+    const { headers } = await createAuthUser();
+    const newHandle = `clean_${Date.now().toString(36)}`.slice(0, 20);
+    const res = await SELF.fetch('http://localhost/me/handle', {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ handle: newHandle }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+});
+
+describe('Content moderation: team name on create', () => {
+  it('rejects team name with blocked content', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'kill yourself project' }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Content blocked');
+  });
+
+  it('accepts team with clean name', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'My Clean Project' }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.team_id).toBeDefined();
+  });
+});
+
+describe('Content moderation: team name on join', () => {
+  it('rejects team join with blocked name', async () => {
+    const { headers } = await createAuthUser();
+    // Create a clean team first
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'Good Project' }),
+    });
+    const { team_id } = await createRes.json();
+
+    // Try to join with a blocked name
+    const res = await SELF.fetch(`http://localhost/teams/${team_id}/join`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'kill yourself team' }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Content blocked');
+  });
+});
+
+describe('Content moderation: memory update', () => {
+  let headers;
+  let teamId;
+  let memoryId;
+
+  it('setup: create user, team, and memory', async () => {
+    const auth = await createAuthUser();
+    headers = auth.headers;
+
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    teamId = (await createRes.json()).team_id;
+
+    const memRes = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ text: 'Original clean text', tags: ['setup'] }),
+    });
+    memoryId = (await memRes.json()).id;
+  });
+
+  it('rejects memory update with blocked text', async () => {
+    const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ id: memoryId, text: 'kill yourself' }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Content blocked');
+  });
+
+  it('accepts memory update with clean text', async () => {
+    const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ id: memoryId, text: 'Updated clean text' }),
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+});
+
+describe('Content moderation: memory tags', () => {
+  let headers;
+  let teamId;
+
+  it('setup: create user and team', async () => {
+    const auth = await createAuthUser();
+    headers = auth.headers;
+
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    teamId = (await createRes.json()).team_id;
+  });
+
+  it('rejects memory save with blocked tag', async () => {
+    const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        text: 'Clean memory text',
+        tags: ['retard'],
+      }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Content blocked');
+  });
+
+  it('accepts memory save with clean tags', async () => {
+    const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        text: 'Clean memory text',
+        tags: ['architecture', 'decision'],
+      }),
+    });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
+  it('rejects memory update with blocked tag', async () => {
+    // First create a clean memory
+    const saveRes = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        text: 'Clean text for tag update test',
+        tags: ['safe'],
+      }),
+    });
+    const memoryId = (await saveRes.json()).id;
+
+    const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ id: memoryId, tags: ['retard'] }),
+    });
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe('Content blocked');
+  });
+});
+
+describe('Content moderation: activity summary edge cases', () => {
+  it('accepts empty summary (no false positive)', async () => {
+    const { headers } = await createAuthUser();
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({}),
+    });
+    const { team_id } = await createRes.json();
+
+    const res = await SELF.fetch(`http://localhost/teams/${team_id}/activity`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        files: ['src/app.js'],
+        summary: '',
+      }),
+    });
+    // Empty summary should pass moderation (isBlocked('') returns false)
+    expect(res.status).toBe(200);
   });
 });

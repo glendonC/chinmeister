@@ -1,16 +1,19 @@
-import { checkContent } from '../moderation.js';
+import { isBlocked, checkContent } from '../moderation.js';
 import { getDB, getLobby, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
-import { getAgentRuntime, sanitizeTags } from '../lib/request-utils.js';
-import { requireJson, sanitizeString, withRateLimit } from '../lib/validation.js';
+import { getAgentRuntime, sanitizeTags, teamErrorStatus } from '../lib/request-utils.js';
+import { requireJson, requireString, sanitizeString, withRateLimit } from '../lib/validation.js';
 import {
   MAX_STATUS_LENGTH,
   MAX_FRAMEWORK_LENGTH,
   RATE_LIMIT_TEAMS,
   RATE_LIMIT_WS_TICKETS,
+  RATE_LIMIT_TOKEN_REFRESH,
   CHAT_COOLDOWN_MS,
   MAX_DASHBOARD_TEAMS,
   MAX_NAME_LENGTH,
+  ACCESS_TOKEN_TTL_S,
+  REFRESH_TOKEN_TTL_S,
 } from '../lib/constants.js';
 
 export async function authenticate(request, env) {
@@ -50,11 +53,87 @@ export async function authenticate(request, env) {
     // Prevents auth bypass when a handle is reassigned to a different user:
     // stale KV entry "token:X -> oldHandle" would resolve to the new owner.
     if (user.handle !== userId) return null;
-    await env.AUTH_KV.put(`token:${token}`, user.id);
+    // Migrate handle→UUID and slide TTL forward
+    await env.AUTH_KV.put(`token:${token}`, user.id, { expirationTtl: ACCESS_TOKEN_TTL_S });
     return user;
   }
 
+  // Sliding window: re-PUT with fresh TTL on every successful auth.
+  // KV writes are cheap and eventually-consistent — the slight delay is
+  // fine because the worst case is the token lives slightly shorter than
+  // 90 days, never longer. This keeps active tokens alive indefinitely.
+  env.AUTH_KV.put(`token:${token}`, userId, { expirationTtl: ACCESS_TOKEN_TTL_S });
   return db.getUser(userId);
+}
+
+// --- Token refresh ---
+// Accepts a refresh token, issues a new access token + new refresh token,
+// and revokes the old refresh token (rotation). If the old refresh token
+// was already revoked, the entire token family is invalidated (theft detection).
+export async function handleRefreshToken(request, env) {
+  const body = await parseBody(request);
+  const parseErr = requireJson(body);
+  if (parseErr) return parseErr;
+
+  const { refresh_token } = body;
+  if (!refresh_token || typeof refresh_token !== 'string') {
+    return json({ error: 'refresh_token is required' }, 400);
+  }
+  if (!refresh_token.startsWith('rt_')) {
+    return json({ error: 'Invalid refresh token format' }, 400);
+  }
+
+  // Look up the refresh token in KV
+  const userId = await env.AUTH_KV.get(`refresh:${refresh_token}`);
+  if (!userId) {
+    // Could be expired or already rotated. Check DB for theft detection:
+    // if this token exists in DB but is revoked, someone reused a rotated token.
+    const db = getDB(env);
+    const tokenRecord = await db.getRefreshToken(refresh_token);
+    if (tokenRecord && tokenRecord.revoked) {
+      // Potential token theft — revoke all refresh tokens for this user
+      await db.revokeAllRefreshTokens(tokenRecord.user_id);
+      // Also delete any KV entries for active refresh tokens
+      const activeTokens = await db.getActiveRefreshTokens(tokenRecord.user_id);
+      await Promise.all(
+        activeTokens.map(t => env.AUTH_KV.delete(`refresh:${t.token}`))
+      );
+      await db.revokeAllRefreshTokens(tokenRecord.user_id);
+    }
+    return json({ error: 'Invalid or expired refresh token' }, 401);
+  }
+
+  const db = getDB(env);
+
+  // Rate limit refresh attempts
+  const limit = await db.checkRateLimit(`refresh:${userId}`, RATE_LIMIT_TOKEN_REFRESH);
+  if (!limit.allowed) {
+    return json({ error: 'Too many refresh attempts. Try again tomorrow.' }, 429);
+  }
+
+  // Revoke the old refresh token (rotation)
+  await Promise.all([
+    env.AUTH_KV.delete(`refresh:${refresh_token}`),
+    db.revokeRefreshToken(refresh_token),
+  ]);
+
+  // Issue new access token
+  const newAccessToken = crypto.randomUUID();
+  await env.AUTH_KV.put(`token:${newAccessToken}`, userId, { expirationTtl: ACCESS_TOKEN_TTL_S });
+
+  // Issue new refresh token
+  const newRefreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
+  await Promise.all([
+    env.AUTH_KV.put(`refresh:${newRefreshToken}`, userId, { expirationTtl: REFRESH_TOKEN_TTL_S }),
+    db.storeRefreshToken(userId, newRefreshToken),
+  ]);
+
+  // Update the user's primary token in the DB
+  await db.updateUserToken(userId, newAccessToken);
+
+  await db.consumeRateLimit(`refresh:${userId}`);
+
+  return json({ token: newAccessToken, refresh_token: newRefreshToken });
 }
 
 export async function handleGetWsTicket(user, env) {
@@ -82,15 +161,15 @@ export async function handleUpdateHandle(request, user, env) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { handle } = body;
-  if (!handle || typeof handle !== 'string') {
-    return json({ error: 'Handle is required' }, 400);
-  }
+  const handle = requireString(body, 'handle');
+  if (!handle) return json({ error: 'Handle is required' }, 400);
+  // Moderation: handles are globally visible and persistent — sync blocklist check.
+  // Handles are alphanumeric+underscores only (validated in DB), but slurs can fit
+  // that format (e.g. "n1gger", "f4ggot" won't match, but "retard" will).
+  if (isBlocked(handle)) return json({ error: 'Content blocked' }, 400);
 
   const result = await getDB(env).updateHandle(user.id, handle);
-  if (result.error) {
-    return json({ error: result.error }, 400);
-  }
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
 
   return json(result);
 }
@@ -100,15 +179,11 @@ export async function handleUpdateColor(request, user, env) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { color } = body;
-  if (!color || typeof color !== 'string') {
-    return json({ error: 'Color is required' }, 400);
-  }
+  const color = requireString(body, 'color');
+  if (!color) return json({ error: 'Color is required' }, 400);
 
   const result = await getDB(env).updateColor(user.id, color);
-  if (result.error) {
-    return json({ error: result.error }, 400);
-  }
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
 
   return json(result);
 }
@@ -118,13 +193,8 @@ export async function handleSetStatus(request, user, env) {
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { status } = body;
-  if (!status || typeof status !== 'string') {
-    return json({ error: 'Status is required' }, 400);
-  }
-  if (status.length > MAX_STATUS_LENGTH) {
-    return json({ error: `Status must be ${MAX_STATUS_LENGTH} characters or less` }, 400);
-  }
+  const status = requireString(body, 'status', MAX_STATUS_LENGTH);
+  if (!status) return json({ error: `Status is required (max ${MAX_STATUS_LENGTH} chars)` }, 400);
 
   const modResult = await checkContent(status, env);
   if (modResult.blocked) {
@@ -159,7 +229,7 @@ export async function handleUpdateAgentProfile(request, user, env) {
   };
 
   const result = await getDB(env).updateAgentProfile(user.id, profile);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 
@@ -295,6 +365,8 @@ export async function handleCreateTeam(request, user, env) {
   } catch {
     /* body is optional */
   }
+  // Moderation: team names are user-visible and persistent
+  if (name && isBlocked(name)) return json({ error: 'Content blocked' }, 400);
 
   const db = getDB(env);
 

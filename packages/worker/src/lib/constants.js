@@ -3,8 +3,17 @@
 //
 // DO return pattern:
 //   Success: { ok: true, ...data }
-//   Failure: { error: 'message' }
-// Route handlers check `.error` and map to the appropriate HTTP status.
+//   Failure: { error: 'Human-readable message', code: 'ERROR_CODE' }
+//
+// Error codes → HTTP status (via teamErrorStatus() in request-utils.js):
+//   NOT_MEMBER, NOT_OWNER, FORBIDDEN → 403
+//   NOT_FOUND                        → 404
+//   CONFLICT                         → 409
+//   VALIDATION                       → 400
+//   INTERNAL                         → 500
+//   (unknown)                        → 400
+//
+// Route handlers check `.error` and call `teamErrorStatus(result)` to map.
 // DOs never throw for expected failures — throws are for bugs only.
 
 // --- Heartbeat windows ---
@@ -53,6 +62,11 @@ export const RATE_LIMIT_ACCOUNTS_PER_IP = 3;
 export const RATE_LIMIT_EVALUATIONS = 5;
 export const RATE_LIMIT_WS_TICKETS = 100;
 
+// --- Rate limits (per IP per day, public/unauthenticated endpoints) ---
+export const RATE_LIMIT_STATS_PER_IP = 1000;
+export const RATE_LIMIT_CATALOG_PER_IP = 500;
+export const RATE_LIMIT_BATCH_EVALUATE_PER_IP = 20;
+
 // --- Chat room tuning ---
 export const CHAT_MIN_ROOM_SIZE = 5;
 export const CHAT_MAX_ROOM_SIZE = 30;
@@ -66,8 +80,26 @@ export const CHAT_RATE_LIMIT_PRUNE_AFTER_MS = 120_000;
 // --- Presence ---
 export const PRESENCE_TTL_MS = 60_000;
 
-// --- Web sessions ---
-export const WEB_SESSION_DURATION_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+// --- Token lifecycle ---
+// Access tokens (CLI/MCP) expire after 90 days of inactivity. Every successful
+// authentication re-PUTs the KV entry with a fresh TTL (sliding window), so
+// active users never hit expiration. 90 days matches Vercel's token lifetime
+// and suits a dev tool where MCP servers reconnect daily — re-auth ~4x/year
+// for completely inactive tokens.
+export const ACCESS_TOKEN_TTL_S = 90 * 24 * 60 * 60; // 90 days in seconds
+
+// Web session tokens get a shorter 30-day sliding window. The dashboard is
+// a secondary surface; re-login via GitHub OAuth is frictionless.
+export const WEB_SESSION_TTL_S = 30 * 24 * 60 * 60; // 30 days in seconds
+export const WEB_SESSION_DURATION_MS = WEB_SESSION_TTL_S * 1000;
+
+// Refresh tokens allow clients to obtain a new access token without
+// re-authenticating from scratch. Longer-lived than access tokens so they
+// survive token expiry windows. Stored in KV with their own prefix.
+export const REFRESH_TOKEN_TTL_S = 180 * 24 * 60 * 60; // 180 days in seconds
+
+// Rate limit for token refresh requests (per user per day).
+export const RATE_LIMIT_TOKEN_REFRESH = 50;
 
 // --- Misc ---
 export const CHAT_COOLDOWN_MS = 5 * 60 * 1000;

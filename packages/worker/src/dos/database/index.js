@@ -128,6 +128,15 @@ export class DatabaseDO extends DurableObject {
         user_agent TEXT,
         revoked INTEGER DEFAULT 0
       );
+
+      CREATE TABLE IF NOT EXISTS refresh_tokens (
+        token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL REFERENCES users(id),
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        revoked INTEGER DEFAULT 0,
+        revoked_at TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
     `);
 
     // Migrate: add team_name column for tables created before this column existed
@@ -139,9 +148,12 @@ export class DatabaseDO extends DurableObject {
     runMigration(this.sql, 'ALTER TABLE users ADD COLUMN avatar_url TEXT', null, 'DatabaseDO');
     runMigration(this.sql, 'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)', null, 'DatabaseDO');
 
-    // Prune stale rate limit rows and expired sessions
+    // Prune stale rate limit rows, expired sessions, and old refresh tokens
     this.sql.exec("DELETE FROM account_limits WHERE date < date('now', '-7 days')");
     this.sql.exec("DELETE FROM web_sessions WHERE expires_at < datetime('now') OR revoked = 1");
+    // Revoked refresh tokens older than 7 days have no forensic value — KV entries
+    // already expired. Active tokens older than 180 days can't have valid KV entries.
+    this.sql.exec("DELETE FROM refresh_tokens WHERE (revoked = 1 AND revoked_at < datetime('now', '-7 days')) OR created_at < datetime('now', '-200 days')");
 
     this.#schemaReady = true;
   }
@@ -164,7 +176,7 @@ export class DatabaseDO extends DurableObject {
     }
 
     if (this.#handleExists(handle)) {
-      return { error: 'Could not generate unique handle, please try again' };
+      return { error: 'Could not generate unique handle, please try again', code: 'CONFLICT' };
     }
 
     this.sql.exec(
@@ -203,14 +215,14 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
 
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(newHandle)) {
-      return { error: 'Handle must be 3-20 characters, alphanumeric + underscores only' };
+      return { error: 'Handle must be 3-20 characters, alphanumeric + underscores only', code: 'VALIDATION' };
     }
 
     const taken = this.sql.exec(
       'SELECT 1 FROM users WHERE handle = ? AND id != ?', newHandle, userId
     ).toArray().length > 0;
     if (taken) {
-      return { error: 'Handle already taken' };
+      return { error: 'Handle already taken', code: 'CONFLICT' };
     }
 
     this.sql.exec('UPDATE users SET handle = ? WHERE id = ?', newHandle, userId);
@@ -221,7 +233,7 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
 
     if (!COLORS.includes(color)) {
-      return { error: `Color must be one of: ${COLORS.join(', ')}` };
+      return { error: `Color must be one of: ${COLORS.join(', ')}`, code: 'VALIDATION' };
     }
 
     this.sql.exec('UPDATE users SET color = ? WHERE id = ?', color, userId);
@@ -261,7 +273,7 @@ export class DatabaseDO extends DurableObject {
       attempts++;
     }
     if (this.#handleExists(handle)) {
-      return { error: 'Could not generate unique handle' };
+      return { error: 'Could not generate unique handle', code: 'CONFLICT' };
     }
 
     this.sql.exec(
@@ -280,7 +292,7 @@ export class DatabaseDO extends DurableObject {
       'SELECT id FROM users WHERE github_id = ? AND id != ?', String(githubId), userId
     ).toArray();
     if (existing.length > 0) {
-      return { error: 'This GitHub account is already linked to another user' };
+      return { error: 'This GitHub account is already linked to another user', code: 'CONFLICT' };
     }
 
     this.sql.exec(
@@ -455,7 +467,7 @@ export class DatabaseDO extends DurableObject {
   async updateAgentProfile(userId, profile) {
     this.#ensureSchema();
     const user = this.sql.exec('SELECT id FROM users WHERE id = ?', userId).toArray();
-    if (user.length === 0) return { error: 'User not found' };
+    if (user.length === 0) return { error: 'User not found', code: 'NOT_FOUND' };
 
     this.sql.exec(
       `INSERT INTO agent_profiles (user_id, framework, languages, frameworks, tools, platforms, registered_at, last_active)
@@ -478,8 +490,66 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
+  // ── Refresh tokens ──
+
+  async storeRefreshToken(userId, token) {
+    this.#ensureSchema();
+    this.sql.exec(
+      'INSERT INTO refresh_tokens (token, user_id) VALUES (?, ?)',
+      token, userId
+    );
+    return { ok: true };
+  }
+
+  async getRefreshToken(token) {
+    this.#ensureSchema();
+    const rows = this.sql.exec(
+      'SELECT token, user_id, created_at, revoked FROM refresh_tokens WHERE token = ?',
+      token
+    ).toArray();
+    return rows[0] || null;
+  }
+
+  async revokeRefreshToken(token) {
+    this.#ensureSchema();
+    this.sql.exec(
+      "UPDATE refresh_tokens SET revoked = 1, revoked_at = datetime('now') WHERE token = ?",
+      token
+    );
+    return { ok: true };
+  }
+
+  async revokeAllRefreshTokens(userId) {
+    this.#ensureSchema();
+    this.sql.exec(
+      "UPDATE refresh_tokens SET revoked = 1, revoked_at = datetime('now') WHERE user_id = ? AND revoked = 0",
+      userId
+    );
+    return { ok: true };
+  }
+
+  async getActiveRefreshTokens(userId) {
+    this.#ensureSchema();
+    return this.sql.exec(
+      'SELECT token FROM refresh_tokens WHERE user_id = ? AND revoked = 0',
+      userId
+    ).toArray();
+  }
+
+  async updateUserToken(userId, newToken) {
+    this.#ensureSchema();
+    this.sql.exec('UPDATE users SET token = ? WHERE id = ?', newToken, userId);
+    return { ok: true };
+  }
+
   // ── Private helpers ──
 
+  /**
+   * Generate a random adjective+noun handle.
+   * Callers retry up to 10 times on collision, then return an error.
+   * With 64 adjectives x 64 nouns = 4096 base combinations (+ random suffix),
+   * collisions are statistically unlikely until ~2k users.
+   */
   #generateHandle() {
     const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
     const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];

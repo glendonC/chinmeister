@@ -3,6 +3,7 @@
 
 import { normalizeRuntimeMetadata } from './runtime.js';
 import { safeParseJSON } from '../../lib/text-utils.js';
+import { sqlChanges } from '../../lib/validation.js';
 import { MEMORY_MAX_COUNT } from '../../lib/constants.js';
 
 // Escape LIKE wildcards so user-supplied text is matched literally
@@ -112,7 +113,6 @@ export function updateMemory(sql, resolvedAgentId, memoryId, text, tags) {
 export function deleteMemory(sql, memoryId) {
   // Any team member can delete — memories are team knowledge
   sql.exec('DELETE FROM memories WHERE id = ?', memoryId);
-  const changed = sql.exec('SELECT changes() as c').toArray();
-  if (changed[0].c === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
+  if (sqlChanges(sql) === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
   return { ok: true };
 }

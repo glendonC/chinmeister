@@ -1,5 +1,6 @@
 // Team membership routes — join, leave, heartbeat, context.
 
+import { isBlocked } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
 import { json } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
@@ -14,6 +15,8 @@ export async function handleTeamJoin(request, user, env, teamId) {
   } catch {
     /* body is optional */
   }
+  // Moderation: team names are user-visible and persistent
+  if (name && isBlocked(name)) return json({ error: 'Content blocked' }, 400);
 
   const db = getDB(env);
   const runtime = getAgentRuntime(request, user);
@@ -27,7 +30,7 @@ export async function handleTeamJoin(request, user, env, teamId) {
     'Team join limit reached (100/day). Try again tomorrow.',
     async () => {
       const result = await team.join(agentId, user.id, user.handle, runtime);
-      if (result.error) return json({ error: result.error }, 400);
+      if (result.error) return json({ error: result.error }, teamErrorStatus(result));
 
       let warning;
       try {
@@ -46,7 +49,7 @@ export async function handleTeamLeave(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.leave(agentId, user.id);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
 
   const db = getDB(env);
   try {
@@ -62,7 +65,7 @@ export async function handleTeamContext(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getContext(agentId, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
 
   const db = getDB(env);
   try {

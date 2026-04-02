@@ -47,6 +47,6 @@ export async function handleTeamGetLocks(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getLockedFiles(agentId, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }

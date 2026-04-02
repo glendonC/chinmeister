@@ -1,9 +1,9 @@
 import { getDB } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
-import { requireJson, withRateLimit } from '../lib/validation.js';
+import { requireJson, withRateLimit, withIpRateLimit } from '../lib/validation.js';
 import { evaluateTool } from '../lib/evaluate.js';
 import { CATEGORY_NAMES } from '../catalog.js';
-import { RATE_LIMIT_EVALUATIONS } from '../lib/constants.js';
+import { RATE_LIMIT_EVALUATIONS, RATE_LIMIT_BATCH_EVALUATE_PER_IP } from '../lib/constants.js';
 
 // Constant-time string comparison to prevent timing attacks on admin key checks.
 function timingSafeEqual(a, b) {
@@ -79,32 +79,35 @@ export async function handleAdminDelete(request, env) {
 
 // Admin-only batch evaluation — no auth, secured by secret key in body.
 // Used for seed scans and monthly re-evaluations.
+// IP rate limited to prevent brute-force key guessing.
 export async function handleBatchEvaluate(request, env) {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
+  return withIpRateLimit(request, env, 'batch-eval', RATE_LIMIT_BATCH_EVALUATE_PER_IP, async () => {
+    const body = await parseBody(request);
+    const parseErr = requireJson(body);
+    if (parseErr) return parseErr;
 
-  const { tools, admin_key } = body;
-  if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY)) return json({ error: 'Forbidden' }, 403);
-  if (!Array.isArray(tools) || tools.length === 0) return json({ error: 'tools array required' }, 400);
-  if (tools.length > 50) return json({ error: 'max 50 tools per batch' }, 400);
+    const { tools, admin_key } = body;
+    if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY)) return json({ error: 'Forbidden' }, 403);
+    if (!Array.isArray(tools) || tools.length === 0) return json({ error: 'tools array required' }, 400);
+    if (tools.length > 50) return json({ error: 'max 50 tools per batch' }, 400);
 
-  const db = getDB(env);
-  const results = [];
-  for (const toolName of tools) {
-    if (typeof toolName !== 'string' || !toolName.trim()) {
-      results.push({ name: toolName, error: 'invalid name' });
-      continue;
+    const db = getDB(env);
+    const results = [];
+    for (const toolName of tools) {
+      if (typeof toolName !== 'string' || !toolName.trim()) {
+        results.push({ name: toolName, error: 'invalid name' });
+        continue;
+      }
+      const result = await evaluateTool(toolName.trim(), env);
+      if (result.error) {
+        results.push({ name: toolName, error: result.error });
+      } else {
+        await db.saveEvaluation(result.evaluation);
+        results.push({ name: result.evaluation.name, verdict: result.evaluation.verdict, confidence: result.evaluation.confidence });
+      }
     }
-    const result = await evaluateTool(toolName.trim(), env);
-    if (result.error) {
-      results.push({ name: toolName, error: result.error });
-    } else {
-      await db.saveEvaluation(result.evaluation);
-      results.push({ name: result.evaluation.name, verdict: result.evaluation.verdict, confidence: result.evaluation.confidence });
-    }
-  }
-  return json({ results, evaluated: results.filter(r => !r.error).length, errors: results.filter(r => r.error).length }, 200);
+    return json({ results, evaluated: results.filter(r => !r.error).length, errors: results.filter(r => r.error).length }, 200);
+  });
 }
 
 export async function handleTriggerEvaluation(request, user, env) {

@@ -3,7 +3,7 @@
 // Auth flow: Bearer token → KV lookup → user_id → DO.getUser(id)
 
 import { json } from './lib/http.js';
-import { parseTeamPath, getToolFromAgentId, sanitizeTags, teamErrorStatus } from './lib/request-utils.js';
+import { buildRoutes, matchRoute } from './lib/router.js';
 import { handleInit, handleStats, handleToolCatalog, handleGithubAuth, handleGithubCallback, handleGithubLink, handleGithubLinkCallback } from './routes/public.js';
 import {
   authenticate,
@@ -13,6 +13,7 @@ import {
   handleDashboardSummary,
   handleGetUserTeams,
   handleHeartbeat,
+  handleRefreshToken,
   handleSetStatus,
   handleUpdateAgentProfile,
   handleUpdateColor,
@@ -52,6 +53,8 @@ export { RoomDO } from './room.js';
 export { TeamDO } from './dos/team/index.js';
 export { parseTeamPath, getAgentRuntime, getToolFromAgentId, sanitizeTags, teamErrorStatus } from './lib/request-utils.js';
 
+// --- CORS ---
+
 const PROD_ORIGINS = new Set(['https://chinwag.dev', 'https://www.chinwag.dev']);
 const DEV_ORIGINS = new Set(['http://localhost:8788', 'http://localhost:3000', 'http://127.0.0.1:8788']);
 
@@ -73,6 +76,97 @@ function getAllowedOrigin(origin, environment) {
   return '';
 }
 
+/**
+ * Validate Origin header for WebSocket upgrades.
+ * Browsers always send Origin on WS handshakes. Non-browser clients
+ * (MCP servers, CLI) may omit it — that's fine, they're not subject
+ * to same-origin policy. We reject only when Origin IS present but
+ * does not match our allowlist, which blocks cross-site WS hijacking.
+ */
+function isWebSocketOriginAllowed(origin, environment) {
+  if (!origin) return true; // non-browser client — no Origin header
+  return getAllowedOrigin(origin, environment) !== '';
+}
+
+// --- Route table ---
+// auth: false → public, auth: true (default) → requires authenticated user.
+// Handlers receive (request, env, user?, ...params) — user is null for public routes.
+// Parametric :params are captured and appended as trailing handler arguments.
+// Constrained params use :name(regex) syntax, e.g. :tid(t_[a-f0-9]{16}).
+//
+// To add a new endpoint, add ONE line here.
+
+// Team ID format used in parseTeamPath — constrained to prevent invalid IDs
+// from reaching handlers (they get a 404 instead).
+const TID = ':tid(t_[a-f0-9]{16})';
+
+const routes = buildRoutes([
+  // Public
+  { method: 'POST', path: '/auth/init',                  handler: (req, env) => handleInit(req, env),                     auth: false },
+  { method: 'POST', path: '/auth/refresh',               handler: (req, env) => handleRefreshToken(req, env),             auth: false },
+  { method: 'GET',  path: '/stats',                      handler: (req, env) => handleStats(req, env),                    auth: false },
+  { method: 'GET',  path: '/tools/catalog',              handler: (req, env) => handleToolCatalog(req, env),              auth: false },
+  { method: 'GET',  path: '/tools/directory',            handler: (req, env) => handleListDirectory(req, env),            auth: false },
+  { method: 'POST', path: '/tools/batch-evaluate',       handler: (req, env) => handleBatchEvaluate(req, env),            auth: false },
+  { method: 'POST', path: '/tools/admin-delete',         handler: (req, env) => handleAdminDelete(req, env),              auth: false },
+  { method: 'GET',  path: '/tools/directory/:id',        handler: (req, env, _u, id) => handleGetDirectoryEntry(req, env, id), auth: false },
+  { method: 'GET',  path: '/auth/github',                handler: (req, env) => handleGithubAuth(req, env),               auth: false },
+  { method: 'GET',  path: '/auth/github/callback',       handler: (req, env) => handleGithubCallback(req, env),           auth: false },
+  { method: 'GET',  path: '/auth/github/callback/link',  handler: (req, env) => handleGithubLinkCallback(req, env),       auth: false },
+
+  // Authenticated — user routes
+  { method: 'GET',    path: '/me',                handler: (_req, _env, user) => { const { id, ...profile } = user; return json(profile); } },
+  { method: 'GET',    path: '/me/teams',          handler: (_req, env, user) => handleGetUserTeams(user, env) },
+  { method: 'GET',    path: '/me/dashboard',      handler: (_req, env, user) => handleDashboardSummary(user, env) },
+  { method: 'PUT',    path: '/me/handle',         handler: (req, env, user) => handleUpdateHandle(req, user, env) },
+  { method: 'PUT',    path: '/me/color',          handler: (req, env, user) => handleUpdateColor(req, user, env) },
+  { method: 'PUT',    path: '/me/github',         handler: (_req, env, user) => handleUnlinkGithub(user, env) },
+  { method: 'PUT',    path: '/status',            handler: (req, env, user) => handleSetStatus(req, user, env) },
+  { method: 'DELETE', path: '/status',            handler: (_req, env, user) => handleClearStatus(user, env) },
+  { method: 'POST',   path: '/presence/heartbeat', handler: (_req, env, user) => handleHeartbeat(user, env) },
+  { method: 'PUT',    path: '/agent/profile',     handler: (req, env, user) => handleUpdateAgentProfile(req, user, env) },
+  { method: 'POST',   path: '/tools/evaluate',    handler: (req, env, user) => handleTriggerEvaluation(req, user, env) },
+  { method: 'POST',   path: '/auth/ws-ticket',    handler: (_req, env, user) => handleGetWsTicket(user, env) },
+  { method: 'POST',   path: '/auth/github/link',  handler: (req, env, user) => handleGithubLink(req, user, env) },
+  { method: 'POST',   path: '/teams',             handler: (req, env, user) => handleCreateTeam(req, user, env) },
+
+  // Authenticated — WebSocket upgrades (return directly, skip CORS headers)
+  { method: 'GET',  path: '/ws/chat',                    handler: (req, env, user) => handleChatUpgrade(req, user, env) },
+  { method: 'GET',  path: `/teams/${TID}/ws`,            handler: (req, env, user, tid) => handleTeamWebSocket(req, user, env, tid) },
+
+  // Authenticated — team routes
+  { method: 'POST',   path: `/teams/${TID}/join`,        handler: (req, env, user, tid) => handleTeamJoin(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/leave`,       handler: (req, env, user, tid) => handleTeamLeave(req, user, env, tid) },
+  { method: 'GET',    path: `/teams/${TID}/context`,     handler: (req, env, user, tid) => handleTeamContext(req, user, env, tid) },
+  { method: 'PUT',    path: `/teams/${TID}/activity`,    handler: (req, env, user, tid) => handleTeamActivity(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/conflicts`,   handler: (req, env, user, tid) => handleTeamConflicts(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/heartbeat`,   handler: (req, env, user, tid) => handleTeamHeartbeat(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/file`,        handler: (req, env, user, tid) => handleTeamFile(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/memory`,      handler: (req, env, user, tid) => handleTeamSaveMemory(req, user, env, tid) },
+  { method: 'GET',    path: `/teams/${TID}/memory`,      handler: (req, env, user, tid) => handleTeamSearchMemory(req, user, env, tid) },
+  { method: 'PUT',    path: `/teams/${TID}/memory`,      handler: (req, env, user, tid) => handleTeamUpdateMemory(req, user, env, tid) },
+  { method: 'DELETE', path: `/teams/${TID}/memory`,      handler: (req, env, user, tid) => handleTeamDeleteMemory(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/locks`,       handler: (req, env, user, tid) => handleTeamClaimFiles(req, user, env, tid) },
+  { method: 'DELETE', path: `/teams/${TID}/locks`,       handler: (req, env, user, tid) => handleTeamReleaseFiles(req, user, env, tid) },
+  { method: 'GET',    path: `/teams/${TID}/locks`,       handler: (req, env, user, tid) => handleTeamGetLocks(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/messages`,    handler: (req, env, user, tid) => handleTeamSendMessage(req, user, env, tid) },
+  { method: 'GET',    path: `/teams/${TID}/messages`,    handler: (req, env, user, tid) => handleTeamGetMessages(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/sessions`,    handler: (req, env, user, tid) => handleTeamStartSession(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/sessionend`,  handler: (req, env, user, tid) => handleTeamEndSession(req, user, env, tid) },
+  { method: 'PUT',    path: `/teams/${TID}/sessionmodel`, handler: (req, env, user, tid) => handleTeamEnrichModel(req, user, env, tid) },
+  { method: 'POST',   path: `/teams/${TID}/sessionedit`, handler: (req, env, user, tid) => handleTeamSessionEdit(req, user, env, tid) },
+  { method: 'GET',    path: `/teams/${TID}/history`,     handler: (req, env, user, tid) => handleTeamHistory(req, user, env, tid) },
+]);
+
+// WebSocket upgrade paths skip CORS header injection (the Response is a
+// WebSocket handshake, not a regular HTTP response).
+const WS_PATHS = new Set(['/ws/chat']);
+const WS_PATTERN = /^\/teams\/[^/]+\/ws$/;
+
+function isWebSocketRoute(path) {
+  return WS_PATHS.has(path) || WS_PATTERN.test(path);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -92,124 +186,34 @@ export default {
     }
 
     try {
-      let response;
+      const matched = matchRoute(routes, method, path);
+      if (!matched) {
+        return json({ error: 'Not found' }, 404, corsHeaders);
+      }
 
-      if (method === 'POST' && path === '/auth/init') {
-        response = await handleInit(request, env);
-      } else if (method === 'GET' && path === '/stats') {
-        response = await handleStats(env);
-      } else if (method === 'GET' && path === '/tools/catalog') {
-        response = await handleToolCatalog(env);
-      } else if (method === 'GET' && path === '/tools/directory') {
-        response = await handleListDirectory(request, env);
-      } else if (method === 'POST' && path === '/tools/batch-evaluate') {
-        response = await handleBatchEvaluate(request, env);
-      } else if (method === 'POST' && path === '/tools/admin-delete') {
-        response = await handleAdminDelete(request, env);
-      } else if (method === 'GET' && path.startsWith('/tools/directory/')) {
-        const toolId = path.slice('/tools/directory/'.length);
-        if (toolId && !toolId.includes('/')) {
-          response = await handleGetDirectoryEntry(request, env, toolId);
-        } else {
-          response = json({ error: 'Not found' }, 404);
-        }
-      } else if (method === 'GET' && path === '/auth/github') {
-        response = await handleGithubAuth(request, env);
-      } else if (method === 'GET' && path === '/auth/github/callback') {
-        response = await handleGithubCallback(request, env);
-      } else if (method === 'GET' && path === '/auth/github/callback/link') {
-        response = await handleGithubLinkCallback(request, env);
-      } else {
-        const user = await authenticate(request, env);
+      const { route, params } = matched;
+
+      // Authenticate if required
+      let user = null;
+      if (route.auth) {
+        user = await authenticate(request, env);
         if (!user) {
           return json({ error: 'Unauthorized' }, 401, corsHeaders);
         }
+      }
 
-        if (method === 'GET' && path === '/me') {
-          const { id, ...profile } = user;
-          response = json(profile);
-        } else if (method === 'GET' && path === '/me/teams') {
-          response = await handleGetUserTeams(user, env);
-        } else if (method === 'GET' && path === '/me/dashboard') {
-          response = await handleDashboardSummary(user, env);
-        } else if (method === 'POST' && path === '/presence/heartbeat') {
-          response = await handleHeartbeat(user, env);
-        } else if (method === 'PUT' && path === '/me/handle') {
-          response = await handleUpdateHandle(request, user, env);
-        } else if (method === 'PUT' && path === '/me/color') {
-          response = await handleUpdateColor(request, user, env);
-        } else if (method === 'PUT' && path === '/status') {
-          response = await handleSetStatus(request, user, env);
-        } else if (method === 'DELETE' && path === '/status') {
-          response = await handleClearStatus(user, env);
-        } else if (method === 'GET' && path === '/ws/chat') {
-          return handleChatUpgrade(request, user, env);
-        } else if (method === 'POST' && path === '/auth/github/link') {
-          response = await handleGithubLink(request, user, env);
-        } else if (method === 'PUT' && path === '/me/github') {
-          response = await handleUnlinkGithub(user, env);
-        } else if (method === 'PUT' && path === '/agent/profile') {
-          response = await handleUpdateAgentProfile(request, user, env);
-        } else if (method === 'POST' && path === '/tools/evaluate') {
-          response = await handleTriggerEvaluation(request, user, env);
-        } else if (method === 'POST' && path === '/auth/ws-ticket') {
-          response = await handleGetWsTicket(user, env);
-        } else if (method === 'POST' && path === '/teams') {
-          response = await handleCreateTeam(request, user, env);
-        } else if (path.startsWith('/teams/')) {
-          const parsed = parseTeamPath(path);
-          if (!parsed) {
-            response = json({ error: 'Not found' }, 404);
-          } else if (method === 'POST' && parsed.action === 'join') {
-            response = await handleTeamJoin(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'leave') {
-            response = await handleTeamLeave(request, user, env, parsed.teamId);
-          } else if (method === 'GET' && parsed.action === 'context') {
-            response = await handleTeamContext(request, user, env, parsed.teamId);
-          } else if (method === 'PUT' && parsed.action === 'activity') {
-            response = await handleTeamActivity(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'conflicts') {
-            response = await handleTeamConflicts(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'heartbeat') {
-            response = await handleTeamHeartbeat(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'file') {
-            response = await handleTeamFile(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'memory') {
-            response = await handleTeamSaveMemory(request, user, env, parsed.teamId);
-          } else if (method === 'GET' && parsed.action === 'memory') {
-            response = await handleTeamSearchMemory(request, user, env, parsed.teamId);
-          } else if (method === 'PUT' && parsed.action === 'memory') {
-            response = await handleTeamUpdateMemory(request, user, env, parsed.teamId);
-          } else if (method === 'DELETE' && parsed.action === 'memory') {
-            response = await handleTeamDeleteMemory(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'locks') {
-            response = await handleTeamClaimFiles(request, user, env, parsed.teamId);
-          } else if (method === 'DELETE' && parsed.action === 'locks') {
-            response = await handleTeamReleaseFiles(request, user, env, parsed.teamId);
-          } else if (method === 'GET' && parsed.action === 'locks') {
-            response = await handleTeamGetLocks(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'messages') {
-            response = await handleTeamSendMessage(request, user, env, parsed.teamId);
-          } else if (method === 'GET' && parsed.action === 'messages') {
-            response = await handleTeamGetMessages(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'sessions') {
-            response = await handleTeamStartSession(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'sessionend') {
-            response = await handleTeamEndSession(request, user, env, parsed.teamId);
-          } else if (method === 'PUT' && parsed.action === 'sessionmodel') {
-            response = await handleTeamEnrichModel(request, user, env, parsed.teamId);
-          } else if (method === 'POST' && parsed.action === 'sessionedit') {
-            response = await handleTeamSessionEdit(request, user, env, parsed.teamId);
-          } else if (method === 'GET' && parsed.action === 'history') {
-            response = await handleTeamHistory(request, user, env, parsed.teamId);
-          } else if (method === 'GET' && parsed.action === 'ws') {
-            return handleTeamWebSocket(request, user, env, parsed.teamId);
-          } else {
-            response = json({ error: 'Not found' }, 404);
-          }
-        } else {
-          response = json({ error: 'Not found' }, 404);
+      // Validate Origin for WebSocket upgrades — reject cross-site hijacking
+      if (isWebSocketRoute(path)) {
+        if (!isWebSocketOriginAllowed(origin, env.ENVIRONMENT)) {
+          return json({ error: 'Origin not allowed' }, 403, corsHeaders);
         }
+      }
+
+      const response = await route.handler(request, env, user, ...params);
+
+      // WebSocket upgrades return the handshake directly (no CORS headers)
+      if (isWebSocketRoute(path)) {
+        return response;
       }
 
       const headers = new Headers(response.headers);
