@@ -88,10 +88,17 @@ export class TeamDO extends DurableObject {
       const isAgent = tags.includes('role:agent');
 
       if (data.type === 'ping') {
-        // Bump heartbeat so SQL queries that check last_heartbeat stay current
         if (agentId) {
           this.#ensureSchema();
-          this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", agentId);
+          if (data.lastToolUseAt) {
+            const ts = new Date(data.lastToolUseAt).toISOString().replace('T', ' ').slice(0, -1);
+            this.sql.exec(
+              "UPDATE members SET last_heartbeat = datetime('now'), last_tool_use = ? WHERE agent_id = ?",
+              ts, agentId
+            );
+          } else {
+            this.sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", agentId);
+          }
         }
         ws.send(JSON.stringify({ type: 'pong' }));
       } else if (data.type === 'activity' && isAgent && agentId) {
@@ -163,6 +170,7 @@ export class TeamDO extends DurableObject {
       ["ALTER TABLE sessions ADD COLUMN agent_model TEXT", null],
       ["ALTER TABLE members ADD COLUMN agent_model TEXT", null],
       ["ALTER TABLE members ADD COLUMN signal_level INTEGER DEFAULT 1", null],
+      ["ALTER TABLE members ADD COLUMN last_tool_use TEXT", null],
       ["ALTER TABLE memories ADD COLUMN source_model TEXT", null],
     ];
     for (const [alter, backfill] of migrations) {
@@ -185,7 +193,8 @@ export class TeamDO extends DurableObject {
         transport TEXT,
         agent_model TEXT,
         joined_at TEXT DEFAULT (datetime('now')),
-        last_heartbeat TEXT DEFAULT (datetime('now'))
+        last_heartbeat TEXT DEFAULT (datetime('now')),
+        last_tool_use TEXT
       );
 
       CREATE TABLE IF NOT EXISTS activities (
@@ -406,11 +415,11 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
-  async heartbeat(agentId, ownerId = null, signalLevel = null) {
+  async heartbeat(agentId, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team' };
-    const result = heartbeatFn(this.sql, resolved, signalLevel);
+    const result = heartbeatFn(this.sql, resolved);
     if (!result.error) {
       const now = Date.now();
       const last = this.#lastHeartbeatBroadcast.get(resolved) || 0;
@@ -470,7 +479,7 @@ export class TeamDO extends DurableObject {
 
     const members = this.sql.exec(
       `SELECT m.agent_id, m.owner_handle, m.tool, m.host_tool, m.agent_surface, m.transport, m.agent_model,
-              m.signal_level, a.files, a.summary, a.updated_at,
+              m.last_tool_use, a.files, a.summary, a.updated_at,
               s.framework, s.started_at as session_started,
               ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
               ROUND((julianday('now') - julianday(a.updated_at)) * 86400) as seconds_since_update,
@@ -501,8 +510,10 @@ export class TeamDO extends DurableObject {
     `).toArray();
 
     const memberList = members.map(m => {
-      // WebSocket connection = active. Heartbeat fallback for hooks/HTTP-only agents.
-      const status = connectedIds.has(m.agent_id) ? 'active'
+      const wsConnected = connectedIds.has(m.agent_id);
+      // Binary status: active (WS or heartbeat) vs offline. UI layers determine
+      // working-vs-idle from activity data (files, summary, seconds_since_update).
+      const status = wsConnected ? 'active'
         : m.heartbeat_active ? 'active' : 'offline';
       return {
         agent_id: m.agent_id,
@@ -517,8 +528,7 @@ export class TeamDO extends DurableObject {
         session_minutes: m.session_minutes || null,
         seconds_since_update: m.seconds_since_update ?? null,
         minutes_since_update: m.minutes_since_update ?? null,
-        signal_tier: connectedIds.has(m.agent_id) ? 'websocket'
-          : m.signal_level >= 2 ? 'hook+mcp' : m.signal_level === 0 ? 'heartbeat-only' : 'mcp',
+        signal_tier: wsConnected ? 'websocket' : m.heartbeat_active ? 'http' : 'none',
         activity: m.files ? {
           files: JSON.parse(m.files),
           summary: m.summary,

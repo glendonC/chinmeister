@@ -12,7 +12,7 @@ import {
 import { SPINNER, truncateText } from './dashboard-utils.js';
 import {
   isAgentAddressable, getAgentIntent,
-  getAgentDisplayLabel,
+  getAgentDisplayLabel, getIntentColor,
 } from './dashboard-agent-display.js';
 import { detectTerminalEnvironment } from './terminal-spawner.js';
 
@@ -125,7 +125,7 @@ export function CommandBar({ composer, memory, notice, view, commandSuggestions,
 }
 
 /**
- * Renders the home view main pane with status, agents table, tool issues, tool picker, and compose overlay.
+ * Renders the home view main pane with agents table, tool issues, tool picker, and compose overlay.
  */
 export function MainPane({
   projectDisplayName,
@@ -150,30 +150,26 @@ export function MainPane({
   onMemorySubmit,
 }) {
   const activeAgents = liveAgents.filter(a => !a._dead);
-  const idleAgents = liveAgents.filter(a => {
+  const workingCount = activeAgents.filter(a => {
     const intent = getAgentIntent(a);
-    return !intent || /idle/i.test(intent);
-  });
+    return intent && !/idle/i.test(intent);
+  }).length;
 
   return (
     <Box flexDirection="column" paddingTop={1}>
-      <Text>
-        <Text color="magenta" bold>chinwag</Text>
-        <Text dimColor>  {projectDisplayName}</Text>
-        {connState === 'reconnecting' && <Text color="yellow">  {SPINNER[spinnerFrame]} reconnecting</Text>}
-        {connState === 'offline' && <Text color="red">  offline</Text>}
-      </Text>
-
       {connState !== 'connected' && connDetail && (
         <Text color={connState === 'offline' ? 'red' : 'yellow'}>{connDetail}</Text>
       )}
+      {connState === 'reconnecting' && <Text color="yellow">{SPINNER[spinnerFrame]} reconnecting</Text>}
 
-      <Box flexDirection="column" marginTop={1}>
-        <Text bold>
-          {'agents'}
-          <Text dimColor>  {activeAgents.length} connected</Text>
-          {idleAgents.length > 0 && activeAgents.length > idleAgents.length && (
-            <Text dimColor>{' \u00B7 '}{activeAgents.length - idleAgents.length} working</Text>
+      <Box flexDirection="column">
+        <Text>
+          <Text bold>agents</Text>
+          {activeAgents.length > 0 && (
+            <Text dimColor>{'  '}{activeAgents.length} connected</Text>
+          )}
+          {workingCount > 0 && (
+            <Text dimColor>{' \u00B7 '}{workingCount} working</Text>
           )}
         </Text>
         {allVisibleAgents.length === 0 ? (
@@ -181,37 +177,33 @@ export function MainPane({
         ) : (() => {
           const toolColWidth = Math.max(4, ...allVisibleAgents.map(a => getAgentDisplayLabel(a, liveAgentNameCounts, allVisibleAgents).length)) + 1;
           const glyphColWidth = 2; // "● " or "○ "
-          const maxActivity = cols ? cols - 4 - 2 - 10 - glyphColWidth - toolColWidth : Infinity;
+          const maxActivity = cols ? cols - 4 - glyphColWidth - toolColWidth : Infinity;
           return (
             <Box flexDirection="column" marginTop={1}>
-              <Text dimColor>
-                {'  '}
-                {'STATUS'.padEnd(10)}
-                {'  '}
-                {'TOOL'.padEnd(toolColWidth)}
-                {'ACTIVITY'}
-              </Text>
               {visibleSessionRows.items.map((agent, idx) => {
                 const absoluteIdx = visibleSessionRows.start + idx;
                 const isSelected = absoluteIdx === selectedIdx;
                 const sel = isSelected && mainFocus === 'agents';
-                const intent = getAgentIntent(agent);
                 const isDone = agent._dead;
                 const isFailed = agent._failed;
-                const status = isDone ? (isFailed ? 'failed' : 'done') : (intent && !/idle/i.test(intent) ? 'active' : 'idle');
-                const statusColor = { active: 'green', idle: 'yellow', done: 'green', failed: 'red' }[status] || 'gray';
+                const intent = getAgentIntent(agent);
+                const isIdle = !intent || /idle/i.test(intent);
                 const activity = isDone
                   ? (agent.outputPreview || (isFailed ? 'exited with error' : 'completed'))
-                  : (intent && !/idle/i.test(intent) ? intent : (agent._duration ? `connected ${agent._duration}` : '-'));
-                const activityColor = isDone ? undefined : (status === 'active' ? 'cyan' : 'gray');
+                  : (isIdle
+                      ? (agent._duration ? `connected ${agent._duration}` : '\u2013')
+                      : intent);
                 const originGlyph = agent._managed ? '●' : '○';
-                const originColor = agent._managed ? (isDone ? 'gray' : 'cyan') : 'gray';
+                const glyphColor = isDone
+                  ? (isFailed ? 'red' : 'gray')
+                  : (isIdle ? 'yellow' : 'green');
+                const activityColor = isDone ? undefined : getIntentColor(intent);
+                const label = getAgentDisplayLabel(agent, liveAgentNameCounts, allVisibleAgents).padEnd(toolColWidth);
                 return (
                   <Text key={agent.agent_id || agent.id}>
                     <Text color={sel ? 'cyan' : 'gray'}>{sel ? '\u203A ' : '  '}</Text>
-                    <Text color={statusColor}>{status.padEnd(10)}</Text>
-                    <Text color={originColor} dimColor={isDone}>{originGlyph} </Text>
-                    <Text bold={sel} dimColor={isDone}>{getAgentDisplayLabel(agent, liveAgentNameCounts, allVisibleAgents).padEnd(toolColWidth)}</Text>
+                    <Text color={glyphColor} dimColor={isDone}>{originGlyph} </Text>
+                    <Text bold={sel} dimColor={isDone}>{label}</Text>
                     <Text color={activityColor} dimColor={isDone}>{truncateText(activity, maxActivity)}</Text>
                   </Text>
                 );
@@ -287,6 +279,10 @@ export function MainPane({
           />
         </Box>
       )}
+
+      <Box marginTop={1}>
+        <Text dimColor>directory: {projectDisplayName}</Text>
+      </Box>
 
       <HintRow hints={contextHints} />
     </Box>

@@ -119,7 +119,7 @@ async function main() {
             pingTimer = setInterval(() => {
               if (Date.now() - lastWsSend > WS_PING_MS - 5000) {
                 try {
-                  ws.send(JSON.stringify({ type: 'ping' }));
+                  ws.send(JSON.stringify({ type: 'ping', lastToolUseAt: state.lastActivity }));
                   lastWsSend = Date.now();
                 } catch { /* close will fire */ }
               }

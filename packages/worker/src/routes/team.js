@@ -99,11 +99,9 @@ export async function handleTeamConflicts(request, user, env, teamId) {
 }
 
 export async function handleTeamHeartbeat(request, user, env, teamId) {
-  const { agentId, transport } = getAgentRuntime(request, user);
-  // hook transport = Claude Code hooks (highest signal), mcp = MCP tool calls
-  const signalLevel = transport === 'hook' ? 2 : 1;
+  const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.heartbeat(agentId, user.id, signalLevel);
+  const result = await team.heartbeat(agentId, user.id);
   if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
