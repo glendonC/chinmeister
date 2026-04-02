@@ -18,8 +18,8 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
         flash(summary.text, { tone: summary.tone });
       }
       return results;
-    } catch (err) {
-      flash(`Could not scan integrations: ${err.message}`, { tone: 'error' });
+    } catch {
+      flash('Could not scan integrations.', { tone: 'error' });
       return [];
     }
   }
@@ -39,13 +39,13 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
 
   function repairIntegrations(hostIds = null) {
     if (!projectRoot) {
-      flash('No project root available for integration repair.', { tone: 'warning' });
+      flash('No project found. Open a project directory first.', { tone: 'warning' });
       return false;
     }
 
     const targets = hostIds?.length ? hostIds : integrationIssues.map((item) => item.id);
     if (targets.length === 0) {
-      flash('No detected integration issues to repair.', { tone: 'info' });
+      flash('No issues to repair.', { tone: 'info' });
       return false;
     }
 
@@ -74,7 +74,7 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
       return true;
     }
 
-    flash(failed[0]?.error || 'Could not repair integrations.', { tone: 'error' });
+    flash('Could not repair integrations.', { tone: 'error' });
     return false;
   }
 

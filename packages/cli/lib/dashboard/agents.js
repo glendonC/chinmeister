@@ -331,15 +331,15 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
       });
       const result = spawnAgent(launch);
       if (result.status === 'failed') {
-        flash(`Failed to start ${toolInfo.name}`, { tone: 'error' });
+        flash(`Could not start ${toolInfo.name}.`, { tone: 'error' });
         return false;
       }
       if (flashSuccess) {
-        flash(`Started ${toolInfo.name} in background`, { tone: 'success' });
+        flash(`Started ${toolInfo.name} in background.`, { tone: 'success' });
       }
       return true;
-    } catch (err) {
-      flash(err?.message || `Failed to start ${toolInfo.name}`, { tone: 'error' });
+    } catch {
+      flash(`Could not start ${toolInfo.name}.`, { tone: 'error' });
       return false;
     }
   }
@@ -356,7 +356,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     if (!agent?._managed) return;
     const didKill = killAgent(agent.id);
     if (!didKill) {
-      flash(agent._dead ? 'Agent is already stopped' : 'Could not stop agent', { tone: 'error' });
+      flash(agent._dead ? 'Already stopped.' : 'Could not stop agent.', { tone: 'error' });
       return;
     }
     flash(`Stopping ${getAgentDisplayLabel(agent, liveAgentNameCounts)}`, { tone: 'info' });
@@ -368,7 +368,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     if (removed) {
       flash(`Removed ${getAgentDisplayLabel(agent, liveAgentNameCounts)}`, { tone: 'success' });
     } else {
-      flash('Agent removal failed. It may have already exited.', { tone: 'error' });
+      flash('Could not remove agent.', { tone: 'error' });
     }
     return removed;
   }
@@ -377,7 +377,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     if (!agent?._managed || !agent._dead) return false;
     const removed = removeAgent(agent.id);
     if (!removed) {
-      flash('Restart failed. Try stopping and launching a new agent.', { tone: 'error' });
+      flash('Could not restart. Try launching a new agent.', { tone: 'error' });
       return false;
     }
     launchManagedTask(
@@ -396,13 +396,13 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
   function handleFixLauncher(tool) {
     const fixTool = tool || unavailableCliAgents[0];
     if (!fixTool) {
-      flash('No fix action is available', { tone: 'warning' });
+      flash('No fix available.', { tone: 'warning' });
       return;
     }
 
     const status = getManagedToolState(fixTool.id);
     if (!status.recoveryCommand) {
-      flash(`${fixTool.name} does not have an automatic fix action`, { tone: 'warning' });
+      flash(`No automatic fix for ${fixTool.name}.`, { tone: 'warning' });
       return;
     }
 

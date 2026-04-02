@@ -130,8 +130,8 @@ export function DashboardShell() {
           {error.includes('chinwag init')
             ? 'Set up this project first, then relaunch.'
             : error.includes('expired')
-              ? 'Your auth token is no longer valid.'
-              : 'Check the issue above and try again.'}
+              ? 'Your session is no longer valid. Run chinwag init to reconnect.'
+              : 'Try again, or run chinwag init if the issue persists.'}
         </Text>
         <HintRow
           hints={[
@@ -159,7 +159,7 @@ export function DashboardShell() {
           </Text>
         ) : (
           <Box flexDirection="column">
-            <Text color="red">{connDetail || 'Cannot reach server.'}</Text>
+            <Text color="red">{connDetail || "Can't reach the server."}</Text>
             <Text>{''}</Text>
             <HintRow
               hints={[

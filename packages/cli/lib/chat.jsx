@@ -25,26 +25,12 @@ export function Chat({ config, user, navigate }) {
   const errorTimerRef = useRef(null);
   const intentionalCloseRef = useRef(false);
 
-  if (!config?.token) return <Text color="red">Not authenticated. Run chinwag init first.</Text>;
-
-  useEffect(() => {
-    connect();
-    return () => {
-      intentionalCloseRef.current = true;
-      clearTimeout(retryTimerRef.current);
-      clearTimeout(errorTimerRef.current);
-      if (wsRef.current) {
-        wsRef.current.close();
-      }
-    };
-  }, []);
-
   function connect(shuffle = false) {
     const url = new URL(WS_URL);
     if (shuffle) url.searchParams.set('shuffle', '1');
 
     const ws = new WebSocket(url.toString(), {
-      headers: { 'Authorization': `Bearer ${config.token}` },
+      headers: { Authorization: `Bearer ${config.token}` },
     });
 
     ws.addEventListener('open', () => {
@@ -55,7 +41,12 @@ export function Chat({ config, user, navigate }) {
 
     ws.addEventListener('message', (event) => {
       let data;
-      try { data = JSON.parse(event.data); } catch (err) { console.error('[chinwag]', err?.message || err); return; }
+      try {
+        data = JSON.parse(event.data);
+      } catch (err) {
+        console.error('[chinwag]', err?.message || err);
+        return;
+      }
 
       if (data.type === 'history') {
         setMessages(data.messages || []);
@@ -64,26 +55,32 @@ export function Chat({ config, user, navigate }) {
       }
 
       if (data.type === 'system') {
-        setMessages(prev => [...prev.slice(-(CHAT_HISTORY_LIMIT - 1)), {
-          type: 'system',
-          content: data.content,
-          timestamp: new Date().toISOString(),
-        }]);
+        setMessages((prev) => [
+          ...prev.slice(-(CHAT_HISTORY_LIMIT - 1)),
+          {
+            type: 'system',
+            content: data.content,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
         return;
       }
 
       if (data.type === 'join' || data.type === 'leave') {
         setRoomCount(data.roomCount || 0);
-        setMessages(prev => [...prev.slice(-(CHAT_HISTORY_LIMIT - 1)), {
-          type: 'system',
-          content: `${data.handle} ${data.type === 'join' ? 'joined' : 'left'}`,
-          timestamp: new Date().toISOString(),
-        }]);
+        setMessages((prev) => [
+          ...prev.slice(-(CHAT_HISTORY_LIMIT - 1)),
+          {
+            type: 'system',
+            content: `${data.handle} ${data.type === 'join' ? 'joined' : 'left'}`,
+            timestamp: new Date().toISOString(),
+          },
+        ]);
         return;
       }
 
       if (data.type === 'message') {
-        setMessages(prev => [...prev.slice(-(CHAT_HISTORY_LIMIT - 1)), data]);
+        setMessages((prev) => [...prev.slice(-(CHAT_HISTORY_LIMIT - 1)), data]);
       }
     });
 
@@ -103,7 +100,10 @@ export function Chat({ config, user, navigate }) {
 
   function scheduleReconnect() {
     // Exponential backoff: 1s, 2s, 4s, 8s, max 15s
-    const delay = Math.min(RECONNECT_BASE_MS * Math.pow(2, retryRef.current), MAX_RECONNECT_DELAY_MS);
+    const delay = Math.min(
+      RECONNECT_BASE_MS * Math.pow(2, retryRef.current),
+      MAX_RECONNECT_DELAY_MS,
+    );
     retryRef.current++;
     retryTimerRef.current = setTimeout(() => {
       if (!intentionalCloseRef.current) {
@@ -111,6 +111,18 @@ export function Chat({ config, user, navigate }) {
       }
     }, delay);
   }
+
+  useEffect(() => {
+    connect();
+    return () => {
+      intentionalCloseRef.current = true;
+      clearTimeout(retryTimerRef.current);
+      clearTimeout(errorTimerRef.current);
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
 
   function showError(message) {
     setError(message);
@@ -122,7 +134,7 @@ export function Chat({ config, user, navigate }) {
     const msg = input.trim();
     if (!msg) return;
     if (!wsRef.current) {
-      showError('Disconnected — reconnecting...');
+      showError('Disconnected. Reconnecting...');
       return;
     }
     if (msg.length > MAX_MESSAGE_LENGTH) {
@@ -156,6 +168,9 @@ export function Chat({ config, user, navigate }) {
     }
   });
 
+  if (!config?.token)
+    return <Text color="red">Not signed in. Run chinwag init to get started.</Text>;
+
   const visibleMessages = messages.slice(-VISIBLE_MESSAGE_COUNT);
 
   return (
@@ -171,25 +186,31 @@ export function Chat({ config, user, navigate }) {
         {visibleMessages.map((msg, i) => {
           if (msg.type === 'system') {
             return (
-              <Text key={i} dimColor>  — {msg.content}</Text>
+              <Text key={i} dimColor>
+                {' '}
+                — {msg.content}
+              </Text>
             );
           }
           return (
             <Box key={i}>
-              <Text color={getInkColor(msg.color)} bold>{msg.handle}</Text>
+              <Text color={getInkColor(msg.color)} bold>
+                {msg.handle}
+              </Text>
               <Text>: {msg.content}</Text>
             </Box>
           );
         })}
-        {visibleMessages.length === 0 && (
-          <Text dimColor>No messages yet. Say something!</Text>
-        )}
+        {visibleMessages.length === 0 && <Text dimColor>No messages yet. Say something!</Text>}
       </Box>
 
       <Text>{''}</Text>
       {error ? <Text color="red">{error}</Text> : null}
       <Box>
-        <Text color={getInkColor(user?.color || 'white')}>{user?.handle || '?'}{'> '}</Text>
+        <Text color={getInkColor(user?.color || 'white')}>
+          {user?.handle || '?'}
+          {'> '}
+        </Text>
         <TextInput
           value={input}
           onChange={setInput}

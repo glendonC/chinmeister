@@ -20,20 +20,19 @@ const RECONCILE_INTERVAL_MS = 60_000;
 export function classifyError(err) {
   const msg = err.message || '';
   const status = err.status;
-  if (status === 401)
-    return { state: 'offline', detail: 'Session expired. Re-run chinwag init.', fatal: true };
-  if (status === 403)
-    return { state: 'offline', detail: 'Access denied. You may have been removed from this team.' };
-  if (status === 404)
-    return { state: 'offline', detail: 'Team not found. The .chinwag file may be stale.' };
-  if (status === 429) return { state: 'reconnecting', detail: 'Rate limited. Retrying shortly.' };
-  if (status >= 500) return { state: 'reconnecting', detail: 'Server error. Retrying...' };
+  if (status === 401) return { state: 'offline', detail: 'Your session has expired.', fatal: true };
+  if (status === 403) return { state: 'offline', detail: "You don't have access to this team." };
+  if (status === 404) return { state: 'offline', detail: 'This team no longer exists.' };
+  if (status === 429)
+    return { state: 'reconnecting', detail: 'Our servers are busy. Retrying shortly.' };
+  if (status >= 500)
+    return { state: 'reconnecting', detail: 'Something went wrong on our end. Retrying...' };
   if (status === 408 || msg.includes('timed out'))
-    return { state: 'reconnecting', detail: 'Request timed out. Retrying...' };
+    return { state: 'reconnecting', detail: 'Connection timed out. Retrying...' };
   if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some((c) => msg.includes(c))) {
-    return { state: 'offline', detail: 'Cannot reach server. Check your connection.' };
+    return { state: 'offline', detail: "Can't reach the server. Check your internet connection." };
   }
-  return { state: 'reconnecting', detail: msg || 'Connection issue. Retrying...' };
+  return { state: 'reconnecting', detail: 'Connection interrupted. Retrying...' };
 }
 
 // Minimal fingerprint of context for change detection (avoids JSON.stringify on every poll)

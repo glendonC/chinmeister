@@ -74,7 +74,14 @@ describe('runAdd', () => {
       const mockClient = {
         get: vi.fn().mockResolvedValue({
           evaluations: [
-            { id: 'some-tool', name: 'SomeTool', tagline: 'A tool', category: 'other', mcp_support: 0, metadata: {} },
+            {
+              id: 'some-tool',
+              name: 'SomeTool',
+              tagline: 'A tool',
+              category: 'other',
+              mcp_support: 0,
+              metadata: {},
+            },
           ],
           categories: { other: 'Other' },
         }),
@@ -94,7 +101,14 @@ describe('runAdd', () => {
       const mockClient = {
         get: vi.fn().mockResolvedValue({
           evaluations: [
-            { id: 'windsurf', name: 'Windsurf', tagline: 'AI code editor', category: 'editors', mcp_support: 0, metadata: {} },
+            {
+              id: 'windsurf',
+              name: 'Windsurf',
+              tagline: 'AI code editor',
+              category: 'editors',
+              mcp_support: 0,
+              metadata: {},
+            },
           ],
           categories: { editors: 'Editors' },
         }),
@@ -150,7 +164,7 @@ describe('runAdd', () => {
       await runAdd('sometool');
 
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Could not fetch tool catalog/);
+      expect(logCalls).toMatch(/Could not load tool catalog/);
     });
   });
 
@@ -162,8 +176,22 @@ describe('runAdd', () => {
       const mockClient = {
         get: vi.fn().mockResolvedValue({
           evaluations: [
-            { id: 'cursor', name: 'Cursor', tagline: 'AI editor', mcp_support: 1, category: 'editors', metadata: {} },
-            { id: 'aider', name: 'Aider', tagline: 'AI terminal tool', mcp_support: 1, category: 'cli', metadata: {} },
+            {
+              id: 'cursor',
+              name: 'Cursor',
+              tagline: 'AI editor',
+              mcp_support: 1,
+              category: 'editors',
+              metadata: {},
+            },
+            {
+              id: 'aider',
+              name: 'Aider',
+              tagline: 'AI terminal tool',
+              mcp_support: 1,
+              category: 'cli',
+              metadata: {},
+            },
           ],
           categories: { editors: 'Editors', cli: 'CLI Tools' },
         }),
@@ -205,7 +233,7 @@ describe('runAdd', () => {
       await runAdd('--list');
 
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Could not fetch tool catalog/);
+      expect(logCalls).toMatch(/Could not load tool catalog/);
     });
   });
 });

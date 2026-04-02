@@ -10,10 +10,16 @@ import { api } from '../api.js';
 function evalToTool(e) {
   const meta = e.metadata || {};
   return {
-    id: e.id, name: e.name, description: e.tagline,
-    category: e.category, mcpCompatible: !!e.mcp_support,
-    website: meta.website, installCmd: meta.install_command,
-    featured: !!meta.featured, verdict: e.verdict, confidence: e.confidence,
+    id: e.id,
+    name: e.name,
+    description: e.tagline,
+    category: e.category,
+    mcpCompatible: !!e.mcp_support,
+    website: meta.website,
+    installCmd: meta.install_command,
+    featured: !!meta.featured,
+    verdict: e.verdict,
+    confidence: e.confidence,
   };
 }
 
@@ -26,11 +32,11 @@ export async function runAdd(toolArg) {
   const cwd = process.cwd();
 
   // Check if it's an MCP-configurable tool
-  const mcpTool = MCP_TOOLS.find(t => t.id === toolArg);
+  const mcpTool = MCP_TOOLS.find((t) => t.id === toolArg);
   if (mcpTool) {
     const result = configureTool(cwd, toolArg);
     if (result.error) {
-      console.log(`  error: ${result.error}`);
+      console.log(`  Could not add ${toolArg}: ${result.error}`);
       process.exit(1);
     }
     console.log('');
@@ -43,7 +49,7 @@ export async function runAdd(toolArg) {
   const catalog = await fetchCatalog();
   if (!catalog) return;
 
-  const catalogTool = catalog.tools.find(t => t.id === toolArg);
+  const catalogTool = catalog.tools.find((t) => t.id === toolArg);
   if (catalogTool) {
     console.log('');
     console.log(`  ${catalogTool.name} — ${catalogTool.description}`);
@@ -65,13 +71,15 @@ export async function runAdd(toolArg) {
   }
 
   // Not found — suggest closest match
-  const match = catalog.tools.find(t =>
-    t.id.includes(toolArg) || t.name.toLowerCase().includes(toolArg.toLowerCase())
+  const match = catalog.tools.find(
+    (t) => t.id.includes(toolArg) || t.name.toLowerCase().includes(toolArg.toLowerCase()),
   );
   if (match) {
     console.log(`  Unknown tool "${toolArg}". Did you mean "${match.id}"?`);
   } else {
-    console.log(`  Unknown tool "${toolArg}". Run \`npx chinwag add --list\` to see available tools.`);
+    console.log(
+      `  Unknown tool "${toolArg}". Run \`npx chinwag add --list\` to see available tools.`,
+    );
   }
 }
 
@@ -89,8 +97,8 @@ async function fetchCatalog() {
     try {
       const fallback = await api(config).get('/tools/catalog');
       return { tools: fallback.tools || [], categories: fallback.categories || {} };
-    } catch (err) {
-      console.log(`  Could not fetch tool catalog: ${err.message}`);
+    } catch {
+      console.log('  Could not load tool catalog.');
       return null;
     }
   }

@@ -20,30 +20,152 @@ import {
 } from './evaluations.js';
 
 const COLORS = [
-  'red', 'cyan', 'yellow', 'green', 'magenta', 'blue',
-  'orange', 'lime', 'pink', 'sky', 'lavender', 'white',
+  'red',
+  'cyan',
+  'yellow',
+  'green',
+  'magenta',
+  'blue',
+  'orange',
+  'lime',
+  'pink',
+  'sky',
+  'lavender',
+  'white',
 ];
 
 const ADJECTIVES = [
-  'swift', 'quiet', 'bold', 'keen', 'warm', 'cool', 'fair', 'deep',
-  'bright', 'calm', 'dark', 'fast', 'glad', 'kind', 'live', 'neat',
-  'pale', 'rare', 'safe', 'tall', 'vast', 'wise', 'zany', 'apt',
-  'dry', 'fit', 'raw', 'shy', 'wry', 'odd', 'sly', 'coy',
-  'deft', 'grim', 'hazy', 'icy', 'lazy', 'mild', 'nimble', 'plush',
-  'rosy', 'snug', 'tidy', 'ultra', 'vivid', 'witty', 'airy', 'bumpy',
-  'crisp', 'dizzy', 'eager', 'fuzzy', 'grumpy', 'hasty', 'itchy', 'jolly',
-  'lumpy', 'merry', 'nifty', 'perky', 'quirky', 'rusty', 'shiny', 'tricky',
+  'swift',
+  'quiet',
+  'bold',
+  'keen',
+  'warm',
+  'cool',
+  'fair',
+  'deep',
+  'bright',
+  'calm',
+  'dark',
+  'fast',
+  'glad',
+  'kind',
+  'live',
+  'neat',
+  'pale',
+  'rare',
+  'safe',
+  'tall',
+  'vast',
+  'wise',
+  'zany',
+  'apt',
+  'dry',
+  'fit',
+  'raw',
+  'shy',
+  'wry',
+  'odd',
+  'sly',
+  'coy',
+  'deft',
+  'grim',
+  'hazy',
+  'icy',
+  'lazy',
+  'mild',
+  'nimble',
+  'plush',
+  'rosy',
+  'snug',
+  'tidy',
+  'ultra',
+  'vivid',
+  'witty',
+  'airy',
+  'bumpy',
+  'crisp',
+  'dizzy',
+  'eager',
+  'fuzzy',
+  'grumpy',
+  'hasty',
+  'itchy',
+  'jolly',
+  'lumpy',
+  'merry',
+  'nifty',
+  'perky',
+  'quirky',
+  'rusty',
+  'shiny',
+  'tricky',
 ];
 
 const NOUNS = [
-  'fox', 'owl', 'elk', 'yak', 'ant', 'bee', 'cod', 'doe',
-  'eel', 'gnu', 'hen', 'jay', 'kit', 'lynx', 'moth', 'newt',
-  'pug', 'ram', 'seal', 'toad', 'vole', 'wasp', 'wren', 'crab',
-  'crow', 'dart', 'echo', 'fern', 'glow', 'haze', 'iris', 'jade',
-  'kelp', 'lark', 'mist', 'node', 'opal', 'pine', 'reed', 'sage',
-  'tide', 'vine', 'wolf', 'pixel', 'spark', 'cloud', 'flint', 'brook',
-  'crane', 'drift', 'flame', 'ghost', 'haven', 'ivory', 'jewel', 'knoll',
-  'maple', 'nexus', 'orbit', 'prism', 'quartz', 'ridge', 'storm', 'thorn',
+  'fox',
+  'owl',
+  'elk',
+  'yak',
+  'ant',
+  'bee',
+  'cod',
+  'doe',
+  'eel',
+  'gnu',
+  'hen',
+  'jay',
+  'kit',
+  'lynx',
+  'moth',
+  'newt',
+  'pug',
+  'ram',
+  'seal',
+  'toad',
+  'vole',
+  'wasp',
+  'wren',
+  'crab',
+  'crow',
+  'dart',
+  'echo',
+  'fern',
+  'glow',
+  'haze',
+  'iris',
+  'jade',
+  'kelp',
+  'lark',
+  'mist',
+  'node',
+  'opal',
+  'pine',
+  'reed',
+  'sage',
+  'tide',
+  'vine',
+  'wolf',
+  'pixel',
+  'spark',
+  'cloud',
+  'flint',
+  'brook',
+  'crane',
+  'drift',
+  'flame',
+  'ghost',
+  'haven',
+  'ivory',
+  'jewel',
+  'knoll',
+  'maple',
+  'nexus',
+  'orbit',
+  'prism',
+  'quartz',
+  'ridge',
+  'storm',
+  'thorn',
 ];
 
 export class DatabaseDO extends DurableObject {
@@ -146,14 +268,21 @@ export class DatabaseDO extends DurableObject {
     runMigration(this.sql, 'ALTER TABLE users ADD COLUMN github_id TEXT', null, 'DatabaseDO');
     runMigration(this.sql, 'ALTER TABLE users ADD COLUMN github_login TEXT', null, 'DatabaseDO');
     runMigration(this.sql, 'ALTER TABLE users ADD COLUMN avatar_url TEXT', null, 'DatabaseDO');
-    runMigration(this.sql, 'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)', null, 'DatabaseDO');
+    runMigration(
+      this.sql,
+      'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_github_id ON users(github_id)',
+      null,
+      'DatabaseDO',
+    );
 
     // Prune stale rate limit rows, expired sessions, and old refresh tokens
     this.sql.exec("DELETE FROM account_limits WHERE date < date('now', '-7 days')");
     this.sql.exec("DELETE FROM web_sessions WHERE expires_at < datetime('now') OR revoked = 1");
     // Revoked refresh tokens older than 7 days have no forensic value — KV entries
     // already expired. Active tokens older than 180 days can't have valid KV entries.
-    this.sql.exec("DELETE FROM refresh_tokens WHERE (revoked = 1 AND revoked_at < datetime('now', '-7 days')) OR created_at < datetime('now', '-200 days')");
+    this.sql.exec(
+      "DELETE FROM refresh_tokens WHERE (revoked = 1 AND revoked_at < datetime('now', '-7 days')) OR created_at < datetime('now', '-200 days')",
+    );
 
     this.#schemaReady = true;
   }
@@ -171,7 +300,7 @@ export class DatabaseDO extends DurableObject {
     let handle = this.#generateHandle();
     let attempts = 0;
     while (this.#handleExists(handle) && attempts < 10) {
-      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
+      handle = this.#generateHandle();
       attempts++;
     }
 
@@ -182,7 +311,12 @@ export class DatabaseDO extends DurableObject {
     this.sql.exec(
       `INSERT INTO users (id, handle, color, token, status, created_at, last_active)
        VALUES (?, ?, ?, ?, NULL, ?, ?)`,
-      id, handle, color, token, now, now
+      id,
+      handle,
+      color,
+      token,
+      now,
+      now,
     );
 
     return { id, handle, color, token };
@@ -190,9 +324,12 @@ export class DatabaseDO extends DurableObject {
 
   async getUser(id) {
     this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE id = ?', id
-    ).toArray();
+    const rows = this.sql
+      .exec(
+        'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE id = ?',
+        id,
+      )
+      .toArray();
     const user = rows[0] || null;
     if (user) {
       const lastActive = new Date(user.last_active).getTime();
@@ -205,9 +342,12 @@ export class DatabaseDO extends DurableObject {
 
   async getUserByHandle(handle) {
     this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT id, handle, color, status, created_at, last_active FROM users WHERE handle = ?', handle
-    ).toArray();
+    const rows = this.sql
+      .exec(
+        'SELECT id, handle, color, status, created_at, last_active FROM users WHERE handle = ?',
+        handle,
+      )
+      .toArray();
     return rows[0] || null;
   }
 
@@ -215,12 +355,15 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
 
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(newHandle)) {
-      return { error: 'Handle must be 3-20 characters, alphanumeric + underscores only', code: 'VALIDATION' };
+      return {
+        error: 'Handle must be 3-20 characters, alphanumeric + underscores only',
+        code: 'VALIDATION',
+      };
     }
 
-    const taken = this.sql.exec(
-      'SELECT 1 FROM users WHERE handle = ? AND id != ?', newHandle, userId
-    ).toArray().length > 0;
+    const taken =
+      this.sql.exec('SELECT 1 FROM users WHERE handle = ? AND id != ?', newHandle, userId).toArray()
+        .length > 0;
     if (taken) {
       return { error: 'Handle already taken', code: 'CONFLICT' };
     }
@@ -250,10 +393,12 @@ export class DatabaseDO extends DurableObject {
 
   async getUserByGithubId(githubId) {
     this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE github_id = ?',
-      String(githubId)
-    ).toArray();
+    const rows = this.sql
+      .exec(
+        'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE github_id = ?',
+        String(githubId),
+      )
+      .toArray();
     return rows[0] || null;
   }
 
@@ -269,7 +414,7 @@ export class DatabaseDO extends DurableObject {
     if (handle.length < 3) handle = this.#generateHandle();
     let attempts = 0;
     while (this.#handleExists(handle) && attempts < 10) {
-      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
+      handle = this.#generateHandle();
       attempts++;
     }
     if (this.#handleExists(handle)) {
@@ -279,7 +424,15 @@ export class DatabaseDO extends DurableObject {
     this.sql.exec(
       `INSERT INTO users (id, handle, color, token, status, github_id, github_login, avatar_url, created_at, last_active)
        VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
-      id, handle, color, token, String(githubId), githubLogin, avatarUrl || null, now, now
+      id,
+      handle,
+      color,
+      token,
+      String(githubId),
+      githubLogin,
+      avatarUrl || null,
+      now,
+      now,
     );
 
     return { id, handle, color, token };
@@ -288,16 +441,19 @@ export class DatabaseDO extends DurableObject {
   async linkGithub(userId, githubId, githubLogin, avatarUrl) {
     this.#ensureSchema();
 
-    const existing = this.sql.exec(
-      'SELECT id FROM users WHERE github_id = ? AND id != ?', String(githubId), userId
-    ).toArray();
+    const existing = this.sql
+      .exec('SELECT id FROM users WHERE github_id = ? AND id != ?', String(githubId), userId)
+      .toArray();
     if (existing.length > 0) {
       return { error: 'This GitHub account is already linked to another user', code: 'CONFLICT' };
     }
 
     this.sql.exec(
       'UPDATE users SET github_id = ?, github_login = ?, avatar_url = ? WHERE id = ?',
-      String(githubId), githubLogin, avatarUrl || null, userId
+      String(githubId),
+      githubLogin,
+      avatarUrl || null,
+      userId,
     );
     return { ok: true };
   }
@@ -306,7 +462,7 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
     this.sql.exec(
       'UPDATE users SET github_id = NULL, github_login = NULL, avatar_url = NULL WHERE id = ?',
-      userId
+      userId,
     );
     return { ok: true };
   }
@@ -320,26 +476,28 @@ export class DatabaseDO extends DurableObject {
 
     this.sql.exec(
       `INSERT INTO web_sessions (token, user_id, expires_at, user_agent) VALUES (?, ?, ?, ?)`,
-      token, userId, expiresAt, userAgent || null
+      token,
+      userId,
+      expiresAt,
+      userAgent || null,
     );
     return { token, expires_at: expiresAt };
   }
 
   async getWebSession(token) {
     this.#ensureSchema();
-    const rows = this.sql.exec(
-      `SELECT token, user_id, expires_at, last_used, user_agent, revoked
+    const rows = this.sql
+      .exec(
+        `SELECT token, user_id, expires_at, last_used, user_agent, revoked
        FROM web_sessions
        WHERE token = ? AND revoked = 0 AND expires_at > datetime('now')`,
-      token
-    ).toArray();
+        token,
+      )
+      .toArray();
     if (rows.length === 0) return null;
 
     // Slide the window — refresh expiry and last_used on access
-    this.sql.exec(
-      `UPDATE web_sessions SET last_used = datetime('now') WHERE token = ?`,
-      token
-    );
+    this.sql.exec(`UPDATE web_sessions SET last_used = datetime('now') WHERE token = ?`, token);
     return rows[0];
   }
 
@@ -351,13 +509,15 @@ export class DatabaseDO extends DurableObject {
 
   async getUserWebSessions(userId) {
     this.#ensureSchema();
-    return this.sql.exec(
-      `SELECT token, created_at, expires_at, last_used, user_agent
+    return this.sql
+      .exec(
+        `SELECT token, created_at, expires_at, last_used, user_agent
        FROM web_sessions
        WHERE user_id = ? AND revoked = 0 AND expires_at > datetime('now')
        ORDER BY last_used DESC LIMIT 20`,
-      userId
-    ).toArray();
+        userId,
+      )
+      .toArray();
   }
 
   // ── Rate limiting ──
@@ -366,9 +526,9 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
     const today = utcDate();
 
-    const rows = this.sql.exec(
-      'SELECT count FROM account_limits WHERE ip = ? AND date = ?', key, today
-    ).toArray();
+    const rows = this.sql
+      .exec('SELECT count FROM account_limits WHERE ip = ? AND date = ?', key, today)
+      .toArray();
 
     const count = rows[0]?.count || 0;
     return { allowed: count < maxPerDay, count };
@@ -381,7 +541,8 @@ export class DatabaseDO extends DurableObject {
     this.sql.exec(
       `INSERT INTO account_limits (ip, date, count) VALUES (?, ?, 1)
        ON CONFLICT(ip, date) DO UPDATE SET count = count + 1`,
-      key, today
+      key,
+      today,
     );
   }
 
@@ -443,17 +604,21 @@ export class DatabaseDO extends DurableObject {
       `INSERT INTO user_teams (user_id, team_id, team_name) VALUES (?, ?, ?)
        ON CONFLICT(user_id, team_id) DO UPDATE SET
          team_name = COALESCE(excluded.team_name, user_teams.team_name)`,
-      userId, teamId, name
+      userId,
+      teamId,
+      name,
     );
     return { ok: true };
   }
 
   async getUserTeams(userId) {
     this.#ensureSchema();
-    return this.sql.exec(
-      'SELECT team_id, team_name, joined_at FROM user_teams WHERE user_id = ? ORDER BY joined_at DESC LIMIT 50',
-      userId
-    ).toArray();
+    return this.sql
+      .exec(
+        'SELECT team_id, team_name, joined_at FROM user_teams WHERE user_id = ? ORDER BY joined_at DESC LIMIT 50',
+        userId,
+      )
+      .toArray();
   }
 
   async removeUserTeam(userId, teamId) {
@@ -484,7 +649,7 @@ export class DatabaseDO extends DurableObject {
       JSON.stringify(profile.languages || []),
       JSON.stringify(profile.frameworks || []),
       JSON.stringify(profile.tools || []),
-      JSON.stringify(profile.platforms || [])
+      JSON.stringify(profile.platforms || []),
     );
 
     return { ok: true };
@@ -494,19 +659,15 @@ export class DatabaseDO extends DurableObject {
 
   async storeRefreshToken(userId, token) {
     this.#ensureSchema();
-    this.sql.exec(
-      'INSERT INTO refresh_tokens (token, user_id) VALUES (?, ?)',
-      token, userId
-    );
+    this.sql.exec('INSERT INTO refresh_tokens (token, user_id) VALUES (?, ?)', token, userId);
     return { ok: true };
   }
 
   async getRefreshToken(token) {
     this.#ensureSchema();
-    const rows = this.sql.exec(
-      'SELECT token, user_id, created_at, revoked FROM refresh_tokens WHERE token = ?',
-      token
-    ).toArray();
+    const rows = this.sql
+      .exec('SELECT token, user_id, created_at, revoked FROM refresh_tokens WHERE token = ?', token)
+      .toArray();
     return rows[0] || null;
   }
 
@@ -514,7 +675,7 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
     this.sql.exec(
       "UPDATE refresh_tokens SET revoked = 1, revoked_at = datetime('now') WHERE token = ?",
-      token
+      token,
     );
     return { ok: true };
   }
@@ -523,17 +684,16 @@ export class DatabaseDO extends DurableObject {
     this.#ensureSchema();
     this.sql.exec(
       "UPDATE refresh_tokens SET revoked = 1, revoked_at = datetime('now') WHERE user_id = ? AND revoked = 0",
-      userId
+      userId,
     );
     return { ok: true };
   }
 
   async getActiveRefreshTokens(userId) {
     this.#ensureSchema();
-    return this.sql.exec(
-      'SELECT token FROM refresh_tokens WHERE user_id = ? AND revoked = 0',
-      userId
-    ).toArray();
+    return this.sql
+      .exec('SELECT token FROM refresh_tokens WHERE user_id = ? AND revoked = 0', userId)
+      .toArray();
   }
 
   async updateUserToken(userId, newToken) {
@@ -545,15 +705,15 @@ export class DatabaseDO extends DurableObject {
   // ── Private helpers ──
 
   /**
-   * Generate a random adjective+noun handle.
-   * Callers retry up to 10 times on collision, then return an error.
-   * With 64 adjectives x 64 nouns = 4096 base combinations (+ random suffix),
-   * collisions are statistically unlikely until ~2k users.
+   * Generate a random adjective+noun+3-digit-suffix handle.
+   * 64 adjectives x 64 nouns x 1000 suffixes = ~4 million combinations.
+   * Callers retry up to 10 times on collision as a safety net.
    */
   #generateHandle() {
     const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
     const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-    return adj + noun;
+    const suffix = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
+    return adj + noun + suffix;
   }
 
   #handleExists(handle) {

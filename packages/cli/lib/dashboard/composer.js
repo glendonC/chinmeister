@@ -64,7 +64,7 @@ export function useComposer({
 
   function sendMessage(text, target, targetLabel = null) {
     if (!config?.token) {
-      flash('Not authenticated');
+      flash('Not signed in.', { tone: 'error' });
       return;
     }
     if (!teamId || !text.trim()) return;
@@ -75,9 +75,8 @@ export function useComposer({
         bumpRefreshKey();
       })
       .catch((err) => {
-        const status = err?.status ? ` (${err.status})` : '';
-        console.error(`[chinwag] Failed to send message${status}:`, err?.message || err);
-        flash(`Message not sent${status}. Check connection.`, { tone: 'error' });
+        console.error('[chinwag] Could not send message:', err?.message || err);
+        flash('Could not send message. Check connection.', { tone: 'error' });
       });
   }
 

@@ -104,8 +104,8 @@ export function Customize({ config, user, navigate, refreshUser }) {
         try {
           const fallback = await api(config).get('/tools/catalog');
           setCatalog(fallback.tools || []);
-        } catch (err) {
-          showFlash(`Could not fetch tool catalog: ${err.message}`, 'error');
+        } catch {
+          showFlash('Could not load tool catalog.', 'error');
         }
       }
       setToolsLoading(false);
@@ -125,7 +125,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
         showFlash(`Added ${result.name}: ${result.detail}`);
         setIntegrationStatuses(scanIntegrationHealth(process.cwd()));
       } else {
-        showFlash(`Could not add ${result.name || tool.name}: ${result.error}`, 'error');
+        showFlash(`Could not add ${result.name || tool.name}.`, 'error');
       }
     } else if (tool.installCmd) {
       showFlash(`${tool.name} — Install: ${tool.installCmd}  |  ${tool.website}`);
@@ -173,8 +173,8 @@ export function Customize({ config, user, navigate, refreshUser }) {
           : err.status === 400
             ? 'Invalid handle. Use 3-20 alphanumeric characters.'
             : err.status >= 500
-              ? 'Server error. Try again shortly.'
-              : err.message || 'Could not update handle.';
+              ? 'Something went wrong on our end. Try again shortly.'
+              : 'Could not update handle.';
       setMessage({ type: 'error', text: msg });
     }
   }
@@ -191,8 +191,8 @@ export function Customize({ config, user, navigate, refreshUser }) {
     } catch (err) {
       const msg =
         err.status >= 500
-          ? 'Server error. Try again shortly.'
-          : err.message || 'Could not update color.';
+          ? 'Something went wrong on our end. Try again shortly.'
+          : 'Could not update color.';
       setMessage({ type: 'error', text: msg });
     }
   }

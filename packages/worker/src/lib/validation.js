@@ -178,6 +178,12 @@ export async function withIpRateLimit(request, env, prefix, max, handler) {
   return handler();
 }
 
+/** Test whether a string is a valid UUID v4 (the format produced by crypto.randomUUID()). */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isUUID(value) {
+  return typeof value === 'string' && UUID_RE.test(value);
+}
+
 /** Seconds remaining until the next UTC midnight. */
 function secondsUntilMidnightUTC() {
   const now = new Date();

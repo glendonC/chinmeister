@@ -24,9 +24,8 @@ export function useMemoryManager({ config, teamId, bumpRefreshKey, flash }) {
         bumpRefreshKey();
       })
       .catch((err) => {
-        const status = err?.status ? ` (${err.status})` : '';
-        console.error(`[chinwag] Failed to save memory${status}:`, err?.message || err);
-        flash(`Memory not saved${status}. Check connection.`, { tone: 'error' });
+        console.error('[chinwag] Could not save memory:', err?.message || err);
+        flash('Could not save memory. Check connection.', { tone: 'error' });
       });
   }
 
@@ -42,9 +41,8 @@ export function useMemoryManager({ config, teamId, bumpRefreshKey, flash }) {
         setTimeout(() => setDeleteMsg(null), DELETE_FEEDBACK_MS);
       })
       .catch((err) => {
-        const status = err?.status ? ` (${err.status})` : '';
-        console.error(`[chinwag] Failed to delete memory${status}:`, err?.message || err);
-        setDeleteMsg(`Delete failed${status}`);
+        console.error('[chinwag] Could not delete memory:', err?.message || err);
+        setDeleteMsg('Could not delete.');
         setDeleteConfirm(false);
         setTimeout(() => setDeleteMsg(null), DELETE_FEEDBACK_MS);
       });

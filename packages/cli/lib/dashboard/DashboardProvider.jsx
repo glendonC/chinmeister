@@ -5,6 +5,7 @@ import React, {
   useRef,
   useCallback,
   useEffect,
+  useMemo,
 } from 'react';
 import { useStdout } from 'ink';
 import { basename } from 'path';
@@ -112,55 +113,107 @@ export function DashboardProvider({ config, navigate, layout, setFooterHints, ch
     clearMemoryInput: memory.clearMemoryInput,
   });
 
-  // ── Derived data ───────────────────────────────────
+  // ── Derived data (memoized) ────────────────────────
+
+  // Group 1: dashboard view — filters members, builds conflicts, memory lists
   const { getToolName, conflicts, memories, filteredMemories, visibleMemories, visibleAgents } =
-    buildDashboardView({
-      context,
-      detectedTools,
-      memoryFilter: null,
-      memorySearch: composer.composeMode === 'memory-search' ? memory.memorySearch : '',
-      cols,
-      projectDir: teamName || basename(process.cwd()),
+    useMemo(
+      () =>
+        buildDashboardView({
+          context,
+          detectedTools,
+          memoryFilter: null,
+          memorySearch: composer.composeMode === 'memory-search' ? memory.memorySearch : '',
+          cols,
+          projectDir: teamName || basename(process.cwd()),
+        }),
+      [context, detectedTools, composer.composeMode, memory.memorySearch, cols, teamName],
+    );
+
+  // Group 2: agent rows + selection state
+  const {
+    combinedAgents,
+    liveAgents,
+    recentlyFinished,
+    allVisibleAgents,
+    selectedAgent,
+    mainSelectedAgent,
+    knowledgeVisible,
+  } = useMemo(() => {
+    const combined = buildCombinedAgentRows({
+      managedAgents: agents.managedAgents,
+      connectedAgents: visibleAgents,
+      getToolName,
     });
+    const live = combined.filter((agent) => !agent._dead);
+    const finished = combined
+      .filter((agent) => agent._managed && agent._dead)
+      .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
+      .slice(0, RECENTLY_FINISHED_LIMIT);
+    const allVisible = [...live, ...finished];
+    const selected = state.selectedIdx >= 0 ? allVisible[state.selectedIdx] : null;
+    const mainSelected = state.mainFocus === 'agents' ? selected : null;
+    const knowledge =
+      state.view === 'memory' ||
+      composer.composeMode === 'memory-search' ||
+      composer.composeMode === 'memory-add'
+        ? visibleMemories
+        : visibleMemories.slice(0, Math.min(1, visibleMemories.length));
 
-  const combinedAgents = buildCombinedAgentRows({
-    managedAgents: agents.managedAgents,
-    connectedAgents: visibleAgents,
+    return {
+      combinedAgents: combined,
+      liveAgents: live,
+      recentlyFinished: finished,
+      allVisibleAgents: allVisible,
+      selectedAgent: selected,
+      mainSelectedAgent: mainSelected,
+      knowledgeVisible: knowledge,
+    };
+  }, [
+    agents.managedAgents,
+    visibleAgents,
     getToolName,
-  });
-  const liveAgents = combinedAgents.filter((agent) => !agent._dead);
-  const recentlyFinished = combinedAgents
-    .filter((agent) => agent._managed && agent._dead)
-    .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
-    .slice(0, RECENTLY_FINISHED_LIMIT);
-  const allVisibleAgents = [...liveAgents, ...recentlyFinished];
-  const selectedAgent = state.selectedIdx >= 0 ? allVisibleAgents[state.selectedIdx] : null;
-  const mainSelectedAgent = state.mainFocus === 'agents' ? selectedAgent : null;
-  const knowledgeVisible =
-    state.view === 'memory' ||
-    composer.composeMode === 'memory-search' ||
-    composer.composeMode === 'memory-add'
-      ? visibleMemories
-      : visibleMemories.slice(0, Math.min(1, visibleMemories.length));
+    state.selectedIdx,
+    state.mainFocus,
+    state.view,
+    composer.composeMode,
+    visibleMemories,
+  ]);
 
-  const hasLiveAgents = liveAgents.length > 0;
-  const hasMemories = memories.length > 0;
-  const projectDisplayName = formatProjectPath(projectRoot);
-  const liveAgentNameCounts = liveAgents.reduce((counts, agent) => {
-    const label = agent._display || agent.toolName || agent.tool || 'agent';
-    counts.set(label, (counts.get(label) || 0) + 1);
-    return counts;
-  }, new Map());
-  const visibleSessionRows = getVisibleWindow(
+  // Group 3: display helpers — counts, project name, windowed rows
+  const {
+    hasLiveAgents,
+    hasMemories,
+    projectDisplayName,
+    liveAgentNameCounts,
+    visibleSessionRows,
+    visibleKnowledgeRows,
+  } = useMemo(() => {
+    const nameCounts = liveAgents.reduce((counts, agent) => {
+      const label = agent._display || agent.toolName || agent.tool || 'agent';
+      counts.set(label, (counts.get(label) || 0) + 1);
+      return counts;
+    }, new Map());
+    const maxRows = Math.max(MIN_VIEWPORT_ROWS, viewportRows - VIEWPORT_CHROME_ROWS);
+
+    return {
+      hasLiveAgents: liveAgents.length > 0,
+      hasMemories: memories.length > 0,
+      projectDisplayName: formatProjectPath(projectRoot),
+      liveAgentNameCounts: nameCounts,
+      visibleSessionRows: getVisibleWindow(allVisibleAgents, state.selectedIdx, maxRows),
+      visibleKnowledgeRows: getVisibleWindow(knowledgeVisible, memory.memorySelectedIdx, maxRows),
+    };
+  }, [
+    liveAgents,
+    memories,
+    projectRoot,
     allVisibleAgents,
     state.selectedIdx,
-    Math.max(MIN_VIEWPORT_ROWS, viewportRows - VIEWPORT_CHROME_ROWS),
-  );
-  const visibleKnowledgeRows = getVisibleWindow(
+    viewportRows,
     knowledgeVisible,
     memory.memorySelectedIdx,
-    Math.max(MIN_VIEWPORT_ROWS, viewportRows - VIEWPORT_CHROME_ROWS),
-  );
+  ]);
 
   // ── Handlers ───────────────────────────────────────
   const handleOpenWebDashboard = useCallback(() => {

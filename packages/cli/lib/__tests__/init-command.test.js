@@ -63,7 +63,10 @@ describe('runInit', () => {
       initAccount.mockResolvedValue({ token: 'tok_new', handle: 'newuser', color: 'green' });
 
       const mockClient = createMockApiClient({
-        post: vi.fn().mockResolvedValueOnce({ team_id: 't_new123' }).mockResolvedValue({ ok: true }),
+        post: vi
+          .fn()
+          .mockResolvedValueOnce({ team_id: 't_new123' })
+          .mockResolvedValue({ ok: true }),
       });
       api.mockReturnValue(mockClient);
 
@@ -77,7 +80,11 @@ describe('runInit', () => {
       }
 
       expect(initAccount).toHaveBeenCalled();
-      expect(saveConfig).toHaveBeenCalledWith({ token: 'tok_new', handle: 'newuser', color: 'green' });
+      expect(saveConfig).toHaveBeenCalledWith({
+        token: 'tok_new',
+        handle: 'newuser',
+        color: 'green',
+      });
     });
 
     it('uses existing config when it exists and is valid', async () => {
@@ -124,7 +131,11 @@ describe('runInit', () => {
       }
 
       expect(initAccount).toHaveBeenCalled();
-      expect(saveConfig).toHaveBeenCalledWith({ token: 'tok_fresh', handle: 'newuser', color: 'red' });
+      expect(saveConfig).toHaveBeenCalledWith({
+        token: 'tok_fresh',
+        handle: 'newuser',
+        color: 'red',
+      });
     });
 
     it('handles server unreachable gracefully', async () => {
@@ -147,7 +158,7 @@ describe('runInit', () => {
 
       // Should print error, not crash
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Could not reach server/);
+      expect(logCalls).toMatch(/Could not reach the server/);
     });
   });
 
@@ -174,13 +185,14 @@ describe('runInit', () => {
 
       expect(mockClient.post).toHaveBeenCalledWith(
         '/teams/t_existing/join',
-        expect.objectContaining({ name: expect.any(String) })
+        expect.objectContaining({ name: expect.any(String) }),
       );
     });
 
     it('creates new team when no .chinwag file', async () => {
       const mockClient = createMockApiClient({
-        post: vi.fn()
+        post: vi
+          .fn()
           .mockResolvedValueOnce({ team_id: 't_created' }) // POST /teams
           .mockResolvedValue({ ok: true }), // POST /teams/:id/join
       });
@@ -194,7 +206,10 @@ describe('runInit', () => {
         process.chdir(origCwd);
       }
 
-      expect(mockClient.post).toHaveBeenCalledWith('/teams', expect.objectContaining({ name: expect.any(String) }));
+      expect(mockClient.post).toHaveBeenCalledWith(
+        '/teams',
+        expect.objectContaining({ name: expect.any(String) }),
+      );
 
       // .chinwag file should be created
       const chinwagFile = path.join(tmpDir, '.chinwag');
@@ -224,8 +239,8 @@ describe('runInit', () => {
       }
 
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Failed to join team/);
-      expect(logCalls).toMatch(/stale/i);
+      expect(logCalls).toMatch(/Could not join team/);
+      expect(logCalls).toMatch(/no longer exists/i);
     });
 
     it('handles team creation rate limit', async () => {
@@ -246,7 +261,7 @@ describe('runInit', () => {
       }
 
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Failed to create team/);
+      expect(logCalls).toMatch(/Could not create team/);
     });
   });
 
@@ -261,8 +276,13 @@ describe('runInit', () => {
         { id: 'cursor', name: 'Cursor' },
         { id: 'claude-code', name: 'Claude Code' },
       ]);
-      configureTool.mockReturnValueOnce({ ok: true, name: 'Cursor', detail: '.cursor/mcp.json' })
-        .mockReturnValueOnce({ ok: true, name: 'Claude Code', detail: '.mcp.json + hooks + channel' });
+      configureTool
+        .mockReturnValueOnce({ ok: true, name: 'Cursor', detail: '.cursor/mcp.json' })
+        .mockReturnValueOnce({
+          ok: true,
+          name: 'Claude Code',
+          detail: '.mcp.json + hooks + channel',
+        });
 
       const mockClient = createMockApiClient({
         post: vi.fn().mockResolvedValueOnce({ team_id: 't_tools' }).mockResolvedValue({ ok: true }),
@@ -286,9 +306,7 @@ describe('runInit', () => {
     });
 
     it('handles configuration failure for individual tools', async () => {
-      detectTools.mockReturnValue([
-        { id: 'badtool', name: 'BadTool' },
-      ]);
+      detectTools.mockReturnValue([{ id: 'badtool', name: 'BadTool' }]);
       configureTool.mockReturnValue({ error: 'Permission denied' });
 
       const mockClient = createMockApiClient({

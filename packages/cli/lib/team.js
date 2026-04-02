@@ -19,13 +19,18 @@ export async function handleTeamCommand(subcmd, arg) {
       const teamId = result.team_id;
 
       const chinwagFile = join(process.cwd(), '.chinwag');
-      writeFileSync(chinwagFile, JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n');
+      writeFileSync(
+        chinwagFile,
+        JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n',
+      );
 
       console.log(`Team created: ${teamId}`);
       console.log(`Wrote .chinwag to ${chinwagFile}`);
       console.log('Commit this file so teammates auto-join.');
     } catch (err) {
-      console.log(`Error: ${err.message}`);
+      console.log(
+        `  Could not create team. ${err.status >= 500 ? 'Try again shortly.' : 'Check your connection.'}`,
+      );
     }
   } else if (subcmd === 'join') {
     if (!arg) {
@@ -42,7 +47,9 @@ export async function handleTeamCommand(subcmd, arg) {
       console.log(`Joined team: ${arg}`);
       console.log(`Wrote .chinwag to ${chinwagFile}`);
     } catch (err) {
-      console.log(`Error: ${err.message}`);
+      console.log(
+        `  Could not join team. ${err.status >= 500 ? 'Try again shortly.' : 'Check your connection.'}`,
+      );
     }
   } else {
     console.log('Usage: npx chinwag team <create|join> [team-id]');

@@ -17,11 +17,6 @@ function colorize(text, colorName) {
   return chalk[getChalkColor(colorName)](text);
 }
 
-// Terminal hyperlink (OSC 8) — clickable in iTerm2, Warp, modern terminals; plain text fallback
-function link(text, url) {
-  return `\x1b]8;;${url}\x07${text}\x1b]8;;\x07`;
-}
-
 const dim = chalk.dim;
 const ok = chalk.green('✔');
 const bullet = chalk.dim('●');
@@ -79,7 +74,7 @@ export async function runInit() {
         color = config.color;
         accountVerb = 'created';
       } else {
-        console.log(`  ${chalk.red('✖')} Could not reach server: ${err.message}`);
+        console.log(`  ${chalk.red('✖')} Could not reach the server.`);
         console.log(`  ${dim('Check your internet connection and try again.')}`);
         console.log('');
         return;
@@ -112,13 +107,13 @@ export async function runInit() {
     } catch (err) {
       const hint =
         err.status === 404
-          ? 'Team not found — the .chinwag file may be stale. Delete it and re-run init.'
+          ? 'This team no longer exists. Delete .chinwag and re-run init.'
           : err.status === 403
-            ? 'Access denied. Ask a team member to verify your access.'
+            ? "You don't have access. Ask a team member to verify your access."
             : err.status >= 500
-              ? 'Server error. Try again in a moment.'
-              : `Check your connection and try again.`;
-      console.log(`  ${chalk.red('✖')} Failed to join team: ${err.message}`);
+              ? 'Something went wrong on our end. Try again in a moment.'
+              : 'Check your connection and try again.';
+      console.log(`  ${chalk.red('✖')} Could not join team.`);
       console.log(`    ${chalk.dim(hint)}`);
       console.log('');
       return;
@@ -139,11 +134,11 @@ export async function runInit() {
     } catch (err) {
       const hint =
         err.status === 429
-          ? 'Rate limit reached. Try again tomorrow.'
+          ? 'Our servers are busy right now. Try again later.'
           : err.status >= 500
-            ? 'Server error. Try again in a moment.'
+            ? 'Something went wrong on our end. Try again in a moment.'
             : 'Check your connection and try again.';
-      console.log(`  ${chalk.red('✖')} Failed to create team: ${err.message}`);
+      console.log(`  ${chalk.red('✖')} Could not create team.`);
       console.log(`    ${chalk.dim(hint)}`);
       console.log('');
       return;

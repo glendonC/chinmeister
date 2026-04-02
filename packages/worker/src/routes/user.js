@@ -2,7 +2,13 @@ import { isBlocked, checkContent } from '../moderation.js';
 import { getDB, getLobby, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
 import { getAgentRuntime, sanitizeTags, teamErrorStatus } from '../lib/request-utils.js';
-import { requireJson, requireString, sanitizeString, withRateLimit } from '../lib/validation.js';
+import {
+  isUUID,
+  requireJson,
+  requireString,
+  sanitizeString,
+  withRateLimit,
+} from '../lib/validation.js';
 import {
   MAX_STATUS_LENGTH,
   MAX_FRAMEWORK_LENGTH,
@@ -31,7 +37,7 @@ export async function authenticate(request, env) {
       if (!userId) return null;
       await env.AUTH_KV.delete(kvKey);
       const db = getDB(env);
-      if (!userId.includes('-')) {
+      if (!isUUID(userId)) {
         const user = await db.getUserByHandle(userId);
         return user || null;
       }
@@ -46,7 +52,7 @@ export async function authenticate(request, env) {
   if (!userId) return null;
 
   const db = getDB(env);
-  if (!userId.includes('-')) {
+  if (!isUUID(userId)) {
     const user = await db.getUserByHandle(userId);
     if (!user) return null;
     // Verify the looked-up user's handle still matches the KV entry.

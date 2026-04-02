@@ -4,12 +4,27 @@ import { saveConfig } from './config.js';
 import { initAccount } from './api.js';
 import { getInkColor } from './colors.js';
 
+const NETWORK_CODES = ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT'];
+
+function classifyInitError({ message = '', status } = {}) {
+  if (status === 429)
+    return { title: 'Our servers are busy right now.', hint: 'Try again in a few minutes.' };
+  if (status >= 500)
+    return { title: 'Something went wrong on our end.', hint: 'Try again shortly.' };
+  if (status === 408 || message.includes('timed out'))
+    return { title: 'Request timed out.', hint: 'Check your connection and try again.' };
+  if (NETWORK_CODES.some((c) => message.includes(c)))
+    return { title: 'Cannot reach server.', hint: 'Check your internet connection.' };
+  return { title: 'Could not connect.', hint: message };
+}
+
 export function Welcome({ onComplete }) {
   const [state, setState] = useState('loading');
   const [account, setAccount] = useState(null);
   const [error, setError] = useState(null);
 
   const [retryKey, setRetryKey] = useState(0);
+  const [logoStep, setLogoStep] = useState(0);
 
   useEffect(() => {
     async function setup() {
@@ -26,16 +41,28 @@ export function Welcome({ onComplete }) {
         setAccount(result);
         setState('ready');
       } catch (err) {
-        setError(err.message || 'Failed to connect to server');
+        setError({ message: err.message || 'Failed to connect to server', status: err.status });
         setState('error');
       }
     }
     setup();
   }, [retryKey]);
 
+  useEffect(() => {
+    if (state !== 'ready') return;
+    const t1 = setTimeout(() => setLogoStep(1), 150);
+    const t2 = setTimeout(() => setLogoStep(2), 300);
+    const t3 = setTimeout(() => setLogoStep(3), 450);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [state]);
+
   useInput((input, key) => {
     if (state === 'error' && input === 'r') {
-      setRetryKey(k => k + 1);
+      setRetryKey((k) => k + 1);
       return;
     }
 
@@ -60,15 +87,18 @@ export function Welcome({ onComplete }) {
   }
 
   if (state === 'error') {
+    const { title, hint } = classifyInitError(error);
     return (
       <Box flexDirection="column" padding={1}>
-        <Text color="red" bold>Could not connect to chinwag servers.</Text>
-        <Text dimColor>{error}</Text>
-        <Text>{''}</Text>
-        <Text dimColor>Check your internet connection and try again.</Text>
+        <Text color="red" bold>
+          {title}
+        </Text>
+        <Text dimColor>{hint}</Text>
         <Text>{''}</Text>
         <Text>
-          <Text color="cyan" bold>[r]</Text>
+          <Text color="cyan" bold>
+            [r]
+          </Text>
           <Text dimColor> retry</Text>
         </Text>
       </Box>
@@ -79,16 +109,18 @@ export function Welcome({ onComplete }) {
     <Box flexDirection="column" paddingX={1} paddingTop={1}>
       <Box>
         <Box flexDirection="column" marginRight={2}>
-          <Text><Text color="yellow"> ▄▀▄   ▄▀▄</Text></Text>
-          <Text><Text color="yellow"> █</Text>  ▀▄▀  <Text color="yellow">█</Text></Text>
-          <Text><Text color="yellow"> █</Text> ▀ ▄ ▀ <Text color="yellow">█</Text></Text>
-          <Text>  <Text color="yellow">▀</Text>▄ ▼ ▄<Text color="yellow">▀</Text></Text>
-          <Text>   <Text color="yellow">█</Text><Text color="white">▀▀▀</Text><Text color="yellow">█</Text></Text>
-          <Text><Text color="yellow">   ██ ██</Text></Text>
-          <Text><Text color="white">   ▀▀ ▀▀</Text></Text>
+          <Text color="green">{logoStep >= 3 ? '    ██████████████' : '                  '}</Text>
+          <Text color="blueBright">
+            {logoStep >= 2 ? '  ██████████████  ' : '                  '}
+          </Text>
+          <Text color="magentaBright">
+            {logoStep >= 1 ? '██████████████    ' : '                  '}
+          </Text>
         </Box>
         <Box flexDirection="column">
-          <Text color="cyan" bold>Welcome to chinwag</Text>
+          <Text color="cyan" bold>
+            Welcome to chinwag
+          </Text>
           <Text>{''}</Text>
           <Text>Your agents now share context,</Text>
           <Text>coordinate edits, and stay aware</Text>
@@ -99,13 +131,17 @@ export function Welcome({ onComplete }) {
       <Box paddingTop={1}>
         <Text>
           <Text dimColor>You are </Text>
-          <Text color={getInkColor(account.color)} bold>{account.handle}</Text>
+          <Text color={getInkColor(account.color)} bold>
+            {account.handle}
+          </Text>
         </Text>
       </Box>
 
       <Box paddingTop={1}>
         <Text>
-          <Text color="cyan" bold>[enter]</Text>
+          <Text color="cyan" bold>
+            [enter]
+          </Text>
           <Text dimColor> get started</Text>
         </Text>
       </Box>

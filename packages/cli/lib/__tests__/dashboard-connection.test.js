@@ -12,25 +12,25 @@ describe('classifyError', () => {
   it('classifies 403 as offline with access denied', () => {
     const result = classifyError({ status: 403, message: '' });
     expect(result.state).toBe('offline');
-    expect(result.detail).toMatch(/access denied/i);
+    expect(result.detail).toMatch(/don't have access/i);
   });
 
   it('classifies 404 as offline with team not found', () => {
     const result = classifyError({ status: 404, message: '' });
     expect(result.state).toBe('offline');
-    expect(result.detail).toMatch(/not found/i);
+    expect(result.detail).toMatch(/no longer exists/i);
   });
 
   it('classifies 429 as reconnecting with rate limit', () => {
     const result = classifyError({ status: 429, message: '' });
     expect(result.state).toBe('reconnecting');
-    expect(result.detail).toMatch(/rate limit/i);
+    expect(result.detail).toMatch(/servers are busy/i);
   });
 
   it('classifies 500+ as reconnecting', () => {
     const result = classifyError({ status: 502, message: '' });
     expect(result.state).toBe('reconnecting');
-    expect(result.detail).toMatch(/server error/i);
+    expect(result.detail).toMatch(/something went wrong/i);
   });
 
   it('classifies timeout as reconnecting', () => {
@@ -48,7 +48,7 @@ describe('classifyError', () => {
   it('classifies ECONNREFUSED as offline', () => {
     const result = classifyError({ message: 'ECONNREFUSED' });
     expect(result.state).toBe('offline');
-    expect(result.detail).toMatch(/cannot reach/i);
+    expect(result.detail).toMatch(/can't reach/i);
   });
 
   it('classifies ECONNRESET as offline', () => {
@@ -69,7 +69,7 @@ describe('classifyError', () => {
   it('classifies unknown errors as reconnecting', () => {
     const result = classifyError({ message: 'something weird happened' });
     expect(result.state).toBe('reconnecting');
-    expect(result.detail).toMatch(/something weird/i);
+    expect(result.detail).toMatch(/connection interrupted/i);
   });
 
   it('handles empty error object', () => {
