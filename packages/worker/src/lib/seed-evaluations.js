@@ -1,6 +1,14 @@
 import { TOOL_CATALOG } from '../catalog.js';
 import { HOST_INTEGRATIONS } from '../../../shared/integration-model.js';
 
+// Seeds the evaluation DB with registry-derived tools on first access.
+// Discovery-only tools (Goose, Warp, CodeRabbit, etc.) are NOT seeded here.
+// They enter the DB through POST /tools/batch-evaluate or POST /tools/evaluate,
+// which runs the Exa Deep Search pipeline to fill in all metadata automatically.
+//
+// To seed discovery tools after deploy:
+//   POST /tools/batch-evaluate { admin_key, tools: ["Goose by Block", "Warp Terminal", ...] }
+
 const registryIds = new Set(HOST_INTEGRATIONS.map(h => h.id));
 
 function catalogEntryToEvaluation(entry) {
@@ -44,7 +52,6 @@ function catalogEntryToEvaluation(entry) {
 
 export async function seedEvaluations(db) {
   for (const entry of TOOL_CATALOG) {
-    const evaluation = catalogEntryToEvaluation(entry);
-    await db.saveEvaluation(evaluation);
+    await db.saveEvaluation(catalogEntryToEvaluation(entry));
   }
 }

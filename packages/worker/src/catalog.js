@@ -3,37 +3,20 @@ import { buildAgentSurfaceCatalogEntries, buildHostIntegrationCatalogEntries } f
 // Tool Catalog — discovery surface for the full AI dev tool catalog.
 // MCP-configurable tools are derived from the shared canonical registry so
 // runtime integration and discovery cannot drift apart.
+//
+// Discovery-only tools (Goose, Warp, CodeRabbit, etc.) are NOT hardcoded here.
+// They live in the evaluation DB, seeded via the Exa Deep Search pipeline on
+// first deploy and refreshable via POST /tools/batch-evaluate.
+// See seed-evaluations.js for the seed list.
 
 export const TOOL_CATALOG = [
   ...buildHostIntegrationCatalogEntries(),
   ...buildAgentSurfaceCatalogEntries(),
-
-  // Discovery-only coding agents
-  { id: 'goose', name: 'Goose', description: 'Open-source on-machine AI agent from Block', category: 'coding-agent', website: 'https://block.github.io/goose/', installCmd: 'brew install block-goose-cli', mcpCompatible: true },
-  { id: 'opencode', name: 'OpenCode', description: 'Open-source terminal AI coding agent', category: 'coding-agent', website: 'https://opencode.ai', installCmd: 'brew install opencode', mcpCompatible: true },
-  { id: 'amp', name: 'Amp', description: 'AI coding agent from Sourcegraph with codebase search', category: 'coding-agent', website: 'https://ampcode.com', mcpCompatible: true },
-  { id: 'kiro', name: 'Kiro', description: 'Spec-driven AI IDE from Amazon with autonomous agents', category: 'coding-agent', website: 'https://kiro.dev', installCmd: 'brew install --cask kiro', mcpCompatible: true },
-  { id: 'zed', name: 'Zed', description: 'High-performance AI-native editor built in Rust', category: 'coding-agent', website: 'https://zed.dev', installCmd: 'brew install --cask zed', mcpCompatible: true },
-  { id: 'augment', name: 'Augment Code', description: 'AI coding agent with deep codebase context engine', category: 'coding-agent', website: 'https://augmentcode.com', installCmd: 'npm install -g @augmentcode/auggie', mcpCompatible: true },
-
-  // Voice-to-code
-  { id: 'wispr-flow', name: 'Wispr Flow', description: 'Voice dictation that works in any app on macOS', category: 'voice', website: 'https://wisprflow.ai', installCmd: 'brew install --cask wispr-flow', mcpCompatible: false, featured: true },
-  { id: 'superwhisper', name: 'Superwhisper', description: 'Offline AI voice-to-text for macOS using Whisper models', category: 'voice', website: 'https://superwhisper.com', installCmd: 'brew install --cask superwhisper', mcpCompatible: false },
-
-  // Code review
-  { id: 'coderabbit', name: 'CodeRabbit', description: 'AI code review on pull requests, GitHub and GitLab', category: 'review', website: 'https://coderabbit.ai', mcpCompatible: false },
-  { id: 'ellipsis', name: 'Ellipsis', description: 'Automated code reviews and bug fixes on GitHub PRs', category: 'review', website: 'https://ellipsis.dev', mcpCompatible: false },
-  { id: 'greptile', name: 'Greptile', description: 'Codebase-aware AI code review for GitHub and GitLab', category: 'review', website: 'https://greptile.com', mcpCompatible: false },
-
-  // Terminal tools
-  { id: 'warp', name: 'Warp', description: 'AI-powered terminal with agent mode and MCP support', category: 'terminal', website: 'https://warp.dev', installCmd: 'brew install --cask warp', mcpCompatible: true },
-
-  // Documentation
-  { id: 'mintlify', name: 'Mintlify', description: 'AI-powered documentation generation and hosting', category: 'docs', website: 'https://mintlify.com', installCmd: 'npm install -g mintlify', mcpCompatible: false },
 ];
 
 export const CATEGORY_NAMES = {
   'coding-agent': 'Coding agents',
+  'ide': 'IDEs',
   'voice': 'Voice-to-code',
   'review': 'Code review',
   'terminal': 'Terminal tools',

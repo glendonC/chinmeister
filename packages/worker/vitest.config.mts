@@ -5,13 +5,8 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       main: './src/index.js',
-      wrangler: { configPath: './wrangler.toml' },
-      miniflare: {
-        bindings: {
-          AI: null,
-          ENVIRONMENT: 'test',
-        },
-      },
+      // Use test-specific config: no AI binding, local KV — runs in CI without CF auth.
+      wrangler: { configPath: './wrangler.test.toml' },
     }),
   ],
 });

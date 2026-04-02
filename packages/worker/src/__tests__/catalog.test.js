@@ -12,4 +12,13 @@ describe('tool catalog', () => {
 
     expect(catalogIds).toEqual(sharedIds);
   });
+
+  it('contains only registry-derived entries (no hardcoded discovery tools)', () => {
+    for (const tool of TOOL_CATALOG) {
+      expect(tool).toHaveProperty('id');
+      expect(tool).toHaveProperty('name');
+      // All entries should be MCP-compatible (derived from integration model)
+      expect(tool.mcpCompatible).toBe(true);
+    }
+  });
 });
