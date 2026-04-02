@@ -138,7 +138,7 @@ export default [
     },
   },
 
-  // Test files: allow common test globals
+  // Test files: allow common test globals + browser globals (jsdom environment)
   {
     files: ['**/*.test.js', '**/*.test.jsx', '**/*.test.ts', '**/*.test.tsx', '**/__tests__/**'],
     languageOptions: {
@@ -152,10 +152,16 @@ export default [
         beforeAll: 'readonly',
         afterAll: 'readonly',
         vi: 'readonly',
+        // Browser globals available in jsdom test environment
+        document: 'readonly',
+        window: 'readonly',
+        localStorage: 'readonly',
         history: 'readonly',
-        Event: 'readonly',
+        navigator: 'readonly',
         MouseEvent: 'readonly',
+        Event: 'readonly',
         KeyboardEvent: 'readonly',
+        HTMLInputElement: 'readonly',
       },
     },
   },

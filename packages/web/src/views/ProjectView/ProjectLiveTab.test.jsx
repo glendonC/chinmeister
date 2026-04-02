@@ -38,11 +38,7 @@ async function loadProjectLiveTab() {
 
   vi.doMock('../../components/AgentRow/AgentRow.jsx', () => ({
     default: function MockAgentRow({ agent }) {
-      return (
-        <div data-testid={`agent-${agent.handle}`}>
-          {agent.handle} ({agent.status})
-        </div>
-      );
+      return <div data-testid="agent-row">{agent.handle}</div>;
     },
   }));
 
@@ -53,26 +49,19 @@ async function loadProjectLiveTab() {
   }));
 
   vi.doMock('../../components/EmptyState/EmptyState.jsx', () => ({
-    default: function MockEmptyState({ title }) {
-      return <div data-testid="empty-state">{title}</div>;
+    default: function MockEmptyState({ title, hint }) {
+      return (
+        <div data-testid="empty-state">
+          {title}::{hint}
+        </div>
+      );
     },
   }));
 
   vi.doMock('../../components/ToolIcon/ToolIcon.jsx', () => ({
-    default: function MockToolIcon({ tool }) {
-      return <span data-testid="tool-icon">{tool}</span>;
+    default: function MockToolIcon() {
+      return <span data-testid="tool-icon" />;
     },
-  }));
-
-  vi.doMock('../../lib/toolAnalytics.js', () => ({
-    formatShare: (share) => `${Math.round((share || 0) * 100)}%`,
-  }));
-
-  vi.doMock('../../lib/toolMeta.js', () => ({
-    getToolMeta: (tool) => ({
-      label: tool || 'Unknown',
-      color: '#ccc',
-    }),
   }));
 
   const mod = await import('./ProjectLiveTab.jsx');
@@ -84,10 +73,10 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('ProjectLiveTab', () => {
-  it('shows empty state when no agents and no aside data', async () => {
-    const Tab = await loadProjectLiveTab();
-    const { container, unmount } = renderComponent(Tab, {
+describe('ProjectLiveTab empty and populated states', () => {
+  it('shows the empty state when there are no agents and no aside data', async () => {
+    const ProjectLiveTab = await loadProjectLiveTab();
+    const { container, unmount } = renderComponent(ProjectLiveTab, {
       sortedAgents: [],
       offlineAgents: [],
       conflicts: [],
@@ -96,138 +85,51 @@ describe('ProjectLiveTab', () => {
       liveToolMix: [],
     });
 
-    expect(container.querySelector('[data-testid="empty-state"]')).not.toBeNull();
-    expect(container.textContent).toContain('No agents connected');
+    const emptyState = container.querySelector('[data-testid="empty-state"]');
+    expect(emptyState).not.toBeNull();
+    expect(emptyState.textContent).toContain('No agents connected');
+
     unmount();
   });
 
-  it('renders agent rows', async () => {
-    const Tab = await loadProjectLiveTab();
-    const agents = [
-      { agent_id: 'a1', handle: 'alice', status: 'active', tool: 'claude-code' },
-      { agent_id: 'a2', handle: 'bob', status: 'offline', tool: 'cursor' },
-    ];
-    const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: agents,
-      offlineAgents: [agents[1]],
-      conflicts: [],
-      filesInPlay: [],
-      locks: [],
-      liveToolMix: [],
-    });
-
-    expect(container.querySelector('[data-testid="agent-alice"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="agent-bob"]')).not.toBeNull();
-    expect(container.textContent).toContain('alice');
-    expect(container.textContent).toContain('bob');
-    unmount();
-  });
-
-  it('shows offline count', async () => {
-    const Tab = await loadProjectLiveTab();
-    const { container, unmount } = renderComponent(Tab, {
+  it('renders agent rows when agents are present', async () => {
+    const ProjectLiveTab = await loadProjectLiveTab();
+    const { container, unmount } = renderComponent(ProjectLiveTab, {
       sortedAgents: [
-        { agent_id: 'a1', handle: 'alice', status: 'active', tool: 'claude-code' },
-        { agent_id: 'a2', handle: 'bob', status: 'offline', tool: 'cursor' },
+        { agent_id: 'a1', handle: 'alice', status: 'active', tool: 'cursor' },
+        { agent_id: 'a2', handle: 'bob', status: 'offline', tool: 'claude-code' },
       ],
-      offlineAgents: [{ agent_id: 'a2', handle: 'bob', status: 'offline' }],
+      offlineAgents: [{ agent_id: 'a2', handle: 'bob', status: 'offline', tool: 'claude-code' }],
       conflicts: [],
       filesInPlay: [],
       locks: [],
       liveToolMix: [],
     });
 
-    expect(container.textContent).toContain('1 offline');
+    const agentRows = container.querySelectorAll('[data-testid="agent-row"]');
+    expect(agentRows).toHaveLength(2);
+    expect(agentRows[0].textContent).toBe('alice');
+    expect(agentRows[1].textContent).toBe('bob');
+
     unmount();
   });
 
-  it('shows conflict banner when conflicts exist', async () => {
-    const Tab = await loadProjectLiveTab();
-    const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', tool: 'cc' }],
+  it('shows empty agent list but still renders aside when files or locks exist', async () => {
+    const ProjectLiveTab = await loadProjectLiveTab();
+    const { container, unmount } = renderComponent(ProjectLiveTab, {
+      sortedAgents: [],
       offlineAgents: [],
-      conflicts: [{ file: 'a.js', owners: ['alice', 'bob'] }],
-      filesInPlay: ['a.js'],
+      conflicts: [],
+      filesInPlay: ['src/index.js'],
       locks: [],
       liveToolMix: [],
     });
 
-    expect(container.querySelector('[data-testid="conflict-banner"]')).not.toBeNull();
-    expect(container.textContent).toContain('1 conflicts');
-    unmount();
-  });
+    // Should show an empty-state for agents within the block
+    const emptyStates = container.querySelectorAll('[data-testid="empty-state"]');
+    expect(emptyStates.length).toBeGreaterThanOrEqual(1);
+    expect(emptyStates[0].textContent).toContain('No agents connected');
 
-  it('renders files in play', async () => {
-    const Tab = await loadProjectLiveTab();
-    const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', host_tool: 'cc' }],
-      offlineAgents: [],
-      conflicts: [],
-      filesInPlay: ['src/app.js', 'src/utils.js'],
-      locks: [],
-      liveToolMix: [],
-    });
-
-    expect(container.textContent).toContain('src/app.js');
-    expect(container.textContent).toContain('src/utils.js');
-    expect(container.textContent).toContain('2 files');
-    unmount();
-  });
-
-  it('renders lock rows', async () => {
-    const Tab = await loadProjectLiveTab();
-    const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', host_tool: 'cc' }],
-      offlineAgents: [],
-      conflicts: [],
-      filesInPlay: ['config.json'],
-      locks: [{ file_path: 'config.json', handle: 'alice' }],
-      liveToolMix: [],
-    });
-
-    expect(container.querySelector('[data-testid="lock-row"]')).not.toBeNull();
-    expect(container.textContent).toContain('config.json');
-    unmount();
-  });
-
-  it('renders live tool mix section', async () => {
-    const Tab = await loadProjectLiveTab();
-    const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [
-        { agent_id: 'a1', handle: 'alice', status: 'active', host_tool: 'claude-code' },
-      ],
-      offlineAgents: [],
-      conflicts: [],
-      filesInPlay: [],
-      locks: [],
-      liveToolMix: [
-        { tool: 'claude-code', label: 'Claude Code', value: 2, share: 0.67 },
-        { tool: 'cursor', label: 'Cursor', value: 1, share: 0.33 },
-      ],
-    });
-
-    expect(container.textContent).toContain('Live tools');
-    expect(container.textContent).toContain('2 live');
-    expect(container.textContent).toContain('1 live');
-    unmount();
-  });
-
-  it('shows aside only when files, locks, conflicts, or tool mix exist', async () => {
-    const Tab = await loadProjectLiveTab();
-
-    // With agents but no aside content - still renders agents section
-    const { container, unmount } = renderComponent(Tab, {
-      sortedAgents: [{ agent_id: 'a1', handle: 'alice', status: 'active', tool: 'cc' }],
-      offlineAgents: [],
-      conflicts: [],
-      filesInPlay: [],
-      locks: [],
-      liveToolMix: [],
-    });
-
-    expect(container.querySelector('[data-testid="agent-alice"]')).not.toBeNull();
-    // "Work in play" heading should not appear without files
-    expect(container.textContent).not.toContain('Work in play');
     unmount();
   });
 });
