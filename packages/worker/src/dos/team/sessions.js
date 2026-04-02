@@ -3,9 +3,7 @@
 
 import { normalizePath } from '../../lib/text-utils.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
-
-const HEARTBEAT_STALE_SECONDS = 300;
-const ACTIVITY_MAX_FILES = 50;
+import { HEARTBEAT_STALE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
 
 export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrTool) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
@@ -23,7 +21,7 @@ export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrT
        SELECT agent_id FROM members
        WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
      )`,
-    handle, HEARTBEAT_STALE_SECONDS
+    handle, HEARTBEAT_STALE_WINDOW_S
   );
 
   const id = crypto.randomUUID();

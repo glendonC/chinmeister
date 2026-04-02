@@ -2,9 +2,7 @@
 // Each function takes `sql` as the first parameter.
 
 import { normalizePath } from '../../lib/text-utils.js';
-
-const HEARTBEAT_ACTIVE_SECONDS = 60;
-const ACTIVITY_MAX_FILES = 50;
+import { HEARTBEAT_ACTIVE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
 
 export function updateActivity(sql, resolvedAgentId, files, summary) {
   const normalized = files.map(normalizePath);
@@ -35,7 +33,7 @@ export function checkConflicts(sql, resolvedAgentId, files, recordMetric, connec
      WHERE m.agent_id != ?
        AND (m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
             OR m.agent_id IN (${wsPlaceholders}))`,
-    resolvedAgentId, HEARTBEAT_ACTIVE_SECONDS, ...wsParams
+    resolvedAgentId, HEARTBEAT_ACTIVE_WINDOW_S, ...wsParams
   ).toArray();
 
   const myFiles = new Set(files.map(normalizePath));
@@ -66,7 +64,7 @@ export function checkConflicts(sql, resolvedAgentId, files, recordMetric, connec
        WHERE l.file_path IN (${placeholders}) AND l.agent_id != ?
          AND (m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
               OR m.agent_id IN (${wsPlaceholders}))`,
-      ...fileList, resolvedAgentId, HEARTBEAT_ACTIVE_SECONDS, ...wsParams
+      ...fileList, resolvedAgentId, HEARTBEAT_ACTIVE_WINDOW_S, ...wsParams
     ).toArray();
     for (const lock of lockRows) {
       lockedFiles.push({

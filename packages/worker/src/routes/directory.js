@@ -3,6 +3,7 @@ import { json, parseBody } from '../lib/http.js';
 import { requireJson, withRateLimit } from '../lib/validation.js';
 import { evaluateTool } from '../lib/evaluate.js';
 import { CATEGORY_NAMES } from '../catalog.js';
+import { RATE_LIMIT_EVALUATIONS } from '../lib/constants.js';
 
 const CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
@@ -115,7 +116,7 @@ export async function handleTriggerEvaluation(request, user, env) {
   const nameOrUrl = hasName ? name.trim() : url.trim();
   const slugified = nameOrUrl.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-  return withRateLimit(db, `eval:${user.id}`, 5, 'Evaluation limit reached (5/day). Try again tomorrow.', async () => {
+  return withRateLimit(db, `eval:${user.id}`, RATE_LIMIT_EVALUATIONS, 'Evaluation limit reached (5/day). Try again tomorrow.', async () => {
     // Check if evaluation already exists and is recent
     const existing = await db.getEvaluation(slugified);
     if (existing.evaluation) {

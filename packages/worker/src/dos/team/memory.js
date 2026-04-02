@@ -2,8 +2,7 @@
 // Each function takes `sql` as the first parameter.
 
 import { normalizeRuntimeMetadata } from './runtime.js';
-
-const MEMORY_MAX_COUNT = 500;
+import { MEMORY_MAX_COUNT } from '../../lib/constants.js';
 
 // Escape LIKE wildcards so user-supplied text is matched literally
 function escapeLike(s) {
