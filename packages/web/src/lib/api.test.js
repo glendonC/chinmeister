@@ -48,25 +48,25 @@ describe('web API client', () => {
     );
   });
 
-  it('defaults to the local worker API on loopback origins', async () => {
+  it('defaults to the production API when no env override is set', async () => {
     fetch.mockResolvedValue(mockJsonResponse({ teams: [] }));
     stubHostname('localhost');
 
     await api('GET', '/me/teams', null, 'web-token');
 
-    expect(getApiUrl()).toBe('http://localhost:8787');
+    expect(getApiUrl()).toBe('https://chinwag-api.glendonchin.workers.dev');
     expect(fetch).toHaveBeenCalledWith(
-      'http://localhost:8787/me/teams',
+      'https://chinwag-api.glendonchin.workers.dev/me/teams',
       expect.objectContaining({
         method: 'GET',
       }),
     );
   });
 
-  it('uses the matching loopback host when served on 127.0.0.1', () => {
+  it('uses DEFAULT_API_URL regardless of hostname when no env override', () => {
     stubHostname('127.0.0.1');
 
-    expect(getApiUrl()).toBe('http://127.0.0.1:8787');
+    expect(getApiUrl()).toBe('https://chinwag-api.glendonchin.workers.dev');
   });
 
   it('uses web-specific parse errors for non-JSON responses', async () => {

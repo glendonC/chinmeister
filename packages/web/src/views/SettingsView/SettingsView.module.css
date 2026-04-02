@@ -14,7 +14,7 @@
 .sectionLabel {
   font-family: var(--mono);
   font-size: var(--text-2xs);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   color: var(--soft);
 }
@@ -61,12 +61,12 @@
 .handleAction {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
+  gap: var(--space-sm);
+  padding-bottom: var(--space-sm);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: color-mix(in srgb, var(--preview-color) 68%, var(--ink));
-  letter-spacing: 0.08em;
+  letter-spacing: var(--tracking-action);
   text-transform: uppercase;
   flex-shrink: 0;
   transition: color var(--motion-fast) var(--motion);
@@ -120,8 +120,8 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: var(--text-11);
+  letter-spacing: var(--tracking-action);
   text-transform: uppercase;
   cursor: pointer;
   transition:
@@ -143,7 +143,7 @@
 }
 
 .handleError {
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--danger);
 }
 
@@ -233,8 +233,8 @@
 
 .githubBadge {
   font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
+  font-size: var(--text-10);
+  letter-spacing: var(--tracking-action);
   text-transform: uppercase;
   color: var(--success, #34c759);
   background: color-mix(in srgb, var(--success, #34c759) 10%, transparent);
@@ -247,8 +247,8 @@
   background: transparent;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: var(--text-11);
+  letter-spacing: var(--tracking-action);
   text-transform: uppercase;
   cursor: pointer;
   padding: 0;
@@ -274,15 +274,17 @@
   font-size: var(--text-sm);
   font-weight: 500;
   color: #fff;
-  background: #24292f;
+  background: var(--github-bg);
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.1s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.1s ease;
 }
 
 .githubLinkButton:hover {
-  background: #1b1f23;
+  background: var(--github-bg-hover);
 }
 
 .githubLinkButton:active {
@@ -290,7 +292,7 @@
 }
 
 .linkError {
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--danger);
 }
 
@@ -300,8 +302,8 @@
   background: transparent;
   color: var(--danger);
   font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
+  font-size: var(--text-11);
+  letter-spacing: var(--tracking-action);
   text-transform: uppercase;
   cursor: pointer;
   padding: 0;
@@ -328,4 +330,3 @@
     gap: 8px;
   }
 }
-

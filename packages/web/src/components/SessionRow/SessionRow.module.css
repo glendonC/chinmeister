@@ -1,14 +1,14 @@
 .row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   padding: 10px 0;
 }
 
 .identity {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   min-width: 0;
 }
 
@@ -30,7 +30,7 @@
 
 .meta {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--soft);
   margin-left: auto;
   font-variant-numeric: tabular-nums;

@@ -9,7 +9,7 @@
   font-family: var(--mono);
   font-size: var(--text-2xs);
   color: var(--soft);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   margin-bottom: 6px;
   animation: fadeSlideIn 0.3s var(--motion) both;
@@ -68,13 +68,13 @@
 .statsRow {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .statButton {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
   padding: 0;
   border: none;
   background: transparent;
@@ -90,21 +90,23 @@
   position: relative;
   display: inline-flex;
   align-self: flex-start;
-  padding: 4px 8px;
-  margin-left: -8px;
+  padding: var(--space-xs) var(--space-sm);
+  margin-left: calc(-1 * var(--space-sm));
   border-radius: 6px;
   font-family: var(--mono);
   font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--soft);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--tracking-stat);
   text-transform: uppercase;
   background: transparent;
-  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
 }
 
 .statButton:hover .statLabel {
-  background: rgba(18, 19, 23, 0.04);
+  background: var(--hover-bg);
 }
 
 .statActive .statLabel {
@@ -179,16 +181,18 @@
   display: inline-flex;
   padding: 3px 10px;
   border: none;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--ghost);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   font-weight: 500;
   color: var(--muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: background var(--motion-fast) ease, color var(--motion-fast) ease;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
 }
 
 .tagPill:hover {
@@ -220,13 +224,13 @@
 .panelGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.18fr) minmax(280px, 0.82fr);
-  gap: 34px;
+  gap: var(--space-2xl);
 }
 
 .asideStack {
   display: flex;
   flex-direction: column;
-  gap: 34px;
+  gap: var(--space-2xl);
 }
 
 .block {
@@ -238,7 +242,7 @@
   align-items: flex-end;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 18px;
+  margin-bottom: var(--space-lg);
 }
 
 .blockTitle {
@@ -248,7 +252,7 @@
 }
 
 .blockMeta {
-  font-size: 11px;
+  font-size: var(--text-11);
   font-family: var(--mono);
   color: var(--muted);
   white-space: nowrap;
@@ -272,7 +276,7 @@
 
 .pathRow {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -282,7 +286,7 @@
 .lockList {
   display: flex;
   flex-direction: column;
-  margin-top: 18px;
+  margin-top: var(--space-lg);
 }
 
 .summaryGrid {
@@ -345,13 +349,13 @@
 }
 
 .distributionMeta {
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--muted);
 }
 
 .distributionValue {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--soft);
   white-space: nowrap;
 }

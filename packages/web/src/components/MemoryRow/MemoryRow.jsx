@@ -1,92 +1,125 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { formatRelativeTime } from '../../lib/relativeTime.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
+import { validateTags } from '../../lib/validateTags.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './MemoryRow.module.css';
 
-const MAX_MEMORY_TEXT_LENGTH = 2000;
-const MAX_MEMORY_TAGS = 50;
-const MAX_MEMORY_TAG_LENGTH = 50;
+/**
+ * Mode state machine for MemoryRow.
+ *
+ * States: 'view' | 'editing' | 'confirming-delete' | 'saving'
+ *
+ * Transitions:
+ *   view → editing           (startEdit)
+ *   view → confirming-delete (requestDelete)
+ *   editing → view           (cancelEdit)
+ *   editing → saving         (save)
+ *   confirming-delete → view (cancelDelete / blur)
+ *   confirming-delete → saving (confirmDelete)
+ *   saving → view            (save success / delete success)
+ *   saving → editing         (save failure)
+ *   saving → view            (delete failure, resets to view)
+ */
 
 export default function MemoryRow({ memory, onUpdate, onDelete }) {
-  const [isEditing, setIsEditing] = useState(false);
+  const [mode, setMode] = useState('view');
   const [editText, setEditText] = useState(memory.text);
   const [editTags, setEditTags] = useState((memory.tags || []).join(', '));
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const saving = mode === 'saving';
+  const isEditing = mode === 'editing' || mode === 'saving';
+  const confirmDelete = mode === 'confirming-delete';
 
   const tags = memory.tags || [];
   const when = formatRelativeTime(memory.updated_at || memory.created_at);
-  const rawTool = memory.host_tool || null;
+  const rawTool = memory.source_tool || memory.source_host_tool;
   const toolMeta = rawTool && rawTool !== 'unknown' ? getToolMeta(rawTool) : null;
-  const handle = memory.handle || null;
-  const model = memory.agent_model || null;
+  const handle = memory.source_handle || null;
+  const model = memory.source_model || null;
   const accentColor = toolMeta?.color || 'var(--soft)';
 
-  function handleEdit() {
+  const startEdit = useCallback(() => {
+    if (mode !== 'view') return;
     setEditText(memory.text);
     setEditTags((memory.tags || []).join(', '));
     setError(null);
-    setIsEditing(true);
-  }
+    setMode('editing');
+  }, [mode, memory.text, memory.tags]);
 
-  function handleCancel() {
-    setIsEditing(false);
+  const cancelEdit = useCallback(() => {
+    if (mode !== 'editing') return;
     setError(null);
-  }
+    setMode('view');
+  }, [mode]);
 
-  async function handleSave() {
-    const trimmedText = editText.trim();
-    if (!trimmedText) return;
-    const newTags = editTags
-      .split(',')
-      .map((t) => t.trim().toLowerCase())
-      .map((t) => t.slice(0, MAX_MEMORY_TAG_LENGTH))
-      .filter(Boolean)
-      .slice(0, MAX_MEMORY_TAGS);
-    const textChanged = trimmedText !== memory.text;
-    const tagsChanged = JSON.stringify(newTags) !== JSON.stringify(memory.tags || []);
-    if (!textChanged && !tagsChanged) {
-      setIsEditing(false);
+  const requestDelete = useCallback(() => {
+    if (mode !== 'view') return;
+    setMode('confirming-delete');
+  }, [mode]);
+
+  const cancelDelete = useCallback(() => {
+    if (mode !== 'confirming-delete') return;
+    setMode('view');
+  }, [mode]);
+
+  const save = useCallback(async () => {
+    if (mode !== 'editing') return;
+    if (!editText.trim()) return;
+
+    const { tags: newTags, error: tagError } = validateTags(editTags);
+    if (tagError) {
+      setError(tagError);
       return;
     }
 
-    setSaving(true);
+    const textChanged = editText !== memory.text;
+    const tagsChanged = JSON.stringify(newTags) !== JSON.stringify(memory.tags || []);
+    if (!textChanged && !tagsChanged) {
+      setMode('view');
+      return;
+    }
+
+    setMode('saving');
     setError(null);
     try {
       await onUpdate(
         memory.id,
-        textChanged ? trimmedText : undefined,
+        textChanged ? editText.trim() : undefined,
         tagsChanged ? newTags : undefined,
       );
-      setIsEditing(false);
+      setMode('view');
     } catch (err) {
       setError(err.message || 'Update failed');
-    } finally {
-      setSaving(false);
+      setMode('editing');
     }
-  }
+  }, [mode, editText, editTags, memory.id, memory.text, memory.tags, onUpdate]);
 
-  async function handleDelete() {
-    if (!confirmDelete) {
-      setConfirmDelete(true);
-      return;
-    }
-    setSaving(true);
+  const confirmDeleteAction = useCallback(async () => {
+    if (mode !== 'confirming-delete') return;
+    setMode('saving');
     setError(null);
     try {
       await onDelete(memory.id);
+      // Component will unmount on success — no state update needed
     } catch (err) {
       setError(err.message || 'Delete failed');
-      setSaving(false);
-      setConfirmDelete(false);
+      setMode('view');
+    }
+  }, [mode, memory.id, onDelete]);
+
+  function handleDeleteClick() {
+    if (mode === 'view') {
+      requestDelete();
+    } else if (mode === 'confirming-delete') {
+      confirmDeleteAction();
     }
   }
 
   function handleKeyDown(e) {
-    if (e.key === 'Escape') handleCancel();
-    if (e.key === 'Enter' && e.metaKey) handleSave();
+    if (e.key === 'Escape') cancelEdit();
+    if (e.key === 'Enter' && e.metaKey) save();
   }
 
   if (isEditing) {
@@ -107,7 +140,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
               className={styles.editTextarea}
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
-              maxLength={MAX_MEMORY_TEXT_LENGTH}
+              maxLength={2000}
               rows={3}
               disabled={saving}
               autoFocus
@@ -118,12 +151,12 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
               <div className={styles.editActions}>
                 <button
                   className={styles.btnSave}
-                  onClick={handleSave}
+                  onClick={save}
                   disabled={saving || !editText.trim()}
                 >
                   {saving ? 'Saving\u2026' : 'Save'}
                 </button>
-                <button className={styles.btnCancel} onClick={handleCancel} disabled={saving}>
+                <button className={styles.btnCancel} onClick={cancelEdit} disabled={saving}>
                   Cancel
                 </button>
               </div>
@@ -181,7 +214,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
           {(onUpdate || onDelete) && (
             <div className={styles.actions}>
               {onUpdate && (
-                <button className={styles.btnText} onClick={handleEdit}>
+                <button className={styles.btnText} onClick={startEdit}>
                   Edit
                 </button>
               )}
@@ -190,8 +223,8 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
                   <span className={styles.actionSep}>&middot;</span>
                   <button
                     className={confirmDelete ? styles.btnText : styles.btnDelete}
-                    onClick={handleDelete}
-                    onBlur={() => setConfirmDelete(false)}
+                    onClick={handleDeleteClick}
+                    onBlur={cancelDelete}
                     disabled={saving}
                   >
                     {confirmDelete ? (

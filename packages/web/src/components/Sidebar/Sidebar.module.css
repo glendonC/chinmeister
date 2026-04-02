@@ -28,15 +28,14 @@
 }
 
 .logoSvg path {
-  transition: transform 0.4s cubic-bezier(0.22, 0.68, 0, 1),
-              opacity 0.4s ease;
+  transition:
+    transform 0.4s cubic-bezier(0.22, 0.68, 0, 1),
+    opacity 0.4s ease;
 }
 
 .sidebarLogo:hover .logoSvg {
-  filter:
-    drop-shadow(0 3px 6px rgba(212, 154, 174, 0.45))
-    drop-shadow(0 0 8px rgba(168, 150, 212, 0.35))
-    drop-shadow(0 -3px 6px rgba(142, 192, 164, 0.4));
+  filter: drop-shadow(0 3px 6px rgba(212, 154, 174, 0.45))
+    drop-shadow(0 0 8px rgba(168, 150, 212, 0.35)) drop-shadow(0 -3px 6px rgba(142, 192, 164, 0.4));
 }
 
 /* bottom pink layer — shift down */
@@ -71,7 +70,9 @@
   font: inherit;
   color: var(--muted);
   text-align: left;
-  transition: color 0.15s ease, opacity 0.15s ease;
+  transition:
+    color 0.15s ease,
+    opacity 0.15s ease;
   user-select: none;
 }
 
@@ -117,7 +118,7 @@
   font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--soft);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
 }
 
@@ -146,7 +147,6 @@
   transition: box-shadow 0.15s ease;
 }
 
-
 .projectName {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -159,7 +159,6 @@
 .sidebarSpacer {
   flex: 1;
 }
-
 
 .mobileToggle {
   display: none;

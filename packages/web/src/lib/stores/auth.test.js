@@ -17,10 +17,11 @@ async function loadAuthModule({ apiMock, hash = '' } = {}) {
       hash,
       pathname: '/dashboard',
     },
+    history: {
+      replaceState: vi.fn(),
+    },
   };
-  globalThis.history = {
-    replaceState: vi.fn(),
-  };
+  globalThis.history = globalThis.window.history;
   globalThis.localStorage = createStorage();
   vi.doMock('../api.js', () => ({
     api: apiMock || vi.fn(),

@@ -25,13 +25,13 @@
 .topGrid {
   display: grid;
   grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.88fr);
-  gap: 34px;
+  gap: var(--space-2xl);
 }
 
 .analyticsStack {
   display: flex;
   flex-direction: column;
-  gap: 34px;
+  gap: var(--space-2xl);
 }
 
 .signalList {
@@ -65,10 +65,10 @@
 
 .signalMeta {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--soft);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-table);
 }
 
 .section {
@@ -90,7 +90,7 @@
 }
 
 .sectionMeta {
-  font-size: 11px;
+  font-size: var(--text-11);
   font-family: var(--mono);
   color: var(--muted);
 }
@@ -130,7 +130,7 @@
 }
 
 .rowMeta {
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -139,7 +139,7 @@
 
 .rowValue {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--soft);
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
@@ -213,7 +213,10 @@
 
 .directoryHeader {
   display: grid;
-  grid-template-columns: minmax(160px, 1.4fr) 90px 50px minmax(90px, 0.8fr) 80px minmax(120px, 1.6fr);
+  grid-template-columns: minmax(160px, 1.4fr) 90px 50px minmax(90px, 0.8fr) 80px minmax(
+      120px,
+      1.6fr
+    );
   gap: 12px;
   padding: 0 0 10px;
   align-items: baseline;
@@ -221,18 +224,24 @@
 
 .directoryHeader > span {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: var(--tracking-table);
   color: var(--soft);
 }
 
-.dhName { }
-.dhVerdict { }
-.dhMcp { }
-.dhCategory { }
-.dhConfidence { }
-.dhTagline { }
+.dhName {
+}
+.dhVerdict {
+}
+.dhMcp {
+}
+.dhCategory {
+}
+.dhConfidence {
+}
+.dhTagline {
+}
 
 /* ── Directory list ── */
 
@@ -247,7 +256,10 @@
 
 .directoryRow {
   display: grid;
-  grid-template-columns: minmax(160px, 1.4fr) 90px 50px minmax(90px, 0.8fr) 80px minmax(120px, 1.6fr);
+  grid-template-columns: minmax(160px, 1.4fr) 90px 50px minmax(90px, 0.8fr) 80px minmax(
+      120px,
+      1.6fr
+    );
   gap: 12px;
   width: 100%;
   padding: 10px 14px;
@@ -262,7 +274,7 @@
 }
 
 .directoryRow:hover {
-  background: rgba(0, 0, 0, 0.035);
+  background: var(--hover-bg);
 }
 
 /* ── Verdict badges ── */
@@ -385,7 +397,7 @@
 
 .detailMetaLabel {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--soft);
@@ -393,7 +405,7 @@
 
 .detailLink {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--accent);
   text-decoration: none;
   font-weight: 500;
@@ -405,7 +417,7 @@
 
 .detailInstall {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   font-weight: 400;
   color: var(--muted);
   background: var(--ghost);
@@ -544,14 +556,14 @@ details[open] > .sourcesToggle::before {
 }
 
 .toolConfigured {
-  font-size: 11px;
+  font-size: var(--text-11);
   font-family: var(--mono);
   font-weight: 500;
   color: var(--success);
 }
 
 .toolObserved {
-  font-size: 11px;
+  font-size: var(--text-11);
   font-family: var(--mono);
   font-weight: 500;
   color: var(--accent);
@@ -567,7 +579,7 @@ details[open] > .sourcesToggle::before {
 .toolInstall {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   font-weight: 400;
   color: var(--muted);
   margin-top: 14px;

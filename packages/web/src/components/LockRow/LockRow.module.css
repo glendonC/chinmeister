@@ -1,14 +1,14 @@
 .lockRow {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   padding: 10px 0;
   font-size: var(--text-base);
 }
 
 .lockFile {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--warn);
   font-weight: 400;
 }
@@ -16,7 +16,7 @@
 .lockOwner {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--ink);
   opacity: var(--opacity-secondary);
@@ -25,7 +25,7 @@
 
 .lockTime {
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--soft);
   margin-left: auto;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { useAuthStore, authActions } from './lib/stores/auth.js';
 import { useTeamStore, teamActions } from './lib/stores/teams.js';
 import {
@@ -16,14 +16,109 @@ import ProjectView from './views/ProjectView/ProjectView.jsx';
 import SettingsView from './views/SettingsView/SettingsView.jsx';
 import ToolsView from './views/ToolsView/ToolsView.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
-import RenderErrorBoundary from './components/RenderErrorBoundary/RenderErrorBoundary.jsx';
 
 import styles from './App.module.css';
 
+class AppErrorBoundary extends Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[chinwag] Render error:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            padding: '2rem',
+            textAlign: 'center',
+            color: '#b0b0b0',
+            fontFamily: 'system-ui',
+          }}
+        >
+          <p style={{ fontSize: '1.1rem' }}>Something went wrong.</p>
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            style={{
+              marginTop: '1rem',
+              padding: '0.5rem 1rem',
+              cursor: 'pointer',
+              background: '#2a2a2a',
+              color: '#e0e0e0',
+              border: '1px solid #444',
+              borderRadius: '6px',
+            }}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+/** Sidebar-specific error boundary with minimal fallback nav. */
+class SidebarErrorBoundary extends Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[chinwag] Sidebar render error:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <aside
+          style={{
+            width: 'var(--sidebar-width, 216px)',
+            padding: '18px 0 24px',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+          }}
+        >
+          <svg width="36" height="36" viewBox="0 0 32 32" style={{ marginBottom: '14px' }}>
+            <path fill="#d49aae" d="M4 24 20 24 24 20 8 20z" />
+            <path fill="#a896d4" d="M6 18 22 18 26 14 10 14z" />
+            <path fill="#8ec0a4" d="M8 12 24 12 28 8 12 8z" />
+          </svg>
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--muted, #888)',
+              fontFamily: 'var(--mono, monospace)',
+              fontSize: '10px',
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
+              cursor: 'pointer',
+              padding: '4px 8px',
+            }}
+          >
+            Reload sidebar
+          </button>
+        </aside>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
-  const [bootState, setBootState] = useState('loading');
+  const [bootCompleted, setBootCompleted] = useState(false);
   const [bootError, setBootError] = useState(null);
-  const [dismissedPollError, setDismissedPollError] = useState(null);
+  const [dismissedError, setDismissedError] = useState(null);
   const [activeNav, setActiveNav] = useState(null);
 
   const token = useAuthStore((s) => s.token);
@@ -45,53 +140,50 @@ export default function App() {
     contextStatus === 'stale' &&
     contextTeamId === activeTeamId &&
     !!contextData;
-  const resolvedBootState =
-    bootState === 'loading' ? 'loading' : isAuthenticated ? 'ready' : 'unauthenticated';
-  const showError =
-    pollError && dismissedPollError !== pollError && (hasOverviewSnapshot || hasProjectSnapshot);
+  const errorDismissed = pollError && dismissedError === pollError;
+  const showError = pollError && !errorDismissed && (hasOverviewSnapshot || hasProjectSnapshot);
   const lastSynced = formatRelativeTime(lastUpdate);
 
+  // Derive boot state — no effect sync needed
+  const bootState = !bootCompleted ? 'loading' : isAuthenticated ? 'ready' : 'unauthenticated';
+
+  // Reset polling data when auth drops (external store action, not setState)
   useEffect(() => {
-    if (resolvedBootState !== 'ready') {
-      stopPolling();
-      resetPollingState();
-    }
-  }, [resolvedBootState]);
+    if (bootCompleted && !isAuthenticated) resetPollingState();
+  }, [bootCompleted, isAuthenticated]);
 
   useEffect(() => {
-    if (resolvedBootState === 'ready' && isAuthenticated) {
+    if (bootState === 'ready' && isAuthenticated) {
       startPolling();
     }
-  }, [activeTeamId, resolvedBootState, isAuthenticated]);
+  }, [activeTeamId, bootState, isAuthenticated]);
 
   useEffect(() => {
     async function boot() {
-      setBootState('loading');
       setBootError(null);
       let t = authActions.readTokenFromHash();
       // Clean up non-token hash params (e.g. github_linked=1)
       if (!t && window.location.hash) {
-        window.history.replaceState(null, '', window.location.pathname);
+        history.replaceState(null, '', window.location.pathname);
       }
       if (!t) t = authActions.getStoredToken();
       if (!t) {
-        setBootState('unauthenticated');
+        setBootCompleted(true);
         return;
       }
       try {
         await authActions.authenticate(t);
         await teamActions.loadTeams();
-        setBootState('ready');
       } catch (err) {
         setBootError(err.message || 'Authentication failed');
-        setBootState('unauthenticated');
       }
+      setBootCompleted(true);
     }
     boot();
     return () => stopPolling();
   }, []);
 
-  if (resolvedBootState === 'loading') {
+  if (bootState === 'loading') {
     return (
       <div className={styles.bootScreen}>
         <div className={styles.bootSpinner}>
@@ -106,19 +198,17 @@ export default function App() {
     );
   }
 
-  if (resolvedBootState === 'unauthenticated') {
-    return (
-      <RenderErrorBoundary label="Connect view" resetKey="connect">
-        <ConnectView error={bootError} />
-      </RenderErrorBoundary>
-    );
+  if (bootState === 'unauthenticated') {
+    return <ConnectView error={bootError} />;
   }
 
   const activeView = activeNav || (activeTeamId !== null ? 'project' : 'overview');
 
   return (
     <div className={styles.layout}>
-      <Sidebar activeNav={activeNav} onNavigate={setActiveNav} />
+      <SidebarErrorBoundary>
+        <Sidebar activeNav={activeNav} onNavigate={setActiveNav} />
+      </SidebarErrorBoundary>
 
       <div className={styles.main}>
         {showError && (
@@ -139,7 +229,7 @@ export default function App() {
               </button>
               <button
                 className={styles.errorDismiss}
-                onClick={() => setDismissedPollError(pollError)}
+                onClick={() => setDismissedError(pollError)}
                 aria-label="Dismiss"
               >
                 <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
@@ -156,12 +246,12 @@ export default function App() {
         )}
 
         <div className={styles.content}>
-          <RenderErrorBoundary label={`${activeView} view`} resetKey={activeView}>
+          <AppErrorBoundary>
             {activeView === 'overview' && <OverviewView />}
             {activeView === 'project' && <ProjectView />}
             {activeView === 'tools' && <ToolsView />}
             {activeView === 'settings' && <SettingsView />}
-          </RenderErrorBoundary>
+          </AppErrorBoundary>
         </div>
       </div>
     </div>

@@ -30,8 +30,14 @@
 }
 
 @keyframes chevronIn {
-  from { opacity: 0; transform: translateX(-6px); }
-  to   { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .bootBrand {
@@ -81,7 +87,7 @@
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  gap: 18px;
+  gap: var(--space-lg);
   margin: 14px 56px 0;
   max-width: 860px;
   padding: 0;
@@ -91,7 +97,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 12px;
+  gap: var(--space-md);
   min-width: 0;
 }
 
@@ -100,7 +106,7 @@
   font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--danger);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
 }
 
@@ -118,7 +124,7 @@
 .errorActions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-md);
   flex: 0 0 auto;
 }
 
@@ -131,7 +137,7 @@
   font-family: var(--mono);
   font-size: var(--text-2xs);
   font-weight: 500;
-  letter-spacing: 0.12em;
+  letter-spacing: var(--tracking-stat);
   text-transform: uppercase;
   opacity: 0.72;
   transition: opacity var(--motion-fast) ease;
@@ -149,7 +155,9 @@
   opacity: 0.64;
   padding: 0;
   display: flex;
-  transition: color var(--motion-fast) var(--motion), opacity var(--motion-fast) var(--motion);
+  transition:
+    color var(--motion-fast) var(--motion),
+    opacity var(--motion-fast) var(--motion);
 }
 
 .errorDismiss:hover {

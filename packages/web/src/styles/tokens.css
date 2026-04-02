@@ -1,0 +1,36 @@
+/* ═══════════════════════════════════════════
+   Design tokens — shared values used across
+   3+ CSS module files. Supplements app.css.
+   ═══════════════════════════════════════════ */
+
+:root {
+  /* ── Spacing scale ── */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 12px;
+  --space-lg: 18px;
+  --space-xl: 28px;
+  --space-2xl: 34px;
+
+  /* ── Border radius ── */
+  --radius-pill: 999px;
+  --radius-circle: 50%;
+  --radius-md: 10px;
+
+  /* ── Surfaces ── */
+  --hover-bg: rgba(18, 19, 23, 0.04);
+  --github-bg: #24292f;
+  --github-bg-hover: #1b1f23;
+
+  /* ── Font sizes (aliases for raw px values used in module CSS) ── */
+  --text-11: 11px;
+  --text-10: 10px;
+  --text-14: 14px;
+  --text-12: 12px;
+
+  /* ── Letter spacing patterns ── */
+  --tracking-eyebrow: 0.14em;
+  --tracking-stat: 0.12em;
+  --tracking-action: 0.08em;
+  --tracking-table: 0.1em;
+}

@@ -86,17 +86,19 @@
   font-size: var(--text-md);
   font-weight: 500;
   color: #fff;
-  background: #24292f;
+  background: var(--github-bg);
   border: none;
-  border-radius: 12px;
+  border-radius: var(--radius);
   cursor: pointer;
   text-decoration: none;
-  transition: background 0.2s ease, transform 0.1s ease;
+  transition:
+    background 0.2s ease,
+    transform 0.1s ease;
   margin-top: 16px;
 }
 
 .githubButton:hover {
-  background: #1b1f23;
+  background: var(--github-bg-hover);
 }
 
 .githubButton:active {
@@ -145,7 +147,7 @@
   font-family: var(--mono);
   font-size: var(--text-2xs);
   color: var(--soft);
-  letter-spacing: 0.14em;
+  letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   margin-bottom: 10px;
 }
@@ -276,7 +278,9 @@
   border-radius: var(--radius-xs);
   cursor: pointer;
   white-space: nowrap;
-  transition: opacity 0.15s ease, transform 0.1s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.1s ease;
 }
 
 .tokenSubmit:hover:not(:disabled) {
