@@ -2,7 +2,7 @@ import { checkContent } from '../moderation.js';
 import { getDB, getLobby, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
 import { getAgentRuntime, sanitizeTags } from '../lib/request-utils.js';
-import { requireJson, withRateLimit } from '../lib/validation.js';
+import { requireJson, sanitizeString, withRateLimit } from '../lib/validation.js';
 import {
   MAX_STATUS_LENGTH,
   MAX_FRAMEWORK_LENGTH,
@@ -39,7 +39,7 @@ export async function authenticate(request, env) {
   }
   if (!token) return null;
 
-  let userId = await env.AUTH_KV.get(`token:${token}`);
+  const userId = await env.AUTH_KV.get(`token:${token}`);
   if (!userId) return null;
 
   const db = getDB(env);
@@ -59,11 +59,17 @@ export async function authenticate(request, env) {
 
 export async function handleGetWsTicket(user, env) {
   const db = getDB(env);
-  return withRateLimit(db, `ws-ticket:${user.id}`, RATE_LIMIT_WS_TICKETS, 'Ticket request limit reached. Try again later.', async () => {
-    const ticket = `tk_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
-    await env.AUTH_KV.put(`ticket:${ticket}`, user.id, { expirationTtl: 30 });
-    return json({ ticket });
-  });
+  return withRateLimit(
+    db,
+    `ws-ticket:${user.id}`,
+    RATE_LIMIT_WS_TICKETS,
+    'Ticket request limit reached. Try again later.',
+    async () => {
+      const ticket = `tk_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
+      await env.AUTH_KV.put(`ticket:${ticket}`, user.id, { expirationTtl: 30 });
+      return json({ ticket });
+    },
+  );
 }
 
 export async function handleUnlinkGithub(user, env) {
@@ -145,7 +151,7 @@ export async function handleUpdateAgentProfile(request, user, env) {
   if (parseErr) return parseErr;
 
   const profile = {
-    framework: typeof body.framework === 'string' ? body.framework.slice(0, MAX_FRAMEWORK_LENGTH) : null,
+    framework: sanitizeString(body.framework, MAX_FRAMEWORK_LENGTH),
     languages: sanitizeTags(body.languages),
     frameworks: sanitizeTags(body.frameworks),
     tools: sanitizeTags(body.tools),
@@ -202,14 +208,17 @@ export async function handleDashboardSummary(user, env) {
           },
         };
       } catch (err) {
-        console.error(`[chinwag] Failed to build dashboard summary for team ${teamEntry.team_id}:`, err);
+        console.error(
+          `[chinwag] Failed to build dashboard summary for team ${teamEntry.team_id}:`,
+          err,
+        );
         return {
           ok: false,
           team_id: teamEntry.team_id,
           team_name: teamEntry.team_name,
         };
       }
-    })
+    }),
   );
 
   const loadedTeams = [];
@@ -218,10 +227,11 @@ export async function handleDashboardSummary(user, env) {
   for (const result of results) {
     if (result.status !== 'fulfilled') continue;
     if (result.value?.ok) loadedTeams.push(result.value.team);
-    else if (result.value) failedTeams.push({
-      team_id: result.value.team_id,
-      team_name: result.value.team_name,
-    });
+    else if (result.value)
+      failedTeams.push({
+        team_id: result.value.team_id,
+        team_name: result.value.team_name,
+      });
   }
 
   const response = {
@@ -232,9 +242,10 @@ export async function handleDashboardSummary(user, env) {
   };
 
   if (loadedTeams.length === 0 && failedTeams.length > 0) {
-    const error = failedTeams.length === 1
-      ? 'Project summary is temporarily unavailable.'
-      : 'Project summaries are temporarily unavailable.';
+    const error =
+      failedTeams.length === 1
+        ? 'Project summary is temporarily unavailable.'
+        : 'Project summaries are temporarily unavailable.';
     return json({ ...response, error }, 503);
   }
 
@@ -247,7 +258,7 @@ export async function handleChatUpgrade(request, user, env) {
     const secsLeft = Math.ceil((CHAT_COOLDOWN_MS - accountAge) / 1000);
     return json(
       { error: `New accounts must wait before joining chat. ${secsLeft}s remaining.` },
-      429
+      429,
     );
   }
 
@@ -262,40 +273,53 @@ export async function handleChatUpgrade(request, user, env) {
   roomUrl.searchParams.set('color', user.color);
   roomUrl.searchParams.set('roomId', roomId);
 
-  return roomStub.fetch(new Request(roomUrl.toString(), {
-    headers: {
-      'X-Chinwag-Verified': '1',
-      Upgrade: request.headers.get('Upgrade'),
-      Connection: request.headers.get('Connection'),
-      'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
-      'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
-      'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
-    },
-  }));
+  return roomStub.fetch(
+    new Request(roomUrl.toString(), {
+      headers: {
+        'X-Chinwag-Verified': '1',
+        Upgrade: request.headers.get('Upgrade'),
+        Connection: request.headers.get('Connection'),
+        'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
+        'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
+        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
+      },
+    }),
+  );
 }
 
 export async function handleCreateTeam(request, user, env) {
   let name = null;
   try {
     const body = await request.json();
-    name = typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
-  } catch {}
+    name = sanitizeString(body.name, MAX_NAME_LENGTH);
+  } catch {
+    /* body is optional */
+  }
 
   const db = getDB(env);
 
-  return withRateLimit(db, `team:${user.id}`, RATE_LIMIT_TEAMS, 'Team creation limit reached. Try again tomorrow.', async () => {
-    const runtime = getAgentRuntime(request, user);
-    const agentId = runtime.agentId;
-    const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
-    const team = getTeam(env, teamId);
-    await team.join(agentId, user.id, user.handle, runtime);
+  return withRateLimit(
+    db,
+    `team:${user.id}`,
+    RATE_LIMIT_TEAMS,
+    'Team creation limit reached. Try again tomorrow.',
+    async () => {
+      const runtime = getAgentRuntime(request, user);
+      const agentId = runtime.agentId;
+      const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
+      const team = getTeam(env, teamId);
+      await team.join(agentId, user.id, user.handle, runtime);
 
-    try {
-      await db.addUserTeam(user.id, teamId, name);
-    } catch (err) {
-      console.error(`[chinwag] Failed to record created team ${teamId} for user ${user.id}:`, err);
-    }
+      try {
+        await db.addUserTeam(user.id, teamId, name);
+      } catch (err) {
+        console.error(
+          `[chinwag] Failed to record created team ${teamId} for user ${user.id}:`,
+          err,
+        );
+      }
 
-    return json({ team_id: teamId }, 201);
-  });
+      return json({ team_id: teamId }, 201);
+    },
+  );
 }

@@ -73,6 +73,19 @@ export default [
     },
   },
 
+  // Web package: browser globals
+  {
+    files: ['packages/web/**/*.js', 'packages/web/**/*.jsx'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        localStorage: 'readonly',
+        location: 'readonly',
+      },
+    },
+  },
+
   // MCP package: no console.log (breaks stdio protocol)
   {
     files: ['packages/mcp/**/*.js'],

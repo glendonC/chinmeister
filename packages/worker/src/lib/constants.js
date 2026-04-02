@@ -77,5 +77,6 @@ export const HEARTBEAT_BROADCAST_DEBOUNCE_MS = 3000;
 export const MAX_DASHBOARD_TEAMS = 25;
 export const MEMORY_SEARCH_DEFAULT_LIMIT = 20;
 export const MEMORY_SEARCH_MAX_LIMIT = 50;
+export const MEMORY_SEARCH_MAX_TAGS = 10;
 export const HISTORY_DEFAULT_DAYS = 7;
 export const HISTORY_MAX_DAYS = 30;

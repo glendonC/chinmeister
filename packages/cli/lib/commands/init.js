@@ -86,10 +86,14 @@ export async function runInit() {
       teamName = data.name || teamId;
       teamVerb = 'joined';
     } catch (err) {
-      const hint = err.status === 404 ? 'Team not found — the .chinwag file may be stale. Delete it and re-run init.'
-        : err.status === 403 ? 'Access denied. Ask a team member to verify your access.'
-        : err.status >= 500 ? 'Server error. Try again in a moment.'
-        : `Check your connection and try again.`;
+      const hint =
+        err.status === 404
+          ? 'Team not found — the .chinwag file may be stale. Delete it and re-run init.'
+          : err.status === 403
+            ? 'Access denied. Ask a team member to verify your access.'
+            : err.status >= 500
+              ? 'Server error. Try again in a moment.'
+              : `Check your connection and try again.`;
       console.log(`  ${chalk.red('✖')} Failed to join team: ${err.message}`);
       console.log(`    ${chalk.dim(hint)}`);
       console.log('');
@@ -98,16 +102,23 @@ export async function runInit() {
   } else {
     try {
       const projectName = basename(cwd);
+      // POST /teams creates the team and joins the creator in one step.
+      // Write the .chinwag file only after creation succeeds — never before.
       const result = await client.post('/teams', { name: projectName });
       teamId = result.team_id;
-      await client.post(`/teams/${teamId}/join`, { name: projectName });
-      writeFileSync(chinwagFile, JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n');
+      writeFileSync(
+        chinwagFile,
+        JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n',
+      );
       teamName = projectName;
       teamVerb = 'created';
     } catch (err) {
-      const hint = err.status === 429 ? 'Rate limit reached. Try again tomorrow.'
-        : err.status >= 500 ? 'Server error. Try again in a moment.'
-        : 'Check your connection and try again.';
+      const hint =
+        err.status === 429
+          ? 'Rate limit reached. Try again tomorrow.'
+          : err.status >= 500
+            ? 'Server error. Try again in a moment.'
+            : 'Check your connection and try again.';
       console.log(`  ${chalk.red('✖')} Failed to create team: ${err.message}`);
       console.log(`    ${chalk.dim(hint)}`);
       console.log('');
@@ -134,13 +145,15 @@ export async function runInit() {
 
   if (configured.length > 0) {
     console.log(`  ${ok} Configured ${chalk.bold(configured.length)} tools`);
-    const maxName = Math.max(...configured.map(c => c.name.length));
+    const maxName = Math.max(...configured.map((c) => c.name.length));
     for (const { name, detail } of configured) {
       console.log(`      ${bullet} ${name.padEnd(maxName + 1)} ${detail}`);
     }
   } else {
     console.log('');
-    console.log(`  ${dim('No tools detected.')} Run ${chalk.cyan('npx chinwag add --list')} to see available tools.`);
+    console.log(
+      `  ${dim('No tools detected.')} Run ${chalk.cyan('npx chinwag add --list')} to see available tools.`,
+    );
   }
 
   // Next steps

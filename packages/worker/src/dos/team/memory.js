@@ -2,28 +2,39 @@
 // Each function takes `sql` as the first parameter.
 
 import { normalizeRuntimeMetadata } from './runtime.js';
+import { safeParseJSON } from '../../lib/text-utils.js';
 import { MEMORY_MAX_COUNT } from '../../lib/constants.js';
 
 // Escape LIKE wildcards so user-supplied text is matched literally
 function escapeLike(s) {
-  return s.replace(/[%_]/g, ch => `\\${ch}`);
+  return s.replace(/[%_]/g, (ch) => `\\${ch}`);
 }
 
 export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTool, recordMetric) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
 
   // Inherit model from active session (session is the source of truth for model)
-  const sessionRow = sql.exec(
-    'SELECT agent_model FROM sessions WHERE agent_id = ? AND ended_at IS NULL LIMIT 1',
-    resolvedAgentId
-  ).toArray();
+  const sessionRow = sql
+    .exec(
+      'SELECT agent_model FROM sessions WHERE agent_id = ? AND ended_at IS NULL LIMIT 1',
+      resolvedAgentId,
+    )
+    .toArray();
   const model = sessionRow[0]?.agent_model || runtime.model || null;
 
   const id = crypto.randomUUID();
   sql.exec(
     `INSERT INTO memories (id, text, tags, source_agent, source_handle, source_tool, source_host_tool, source_agent_surface, source_model, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    id, text, JSON.stringify(tags || []), resolvedAgentId, handle || 'unknown', runtime.tool, runtime.hostTool, runtime.agentSurface, model
+    id,
+    text,
+    JSON.stringify(tags || []),
+    resolvedAgentId,
+    handle || 'unknown',
+    runtime.tool,
+    runtime.hostTool,
+    runtime.agentSurface,
+    model,
   );
 
   // Prune oldest beyond storage cap
@@ -31,14 +42,14 @@ export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTo
     `DELETE FROM memories WHERE id NOT IN (
       SELECT id FROM memories ORDER BY updated_at DESC, created_at DESC LIMIT ?
     )`,
-    MEMORY_MAX_COUNT
+    MEMORY_MAX_COUNT,
   );
 
   // Record in active session
   sql.exec(
     `UPDATE sessions SET memories_saved = memories_saved + 1
      WHERE agent_id = ? AND ended_at IS NULL`,
-    resolvedAgentId
+    resolvedAgentId,
   );
   recordMetric('memories_saved');
 
@@ -69,9 +80,8 @@ export function searchMemories(sql, query, tags, limit = 20) {
 
   const rows = sql.exec(sqlStr, ...params).toArray();
   return {
-    memories: rows.map(m => {
-      let tags = [];
-      try { tags = JSON.parse(m.tags || '[]'); } catch {}
+    memories: rows.map((m) => {
+      const tags = safeParseJSON(m.tags, [], 'memory.tags');
       return { ...m, tags };
     }),
   };
@@ -84,8 +94,14 @@ export function updateMemory(sql, resolvedAgentId, memoryId, text, tags) {
   // Any team member can update — memories are team knowledge
   const sets = [];
   const params = [];
-  if (text !== undefined) { sets.push('text = ?'); params.push(typeof text === 'string' ? text.trim() : String(text)); }
-  if (tags !== undefined) { sets.push('tags = ?'); params.push(JSON.stringify(tags)); }
+  if (text !== undefined) {
+    sets.push('text = ?');
+    params.push(typeof text === 'string' ? text.trim() : String(text));
+  }
+  if (tags !== undefined) {
+    sets.push('tags = ?');
+    params.push(JSON.stringify(tags));
+  }
   sets.push("updated_at = datetime('now')");
   params.push(memoryId);
 

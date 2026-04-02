@@ -4,6 +4,7 @@ import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
 import { applyDelta } from '../../../../shared/dashboard-ws.js';
+import { dashboardSummarySchema, teamContextSchema, validateResponse } from '../apiSchemas.js';
 
 const POLL_MS = 5000;
 const SLOW_POLL_MS = 30000;
@@ -31,7 +32,57 @@ const pollingStore = createStore((set, get) => ({
   lastUpdate: null,
 }));
 
-/** Single poll cycle. Checks abort signal to bail early on team switches. */
+/** Poll the cross-project overview (no active team selected). */
+async function pollOverview(signal, token) {
+  pollingStore.setState((state) => ({
+    contextData: null,
+    contextTeamId: null,
+    contextStatus: 'idle',
+    dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
+  }));
+  const raw = await api('GET', '/me/dashboard', null, token);
+  if (signal?.aborted) return;
+  const data = validateResponse(dashboardSummarySchema, raw, 'dashboard');
+  if (data.failed_teams?.length > 0) {
+    await teamActions.loadTeams();
+  }
+  if (teamActions.getState().activeTeamId !== null) return;
+  pollingStore.setState({
+    dashboardData: data,
+    dashboardStatus: 'ready',
+    contextData: null,
+    contextStatus: 'idle',
+    contextTeamId: null,
+  });
+}
+
+/** Poll a single project's team context. */
+async function pollProject(signal, token, teamId) {
+  pollingStore.setState((state) => {
+    const sameTeam = state.contextTeamId === teamId;
+    return {
+      dashboardData: null,
+      dashboardStatus: 'idle',
+      contextData: sameTeam ? state.contextData : null,
+      contextStatus: sameTeam && state.contextData ? state.contextStatus : 'loading',
+      contextTeamId: teamId,
+    };
+  });
+  await teamActions.ensureJoined(teamId);
+  if (signal?.aborted) return;
+  const raw = await api('GET', `/teams/${teamId}/context`, null, token);
+  if (signal?.aborted || teamActions.getState().activeTeamId !== teamId) return;
+  const data = validateResponse(teamContextSchema, raw, 'context');
+  pollingStore.setState({
+    contextData: data,
+    contextStatus: 'ready',
+    contextTeamId: teamId,
+    dashboardData: null,
+    dashboardStatus: 'idle',
+  });
+}
+
+/** Single poll cycle. Routes to overview or project poller based on active team. */
 async function poll() {
   const signal = _internal.abortController?.signal;
   const snapshotTeamId = teamActions.getState().activeTeamId;
@@ -40,47 +91,9 @@ async function poll() {
 
   try {
     if (snapshotTeamId === null) {
-      pollingStore.setState((state) => ({
-        contextData: null,
-        contextTeamId: null,
-        contextStatus: 'idle',
-        dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
-      }));
-      const data = await api('GET', '/me/dashboard', null, token);
-      if (signal?.aborted) return;
-      if (data.failed_teams?.length > 0) {
-        await teamActions.loadTeams();
-      }
-      if (teamActions.getState().activeTeamId !== null) return;
-      pollingStore.setState({
-        dashboardData: data,
-        dashboardStatus: 'ready',
-        contextData: null,
-        contextStatus: 'idle',
-        contextTeamId: null,
-      });
+      await pollOverview(signal, token);
     } else {
-      pollingStore.setState((state) => {
-        const sameTeam = state.contextTeamId === snapshotTeamId;
-        return {
-          dashboardData: null,
-          dashboardStatus: 'idle',
-          contextData: sameTeam ? state.contextData : null,
-          contextStatus: sameTeam && state.contextData ? state.contextStatus : 'loading',
-          contextTeamId: snapshotTeamId,
-        };
-      });
-      await teamActions.ensureJoined(snapshotTeamId);
-      if (signal?.aborted) return;
-      const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token);
-      if (signal?.aborted || teamActions.getState().activeTeamId !== snapshotTeamId) return;
-      pollingStore.setState({
-        contextData: data,
-        contextStatus: 'ready',
-        contextTeamId: snapshotTeamId,
-        dashboardData: null,
-        dashboardStatus: 'idle',
-      });
+      await pollProject(signal, token, snapshotTeamId);
     }
 
     pollingStore.setState({ pollError: null, pollErrorData: null, lastUpdate: new Date() });
@@ -138,9 +151,16 @@ function restartPolling() {
 
 /** Close any active WebSocket and its reconciliation timer. */
 function closeWebSocket() {
-  if (_internal.reconcileTimer) { clearInterval(_internal.reconcileTimer); _internal.reconcileTimer = null; }
+  if (_internal.reconcileTimer) {
+    clearInterval(_internal.reconcileTimer);
+    _internal.reconcileTimer = null;
+  }
   if (_internal.activeWs) {
-    try { _internal.activeWs.close(); } catch {}
+    try {
+      _internal.activeWs.close();
+    } catch {
+      /* ignore close errors */
+    }
     _internal.activeWs = null;
   }
 }
@@ -173,10 +193,19 @@ async function connectTeamWebSocket(teamId) {
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      if (teamActions.getState().activeTeamId !== teamId) { ws.close(); return; }
+      if (teamActions.getState().activeTeamId !== teamId) {
+        ws.close();
+        return;
+      }
       // WebSocket connected — stop polling, start reconciliation
-      if (_internal.pollTimer) { clearInterval(_internal.pollTimer); _internal.pollTimer = null; }
-      if (_internal.reconcileTimer) { clearInterval(_internal.reconcileTimer); _internal.reconcileTimer = null; }
+      if (_internal.pollTimer) {
+        clearInterval(_internal.pollTimer);
+        _internal.pollTimer = null;
+      }
+      if (_internal.reconcileTimer) {
+        clearInterval(_internal.reconcileTimer);
+        _internal.reconcileTimer = null;
+      }
       _internal.reconcileTimer = setInterval(poll, RECONCILE_MS);
     };
 
@@ -186,7 +215,7 @@ async function connectTeamWebSocket(teamId) {
         const event = JSON.parse(evt.data);
         if (event.type === 'context') {
           pollingStore.setState({
-            contextData: event.data,
+            contextData: validateResponse(teamContextSchema, event.data, 'ws-context'),
             contextStatus: 'ready',
             contextTeamId: teamId,
             pollError: null,
@@ -202,19 +231,26 @@ async function connectTeamWebSocket(teamId) {
             };
           });
         }
-      } catch (e) { console.warn('[chinwag] Malformed WS event:', e.message); }
+      } catch (e) {
+        console.warn('[chinwag] Malformed WS event:', e.message);
+      }
     };
 
     ws.onclose = () => {
       _internal.activeWs = null;
-      if (_internal.reconcileTimer) { clearInterval(_internal.reconcileTimer); _internal.reconcileTimer = null; }
+      if (_internal.reconcileTimer) {
+        clearInterval(_internal.reconcileTimer);
+        _internal.reconcileTimer = null;
+      }
       // Fall back to polling if we're still on this team
       if (teamActions.getState().activeTeamId === teamId) {
         restartPolling();
       }
     };
 
-    ws.onerror = () => { /* onclose fires after */ };
+    ws.onerror = () => {
+      /* onclose fires after */
+    };
 
     _internal.activeWs = ws;
   } catch {

@@ -96,7 +96,8 @@ describe('polling store', () => {
 
   it('clears the inactive data branch when switching modes', async () => {
     const teamState = { activeTeamId: null };
-    const apiMock = vi.fn()
+    const apiMock = vi
+      .fn()
       .mockResolvedValueOnce({ teams: [{ team_id: 't_one' }] })
       .mockResolvedValueOnce({ members: [{ handle: 'alice' }] });
     const ensureJoinedMock = vi.fn().mockResolvedValue({ ok: true });
@@ -108,18 +109,21 @@ describe('polling store', () => {
 
     forceRefresh();
     await flushPromises();
-    expect(pollingActions.getState().dashboardData).toEqual({ teams: [{ team_id: 't_one' }] });
+    expect(pollingActions.getState().dashboardData).toMatchObject({
+      teams: [{ team_id: 't_one' }],
+    });
 
     teamState.activeTeamId = 't_active';
     forceRefresh();
     await flushPromises();
 
     expect(pollingActions.getState().dashboardData).toBeNull();
-    expect(pollingActions.getState().contextData).toEqual({ members: [{ handle: 'alice' }] });
+    expect(pollingActions.getState().contextData).toMatchObject({ members: [{ handle: 'alice' }] });
   });
 
   it('keeps the last overview snapshot when refresh fails', async () => {
-    const apiMock = vi.fn()
+    const apiMock = vi
+      .fn()
       .mockResolvedValueOnce({ teams: [{ team_id: 't_one' }] })
       .mockRejectedValueOnce(new Error('HTTP 500 (server error)'));
     const { forceRefresh, pollingActions } = await loadPollingModule({ apiMock });

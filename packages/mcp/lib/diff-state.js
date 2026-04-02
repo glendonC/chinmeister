@@ -15,8 +15,8 @@ export function diffState(prev, curr, stucknessAlerted) {
 
   const prevKeys = new Set(prev.members?.map(agentKey) || []);
   const currKeys = new Set(curr.members?.map(agentKey) || []);
-  const prevByKey = new Map((prev.members || []).map(m => [agentKey(m), m]));
-  const currByKey = new Map((curr.members || []).map(m => [agentKey(m), m]));
+  const prevByKey = new Map((prev.members || []).map((m) => [agentKey(m), m]));
+  const currByKey = new Map((curr.members || []).map((m) => [agentKey(m), m]));
 
   // New agents joined
   for (const key of currKeys) {
@@ -44,7 +44,7 @@ export function diffState(prev, curr, stucknessAlerted) {
 
     const prevFiles = new Set(prevMember.activity?.files || []);
     const currFiles = currMember.activity?.files || [];
-    const newFiles = currFiles.filter(f => !prevFiles.has(f));
+    const newFiles = currFiles.filter((f) => !prevFiles.has(f));
 
     if (newFiles.length > 0) {
       events.push(`${formatAgentLabel(currMember)} started editing ${newFiles.join(', ')}`);
@@ -54,7 +54,7 @@ export function diffState(prev, curr, stucknessAlerted) {
   // Conflict detection — only emit NEW conflicts (not in prev state)
   const prevConflictFiles = new Set();
   const prevFileOwners = new Map();
-  for (const m of (prev.members || [])) {
+  for (const m of prev.members || []) {
     if (m.status !== 'active' || !m.activity?.files) continue;
     for (const f of m.activity.files) {
       if (!prevFileOwners.has(f)) prevFileOwners.set(f, []);
@@ -66,7 +66,7 @@ export function diffState(prev, curr, stucknessAlerted) {
   }
 
   const currFileOwners = new Map();
-  for (const m of (curr.members || [])) {
+  for (const m of curr.members || []) {
     if (m.status !== 'active' || !m.activity?.files) continue;
     for (const f of m.activity.files) {
       if (!currFileOwners.has(f)) currFileOwners.set(f, []);
@@ -94,11 +94,14 @@ export function diffState(prev, curr, stucknessAlerted) {
     }
 
     if (!stucknessAlerted.has(key)) {
-      const minutesOnSameActivity = m.minutes_since_update != null
-        ? m.minutes_since_update
-        : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
+      const minutesOnSameActivity =
+        m.minutes_since_update != null
+          ? m.minutes_since_update
+          : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
       if (minutesOnSameActivity > STUCKNESS_THRESHOLD_MINUTES) {
-        events.push(`Agent ${formatAgentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min — may be stuck`);
+        events.push(
+          `Agent ${formatAgentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min — may be stuck`,
+        );
         stucknessAlerted.set(key, activityFingerprint);
       }
     }
@@ -112,8 +115,8 @@ export function diffState(prev, curr, stucknessAlerted) {
   }
 
   // New memories — compare by id (preferred) or text
-  const prevMemKeys = new Set((prev.memories || []).map(m => m.id || m.text));
-  for (const mem of (curr.memories || [])) {
+  const prevMemKeys = new Set((prev.memories || []).map((m) => m.id || m.text));
+  for (const mem of curr.memories || []) {
     const key = mem.id || mem.text;
     if (!prevMemKeys.has(key)) {
       const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
@@ -122,8 +125,8 @@ export function diffState(prev, curr, stucknessAlerted) {
   }
 
   // Lock changes — new locks and released locks
-  const prevLocks = new Map((prev.locks || []).map(l => [l.file_path, l]));
-  const currLocks = new Map((curr.locks || []).map(l => [l.file_path, l]));
+  const prevLocks = new Map((prev.locks || []).map((l) => [l.file_path, l]));
+  const currLocks = new Map((curr.locks || []).map((l) => [l.file_path, l]));
   for (const [file, lock] of currLocks) {
     if (!prevLocks.has(file)) {
       events.push(`${formatWho(lock.owner_handle, lock.tool)} locked ${file}`);
@@ -135,11 +138,13 @@ export function diffState(prev, curr, stucknessAlerted) {
     }
   }
 
-  // New messages
-  const prevMsgIds = new Set((prev.messages || []).map(m => m.created_at + m.from_handle));
-  for (const msg of (curr.messages || [])) {
-    const key = msg.created_at + msg.from_handle;
-    if (!prevMsgIds.has(key)) {
+  // New messages — use a delimited composite key to prevent collisions
+  // (e.g. timestamp "2024-01-01T10:30Z" + handle "alice" must not collide
+  // with a different timestamp/handle pair that concatenates identically).
+  const msgKey = (m) => `${m.created_at}\0${m.from_handle}`;
+  const prevMsgIds = new Set((prev.messages || []).map(msgKey));
+  for (const msg of curr.messages || []) {
+    if (!prevMsgIds.has(msgKey(msg))) {
       events.push(`Message from ${formatWho(msg.from_handle, msg.from_tool)}: ${msg.text}`);
     }
   }

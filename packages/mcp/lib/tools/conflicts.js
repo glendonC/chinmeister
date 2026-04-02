@@ -1,23 +1,18 @@
 // chinwag_check_conflicts tool handler.
 
 import * as z from 'zod/v4';
-import path from 'path';
 import { teamPreamble, getCachedContext } from '../context.js';
 import { noTeam, errorResult } from '../utils/responses.js';
 import { formatConflictsList } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
-
-function normalizePath(filePath) {
-  // Use path.posix.normalize for robust handling of ./, ../, and duplicate slashes,
-  // then strip any trailing slash. posix ensures consistent forward-slash behavior.
-  return path.posix.normalize(filePath).replace(/\/$/, '');
-}
+import { normalizePath } from '../utils/paths.js';
 
 export function registerConflictsTool(addTool, { team, state }) {
   addTool(
     'chinwag_check_conflicts',
     {
-      description: 'Check if any teammate agents are working on the same files you plan to edit. Call this BEFORE starting edits on shared code to avoid merge conflicts.',
+      description:
+        'Check if any teammate agents are working on the same files you plan to edit. Call this BEFORE starting edits on shared code to avoid merge conflicts.',
       inputSchema: z.object({
         files: z.array(z.string().max(500)).max(100).describe('File paths you plan to modify'),
       }),
@@ -41,7 +36,7 @@ export function registerConflictsTool(addTool, { team, state }) {
           const warnings = [];
           for (const m of cached.members) {
             if (m.status !== 'active' || !m.activity?.files) continue;
-            const overlap = m.activity.files.map(normalizePath).filter(f => myFiles.has(f));
+            const overlap = m.activity.files.map(normalizePath).filter((f) => myFiles.has(f));
             if (overlap.length > 0) {
               const who = formatWho(m.handle, m.tool);
               warnings.push(`\u26A0 ${who} was working on ${overlap.join(', ')} (cached)`);
@@ -49,19 +44,34 @@ export function registerConflictsTool(addTool, { team, state }) {
           }
           if (warnings.length > 0) {
             return {
-              content: [{ type: 'text', text: `[offline \u2014 cached overlap only]\n${warnings.join('\n')}\nDo not treat this as live clearance to edit.` }],
+              content: [
+                {
+                  type: 'text',
+                  text: `[offline \u2014 cached overlap only]\n${warnings.join('\n')}\nDo not treat this as live clearance to edit.`,
+                },
+              ],
               isError: true,
             };
           }
           return {
-            content: [{ type: 'text', text: '[offline \u2014 cached data only] No overlapping files were found in cache. Do not treat this as live clearance to edit.' }],
+            content: [
+              {
+                type: 'text',
+                text: '[offline \u2014 cached data only] No overlapping files were found in cache. Do not treat this as live clearance to edit.',
+              },
+            ],
           };
         }
         return {
-          content: [{ type: 'text', text: '[offline] Could not reach chinwag to check conflicts. Do not treat this as clearance to edit.' }],
+          content: [
+            {
+              type: 'text',
+              text: '[offline] Could not reach chinwag to check conflicts. Do not treat this as clearance to edit.',
+            },
+          ],
           isError: true,
         };
       }
-    }
+    },
   );
 }

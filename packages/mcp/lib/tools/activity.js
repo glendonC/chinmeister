@@ -4,23 +4,31 @@ import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
 import { setTerminalTitle } from '../../../shared/session-registry.js';
 import { noTeam, errorResult } from '../utils/responses.js';
+import { normalizeFiles } from '../utils/paths.js';
 
 export function registerActivityTool(addTool, { team, state }) {
   addTool(
     'chinwag_update_activity',
     {
-      description: 'Report what files you are currently working on. IMPORTANT: Call this immediately after chinwag_claim_files to broadcast your activity. Other agents across all tools will see this in their team context.',
+      description:
+        'Report what files you are currently working on. IMPORTANT: Call this immediately after chinwag_claim_files to broadcast your activity. Other agents across all tools will see this in their team context.',
       inputSchema: z.object({
         files: z.array(z.string().max(500)).max(100).describe('File paths being modified'),
-        summary: z.string().max(280).describe('Brief description, e.g. "Refactoring auth middleware"'),
+        summary: z
+          .string()
+          .max(280)
+          .describe('Brief description, e.g. "Refactoring auth middleware"'),
       }),
     },
     async ({ files, summary }) => {
       if (!state.teamId) return noTeam();
       try {
-        const result = await team.updateActivity(state.teamId, files, summary);
+        const result = await team.updateActivity(state.teamId, normalizeFiles(files), summary);
         if (result?.error) {
-          return { content: [{ type: 'text', text: `Failed to update activity: ${result.error}` }], isError: true };
+          return {
+            content: [{ type: 'text', text: `Failed to update activity: ${result.error}` }],
+            isError: true,
+          };
         }
         // Set terminal tab title to the agent's task — stable identity
         if (state.tty && summary) {
@@ -32,6 +40,6 @@ export function registerActivityTool(addTool, { team, state }) {
       } catch (err) {
         return errorResult(err);
       }
-    }
+    },
   );
 }

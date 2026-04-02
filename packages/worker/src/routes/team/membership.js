@@ -3,35 +3,43 @@
 import { getDB, getTeam } from '../../lib/env.js';
 import { json } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import { withRateLimit } from '../../lib/validation.js';
+import { sanitizeString, withRateLimit } from '../../lib/validation.js';
 import { RATE_LIMIT_JOINS, MAX_NAME_LENGTH } from '../../lib/constants.js';
 
 export async function handleTeamJoin(request, user, env, teamId) {
   let name = null;
   try {
     const body = await request.json();
-    name = typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
-  } catch {}
+    name = sanitizeString(body.name, MAX_NAME_LENGTH);
+  } catch {
+    /* body is optional */
+  }
 
   const db = getDB(env);
   const runtime = getAgentRuntime(request, user);
   const agentId = runtime.agentId;
   const team = getTeam(env, teamId);
 
-  return withRateLimit(db, `join:${user.id}`, RATE_LIMIT_JOINS, 'Team join limit reached (100/day). Try again tomorrow.', async () => {
-    const result = await team.join(agentId, user.id, user.handle, runtime);
-    if (result.error) return json({ error: result.error }, 400);
+  return withRateLimit(
+    db,
+    `join:${user.id}`,
+    RATE_LIMIT_JOINS,
+    'Team join limit reached (100/day). Try again tomorrow.',
+    async () => {
+      const result = await team.join(agentId, user.id, user.handle, runtime);
+      if (result.error) return json({ error: result.error }, 400);
 
-    let warning;
-    try {
-      await db.addUserTeam(user.id, teamId, name);
-    } catch (err) {
-      console.error(`[chinwag] Failed to sync joined team ${teamId} for user ${user.id}:`, err);
-      warning = 'Team joined successfully, but team list sync failed';
-    }
+      let warning;
+      try {
+        await db.addUserTeam(user.id, teamId, name);
+      } catch (err) {
+        console.error(`[chinwag] Failed to sync joined team ${teamId} for user ${user.id}:`, err);
+        warning = 'Team joined successfully, but team list sync failed';
+      }
 
-    return json(warning ? { ...result, warning } : result);
-  });
+      return json(warning ? { ...result, warning } : result);
+    },
+  );
 }
 
 export async function handleTeamLeave(request, user, env, teamId) {
@@ -84,14 +92,16 @@ export async function handleTeamWebSocket(request, user, env, teamId) {
   wsUrl.searchParams.delete('ticket');
   wsUrl.searchParams.set('agentId', agentId);
 
-  return team.fetch(new Request(wsUrl.toString(), {
-    headers: {
-      'X-Chinwag-Verified': '1',
-      Upgrade: request.headers.get('Upgrade'),
-      Connection: request.headers.get('Connection'),
-      'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
-      'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
-      'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
-    },
-  }));
+  return team.fetch(
+    new Request(wsUrl.toString(), {
+      headers: {
+        'X-Chinwag-Verified': '1',
+        Upgrade: request.headers.get('Upgrade'),
+        Connection: request.headers.get('Connection'),
+        'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
+        'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
+        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
+      },
+    }),
+  );
 }

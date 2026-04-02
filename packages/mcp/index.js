@@ -12,9 +12,14 @@ import { loadConfig, configExists } from './lib/config.js';
 import { api, getApiUrl } from './lib/api.js';
 import { scanEnvironment } from './lib/profile.js';
 import { findTeamFile, teamHandlers } from './lib/team.js';
-import { detectRuntimeIdentity, generateSessionAgentId, getConfiguredAgentId } from './lib/identity.js';
+import {
+  detectRuntimeIdentity,
+  generateSessionAgentId,
+  getConfiguredAgentId,
+} from './lib/identity.js';
 import { cleanupProcessSession, registerProcessSession } from './lib/lifecycle.js';
 import { registerTools, registerResources } from './lib/tools/index.js';
+import { createAgentState } from './lib/state.js';
 import { isProcessAlive, setTerminalTitle } from '../shared/session-registry.js';
 import { scanHostIntegrations, configureHostIntegration } from '../shared/integration-doctor.js';
 
@@ -28,7 +33,9 @@ const PARENT_WATCH_INTERVAL_MS = 5000;
 let PKG = { version: '0.0.0' };
 try {
   PKG = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
-} catch (err) { console.error('[chinwag]', err?.message || 'failed to read package.json'); }
+} catch (err) {
+  console.error('[chinwag]', err?.message || 'failed to read package.json');
+}
 
 async function main() {
   if (!configExists()) {
@@ -49,7 +56,9 @@ async function main() {
   const runtimeLabel = runtime.agentSurface
     ? `${runtime.hostTool}/${runtime.agentSurface}`
     : runtime.hostTool;
-  console.error(`[chinwag] Runtime: ${runtimeLabel} via ${runtime.transport}, Agent ID: ${agentId}`);
+  console.error(
+    `[chinwag] Runtime: ${runtimeLabel} via ${runtime.transport}, Agent ID: ${agentId}`,
+  );
 
   // Detect parent TTY and write session file for terminal identification
   let parentTty = null;
@@ -59,27 +68,34 @@ async function main() {
       console.error(`[chinwag] Terminal: ${parentTty}`);
       setTerminalTitle(parentTty, `chinwag · ${basename(process.cwd())}`);
     }
-  } catch (err) { console.error('[chinwag]', err?.message || 'session registration failed'); }
+  } catch (err) {
+    console.error('[chinwag]', err?.message || 'session registration failed');
+  }
 
   // Scan environment and register profile
   const profile = scanEnvironment();
   try {
     await client.put('/agent/profile', profile);
-    console.error(`[chinwag] Profile registered: ${[...profile.languages, ...profile.frameworks].join(', ') || 'no stack detected'}`);
+    console.error(
+      `[chinwag] Profile registered: ${[...profile.languages, ...profile.frameworks].join(', ') || 'no stack detected'}`,
+    );
   } catch (err) {
     console.error('[chinwag] Failed to register profile:', err.message);
   }
 
-  // Mutable state shared with tool handlers (fixes scoping — tools need to
-  // read/write these values, and they run in a different module's closures).
-  const state = {
+  // Guarded state container shared with tool handlers.
+  // All properties must be declared here — the Proxy rejects writes to
+  // undeclared keys, catching typos at the call site instead of silently.
+  const state = createAgentState({
     teamId: findTeamFile(),
-    ws: null,           // WebSocket to TeamDO (presence + activity channel)
+    ws: null, // WebSocket to TeamDO (presence + activity channel)
     sessionId: null,
     tty: parentTty,
     modelReported: false,
     lastActivity: Date.now(),
-  };
+    heartbeatInterval: null, // setInterval handle for team heartbeat (managed by team.js)
+    shuttingDown: false, // set once cleanup begins — prevents reconnect attempts
+  });
 
   const team = teamHandlers(client);
   const projectName = basename(process.cwd());
@@ -109,9 +125,14 @@ async function main() {
       let connectingPromise = null; // Promise-based guard: subsequent callers await the same attempt
 
       function scheduleReconnect() {
-        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-        if (state._shuttingDown) return;
-        console.error(`[chinwag] WebSocket disconnected, reconnecting in ${reconnectDelay / 1000}s`);
+        if (reconnectTimer) {
+          clearTimeout(reconnectTimer);
+          reconnectTimer = null;
+        }
+        if (state.shuttingDown) return;
+        console.error(
+          `[chinwag] WebSocket disconnected, reconnecting in ${reconnectDelay / 1000}s`,
+        );
         reconnectTimer = setTimeout(connectTeamWs, reconnectDelay);
         if (reconnectTimer.unref) reconnectTimer.unref();
         reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
@@ -121,57 +142,69 @@ async function main() {
         // If a connection attempt is already in progress, return the existing promise
         // so callers await the same attempt instead of starting a new one.
         if (connectingPromise) return connectingPromise;
-        if (state._shuttingDown) return Promise.resolve();
+        if (state.shuttingDown) return Promise.resolve();
         reconnectTimer = null;
 
         connectingPromise = new Promise((resolve) => {
           // Fetch short-lived ticket, then open WS
-          client.post('/auth/ws-ticket').then(({ ticket }) => {
-            if (state._shuttingDown) { connectingPromise = null; resolve(); return; }
+          client
+            .post('/auth/ws-ticket')
+            .then(({ ticket }) => {
+              if (state.shuttingDown) {
+                connectingPromise = null;
+                resolve();
+                return;
+              }
 
-            const wsBase = getApiUrl().replace(/^http/, 'ws');
-            const wsUrl = `${wsBase}/teams/${state.teamId}/ws?agentId=${encodeURIComponent(agentId)}&ticket=${encodeURIComponent(ticket)}&role=agent`;
+              const wsBase = getApiUrl().replace(/^http/, 'ws');
+              const wsUrl = `${wsBase}/teams/${state.teamId}/ws?agentId=${encodeURIComponent(agentId)}&ticket=${encodeURIComponent(ticket)}&role=agent`;
 
-            const ws = new WebSocket(wsUrl);
+              const ws = new WebSocket(wsUrl);
 
-            ws.onopen = () => {
-              connectingPromise = null;
-              state.ws = ws;
-              reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
-              console.error('[chinwag] WebSocket connected (presence active)');
+              ws.onopen = () => {
+                connectingPromise = null;
+                state.ws = ws;
+                reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
+                console.error('[chinwag] WebSocket connected (presence active)');
 
-              // Ping to keep DB heartbeat fresh — only when no activity was sent recently
-              pingTimer = setInterval(() => {
-                if (Date.now() - lastWsSend > WS_PING_MS - 5000) {
-                  try {
-                    ws.send(JSON.stringify({ type: 'ping', lastToolUseAt: state.lastActivity }));
-                    lastWsSend = Date.now();
-                  } catch (err) { console.error('[chinwag]', err?.message || 'ws ping failed'); }
+                // Ping to keep DB heartbeat fresh — only when no activity was sent recently
+                pingTimer = setInterval(() => {
+                  if (Date.now() - lastWsSend > WS_PING_MS - 5000) {
+                    try {
+                      ws.send(JSON.stringify({ type: 'ping', lastToolUseAt: state.lastActivity }));
+                      lastWsSend = Date.now();
+                    } catch (err) {
+                      console.error('[chinwag]', err?.message || 'ws ping failed');
+                    }
+                  }
+                }, WS_PING_MS);
+                if (pingTimer.unref) pingTimer.unref();
+                resolve();
+              };
+
+              ws.onmessage = () => {}; // agent doesn't need broadcasts
+
+              ws.onclose = () => {
+                connectingPromise = null;
+                state.ws = null;
+                if (pingTimer) {
+                  clearInterval(pingTimer);
+                  pingTimer = null;
                 }
-              }, WS_PING_MS);
-              if (pingTimer.unref) pingTimer.unref();
-              resolve();
-            };
+                scheduleReconnect();
+                resolve();
+              };
 
-            ws.onmessage = () => {}; // agent doesn't need broadcasts
-
-            ws.onclose = () => {
+              ws.onerror = (err) => {
+                console.error('[chinwag] WebSocket error:', err?.message || 'unknown');
+              };
+            })
+            .catch((err) => {
               connectingPromise = null;
-              state.ws = null;
-              if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+              console.error('[chinwag]', err?.message || 'ws ticket fetch failed');
               scheduleReconnect();
               resolve();
-            };
-
-            ws.onerror = (err) => {
-              console.error('[chinwag] WebSocket error:', err?.message || 'unknown');
-            };
-          }).catch((err) => {
-            connectingPromise = null;
-            console.error('[chinwag]', err?.message || 'ws ticket fetch failed');
-            scheduleReconnect();
-            resolve();
-          });
+            });
         });
 
         return connectingPromise;
@@ -192,14 +225,20 @@ async function main() {
   const cleanup = () => {
     if (cleaning) return;
     cleaning = true;
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     if (parentWatch) {
       clearInterval(parentWatch);
       parentWatch = null;
     }
     const forceExit = setTimeout(() => process.exit(0), FORCE_EXIT_TIMEOUT_MS);
     forceExit.unref();
-    const done = () => { clearTimeout(forceExit); process.exit(0); };
+    const done = () => {
+      clearTimeout(forceExit);
+      process.exit(0);
+    };
     cleanupProcessSession(agentId, state, team).finally(done);
   };
   process.on('SIGINT', cleanup);

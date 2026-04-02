@@ -4,6 +4,20 @@
 import { json } from './http.js';
 
 /**
+ * Sanitize an optional string value: type-check, truncate, trim, and convert
+ * empty results to null. Replaces the repeated inline pattern:
+ *   typeof x === 'string' ? x.slice(0, MAX).trim() || null : null
+ *
+ * @param {*} value - Value to sanitize
+ * @param {number} maxLength - Maximum allowed length
+ * @returns {string|null} - Sanitized string or null
+ */
+export function sanitizeString(value, maxLength) {
+  if (typeof value !== 'string') return null;
+  return value.slice(0, maxLength).trim() || null;
+}
+
+/**
  * Check for JSON parse errors from parseBody().
  * Returns a 400 JSON response if there's a parse error, null otherwise.
  */
@@ -25,7 +39,7 @@ export function validateFileArray(files, max) {
   if (files.length > max) {
     return `too many files (max ${max})`;
   }
-  if (files.some(f => typeof f !== 'string' || f.length > 500)) {
+  if (files.some((f) => typeof f !== 'string' || f.length > 500)) {
     return 'invalid file path';
   }
   return null;
@@ -47,10 +61,10 @@ export function validateTagsArray(tags, max) {
   if (tags.length > max) {
     return { error: `max ${max} tags` };
   }
-  if (tags.some(t => typeof t !== 'string' || t.length > 50)) {
+  if (tags.some((t) => typeof t !== 'string' || t.length > 50)) {
     return { error: 'each tag must be a string of 50 chars or less' };
   }
-  return { tags: tags.map(t => t.toLowerCase().trim()).filter(Boolean) };
+  return { tags: tags.map((t) => t.toLowerCase().trim()).filter(Boolean) };
 }
 
 /**

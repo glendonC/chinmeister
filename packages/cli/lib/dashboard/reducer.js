@@ -1,7 +1,10 @@
+// Dashboard state management — split into domain sub-reducers for testability.
+// Each sub-reducer handles its own action types and returns early on no-match,
+// so composition is a simple fall-through chain.
+
 // ── Initial state ──────────────────────────────────
 
-export const initialState = {
-  // View
+export const initialViewState = {
   view: 'home',
   mainFocus: 'input',
   selectedIdx: -1,
@@ -9,28 +12,37 @@ export const initialState = {
   showDiagnostics: false,
   heroInput: '',
   heroInputActive: false,
+};
 
-  // Compose
+export const initialComposeState = {
   composeMode: null,
   composeText: '',
   composeTarget: null,
   composeTargetLabel: null,
   commandSelectedIdx: 0,
+};
 
-  // Memory UI
+export const initialMemoryState = {
   memorySelectedIdx: -1,
   deleteConfirm: false,
   deleteMsg: null,
+};
 
-  // Notification
+export const initialNoticeState = {
   notice: null,
 };
 
-// ── Reducer ────────────────────────────────────────
+export const initialState = {
+  ...initialViewState,
+  ...initialComposeState,
+  ...initialMemoryState,
+  ...initialNoticeState,
+};
 
-export function dashboardReducer(state, action) {
+// ── View navigation ─────────────────────────────────
+
+export function viewReducer(state, action) {
   switch (action.type) {
-    // ── View navigation ──────────────────────────
     case 'NAVIGATE_TO_VIEW': {
       const next = { ...state, view: action.view };
       if (action.view === 'home') {
@@ -86,7 +98,11 @@ export function dashboardReducer(state, action) {
       return { ...state, showDiagnostics: !state.showDiagnostics };
     case 'CLAMP_SELECTION': {
       if (action.listLength === 0) {
-        return { ...state, selectedIdx: -1, mainFocus: state.mainFocus === 'agents' ? 'input' : state.mainFocus };
+        return {
+          ...state,
+          selectedIdx: -1,
+          mainFocus: state.mainFocus === 'agents' ? 'input' : state.mainFocus,
+        };
       }
       if (state.selectedIdx >= action.listLength) {
         return { ...state, selectedIdx: action.listLength - 1 };
@@ -100,8 +116,15 @@ export function dashboardReducer(state, action) {
       }
       return next;
     }
+    default:
+      return null; // not handled
+  }
+}
 
-    // ── Compose ──────────────────────────────────
+// ── Compose ─────────────────────────────────────────
+
+export function composeReducer(state, action) {
+  switch (action.type) {
     case 'BEGIN_COMMAND':
       return {
         ...state,
@@ -133,13 +156,23 @@ export function dashboardReducer(state, action) {
     case 'SET_COMPOSE_TEXT':
       return { ...state, composeText: action.text };
     case 'COMMAND_SELECT_DOWN':
-      return { ...state, commandSelectedIdx: Math.min(state.commandSelectedIdx + 1, action.maxIdx) };
+      return {
+        ...state,
+        commandSelectedIdx: Math.min(state.commandSelectedIdx + 1, action.maxIdx),
+      };
     case 'COMMAND_SELECT_UP':
       return { ...state, commandSelectedIdx: Math.max(state.commandSelectedIdx - 1, 0) };
     case 'RESET_COMMAND_SELECTION':
       return { ...state, commandSelectedIdx: 0 };
+    default:
+      return null;
+  }
+}
 
-    // ── Memory UI ────────────────────────────────
+// ── Memory UI ───────────────────────────────────────
+
+export function memoryReducer(state, action) {
+  switch (action.type) {
     case 'MEMORY_SELECT_DOWN':
       return {
         ...state,
@@ -164,8 +197,15 @@ export function dashboardReducer(state, action) {
       return { ...state, deleteConfirm: action.confirm };
     case 'SET_DELETE_MSG':
       return { ...state, deleteMsg: action.msg };
+    default:
+      return null;
+  }
+}
 
-    // ── Notification ─────────────────────────────
+// ── Notification ────────────────────────────────────
+
+export function noticeReducer(state, action) {
+  switch (action.type) {
     case 'FLASH':
       return { ...state, notice: { text: action.text, tone: action.tone } };
     case 'CLEAR_NOTICE':
@@ -173,8 +213,20 @@ export function dashboardReducer(state, action) {
         return { ...state, notice: null };
       }
       return state;
-
     default:
-      return state;
+      return null;
   }
+}
+
+// ── Root reducer ────────────────────────────────────
+// Delegates to each domain reducer in order; first match wins.
+
+const subReducers = [viewReducer, composeReducer, memoryReducer, noticeReducer];
+
+export function dashboardReducer(state, action) {
+  for (const reducer of subReducers) {
+    const result = reducer(state, action);
+    if (result !== null) return result;
+  }
+  return state;
 }

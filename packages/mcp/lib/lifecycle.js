@@ -53,20 +53,23 @@ export async function cleanupProcessSession(agentId, state, team, options = {}) 
   const deleteRecord = options.deleteRecord || deleteSessionRecord;
   const clearTimer = options.clearIntervalFn || clearInterval;
 
-  state._shuttingDown = true;
+  state.shuttingDown = true;
   deleteRecord(agentId, options.homeDir ? { homeDir: options.homeDir } : {});
   if (state.heartbeatInterval) clearTimer(state.heartbeatInterval);
-  if (state.ws) try { state.ws.close(); } catch (err) {
-    console.error('[chinwag] Failed to close WebSocket:', err.message);
-  }
+  if (state.ws)
+    try {
+      state.ws.close();
+    } catch (err) {
+      console.error('[chinwag] Failed to close WebSocket:', err.message);
+    }
 
   if (state.sessionId && state.teamId) {
-    await team.endSession(state.teamId, state.sessionId).catch(err => {
+    await team.endSession(state.teamId, state.sessionId).catch((err) => {
       console.error('[chinwag] Failed to end session:', err.message);
     });
   }
   if (state.teamId) {
-    await team.leaveTeam(state.teamId).catch(err => {
+    await team.leaveTeam(state.teamId).catch((err) => {
       console.error('[chinwag] Failed to leave team:', err.message);
     });
   }

@@ -4,12 +4,14 @@ import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
 import { noTeam, errorResult } from '../utils/responses.js';
 import { formatWho } from '../utils/formatting.js';
+import { normalizeFiles } from '../utils/paths.js';
 
 export function registerLockTools(addTool, { team, state }) {
   addTool(
     'chinwag_claim_files',
     {
-      description: 'Claim advisory locks on files you are about to edit. Other agents will be warned if they try to edit locked files. Locks auto-release when your session ends or you stop heartbeating.',
+      description:
+        'Claim advisory locks on files you are about to edit. Other agents will be warned if they try to edit locked files. Locks auto-release when your session ends or you stop heartbeating.',
       inputSchema: z.object({
         files: z.array(z.string().max(500)).max(20).describe('File paths to claim'),
       }),
@@ -17,9 +19,12 @@ export function registerLockTools(addTool, { team, state }) {
     async ({ files }) => {
       if (!state.teamId) return noTeam();
       try {
-        const result = await team.claimFiles(state.teamId, files);
+        const result = await team.claimFiles(state.teamId, normalizeFiles(files));
         if (result?.error) {
-          return { content: [{ type: 'text', text: `Failed to claim files: ${result.error}` }], isError: true };
+          return {
+            content: [{ type: 'text', text: `Failed to claim files: ${result.error}` }],
+            isError: true,
+          };
         }
         const preamble = await teamPreamble(team, state.teamId);
         const lines = [];
@@ -34,29 +39,40 @@ export function registerLockTools(addTool, { team, state }) {
       } catch (err) {
         return errorResult(err);
       }
-    }
+    },
   );
 
   addTool(
     'chinwag_release_files',
     {
-      description: 'Release advisory locks on files you previously claimed. Call this when you are done editing files so other agents can work on them.',
+      description:
+        'Release advisory locks on files you previously claimed. Call this when you are done editing files so other agents can work on them.',
       inputSchema: z.object({
-        files: z.array(z.string().max(500)).max(20).optional().describe('File paths to release (omit to release all your locks)'),
+        files: z
+          .array(z.string().max(500))
+          .max(20)
+          .optional()
+          .describe('File paths to release (omit to release all your locks)'),
       }),
     },
     async ({ files }) => {
       if (!state.teamId) return noTeam();
       try {
-        const result = await team.releaseFiles(state.teamId, files);
+        const result = await team.releaseFiles(
+          state.teamId,
+          files ? normalizeFiles(files) : undefined,
+        );
         if (result?.error) {
-          return { content: [{ type: 'text', text: `Failed to release files: ${result.error}` }], isError: true };
+          return {
+            content: [{ type: 'text', text: `Failed to release files: ${result.error}` }],
+            isError: true,
+          };
         }
         const msg = files ? `Released: ${files.join(', ')}` : 'All locks released.';
         return { content: [{ type: 'text', text: msg }] };
       } catch (err) {
         return errorResult(err);
       }
-    }
+    },
   );
 }
