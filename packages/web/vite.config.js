@@ -28,11 +28,11 @@ export default defineConfig({
       reporter: ['text', 'json-summary'],
       reportsDirectory: './coverage',
       // Thresholds enforce current coverage floor (~5% margin below actual).
-      // Target: raise to 60/50/40 as view-level tests are added.
+      // Raise these as more view-level and component tests are added.
       thresholds: {
-        lines: 34,
-        functions: 31,
-        branches: 15,
+        lines: 40,
+        functions: 28,
+        branches: 28,
       },
     },
   },

@@ -2,7 +2,11 @@
 // These are the two "wide" reads: getContext (full state for agents/dashboards)
 // and getSummary (lightweight counts for cross-project overview).
 
-import { HEARTBEAT_ACTIVE_WINDOW_S } from '../../lib/constants.js';
+import {
+  HEARTBEAT_ACTIVE_WINDOW_S,
+  CONTEXT_MEMBERS_LIMIT,
+  CONTEXT_LOCKS_LIMIT,
+} from '../../lib/constants.js';
 import { safeParseJSON } from '../../lib/text-utils.js';
 import { inferHostToolFromAgentId } from './runtime.js';
 
@@ -68,8 +72,11 @@ export function queryTeamContext(sql, connectedIds) {
               THEN 1 ELSE 0 END as heartbeat_active
      FROM members m
      LEFT JOIN activities a ON a.agent_id = m.agent_id
-     LEFT JOIN sessions s ON s.agent_id = m.agent_id AND s.ended_at IS NULL`,
+     LEFT JOIN sessions s ON s.agent_id = m.agent_id AND s.ended_at IS NULL
+     ORDER BY m.last_heartbeat DESC
+     LIMIT ?`,
       HEARTBEAT_ACTIVE_WINDOW_S,
+      CONTEXT_MEMBERS_LIMIT,
     )
     .toArray();
 
@@ -161,8 +168,11 @@ export function queryTeamContext(sql, connectedIds) {
             ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
      FROM locks l
      JOIN members m ON m.agent_id = l.agent_id
-     WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')`,
+     WHERE m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
+     ORDER BY l.claimed_at DESC
+     LIMIT ?`,
       HEARTBEAT_ACTIVE_WINDOW_S,
+      CONTEXT_LOCKS_LIMIT,
     )
     .toArray();
 

@@ -166,9 +166,9 @@ Good first contributions also include:
 
 ### Code style
 
-- **JavaScript** (ES modules, no TypeScript currently)
+- **JavaScript** (ES modules). Shared primitives (`packages/shared/`) are TypeScript.
 - **JSX** for CLI components (Ink uses React)
-- No linter configured yet; match the existing style:
+- ESLint and Prettier are configured. Run `npm run lint:fix` to auto-format. Match the existing style:
   - 2-space indentation
   - Single quotes for strings
   - `const` by default, `let` when reassignment is needed

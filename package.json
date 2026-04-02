@@ -5,7 +5,8 @@
   "workspaces": [
     "packages/cli",
     "packages/worker",
-    "packages/mcp"
+    "packages/mcp",
+    "packages/shared"
   ],
   "scripts": {
     "dev:cli": "npm run dev --workspace=packages/cli",

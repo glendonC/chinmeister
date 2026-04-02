@@ -26,7 +26,9 @@ export const HEARTBEAT_STALE_WINDOW_S = 300;
 
 // --- Retention ---
 export const SESSION_RETENTION_DAYS = 30;
-export const CONTEXT_CACHE_TTL_MS = 2000;
+export const CONTEXT_CACHE_TTL_MS = 5000;
+export const CONTEXT_MEMBERS_LIMIT = 100;
+export const CONTEXT_LOCKS_LIMIT = 100;
 export const MESSAGE_EXPIRY_HOURS = 1;
 
 // --- Capacity caps ---

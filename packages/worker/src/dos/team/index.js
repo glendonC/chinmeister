@@ -223,7 +223,6 @@ export class TeamDO extends DurableObject {
     'file',
     'lock_change',
     'status_change',
-    'heartbeat',
     'memory',
   ]);
 
