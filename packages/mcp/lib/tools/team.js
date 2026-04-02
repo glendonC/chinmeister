@@ -21,6 +21,7 @@ export function registerTeamTool(addTool, { team, state, profile }) {
         await team.joinTeam(team_id, basename(process.cwd()));
         state.teamId = team_id;
         state.sessionId = null;
+        state.modelReported = false;
         clearContextCache();
 
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);

@@ -50,7 +50,7 @@ export async function handleAdminDelete(request, env) {
   if (parseErr) return parseErr;
 
   const { ids, admin_key } = body;
-  if (admin_key !== env.EXA_API_KEY) return json({ error: 'Forbidden' }, 403);
+  if (!env.EXA_API_KEY || admin_key !== env.EXA_API_KEY) return json({ error: 'Forbidden' }, 403);
   if (!Array.isArray(ids) || ids.length === 0) return json({ error: 'ids array required' }, 400);
 
   const db = getDB(env);
@@ -70,7 +70,7 @@ export async function handleBatchEvaluate(request, env) {
   if (parseErr) return parseErr;
 
   const { tools, admin_key } = body;
-  if (admin_key !== env.EXA_API_KEY) return json({ error: 'Forbidden' }, 403);
+  if (!env.EXA_API_KEY || admin_key !== env.EXA_API_KEY) return json({ error: 'Forbidden' }, 403);
   if (!Array.isArray(tools) || tools.length === 0) return json({ error: 'tools array required' }, 400);
   if (tools.length > 50) return json({ error: 'max 50 tools per batch' }, 400);
 

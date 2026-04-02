@@ -25,6 +25,7 @@ const processes = new Map();
 let updateCallbacks = [];
 
 let nextId = 1;
+let exitCleanupRegistered = false;
 
 const MAX_OUTPUT_LINES = 200;
 const DEFAULT_COLS = 120;
@@ -163,6 +164,23 @@ export function spawnAgent(launch) {
 
   if (!toolId || !cmd || !task || !cwd) {
     throw new Error('spawnAgent requires toolId, cmd, task, and cwd');
+  }
+
+  // Register one-time exit handler to kill child processes on parent exit
+  if (!exitCleanupRegistered) {
+    exitCleanupRegistered = true;
+    const cleanup = () => {
+      for (const proc of processes.values()) {
+        if (proc.status !== 'running') continue;
+        try {
+          if (proc.pty) proc.pty.kill('SIGTERM');
+          else if (proc.pid) process.kill(proc.pid, 'SIGTERM');
+        } catch { /* already dead */ }
+      }
+    };
+    process.on('exit', cleanup);
+    process.on('SIGINT', () => { cleanup(); process.exit(130); });
+    process.on('SIGTERM', () => { cleanup(); process.exit(143); });
   }
 
   const id = nextId++;

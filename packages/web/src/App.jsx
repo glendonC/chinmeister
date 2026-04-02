@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Component } from 'react';
 import { useAuthStore, authActions } from './lib/stores/auth.js';
 import { useTeamStore, teamActions } from './lib/stores/teams.js';
-import { usePollingStore, startPolling, stopPolling, forceRefresh } from './lib/stores/polling.js';
+import { usePollingStore, startPolling, stopPolling, resetPollingState, forceRefresh } from './lib/stores/polling.js';
 import { formatRelativeTime } from './lib/relativeTime.js';
 
 import ConnectView from './views/ConnectView/ConnectView.jsx';
@@ -12,6 +12,35 @@ import ToolsView from './views/ToolsView/ToolsView.jsx';
 import Sidebar from './components/Sidebar/Sidebar.jsx';
 
 import styles from './App.module.css';
+
+class AppErrorBoundary extends Component {
+  state = { hasError: false };
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, info) {
+    console.error('[chinwag] Render error:', error, info.componentStack);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '2rem', textAlign: 'center', color: '#b0b0b0', fontFamily: 'system-ui' }}>
+          <p style={{ fontSize: '1.1rem' }}>Something went wrong.</p>
+          <button
+            onClick={() => this.setState({ hasError: false })}
+            style={{ marginTop: '1rem', padding: '0.5rem 1rem', cursor: 'pointer', background: '#2a2a2a', color: '#e0e0e0', border: '1px solid #444', borderRadius: '6px' }}
+          >
+            Try again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 export default function App() {
   const [bootState, setBootState] = useState('loading');
@@ -45,7 +74,7 @@ export default function App() {
 
   useEffect(() => {
     if (bootState === 'ready' && !isAuthenticated) {
-      stopPolling();
+      resetPollingState();
       setBootState('unauthenticated');
     } else if (bootState === 'unauthenticated' && isAuthenticated) {
       setBootState('ready');
@@ -134,10 +163,12 @@ export default function App() {
         )}
 
         <div className={styles.content}>
-          {activeView === 'overview' && <OverviewView />}
-          {activeView === 'project' && <ProjectView />}
-          {activeView === 'tools' && <ToolsView />}
-          {activeView === 'settings' && <SettingsView />}
+          <AppErrorBoundary>
+            {activeView === 'overview' && <OverviewView />}
+            {activeView === 'project' && <ProjectView />}
+            {activeView === 'tools' && <ToolsView />}
+            {activeView === 'settings' && <SettingsView />}
+          </AppErrorBoundary>
         </div>
       </div>
     </div>

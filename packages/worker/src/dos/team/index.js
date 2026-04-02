@@ -352,6 +352,48 @@ export class TeamDO extends DurableObject {
     );
   }
 
+  #getTelemetryBreakdown() {
+    const toolMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const tools_configured = toolMetrics.map(t => ({
+      tool: t.metric.replace('tool:', ''),
+      joins: t.count,
+    }));
+
+    const hostMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'host:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const hosts_configured = hostMetrics.map(t => ({
+      host_tool: t.metric.replace('host:', ''),
+      joins: t.count,
+    }));
+
+    const surfaceMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'surface:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const surfaces_seen = surfaceMetrics.map(t => ({
+      agent_surface: t.metric.replace('surface:', ''),
+      joins: t.count,
+    }));
+
+    const modelMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric LIKE 'model:%' ORDER BY count DESC LIMIT 10"
+    ).toArray();
+    const models_seen = modelMetrics.map(t => ({
+      model: t.metric.replace('model:', ''),
+      count: t.count,
+    }));
+
+    const keyMetrics = this.sql.exec(
+      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
+    ).toArray();
+    const usage = {};
+    for (const m of keyMetrics) usage[m.metric] = m.count;
+
+    return { tools_configured, hosts_configured, surfaces_seen, models_seen, usage };
+  }
+
   #findExactMember(agentId) {
     const rows = this.sql.exec(
       'SELECT agent_id, owner_id FROM members WHERE agent_id = ?',
@@ -591,55 +633,14 @@ export class TeamDO extends DurableObject {
       HEARTBEAT_ACTIVE_SECONDS
     ).toArray();
 
-    // Telemetry — tool usage breakdown + key metrics
-    const toolMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const tools_configured = toolMetrics.map(t => ({
-      tool: t.metric.replace('tool:', ''),
-      joins: t.count,
-    }));
-
-    const hostMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'host:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const hosts_configured = hostMetrics.map(t => ({
-      host_tool: t.metric.replace('host:', ''),
-      joins: t.count,
-    }));
-
-    const surfaceMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'surface:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const surfaces_seen = surfaceMetrics.map(t => ({
-      agent_surface: t.metric.replace('surface:', ''),
-      joins: t.count,
-    }));
-
-    const modelMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'model:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const models_seen = modelMetrics.map(t => ({
-      model: t.metric.replace('model:', ''),
-      count: t.count,
-    }));
-
-    const keyMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
-    ).toArray();
-    const usage = {};
-    for (const m of keyMetrics) usage[m.metric] = m.count;
+    const telemetry = this.#getTelemetryBreakdown();
 
     const teamContext = {
       members: memberList,
       conflicts,
       locks,
       memories,
-      tools_configured,
-      hosts_configured,
-      surfaces_seen,
-      models_seen,
-      usage,
+      ...telemetry,
       recentSessions: recentSessions.map(s => {
         const toolFromAgent = s.host_tool || inferHostToolFromAgentId(s.agent_id);
         return {
@@ -821,45 +822,6 @@ export class TeamDO extends DurableObject {
       "SELECT COUNT(*) as c FROM sessions WHERE started_at > datetime('now', '-24 hours')"
     ).toArray();
 
-    // Telemetry — tool usage breakdown
-    const toolMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'tool:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const tools_configured = toolMetrics.map(t => ({
-      tool: t.metric.replace('tool:', ''),
-      joins: t.count,
-    }));
-
-    const hostMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'host:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const hosts_configured = hostMetrics.map(t => ({
-      host_tool: t.metric.replace('host:', ''),
-      joins: t.count,
-    }));
-
-    const surfaceMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'surface:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const surfaces_seen = surfaceMetrics.map(t => ({
-      agent_surface: t.metric.replace('surface:', ''),
-      joins: t.count,
-    }));
-
-    const modelMetricsSummary = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric LIKE 'model:%' ORDER BY count DESC LIMIT 10"
-    ).toArray();
-    const models_seen = modelMetricsSummary.map(t => ({
-      model: t.metric.replace('model:', ''),
-      count: t.count,
-    }));
-
-    const keyMetrics = this.sql.exec(
-      "SELECT metric, count FROM telemetry WHERE metric NOT LIKE 'tool:%'"
-    ).toArray();
-    const usage = {};
-    for (const m of keyMetrics) usage[m.metric] = m.count;
-
     return {
       active_agents: active[0]?.c || 0,
       total_members: total[0]?.c || 0,
@@ -867,11 +829,7 @@ export class TeamDO extends DurableObject {
       memory_count: memoriesCount[0]?.c || 0,
       live_sessions: live[0]?.c || 0,
       recent_sessions_24h: recent[0]?.c || 0,
-      tools_configured,
-      hosts_configured,
-      surfaces_seen,
-      models_seen,
-      usage,
+      ...this.#getTelemetryBreakdown(),
     };
   }
 }

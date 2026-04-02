@@ -27,12 +27,12 @@ const pollingStore = createStore((set, get) => ({
 
 /** Single poll cycle. */
 async function poll() {
-  const { activeTeamId } = teamActions.getState();
+  const snapshotTeamId = teamActions.getState().activeTeamId;
   const { token } = authActions.getState();
   if (!token) return;
 
   try {
-    if (activeTeamId === null) {
+    if (snapshotTeamId === null) {
       pollingStore.setState((state) => ({
         contextData: null,
         contextTeamId: null,
@@ -53,22 +53,22 @@ async function poll() {
       });
     } else {
       pollingStore.setState((state) => {
-        const sameTeam = state.contextTeamId === activeTeamId;
+        const sameTeam = state.contextTeamId === snapshotTeamId;
         return {
           dashboardData: null,
           dashboardStatus: 'idle',
           contextData: sameTeam ? state.contextData : null,
           contextStatus: sameTeam && state.contextData ? state.contextStatus : 'loading',
-          contextTeamId: activeTeamId,
+          contextTeamId: snapshotTeamId,
         };
       });
-      await teamActions.ensureJoined(activeTeamId);
-      const data = await api('GET', `/teams/${activeTeamId}/context`, null, token);
-      if (teamActions.getState().activeTeamId !== activeTeamId) return;
+      await teamActions.ensureJoined(snapshotTeamId);
+      const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token);
+      if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
       pollingStore.setState({
         contextData: data,
         contextStatus: 'ready',
-        contextTeamId: activeTeamId,
+        contextTeamId: snapshotTeamId,
         dashboardData: null,
         dashboardStatus: 'idle',
       });
@@ -86,14 +86,14 @@ async function poll() {
       stopPolling();
       return;
     }
-    if (teamActions.getState().activeTeamId !== activeTeamId) return;
-    if (activeTeamId === null && err?.data?.failed_teams?.length > 0) {
+    if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
+    if (snapshotTeamId === null && err?.data?.failed_teams?.length > 0) {
       await teamActions.loadTeams();
     }
     consecutiveFailures++;
     const pollError = formatError(err);
     const pollErrorData = err?.data || null;
-    if (activeTeamId === null) {
+    if (snapshotTeamId === null) {
       pollingStore.setState((state) => ({
         pollError,
         pollErrorData,
@@ -104,14 +104,14 @@ async function poll() {
       }));
     } else {
       pollingStore.setState((state) => {
-        const hasSnapshot = state.contextTeamId === activeTeamId && !!state.contextData;
+        const hasSnapshot = state.contextTeamId === snapshotTeamId && !!state.contextData;
         return {
           pollError,
           pollErrorData,
           dashboardData: null,
           dashboardStatus: 'idle',
           contextStatus: hasSnapshot ? 'stale' : 'error',
-          contextTeamId: activeTeamId,
+          contextTeamId: snapshotTeamId,
         };
       });
     }
@@ -153,6 +153,9 @@ async function connectTeamWebSocket(teamId) {
     return; // polling continues as fallback
   }
 
+  // Team may have changed while waiting for ticket
+  if (teamActions.getState().activeTeamId !== teamId) return;
+
   const wsBase = getApiUrl().replace(/^http/, 'ws');
   const agentId = `web-dashboard:${token.slice(0, 8)}`;
   const wsUrl = `${wsBase}/teams/${teamId}/ws?agentId=${encodeURIComponent(agentId)}&ticket=${encodeURIComponent(ticket)}`;
@@ -190,7 +193,7 @@ async function connectTeamWebSocket(teamId) {
             };
           });
         }
-      } catch { /* malformed event */ }
+      } catch (e) { console.warn('[chinwag] Malformed WS event:', e.message); }
     };
 
     ws.onclose = () => {
@@ -245,6 +248,22 @@ export function stopPolling() {
     pollTimer = null;
   }
   closeWebSocket();
+}
+
+/** Reset all polling state (call on logout to prevent stale data on re-login). */
+export function resetPollingState() {
+  stopPolling();
+  consecutiveFailures = 0;
+  pollingStore.setState({
+    dashboardData: null,
+    dashboardStatus: 'idle',
+    contextData: null,
+    contextStatus: 'idle',
+    contextTeamId: null,
+    pollError: null,
+    pollErrorData: null,
+    lastUpdate: null,
+  });
 }
 
 // Pause polling when tab is hidden, resume when visible
