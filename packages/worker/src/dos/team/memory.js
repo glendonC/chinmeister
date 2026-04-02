@@ -5,6 +5,11 @@ import { normalizeRuntimeMetadata } from './runtime.js';
 
 const MEMORY_MAX_COUNT = 500;
 
+// Escape LIKE wildcards so user-supplied text is matched literally
+function escapeLike(s) {
+  return s.replace(/[%_]/g, ch => `\\${ch}`);
+}
+
 export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTool, recordMetric) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
 
@@ -47,14 +52,14 @@ export function searchMemories(sql, query, tags, limit = 20) {
   const params = [];
 
   if (query) {
-    conditions.push('text LIKE ?');
-    params.push(`%${query}%`);
+    conditions.push("text LIKE ? ESCAPE '\\'");
+    params.push(`%${escapeLike(query)}%`);
   }
   if (tags && tags.length > 0) {
     // OR filter: match memories containing ANY of the listed tags
-    const tagClauses = tags.map(() => "tags LIKE ?");
+    const tagClauses = tags.map(() => "tags LIKE ? ESCAPE '\\'");
     conditions.push(`(${tagClauses.join(' OR ')})`);
-    for (const tag of tags) params.push(`%"${tag}"%`);
+    for (const tag of tags) params.push(`%"${escapeLike(tag)}"%`);
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

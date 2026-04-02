@@ -13,20 +13,6 @@ export function requireJson(body) {
 }
 
 /**
- * Validate a required or optional string field.
- * Returns an error string if invalid, null if valid.
- */
-export function validateString(value, maxLen, fieldName) {
-  if (typeof value !== 'string' || !value.trim()) {
-    return `${fieldName} is required`;
-  }
-  if (value.length > maxLen) {
-    return `${fieldName} must be ${maxLen} characters or less`;
-  }
-  return null;
-}
-
-/**
  * Validate an array of file path strings.
  * Returns an error string if invalid, null if valid.
  * @param {*} files - The files value to validate

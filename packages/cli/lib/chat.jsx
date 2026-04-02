@@ -14,6 +14,7 @@ export function Chat({ config, user, navigate }) {
   const wsRef = useRef(null);
   const retryRef = useRef(0);
   const retryTimerRef = useRef(null);
+  const errorTimerRef = useRef(null);
   const intentionalCloseRef = useRef(false);
 
   if (!config?.token) return <Text color="red">Not authenticated. Run chinwag init first.</Text>;
@@ -23,6 +24,7 @@ export function Chat({ config, user, navigate }) {
     return () => {
       intentionalCloseRef.current = true;
       clearTimeout(retryTimerRef.current);
+      clearTimeout(errorTimerRef.current);
       if (wsRef.current) {
         wsRef.current.close();
       }
@@ -104,7 +106,8 @@ export function Chat({ config, user, navigate }) {
 
   function showError(message) {
     setError(message);
-    setTimeout(() => setError(''), 3000);
+    clearTimeout(errorTimerRef.current);
+    errorTimerRef.current = setTimeout(() => setError(''), 3000);
   }
 
   function send() {

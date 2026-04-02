@@ -39,7 +39,7 @@ export default function ProjectLiveTab({
           <div className={styles.sectionBody}>
             {sortedAgents.map((agent) => (
               <AgentRow
-                key={agent.agent_id || `${agent.handle}:${agent.tool}:${agent.status}`}
+                key={agent.agent_id || `${agent.handle}:${agent.tool}`}
                 agent={agent}
               />
             ))}

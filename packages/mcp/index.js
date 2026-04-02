@@ -144,7 +144,9 @@ async function main() {
             }
           };
 
-          ws.onerror = () => {}; // onclose fires after
+          ws.onerror = (err) => {
+            console.error('[chinwag] WebSocket error:', err?.message || 'unknown');
+          };
         }).catch(() => {
           connecting = false;
           if (!state._shuttingDown) {
