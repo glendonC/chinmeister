@@ -70,18 +70,23 @@ export class RoomDO extends DurableObject {
     this.ctx.acceptWebSocket(server, [handle]);
     this.sessions.set(server, { handle, color });
 
-    server.send(JSON.stringify({
-      type: 'history',
-      messages: this.history,
-      roomCount: this.sessions.size,
-    }));
+    server.send(
+      JSON.stringify({
+        type: 'history',
+        messages: this.history,
+        roomCount: this.sessions.size,
+      }),
+    );
 
-    this.broadcast({
-      type: 'join',
-      handle,
-      color,
-      roomCount: this.sessions.size,
-    }, server);
+    this.broadcast(
+      {
+        type: 'join',
+        handle,
+        color,
+        roomCount: this.sessions.size,
+      },
+      server,
+    );
 
     await this.#updateLobbyCount();
 
@@ -103,19 +108,25 @@ export class RoomDO extends DurableObject {
       const content = (data.content || '').trim();
       if (!content || content.length > CHAT_MAX_MESSAGE_LENGTH) return;
 
-      if (!checkWindowedRateLimit(this.chatRateLimits, `chat:${session.handle}`, CHAT_MAX_PER_MINUTE)) {
-        ws.send(JSON.stringify({
-          type: 'system',
-          content: 'Slow down — max 10 messages per minute.',
-        }));
+      if (
+        !checkWindowedRateLimit(this.chatRateLimits, `chat:${session.handle}`, CHAT_MAX_PER_MINUTE)
+      ) {
+        ws.send(
+          JSON.stringify({
+            type: 'system',
+            content: 'Slow down — max 10 messages per minute.',
+          }),
+        );
         return;
       }
 
       if (isBlocked(content)) {
-        ws.send(JSON.stringify({
-          type: 'system',
-          content: 'Message not sent. Please keep chat respectful.',
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'system',
+            content: 'Message not sent. Please keep chat respectful.',
+          }),
+        );
         return;
       }
 
@@ -159,11 +170,19 @@ export class RoomDO extends DurableObject {
     await this.#updateLobbyCount();
   }
 
-  broadcast(message, exclude = null) {
+  /**
+   * @param {object} message
+   * @param {WebSocket} [exclude]
+   */
+  broadcast(message, exclude) {
     const data = JSON.stringify(message);
     for (const [ws] of this.sessions) {
       if (ws !== exclude) {
-        try { ws.send(data); } catch { /* dead connection */ }
+        try {
+          ws.send(data);
+        } catch {
+          /* dead connection */
+        }
       }
     }
   }

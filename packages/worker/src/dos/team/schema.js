@@ -37,6 +37,12 @@ function renameColumnIfNeeded(sql, table, fromColumn, toColumn) {
   }
 }
 
+/**
+ * @param {any} sql
+ * @param {string} table
+ * @param {string} definition
+ * @param {string | null} [backfill]
+ */
 function addColumnIfMissing(sql, table, definition, backfill = null) {
   const columnName = definition.trim().split(/\s+/, 1)[0];
   if (hasColumn(sql, table, columnName)) return;

@@ -289,6 +289,10 @@ export class DatabaseDO extends DurableObject {
 
   // ── Users ──
 
+  /**
+   * Create a new user with a random handle, color, and auth token.
+   * @returns {Promise<import('../../types.js').NewUser | import('../../types.js').DOError>}
+   */
   async createUser() {
     this.#ensureSchema();
 
@@ -322,6 +326,11 @@ export class DatabaseDO extends DurableObject {
     return { id, handle, color, token };
   }
 
+  /**
+   * Get a user by ID. Updates last_active if stale (>5 min).
+   * @param {string} id
+   * @returns {Promise<import('../../types.js').User | null>}
+   */
   async getUser(id) {
     this.#ensureSchema();
     const rows = this.sql
@@ -340,6 +349,11 @@ export class DatabaseDO extends DurableObject {
     return user;
   }
 
+  /**
+   * Look up a user by their handle.
+   * @param {string} handle
+   * @returns {Promise<import('../../types.js').User | null>}
+   */
   async getUserByHandle(handle) {
     this.#ensureSchema();
     const rows = this.sql
@@ -351,6 +365,12 @@ export class DatabaseDO extends DurableObject {
     return rows[0] || null;
   }
 
+  /**
+   * Change a user's handle. Must be 3-20 chars, alphanumeric + underscores, and unique.
+   * @param {string} userId
+   * @param {string} newHandle
+   * @returns {Promise<{ ok: boolean, handle: string } | import('../../types.js').DOError>}
+   */
   async updateHandle(userId, newHandle) {
     this.#ensureSchema();
 
@@ -372,6 +392,12 @@ export class DatabaseDO extends DurableObject {
     return { ok: true, handle: newHandle };
   }
 
+  /**
+   * Change a user's display color. Must be one of the 12 allowed colors.
+   * @param {string} userId
+   * @param {string} color
+   * @returns {Promise<{ ok: boolean, color: string } | import('../../types.js').DOError>}
+   */
   async updateColor(userId, color) {
     this.#ensureSchema();
 
@@ -383,6 +409,12 @@ export class DatabaseDO extends DurableObject {
     return { ok: true, color };
   }
 
+  /**
+   * Set or clear a user's status text.
+   * @param {string} userId
+   * @param {string | null} status
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async setStatus(userId, status) {
     this.#ensureSchema();
     this.sql.exec('UPDATE users SET status = ? WHERE id = ?', status, userId);
@@ -391,6 +423,11 @@ export class DatabaseDO extends DurableObject {
 
   // ── GitHub OAuth ──
 
+  /**
+   * Look up a user by their linked GitHub ID.
+   * @param {string | number} githubId
+   * @returns {Promise<import('../../types.js').User | null>}
+   */
   async getUserByGithubId(githubId) {
     this.#ensureSchema();
     const rows = this.sql
@@ -402,6 +439,13 @@ export class DatabaseDO extends DurableObject {
     return rows[0] || null;
   }
 
+  /**
+   * Create a new user from GitHub OAuth data.
+   * @param {string | number} githubId
+   * @param {string} githubLogin
+   * @param {string | null} avatarUrl
+   * @returns {Promise<import('../../types.js').NewUser | import('../../types.js').DOError>}
+   */
   async createUserFromGithub(githubId, githubLogin, avatarUrl) {
     this.#ensureSchema();
 
@@ -438,6 +482,14 @@ export class DatabaseDO extends DurableObject {
     return { id, handle, color, token };
   }
 
+  /**
+   * Link a GitHub account to an existing user.
+   * @param {string} userId
+   * @param {string | number} githubId
+   * @param {string} githubLogin
+   * @param {string | null} avatarUrl
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async linkGithub(userId, githubId, githubLogin, avatarUrl) {
     this.#ensureSchema();
 
@@ -458,6 +510,11 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
+  /**
+   * Remove GitHub link from a user.
+   * @param {string} userId
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async unlinkGithub(userId) {
     this.#ensureSchema();
     this.sql.exec(
@@ -469,6 +526,12 @@ export class DatabaseDO extends DurableObject {
 
   // ── Web sessions ──
 
+  /**
+   * Create a web session token for browser-based auth.
+   * @param {string} userId
+   * @param {string | null} userAgent
+   * @returns {Promise<{ token: string, expires_at: string }>}
+   */
   async createWebSession(userId, userAgent) {
     this.#ensureSchema();
     const token = crypto.randomUUID();
@@ -484,6 +547,11 @@ export class DatabaseDO extends DurableObject {
     return { token, expires_at: expiresAt };
   }
 
+  /**
+   * Get and refresh a valid web session. Returns null if expired or revoked.
+   * @param {string} token
+   * @returns {Promise<import('../../types.js').WebSession | null>}
+   */
   async getWebSession(token) {
     this.#ensureSchema();
     const rows = this.sql
@@ -501,12 +569,22 @@ export class DatabaseDO extends DurableObject {
     return rows[0];
   }
 
+  /**
+   * Revoke a web session.
+   * @param {string} token
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async revokeWebSession(token) {
     this.#ensureSchema();
     this.sql.exec('UPDATE web_sessions SET revoked = 1 WHERE token = ?', token);
     return { ok: true };
   }
 
+  /**
+   * List active web sessions for a user (up to 20).
+   * @param {string} userId
+   * @returns {Promise<Array<{ token: string, created_at: string, expires_at: string, last_used: string, user_agent: string | null }>>}
+   */
   async getUserWebSessions(userId) {
     this.#ensureSchema();
     return this.sql
@@ -522,6 +600,12 @@ export class DatabaseDO extends DurableObject {
 
   // ── Rate limiting ──
 
+  /**
+   * Check if a rate limit key has remaining capacity for today.
+   * @param {string} key - Rate limit key (e.g. "join:userId", "memory:userId")
+   * @param {number} [maxPerDay=3]
+   * @returns {Promise<import('../../types.js').RateLimitCheck>}
+   */
   async checkRateLimit(key, maxPerDay = 3) {
     this.#ensureSchema();
     const today = utcDate();
@@ -534,6 +618,10 @@ export class DatabaseDO extends DurableObject {
     return { allowed: count < maxPerDay, count };
   }
 
+  /**
+   * Increment the rate limit counter for today.
+   * @param {string} key
+   */
   async consumeRateLimit(key) {
     this.#ensureSchema();
     const today = utcDate();
@@ -598,6 +686,13 @@ export class DatabaseDO extends DurableObject {
 
   // ── User teams ──
 
+  /**
+   * Record that a user belongs to a team.
+   * @param {string} userId
+   * @param {string} teamId
+   * @param {string | null} [name=null] - Optional team display name
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async addUserTeam(userId, teamId, name = null) {
     this.#ensureSchema();
     this.sql.exec(
@@ -611,6 +706,11 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
+  /**
+   * Get all teams a user belongs to (up to 50).
+   * @param {string} userId
+   * @returns {Promise<import('../../types.js').UserTeam[]>}
+   */
   async getUserTeams(userId) {
     this.#ensureSchema();
     return this.sql
@@ -621,6 +721,12 @@ export class DatabaseDO extends DurableObject {
       .toArray();
   }
 
+  /**
+   * Remove a team membership record.
+   * @param {string} userId
+   * @param {string} teamId
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async removeUserTeam(userId, teamId) {
     this.#ensureSchema();
     this.sql.exec('DELETE FROM user_teams WHERE user_id = ? AND team_id = ?', userId, teamId);
@@ -629,6 +735,12 @@ export class DatabaseDO extends DurableObject {
 
   // ── Agent profiles ──
 
+  /**
+   * Upsert agent profile data (framework, languages, etc.).
+   * @param {string} userId
+   * @param {import('../../types.js').AgentProfile} profile
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async updateAgentProfile(userId, profile) {
     this.#ensureSchema();
     const user = this.sql.exec('SELECT id FROM users WHERE id = ?', userId).toArray();

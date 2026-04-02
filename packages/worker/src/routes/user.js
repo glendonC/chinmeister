@@ -22,6 +22,12 @@ import {
   REFRESH_TOKEN_TTL_S,
 } from '../lib/constants.js';
 
+/**
+ * Authenticate a request via Bearer token or WebSocket ticket.
+ * @param {Request} request
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<import('../types.js').User | null>}
+ */
 export async function authenticate(request, env) {
   const auth = request.headers.get('Authorization');
   let token;
@@ -139,6 +145,11 @@ export async function handleRefreshToken(request, env) {
   return json({ token: newAccessToken, refresh_token: newRefreshToken });
 }
 
+/**
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleGetWsTicket(user, env) {
   const db = getDB(env);
   return withRateLimit(
@@ -154,11 +165,22 @@ export async function handleGetWsTicket(user, env) {
   );
 }
 
+/**
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleUnlinkGithub(user, env) {
   const result = await getDB(env).unlinkGithub(user.id);
   return json(result);
 }
 
+/**
+ * @param {Request} request
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleUpdateHandle(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
@@ -177,6 +199,12 @@ export async function handleUpdateHandle(request, user, env) {
   return json(result);
 }
 
+/**
+ * @param {Request} request
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleUpdateColor(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
@@ -191,6 +219,12 @@ export async function handleUpdateColor(request, user, env) {
   return json(result);
 }
 
+/**
+ * @param {Request} request
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleSetStatus(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
@@ -208,16 +242,32 @@ export async function handleSetStatus(request, user, env) {
   return json({ ok: true });
 }
 
+/**
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleClearStatus(user, env) {
   await getDB(env).setStatus(user.id, null);
   return json({ ok: true });
 }
 
+/**
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleHeartbeat(user, env) {
   await getLobby(env).heartbeat(user.handle);
   return json({ ok: true });
 }
 
+/**
+ * @param {Request} request
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleUpdateAgentProfile(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
@@ -236,11 +286,21 @@ export async function handleUpdateAgentProfile(request, user, env) {
   return json(result);
 }
 
+/**
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleGetUserTeams(user, env) {
   const teams = await getDB(env).getUserTeams(user.id);
   return json({ teams });
 }
 
+/**
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleDashboardSummary(user, env) {
   const db = getDB(env);
   const teams = await db.getUserTeams(user.id);
@@ -325,6 +385,12 @@ export async function handleDashboardSummary(user, env) {
   return json(response);
 }
 
+/**
+ * @param {Request} request
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleChatUpgrade(request, user, env) {
   const accountAge = Date.now() - new Date(user.created_at).getTime();
   if (accountAge < CHAT_COOLDOWN_MS) {
@@ -348,18 +414,24 @@ export async function handleChatUpgrade(request, user, env) {
 
   return roomStub.fetch(
     new Request(roomUrl.toString(), {
-      headers: {
+      headers: /** @type {HeadersInit} */ ({
         'X-Chinwag-Verified': '1',
         Upgrade: request.headers.get('Upgrade'),
         Connection: request.headers.get('Connection'),
         'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
         'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
         'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
-      },
+      }),
     }),
   );
 }
 
+/**
+ * @param {Request} request
+ * @param {import('../types.js').User} user
+ * @param {import('../types.js').Env} env
+ * @returns {Promise<Response>}
+ */
 export async function handleCreateTeam(request, user, env) {
   let name = null;
   try {

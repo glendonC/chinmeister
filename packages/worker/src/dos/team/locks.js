@@ -1,11 +1,21 @@
 // Advisory file locking — claimFiles, releaseFiles, getLockedFiles.
 // Each function takes `sql` as the first parameter.
 
+/** @import { LockClaim, DOResult } from '../../types.js' */
 import { normalizePath } from '../../lib/text-utils.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
 import { sqlChanges } from '../../lib/validation.js';
 import { HEARTBEAT_ACTIVE_WINDOW_S } from '../../lib/constants.js';
 
+/**
+ * Claim advisory locks on files. Atomic per-file: owned files refresh, foreign files are blocked.
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string[]} files - File paths to lock
+ * @param {string} handle - Agent's display handle
+ * @param {string | Record<string, any>} runtimeOrTool
+ * @returns {LockClaim}
+ */
 export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
   const normalized = files.map(normalizePath);
@@ -58,6 +68,13 @@ export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
   return { ok: true, claimed, blocked };
 }
 
+/**
+ * Release advisory locks. If files is null/empty, releases all locks for the agent.
+ * @param {any} sql - DO SQL handle
+ * @param {string} resolvedAgentId
+ * @param {string[] | null} files - Specific files to release, or null for all
+ * @returns {DOResult}
+ */
 export function releaseFiles(sql, resolvedAgentId, files) {
   if (!files || files.length === 0) {
     // Release all locks for this agent
@@ -71,6 +88,12 @@ export function releaseFiles(sql, resolvedAgentId, files) {
   return { ok: true };
 }
 
+/**
+ * Get all active file locks (only from agents with recent heartbeat or live WebSocket).
+ * @param {any} sql - DO SQL handle
+ * @param {Set<string>} [connectedAgentIds] - Agent IDs with active WebSocket connections
+ * @returns {{ locks: import('../../types.js').LockEntry[] }}
+ */
 export function getLockedFiles(sql, connectedAgentIds = new Set()) {
   const wsAlive = [...connectedAgentIds];
   const wsPlaceholders = wsAlive.length ? wsAlive.map(() => '?').join(',') : "'__none__'";

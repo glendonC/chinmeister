@@ -55,6 +55,7 @@ export function validateFileArray(files, max, opts) {
  * Returns { error: string } if invalid, { tags: string[] } if valid.
  * @param {*} tags - The tags value to validate
  * @param {number} max - Maximum number of tags allowed
+ * @returns {{ error: string, tags?: undefined } | { tags: string[], error?: undefined }}
  */
 export function validateTagsArray(tags, max) {
   if (tags === undefined || tags === null) {
@@ -91,7 +92,10 @@ export async function withRateLimit(db, key, max, errorMsg, handler) {
   try {
     limit = await db.checkRateLimit(key, max);
   } catch (err) {
-    console.error(`[chinwag] Rate limit check failed for ${key}:`, err?.message || err);
+    console.error(
+      `[chinwag] Rate limit check failed for ${key}:`,
+      /** @type {any} */ (err)?.message || err,
+    );
     return json({ error: 'Service temporarily unavailable' }, 503);
   }
   if (!limit.allowed) {
@@ -102,7 +106,10 @@ export async function withRateLimit(db, key, max, errorMsg, handler) {
     try {
       await db.consumeRateLimit(key);
     } catch (err) {
-      console.error(`[chinwag] Rate limit consume failed for ${key}:`, err?.message || err);
+      console.error(
+        `[chinwag] Rate limit consume failed for ${key}:`,
+        /** @type {any} */ (err)?.message || err,
+      );
     }
   }
   return response;
@@ -190,5 +197,5 @@ function secondsUntilMidnightUTC() {
   const midnight = new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
   );
-  return Math.ceil((midnight - now) / 1000);
+  return Math.ceil((midnight.getTime() - now.getTime()) / 1000);
 }

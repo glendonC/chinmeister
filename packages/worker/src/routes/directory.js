@@ -28,7 +28,10 @@ export async function handleListDirectory(request, env) {
   const q = url.searchParams.get('q') || null;
   const verdict = url.searchParams.get('verdict') || null;
   const category = url.searchParams.get('category') || null;
-  const limit = Math.max(1, Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200));
+  const limit = Math.max(
+    1,
+    Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200),
+  );
   const offset = Math.max(0, parseInt(url.searchParams.get('offset') || '0', 10) || 0);
 
   const mcpRaw = url.searchParams.get('mcp_support');
@@ -43,11 +46,22 @@ export async function handleListDirectory(request, env) {
   if (q) {
     result = await db.searchEvaluations(q, limit);
   } else {
-    result = await db.listEvaluations({ verdict, category, mcp_support, in_registry, limit, offset });
+    result = await db.listEvaluations({
+      verdict,
+      category,
+      mcp_support,
+      in_registry,
+      limit,
+      offset,
+    });
   }
   if (result.error) return json({ error: result.error }, 500);
 
-  return json({ evaluations: result.evaluations || [], categories: CATEGORY_NAMES }, 200, CACHE_HEADERS);
+  return json(
+    { evaluations: result.evaluations || [], categories: CATEGORY_NAMES },
+    200,
+    CACHE_HEADERS,
+  );
 }
 
 export async function handleGetDirectoryEntry(request, env, toolId) {
@@ -65,7 +79,8 @@ export async function handleAdminDelete(request, env) {
   if (parseErr) return parseErr;
 
   const { ids, admin_key } = body;
-  if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY)) return json({ error: 'Forbidden' }, 403);
+  if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY))
+    return json({ error: 'Forbidden' }, 403);
   if (!Array.isArray(ids) || ids.length === 0) return json({ error: 'ids array required' }, 400);
 
   const db = getDB(env);
@@ -87,8 +102,10 @@ export async function handleBatchEvaluate(request, env) {
     if (parseErr) return parseErr;
 
     const { tools, admin_key } = body;
-    if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY)) return json({ error: 'Forbidden' }, 403);
-    if (!Array.isArray(tools) || tools.length === 0) return json({ error: 'tools array required' }, 400);
+    if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY))
+      return json({ error: 'Forbidden' }, 403);
+    if (!Array.isArray(tools) || tools.length === 0)
+      return json({ error: 'tools array required' }, 400);
     if (tools.length > 50) return json({ error: 'max 50 tools per batch' }, 400);
 
     const db = getDB(env);
@@ -99,14 +116,25 @@ export async function handleBatchEvaluate(request, env) {
         continue;
       }
       const result = await evaluateTool(toolName.trim(), env);
-      if (result.error) {
-        results.push({ name: toolName, error: result.error });
+      if (result.error || !result.evaluation) {
+        results.push({ name: toolName, error: result.error || 'No evaluation returned' });
       } else {
         await db.saveEvaluation(result.evaluation);
-        results.push({ name: result.evaluation.name, verdict: result.evaluation.verdict, confidence: result.evaluation.confidence });
+        results.push({
+          name: result.evaluation.name,
+          verdict: result.evaluation.verdict,
+          confidence: result.evaluation.confidence,
+        });
       }
     }
-    return json({ results, evaluated: results.filter(r => !r.error).length, errors: results.filter(r => r.error).length }, 200);
+    return json(
+      {
+        results,
+        evaluated: results.filter((r) => !r.error).length,
+        errors: results.filter((r) => r.error).length,
+      },
+      200,
+    );
   });
 }
 
@@ -131,25 +159,36 @@ export async function handleTriggerEvaluation(request, user, env) {
 
   const db = getDB(env);
   const nameOrUrl = hasName ? name.trim() : url.trim();
-  const slugified = nameOrUrl.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const slugified = nameOrUrl
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 
-  return withRateLimit(db, `eval:${user.id}`, RATE_LIMIT_EVALUATIONS, 'Evaluation limit reached (5/day). Try again tomorrow.', async () => {
-    // Check if evaluation already exists and is recent
-    const existing = await db.getEvaluation(slugified);
-    if (existing.evaluation) {
-      const evaluatedAt = new Date(existing.evaluation.evaluated_at || existing.evaluation.created_at);
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      if (evaluatedAt > sevenDaysAgo) {
-        return json({ evaluation: existing.evaluation, cached: true }, 200);
+  return withRateLimit(
+    db,
+    `eval:${user.id}`,
+    RATE_LIMIT_EVALUATIONS,
+    'Evaluation limit reached (5/day). Try again tomorrow.',
+    async () => {
+      // Check if evaluation already exists and is recent
+      const existing = await db.getEvaluation(slugified);
+      if (existing.evaluation) {
+        const evaluatedAt = new Date(
+          existing.evaluation.evaluated_at || existing.evaluation.created_at,
+        );
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        if (evaluatedAt > sevenDaysAgo) {
+          return json({ evaluation: existing.evaluation, cached: true }, 200);
+        }
       }
-    }
 
-    const result = await evaluateTool(nameOrUrl, env);
-    if (result.error) return json({ error: result.error }, 500);
+      const result = await evaluateTool(nameOrUrl, env);
+      if (result.error) return json({ error: result.error }, 500);
 
-    const saveResult = await db.saveEvaluation(result.evaluation);
-    if (saveResult.error) return json({ error: saveResult.error }, 500);
+      const saveResult = await db.saveEvaluation(result.evaluation);
+      if (saveResult.error) return json({ error: saveResult.error }, 500);
 
-    return json({ evaluation: result.evaluation }, 201);
-  });
+      return json({ evaluation: result.evaluation }, 201);
+    },
+  );
 }

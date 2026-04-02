@@ -27,11 +27,13 @@ const EVALUATION_SCHEMA = {
     category: {
       type: 'string',
       enum: ['ide', 'coding-agent', 'terminal', 'review', 'voice', 'docs', 'other'],
-      description: 'ide (full IDE like Cursor, VS Code), coding-agent (AI agent like Claude Code, Aider), terminal (Warp), review (CodeRabbit), voice, docs, other',
+      description:
+        'ide (full IDE like Cursor, VS Code), coding-agent (AI agent like Claude Code, Aider), terminal (Warp), review (CodeRabbit), voice, docs, other',
     },
     mcp_support: {
       type: ['boolean', 'null'],
-      description: 'Does this tool support MCP (Model Context Protocol)? true ONLY if docs explicitly mention MCP servers, .mcp.json, or model context protocol. null if not mentioned.',
+      description:
+        'Does this tool support MCP (Model Context Protocol)? true ONLY if docs explicitly mention MCP servers, .mcp.json, or model context protocol. null if not mentioned.',
     },
     has_cli: {
       type: ['boolean', 'null'],
@@ -42,15 +44,28 @@ const EVALUATION_SCHEMA = {
       description: 'Is this tool open source (GitHub/GitLab repo available)? null if unknown.',
     },
     website: { type: ['string', 'null'], description: 'Official website URL' },
-    github: { type: ['string', 'null'], description: 'GitHub/GitLab repository URL if open source, else null' },
-    install_command: { type: ['string', 'null'], description: 'Primary install command (brew install, npm i -g, etc.) or null' },
-    notable: { type: ['string', 'null'], description: 'One sentence: what makes this tool unique and how it relates to AI-assisted development' },
+    github: {
+      type: ['string', 'null'],
+      description: 'GitHub/GitLab repository URL if open source, else null',
+    },
+    install_command: {
+      type: ['string', 'null'],
+      description: 'Primary install command (brew install, npm i -g, etc.) or null',
+    },
+    notable: {
+      type: ['string', 'null'],
+      description:
+        'One sentence: what makes this tool unique and how it relates to AI-assisted development',
+    },
   },
   required: ['name', 'category'],
 };
 
 function generateId(name) {
-  return name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
 }
 
 // Derive verdict (integration depth) and tier from Exa's structured output.
@@ -69,9 +84,9 @@ function deriveVerdict(output) {
 // Derive overall confidence from Exa's per-field grounding
 function deriveConfidence(grounding) {
   if (!grounding || grounding.length === 0) return 'low';
-  const confidences = grounding.map(g => g.confidence).filter(Boolean);
-  const highCount = confidences.filter(c => c === 'high').length;
-  const medCount = confidences.filter(c => c === 'medium').length;
+  const confidences = grounding.map((g) => g.confidence).filter(Boolean);
+  const highCount = confidences.filter((c) => c === 'high').length;
+  const medCount = confidences.filter((c) => c === 'medium').length;
   if (highCount >= 3) return 'high';
   if (highCount >= 1 || medCount >= 2) return 'medium';
   return 'low';
@@ -80,9 +95,9 @@ function deriveConfidence(grounding) {
 // Map Exa grounding to our sources format
 function mapGrounding(grounding) {
   if (!grounding || !Array.isArray(grounding)) return [];
-  return grounding.map(g => ({
+  return grounding.map((g) => ({
     claim: g.field,
-    citations: (g.citations || []).map(c => ({ url: c.url, title: c.title })),
+    citations: (g.citations || []).map((c) => ({ url: c.url, title: c.title })),
     confidence: g.confidence || 'low',
   }));
 }
@@ -98,8 +113,10 @@ function toEvaluation(output, grounding, searchResults) {
   const confidence = deriveConfidence(grounding);
 
   const blocking = [];
-  if (output.mcp_support === false) blocking.push('No MCP support — coordination not available yet');
-  if (output.has_cli === false && !output.install_command) blocking.push('No CLI — manual install required');
+  if (output.mcp_support === false)
+    blocking.push('No MCP support — coordination not available yet');
+  if (output.has_cli === false && !output.install_command)
+    blocking.push('No CLI — manual install required');
 
   return {
     id: generateId(output.name),
@@ -108,8 +125,8 @@ function toEvaluation(output, grounding, searchResults) {
     category: VALID_CATEGORIES.includes(output.category) ? output.category : 'other',
     mcp_support: toBool(output.mcp_support),
     has_cli: toBool(output.has_cli),
-    hooks_support: null,    // Not in Exa schema — derived from registry if known
-    channel_support: null,  // Not in Exa schema — derived from registry if known
+    hooks_support: null, // Not in Exa schema — derived from registry if known
+    channel_support: null, // Not in Exa schema — derived from registry if known
     process_detectable: toBool(output.has_cli), // CLI implies process detectable
     open_source: toBool(output.open_source),
     verdict,
@@ -121,8 +138,8 @@ function toEvaluation(output, grounding, searchResults) {
       install_command: output.install_command || null,
       notable: output.notable || null,
       // Favicon from the first search result (typically the official site)
-      favicon: searchResults.find(r => r.favicon)?.favicon || null,
-      image: searchResults.find(r => r.image)?.image || null,
+      favicon: searchResults.find((r) => r.favicon)?.favicon || null,
+      image: searchResults.find((r) => r.image)?.image || null,
       search_results: searchResults.slice(0, 10),
     },
     sources: mapGrounding(grounding),
@@ -149,7 +166,7 @@ export async function evaluateTool(nameOrUrl, env) {
 
     const evaluation = toEvaluation(result.output, result.grounding, result.results || []);
     return { ok: true, evaluation };
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     return { error: err.message || 'Evaluation failed' };
   }
 }

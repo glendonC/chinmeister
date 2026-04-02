@@ -5,17 +5,18 @@
 // enough context to debug remotely via `wrangler tail`.
 
 /**
- * Error messages that mean "this migration already ran" — not real failures.
+ * Error messages that mean "this migration already ran" -- not real failures.
  * SQLite uses these exact phrases; we match case-insensitively for safety.
+ * @type {string[]}
  */
 const IDEMPOTENT_PATTERNS = [
-  'duplicate column name',  // ALTER TABLE ADD COLUMN that already exists
-  'already exists',          // CREATE TABLE/INDEX that already exists
+  'duplicate column name', // ALTER TABLE ADD COLUMN that already exists
+  'already exists', // CREATE TABLE/INDEX that already exists
 ];
 
 function isExpectedError(message) {
   const lower = (message || '').toLowerCase();
-  return IDEMPOTENT_PATTERNS.some(pattern => lower.includes(pattern));
+  return IDEMPOTENT_PATTERNS.some((pattern) => lower.includes(pattern));
 }
 
 /**
@@ -32,13 +33,13 @@ export function runMigration(sql, ddl, backfill, label) {
     sql.exec(ddl);
     if (backfill) sql.exec(backfill);
     return true;
-  } catch (err) {
+  } catch (/** @type {any} */ err) {
     if (isExpectedError(err.message)) {
       return false; // Already applied — this is fine
     }
     // Real failure — log enough context to diagnose remotely
     console.error(
-      `[${label}] migration failed: ${err.message} | SQL: ${ddl.replace(/\s+/g, ' ').trim()}`
+      `[${label}] migration failed: ${err.message} | SQL: ${ddl.replace(/\s+/g, ' ').trim()}`,
     );
     return false;
   }

@@ -7,22 +7,55 @@
 //          Outperforms OpenAI Moderation API on real-world benchmarks (ToxicChat).
 
 const BLOCKED_PATTERNS = [
-  'nigger', 'nigga', 'niggers', 'niggas', 'chink', 'chinks', 'wetback',
-  'spic', 'spics', 'kike', 'kikes', 'gook', 'gooks', 'coon', 'coons',
-  'darkie', 'darkies', 'beaner', 'beaners', 'zipperhead',
-  'faggot', 'faggots', 'fag', 'fags', 'dyke', 'dykes', 'tranny', 'trannies',
-  'retard', 'retards', 'retarded',
-  'kill yourself', 'kys',
-  'buy followers', 'free crypto', 'dm me for',
+  'nigger',
+  'nigga',
+  'niggers',
+  'niggas',
+  'chink',
+  'chinks',
+  'wetback',
+  'spic',
+  'spics',
+  'kike',
+  'kikes',
+  'gook',
+  'gooks',
+  'coon',
+  'coons',
+  'darkie',
+  'darkies',
+  'beaner',
+  'beaners',
+  'zipperhead',
+  'faggot',
+  'faggots',
+  'fag',
+  'fags',
+  'dyke',
+  'dykes',
+  'tranny',
+  'trannies',
+  'retard',
+  'retards',
+  'retarded',
+  'kill yourself',
+  'kys',
+  'buy followers',
+  'free crypto',
+  'dm me for',
 ];
 
 const BLOCKED_REGEXES = BLOCKED_PATTERNS.map(
-  p => new RegExp(`\\b${p.replace(/\s+/g, '\\s+')}\\b`, 'i')
+  (p) => new RegExp(`\\b${p.replace(/\s+/g, '\\s+')}\\b`, 'i'),
 );
 
-// Layer 1: instant blocklist check (sync, <1ms)
+/**
+ * Layer 1: instant blocklist check (sync, <1ms).
+ * @param {string} text
+ * @returns {boolean}
+ */
 export function isBlocked(text) {
-  return BLOCKED_REGEXES.some(r => r.test(text));
+  return BLOCKED_REGEXES.some((r) => r.test(text));
 }
 
 // Layer 2: AI moderation via Llama Guard 3 on Cloudflare Workers AI.
@@ -52,7 +85,7 @@ async function moderateWithAI(text, env) {
     const lines = output.split('\n');
     for (const line of lines) {
       const matches = line.match(/s\d+/gi);
-      if (matches) categories.push(...matches.map(m => m.toUpperCase()));
+      if (matches) categories.push(...matches.map((m) => m.toUpperCase()));
     }
 
     return { flagged: true, categories };
@@ -62,8 +95,12 @@ async function moderateWithAI(text, env) {
   }
 }
 
-// Combined check: blocklist first (instant), then AI if available.
-// Returns { blocked: boolean, reason?: string }
+/**
+ * Combined check: blocklist first (instant), then AI if available.
+ * @param {string} text
+ * @param {import('./types.js').Env} env
+ * @returns {Promise<import('./types.js').ModerationResult>}
+ */
 export async function checkContent(text, env) {
   // Layer 1: instant blocklist
   if (isBlocked(text)) {

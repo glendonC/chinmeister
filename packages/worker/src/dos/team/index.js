@@ -52,6 +52,7 @@ export class TeamDO extends DurableObject {
   #schemaReady = false;
   #lastCleanup = 0;
   #lastHeartbeatBroadcast = new Map();
+  /** @type {Record<string, any> | null} */
   #contextCache = null;
   #contextCacheExpire = 0;
 
@@ -339,6 +340,12 @@ export class TeamDO extends DurableObject {
     return rows[0] || null;
   }
 
+  /**
+   * Resolve an agent ID to its canonical form, verifying ownership if ownerId is given.
+   * @param {string} agentId
+   * @param {string | null} [ownerId=null]
+   * @returns {string | null}
+   */
   #resolveOwnedAgentId(agentId, ownerId = null) {
     const exact = this.#findExactMember(agentId);
     if (exact) {
@@ -364,6 +371,13 @@ export class TeamDO extends DurableObject {
 
   // ── Membership ──
 
+  /**
+   * @param {string} agentId
+   * @param {string} ownerId
+   * @param {string} ownerHandle
+   * @param {string | Record<string, any>} [runtimeOrTool='unknown']
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async join(agentId, ownerId, ownerHandle, runtimeOrTool = 'unknown') {
     this.#ensureSchema();
     const result = join(
@@ -386,6 +400,11 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async leave(agentId, ownerId = null) {
     this.#ensureSchema();
     const result = leave(this.sql, agentId, ownerId);
@@ -395,6 +414,11 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async heartbeat(agentId, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -413,6 +437,13 @@ export class TeamDO extends DurableObject {
 
   // ── Activity ──
 
+  /**
+   * @param {string} agentId
+   * @param {string[]} files
+   * @param {string} summary
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async updateActivity(agentId, files, summary, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -424,6 +455,12 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string[]} files
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async checkConflicts(agentId, files, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -437,6 +474,12 @@ export class TeamDO extends DurableObject {
     );
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string} filePath
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async reportFile(agentId, filePath, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -450,6 +493,12 @@ export class TeamDO extends DurableObject {
 
   // ── Context (composite queries — logic in context.js) ──
 
+  /**
+   * Full team context: members, activities, conflicts, locks, memories, sessions, messages.
+   * @param {string} agentId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async getContext(agentId, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -492,16 +541,30 @@ export class TeamDO extends DurableObject {
 
   // ── Sessions (observability) ──
 
+  /**
+   * @param {string} agentId
+   * @param {string} handle
+   * @param {string} framework
+   * @param {Record<string, any> | string | null} [runtimeOrOwnerId=null]
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async startSession(agentId, handle, framework, runtimeOrOwnerId = null, ownerId = null) {
     this.#ensureSchema();
     const runtime =
       runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
-    const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
+    const resolvedOwnerId = /** @type {string | null} */ (runtime ? ownerId : runtimeOrOwnerId);
     const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     return startSessionFn(this.sql, resolved, handle, framework, runtime);
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string} sessionId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async endSession(agentId, sessionId, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -509,6 +572,12 @@ export class TeamDO extends DurableObject {
     return endSessionFn(this.sql, resolved, sessionId);
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string} filePath
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async recordEdit(agentId, filePath, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -516,6 +585,12 @@ export class TeamDO extends DurableObject {
     return recordEditFn(this.sql, resolved, filePath);
   }
 
+  /**
+   * @param {string} agentId
+   * @param {number} days
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async getHistory(agentId, days, ownerId = null) {
     this.#ensureSchema();
     if (!this.#resolveOwnedAgentId(agentId, ownerId))
@@ -523,6 +598,12 @@ export class TeamDO extends DurableObject {
     return getSessionHistory(this.sql, days);
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string} model
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async enrichModel(agentId, model, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -532,11 +613,20 @@ export class TeamDO extends DurableObject {
 
   // ── Memory ──
 
+  /**
+   * @param {string} agentId
+   * @param {string} text
+   * @param {string[]} tags
+   * @param {string} handle
+   * @param {Record<string, any> | string | null} [runtimeOrOwnerId=null]
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async saveMemory(agentId, text, tags, handle, runtimeOrOwnerId = null, ownerId = null) {
     this.#ensureSchema();
     const runtime =
       runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
-    const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
+    const resolvedOwnerId = /** @type {string | null} */ (runtime ? ownerId : runtimeOrOwnerId);
     const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = saveMemoryFn(
@@ -548,7 +638,7 @@ export class TeamDO extends DurableObject {
       runtime,
       this.#boundRecordMetric,
     );
-    if (!result.error) {
+    if (!('error' in result)) {
       this.#broadcastToWatchers({
         type: 'memory',
         id: result.id,
@@ -561,6 +651,14 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string | null} query
+   * @param {string[] | null} tags
+   * @param {number} [limit=20]
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async searchMemories(agentId, query, tags, limit = 20, ownerId = null) {
     this.#ensureSchema();
     if (!this.#resolveOwnedAgentId(agentId, ownerId))
@@ -568,6 +666,14 @@ export class TeamDO extends DurableObject {
     return searchMemoriesFn(this.sql, query, tags, limit);
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string} memoryId
+   * @param {string | undefined} text
+   * @param {string[] | undefined} tags
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async updateMemory(agentId, memoryId, text, tags, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -575,6 +681,12 @@ export class TeamDO extends DurableObject {
     return updateMemoryFn(this.sql, resolved, memoryId, text, tags);
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string} memoryId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async deleteMemory(agentId, memoryId, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -584,6 +696,14 @@ export class TeamDO extends DurableObject {
 
   // ── File Locks ──
 
+  /**
+   * @param {string} agentId
+   * @param {string[]} files
+   * @param {string} handle
+   * @param {string | Record<string, any>} runtimeOrTool
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async claimFiles(agentId, files, handle, runtimeOrTool, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -600,6 +720,12 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string[] | null} files
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async releaseFiles(agentId, files, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -616,6 +742,11 @@ export class TeamDO extends DurableObject {
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async getLockedFiles(agentId, ownerId = null) {
     this.#ensureSchema();
     if (!this.#resolveOwnedAgentId(agentId, ownerId))
@@ -625,6 +756,15 @@ export class TeamDO extends DurableObject {
 
   // ── Messages ──
 
+  /**
+   * @param {string} agentId
+   * @param {string} handle
+   * @param {string | Record<string, any>} runtimeOrTool
+   * @param {string} text
+   * @param {string | null} targetAgent
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async sendMessage(agentId, handle, runtimeOrTool, text, targetAgent, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -638,18 +778,22 @@ export class TeamDO extends DurableObject {
       targetAgent,
       this.#boundRecordMetric,
     );
-    if (!result.error) {
-      const hostTool = typeof runtimeOrTool === 'object' ? runtimeOrTool?.hostTool : runtimeOrTool;
-      this.#broadcastToWatchers({
-        type: 'message',
-        handle,
-        host_tool: hostTool || 'unknown',
-        text,
-      });
-    }
+    const hostTool = typeof runtimeOrTool === 'object' ? runtimeOrTool?.hostTool : runtimeOrTool;
+    this.#broadcastToWatchers({
+      type: 'message',
+      handle,
+      host_tool: hostTool || 'unknown',
+      text,
+    });
     return result;
   }
 
+  /**
+   * @param {string} agentId
+   * @param {string | null} since
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async getMessages(agentId, since, ownerId = null) {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
@@ -659,6 +803,12 @@ export class TeamDO extends DurableObject {
 
   // ── Summary (lightweight, for cross-project dashboard) ──
 
+  /**
+   * Lightweight summary for cross-project dashboard — counts only.
+   * @param {string} agentId
+   * @param {string | null} [ownerId=null]
+   * @returns {Promise<import('../../types.js').DOResult>}
+   */
   async getSummary(agentId, ownerId = null) {
     this.#ensureSchema();
     if (!this.#resolveOwnedAgentId(agentId, ownerId))
