@@ -35,6 +35,7 @@
   line-height: var(--display-line);
   letter-spacing: var(--display-spacing);
   max-width: 16ch;
+  padding-bottom: 0.15em;
   background: linear-gradient(
     90deg,
     var(--ink) 0%,
