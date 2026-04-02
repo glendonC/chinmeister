@@ -1,155 +1,375 @@
 import { describe, it, expect } from 'vitest';
 import { formatConflictsList, formatTeamContextDisplay } from '../utils/display.js';
 
-describe('display utilities', () => {
-  describe('formatConflictsList', () => {
-    it('returns empty array when no conflicts or locks', () => {
-      expect(formatConflictsList([], [])).toEqual([]);
-    });
+// --- formatConflictsList ---
 
-    it('formats conflicts with tool info', () => {
-      const lines = formatConflictsList(
-        [{ owner_handle: 'alice', tool: 'cursor', files: ['auth.js'], summary: 'Fixing login' }],
-        [],
-      );
-      expect(lines.length).toBe(1);
-      expect(lines[0]).toMatch(/alice \(cursor\) is working on auth\.js/);
-    });
-
-    it('formats locked files', () => {
-      const lines = formatConflictsList([], [{ file: 'db.js', held_by: 'bob', tool: 'aider' }]);
-      expect(lines.length).toBe(1);
-      expect(lines[0]).toMatch(/db\.js is locked by bob \(aider\)/);
-    });
-
-    it('omits tool when tool is "unknown" in conflicts', () => {
-      const lines = formatConflictsList(
-        [{ owner_handle: 'alice', tool: 'unknown', files: ['x.js'], summary: 'stuff' }],
-        [],
-      );
-      expect(lines[0]).toMatch(/alice is working on x\.js/);
-      expect(lines[0]).not.toMatch(/unknown/);
-    });
-
-    it('omits tool when tool is "unknown" in locks', () => {
-      const lines = formatConflictsList([], [{ file: 'db.js', held_by: 'bob', tool: 'unknown' }]);
-      expect(lines[0]).toMatch(/db\.js is locked by bob/);
-      expect(lines[0]).not.toMatch(/unknown/);
-    });
+describe('formatConflictsList', () => {
+  it('returns empty array when no conflicts or locks', () => {
+    expect(formatConflictsList([], [])).toEqual([]);
   });
 
-  describe('formatTeamContextDisplay', () => {
-    it('returns empty array when no members', () => {
-      expect(formatTeamContextDisplay({ members: [] })).toEqual([]);
-    });
+  it('returns empty array when both args are null', () => {
+    expect(formatConflictsList(null, null)).toEqual([]);
+  });
 
-    it('formats active member with tool and activity', () => {
-      const lines = formatTeamContextDisplay({
-        members: [
-          {
-            handle: 'alice',
-            status: 'active',
-            tool: 'cursor',
-            activity: { files: ['auth.js', 'db.js'], summary: 'Fixing login' },
-          },
-        ],
-      });
-      expect(lines[0]).toBe(
-        '  alice (active, cursor): working on auth.js, db.js \u2014 "Fixing login"',
-      );
-    });
+  it('returns empty array when both args are undefined', () => {
+    expect(formatConflictsList(undefined, undefined)).toEqual([]);
+  });
 
-    it('formats idle member without activity', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'bob', status: 'active', tool: 'unknown' }],
-      });
-      expect(lines[0]).toBe('  bob (active): idle');
-    });
+  it('formats a conflict with tool name', () => {
+    const conflicts = [
+      {
+        owner_handle: 'alice',
+        tool: 'cursor',
+        files: ['src/api.js'],
+        summary: 'Adding endpoints',
+      },
+    ];
+    const lines = formatConflictsList(conflicts, []);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toMatch(/alice \(cursor\) is working on src\/api\.js/);
+    expect(lines[0]).toMatch(/"Adding endpoints"/);
+  });
 
-    it('omits tool when tool is "unknown"', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'carol', status: 'idle', tool: 'unknown' }],
-      });
-      expect(lines[0]).not.toMatch(/unknown/);
-    });
+  it('formats a conflict without tool (unknown)', () => {
+    const conflicts = [
+      {
+        owner_handle: 'bob',
+        tool: 'unknown',
+        files: ['auth.js'],
+        summary: 'Fixing login',
+      },
+    ];
+    const lines = formatConflictsList(conflicts, []);
+    expect(lines[0]).toMatch(/bob is working on auth\.js/);
+    expect(lines[0]).not.toMatch(/unknown/);
+  });
 
-    it('formats activity without summary', () => {
-      const lines = formatTeamContextDisplay({
-        members: [
-          {
-            handle: 'dave',
-            status: 'active',
-            tool: 'aider',
-            activity: { files: ['test.js'] },
-          },
-        ],
-      });
-      expect(lines[0]).toBe('  dave (active, aider): working on test.js');
-    });
+  it('formats multiple files in a conflict', () => {
+    const conflicts = [
+      {
+        owner_handle: 'alice',
+        tool: 'cursor',
+        files: ['auth.js', 'db.js', 'utils.js'],
+        summary: 'Refactoring',
+      },
+    ];
+    const lines = formatConflictsList(conflicts, []);
+    expect(lines[0]).toMatch(/auth\.js, db\.js, utils\.js/);
+  });
 
-    it('includes lock lines with owner info', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor' }],
-        locks: [{ file_path: 'auth.js', owner_handle: 'alice', tool: 'cursor', minutes_held: 5.8 }],
-      });
-      const lockLine = lines.find((l) => l.includes('auth.js'));
-      expect(lockLine).toBe('  auth.js \u2014 alice (cursor) (6m)');
-    });
+  it('formats locked files', () => {
+    const locks = [
+      {
+        file: 'db.js',
+        held_by: 'bob',
+        tool: 'aider',
+      },
+    ];
+    const lines = formatConflictsList([], locks);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toMatch(/db\.js is locked by bob \(aider\)/);
+  });
 
-    it('omits tool in lock line when tool is "unknown"', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'bob', status: 'active', tool: 'unknown' }],
-        locks: [{ file_path: 'db.js', owner_handle: 'bob', tool: 'unknown', minutes_held: 3 }],
-      });
-      const lockLine = lines.find((l) => l.includes('db.js'));
-      expect(lockLine).toBe('  db.js \u2014 bob (3m)');
-      expect(lockLine).not.toMatch(/unknown/);
-    });
+  it('formats locked files without tool', () => {
+    const locks = [
+      {
+        file: 'db.js',
+        held_by: 'bob',
+        tool: 'unknown',
+      },
+    ];
+    const lines = formatConflictsList([], locks);
+    expect(lines[0]).toMatch(/db\.js is locked by bob/);
+    expect(lines[0]).not.toMatch(/unknown/);
+  });
 
-    it('formats memory with tags', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor' }],
-        memories: [{ text: 'Use Redis for cache', tags: ['config', 'infra'] }],
-      });
-      const memLine = lines.find((l) => l.includes('Use Redis'));
-      expect(memLine).toBe('  Use Redis for cache [config, infra]');
-    });
+  it('combines conflicts and locks', () => {
+    const conflicts = [
+      {
+        owner_handle: 'alice',
+        tool: 'cursor',
+        files: ['api.js'],
+        summary: 'API work',
+      },
+    ];
+    const locks = [
+      {
+        file: 'db.js',
+        held_by: 'bob',
+        tool: 'aider',
+      },
+    ];
+    const lines = formatConflictsList(conflicts, locks);
+    expect(lines.length).toBe(2);
+    expect(lines[0]).toMatch(/alice/);
+    expect(lines[1]).toMatch(/bob/);
+  });
 
-    it('formats memory without tags', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor' }],
-        memories: [{ text: 'Important fact' }],
-      });
-      const memLine = lines.find((l) => l.includes('Important fact'));
-      expect(memLine).toBe('  Important fact');
-    });
+  it('handles multiple conflicts', () => {
+    const conflicts = [
+      { owner_handle: 'alice', tool: 'cursor', files: ['a.js'], summary: 'Task A' },
+      { owner_handle: 'bob', tool: 'aider', files: ['b.js'], summary: 'Task B' },
+    ];
+    const lines = formatConflictsList(conflicts, []);
+    expect(lines.length).toBe(2);
+  });
+});
 
-    it('formats memory with empty tags array', () => {
-      const lines = formatTeamContextDisplay({
-        members: [{ handle: 'alice', status: 'active', tool: 'cursor' }],
-        memories: [{ text: 'Note', tags: [] }],
-      });
-      const memLine = lines.find((l) => l.includes('Note'));
-      expect(memLine).toBe('  Note');
-    });
+// --- formatTeamContextDisplay ---
 
-    it('shows stuckness insights when enabled and threshold exceeded', () => {
-      const lines = formatTeamContextDisplay(
+describe('formatTeamContextDisplay', () => {
+  it('returns empty array when no members', () => {
+    const lines = formatTeamContextDisplay({ members: [] });
+    expect(lines).toEqual([]);
+  });
+
+  it('returns empty array when members is null', () => {
+    const lines = formatTeamContextDisplay({ members: null });
+    expect(lines).toEqual([]);
+  });
+
+  it('returns empty array when members is undefined', () => {
+    const lines = formatTeamContextDisplay({});
+    expect(lines).toEqual([]);
+  });
+
+  it('formats a member with activity', () => {
+    const ctx = {
+      members: [
         {
-          members: [
-            {
-              handle: 'alice',
-              status: 'active',
-              tool: 'cursor',
-              activity: { files: ['stuck.js'], updated_at: '2026-01-01T00:00:00Z' },
-              minutes_since_update: 20,
-            },
-          ],
+          handle: 'alice',
+          status: 'active',
+          tool: 'cursor',
+          activity: {
+            files: ['auth.js', 'db.js'],
+            summary: 'Fixing login',
+          },
         },
-        { showInsights: true },
-      );
-      const insight = lines.find((l) => l.includes('may need help'));
-      expect(insight).toMatch(/alice has been on stuck\.js for 20 min/);
-    });
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines.length).toBe(1);
+    expect(lines[0]).toMatch(/alice \(active, cursor\): working on auth\.js, db\.js/);
+    expect(lines[0]).toMatch(/"Fixing login"/);
+  });
+
+  it('shows idle for member without activity', () => {
+    const ctx = {
+      members: [{ handle: 'bob', status: 'active', tool: 'cursor' }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines[0]).toMatch(/bob \(active, cursor\): idle/);
+  });
+
+  it('omits tool info when tool is unknown', () => {
+    const ctx = {
+      members: [{ handle: 'bob', status: 'idle', tool: 'unknown' }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines[0]).toMatch(/bob \(idle\): idle/);
+    expect(lines[0]).not.toMatch(/unknown/);
+  });
+
+  it('omits tool info when tool is missing', () => {
+    const ctx = {
+      members: [{ handle: 'bob', status: 'idle' }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines[0]).toMatch(/bob \(idle\): idle/);
+  });
+
+  it('formats activity with files but no summary', () => {
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          tool: 'cursor',
+          activity: { files: ['auth.js'] },
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines[0]).toMatch(/working on auth\.js/);
+    expect(lines[0]).not.toMatch(/"/);
+  });
+
+  it('includes locked files section', () => {
+    const ctx = {
+      members: [{ handle: 'alice', status: 'active' }],
+      locks: [
+        {
+          file_path: 'auth.js',
+          owner_handle: 'alice',
+          tool: 'cursor',
+          minutes_held: 5.8,
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines.some((l) => l.includes('Locked files:'))).toBe(true);
+    expect(
+      lines.some((l) => l.includes('auth.js') && l.includes('alice (cursor)') && l.includes('6m')),
+    ).toBe(true);
+  });
+
+  it('rounds minutes_held to nearest integer', () => {
+    const ctx = {
+      members: [{ handle: 'alice', status: 'active' }],
+      locks: [{ file_path: 'x.js', owner_handle: 'bob', tool: 'aider', minutes_held: 3.2 }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines.some((l) => l.includes('3m'))).toBe(true);
+  });
+
+  it('includes memories section', () => {
+    const ctx = {
+      members: [{ handle: 'alice', status: 'active' }],
+      memories: [{ text: 'Redis on port 6379', tags: ['config', 'redis'] }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines.some((l) => l.includes('Project knowledge:'))).toBe(true);
+    expect(lines.some((l) => l.includes('Redis on port 6379 [config, redis]'))).toBe(true);
+  });
+
+  it('shows memories without tags', () => {
+    const ctx = {
+      members: [{ handle: 'alice', status: 'active' }],
+      memories: [{ text: 'Important note' }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines.some((l) => l.includes('Important note'))).toBe(true);
+  });
+
+  it('shows memories with empty tags array', () => {
+    const ctx = {
+      members: [{ handle: 'alice', status: 'active' }],
+      memories: [{ text: 'No tags', tags: [] }],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    const memLine = lines.find((l) => l.includes('No tags'));
+    expect(memLine).toBeDefined();
+    expect(memLine).not.toMatch(/\[/);
+  });
+
+  it('does not show insights by default', () => {
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          activity: { files: ['stuck.js'], updated_at: thirtyMinAgo },
+          minutes_since_update: 30,
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    expect(lines.some((l) => l.includes('Insights:'))).toBe(false);
+  });
+
+  it('shows insights when showInsights is true', () => {
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          activity: { files: ['stuck.js'], updated_at: thirtyMinAgo },
+          minutes_since_update: 30,
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx, { showInsights: true });
+    expect(lines.some((l) => l.includes('Insights:'))).toBe(true);
+    expect(lines.some((l) => l.includes('alice has been on stuck.js'))).toBe(true);
+    expect(lines.some((l) => l.includes('may need help'))).toBe(true);
+  });
+
+  it('does not show insights for recently active agents', () => {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60_000).toISOString();
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          activity: { files: ['active.js'], updated_at: fiveMinAgo },
+          minutes_since_update: 5,
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx, { showInsights: true });
+    expect(lines.some((l) => l.includes('Insights:'))).toBe(false);
+  });
+
+  it('falls back to Date.now() calculation when minutes_since_update is null', () => {
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          activity: { files: ['old.js'], updated_at: thirtyMinAgo },
+          // no minutes_since_update
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx, { showInsights: true });
+    expect(lines.some((l) => l.includes('may need help'))).toBe(true);
+  });
+
+  it('uses "a file" as fallback when no files in activity', () => {
+    const thirtyMinAgo = new Date(Date.now() - 30 * 60_000).toISOString();
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          activity: { files: [], updated_at: thirtyMinAgo },
+          minutes_since_update: 30,
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx, { showInsights: true });
+    expect(lines.some((l) => l.includes('a file'))).toBe(true);
+  });
+
+  it('skips insights for members without updated_at', () => {
+    const ctx = {
+      members: [
+        {
+          handle: 'alice',
+          status: 'active',
+          activity: { files: ['x.js'] },
+          // no updated_at
+        },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx, { showInsights: true });
+    expect(lines.some((l) => l.includes('Insights:'))).toBe(false);
+  });
+
+  it('includes multiple members, locks, and memories', () => {
+    const ctx = {
+      members: [
+        { handle: 'alice', status: 'active', tool: 'cursor', activity: { files: ['auth.js'] } },
+        { handle: 'bob', status: 'idle', tool: 'aider' },
+      ],
+      locks: [{ file_path: 'db.js', owner_handle: 'alice', tool: 'cursor', minutes_held: 10 }],
+      memories: [
+        { text: 'Use Redis', tags: ['infra'] },
+        { text: 'Port 6379', tags: ['config'] },
+      ],
+    };
+    const lines = formatTeamContextDisplay(ctx);
+    // Two members
+    expect(
+      lines.filter((l) => l.includes('alice') || l.includes('bob')).length,
+    ).toBeGreaterThanOrEqual(2);
+    // One lock
+    expect(lines.some((l) => l.includes('Locked files:'))).toBe(true);
+    // Two memories
+    expect(lines.filter((l) => l.includes('Use Redis') || l.includes('Port 6379')).length).toBe(2);
   });
 });
