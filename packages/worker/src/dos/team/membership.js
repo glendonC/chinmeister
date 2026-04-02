@@ -27,7 +27,7 @@ export function join(sql, agentId, ownerId, ownerHandle, runtimeOrTool, recordMe
   // If nothing was inserted or updated, the agent_id is owned by someone else.
   const changed = sql.exec('SELECT changes() as c').toArray()[0].c;
   if (changed === 0) {
-    return { error: 'Agent ID already claimed by another user' };
+    return { error: 'Agent ID already claimed by another user', code: 'AGENT_CLAIMED' };
   }
 
   recordMetric('joins');
@@ -50,7 +50,7 @@ export function leave(sql, agentId, ownerId) {
       // Could be wrong owner or non-existent agent. Check which.
       const exists = sql.exec('SELECT 1 FROM members WHERE agent_id = ?', agentId).toArray();
       if (exists.length > 0) {
-        return { error: 'Not your agent' };
+        return { error: 'Not your agent', code: 'NOT_OWNER' };
       }
     }
   } else {
@@ -72,6 +72,6 @@ export function leave(sql, agentId, ownerId) {
 export function heartbeat(sql, resolvedAgentId) {
   sql.exec("UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?", resolvedAgentId);
   const row = sql.exec('SELECT changes() as c').toArray();
-  if (row[0].c === 0) return { error: 'Not a member of this team' };
+  if (row[0].c === 0) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
   return { ok: true };
 }

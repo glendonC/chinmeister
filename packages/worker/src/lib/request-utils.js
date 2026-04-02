@@ -56,8 +56,22 @@ export function parseTeamPath(path) {
   return { teamId: match[1], action: match[2] };
 }
 
-export function teamErrorStatus(msg) {
-  return msg?.includes('Not a member') || msg?.includes('Not your agent') || msg?.includes('Only the author')
-    ? 403
-    : 400;
+const ERROR_CODE_STATUS = {
+  NOT_MEMBER: 403,
+  NOT_OWNER: 403,
+  AGENT_CLAIMED: 409,
+  NOT_FOUND: 404,
+};
+
+export function teamErrorStatus(result) {
+  // Structured error codes (preferred path)
+  if (result?.code && ERROR_CODE_STATUS[result.code]) {
+    return ERROR_CODE_STATUS[result.code];
+  }
+  // Legacy fallback: string matching for callers that pass raw error messages
+  const msg = typeof result === 'string' ? result : result?.error;
+  if (msg?.includes('Not a member') || msg?.includes('Not your agent') || msg?.includes('Only the author')) {
+    return 403;
+  }
+  return 400;
 }

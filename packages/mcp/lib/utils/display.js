@@ -1,7 +1,51 @@
 // Shared display logic for formatting team context and conflict information.
-// Used by both MCP tool handlers and hook handlers to avoid duplication.
+// Used by both MCP tool handlers, hook handlers, and the channel server to avoid duplication.
 
 import { formatToolTag, formatWho } from './formatting.js';
+
+/**
+ * Format a lock/activity duration in minutes to a human-readable string.
+ * Single source of truth for duration formatting — used by context display,
+ * stuckness insights, and diff-state.
+ * @param {number} minutes - Duration in minutes
+ * @returns {string} e.g. '5m', '120m'
+ */
+export function formatLockDuration(minutes) {
+  return `${Math.round(minutes)}m`;
+}
+
+/**
+ * Format a single team member into a display line.
+ * @param {{ handle: string, status: string, tool?: string, activity?: { files: string[], summary?: string } }} member
+ * @returns {string} e.g. '  alice (active, cursor): working on auth.js — "Fixing login"'
+ */
+export function formatMemberLine(member) {
+  const toolInfo = formatToolTag(member.tool) ? `, ${member.tool}` : '';
+  const activity = member.activity
+    ? `working on ${member.activity.files.join(', ')}${member.activity.summary ? ` \u2014 "${member.activity.summary}"` : ''}`
+    : 'idle';
+  return `  ${member.handle} (${member.status}${toolInfo}): ${activity}`;
+}
+
+/**
+ * Format a lock entry into a display line.
+ * @param {{ file_path: string, owner_handle: string, tool?: string, minutes_held: number }} lock
+ * @returns {string}
+ */
+export function formatLockLine(lock) {
+  const who = formatWho(lock.owner_handle, lock.tool);
+  return `  ${lock.file_path} \u2014 ${who} (${formatLockDuration(lock.minutes_held)})`;
+}
+
+/**
+ * Format a memory entry into a display line.
+ * @param {{ text: string, tags?: string[] }} memory
+ * @returns {string}
+ */
+export function formatMemoryLine(memory) {
+  const tagStr = memory.tags?.length ? ` [${memory.tags.join(', ')}]` : '';
+  return `  ${memory.text}${tagStr}`;
+}
 
 /**
  * Format conflict and lock check results into human-readable warning lines.
@@ -41,19 +85,14 @@ export function formatTeamContextDisplay(ctx, options = {}) {
   }
 
   for (const m of ctx.members) {
-    const toolInfo = formatToolTag(m.tool) ? `, ${m.tool}` : '';
-    const activity = m.activity
-      ? `working on ${m.activity.files.join(', ')}${m.activity.summary ? ` \u2014 "${m.activity.summary}"` : ''}`
-      : 'idle';
-    lines.push(`  ${m.handle} (${m.status}${toolInfo}): ${activity}`);
+    lines.push(formatMemberLine(m));
   }
 
   if (ctx.locks && ctx.locks.length > 0) {
     lines.push('');
     lines.push('Locked files:');
     for (const l of ctx.locks) {
-      const who = formatWho(l.owner_handle, l.tool);
-      lines.push(`  ${l.file_path} \u2014 ${who} (${Math.round(l.minutes_held)}m)`);
+      lines.push(formatLockLine(l));
     }
   }
 
@@ -61,8 +100,7 @@ export function formatTeamContextDisplay(ctx, options = {}) {
     lines.push('');
     lines.push('Project knowledge:');
     for (const mem of ctx.memories) {
-      const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
-      lines.push(`  ${mem.text}${tagStr}`);
+      lines.push(formatMemoryLine(mem));
     }
   }
 
@@ -75,7 +113,7 @@ export function formatTeamContextDisplay(ctx, options = {}) {
           : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
         if (mins > 15) {
           const stuckFile = m.activity?.files?.length > 0 ? m.activity.files[0] : 'a file';
-          insights.push(`${m.handle} has been on ${stuckFile} for ${Math.round(mins)} min \u2014 may need help`);
+          insights.push(`${m.handle} has been on ${stuckFile} for ${formatLockDuration(mins)} \u2014 may need help`);
         }
       }
     }

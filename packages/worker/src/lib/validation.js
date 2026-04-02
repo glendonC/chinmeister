@@ -68,11 +68,21 @@ export function validateTagsArray(tags, max) {
  * @returns {Promise<Response>}
  */
 export async function withRateLimit(db, key, max, errorMsg, handler) {
-  const limit = await db.checkRateLimit(key, max);
+  let limit;
+  try {
+    limit = await db.checkRateLimit(key, max);
+  } catch (err) {
+    console.error(`[chinwag] Rate limit check failed for ${key}:`, err?.message || err);
+    return json({ error: 'Service temporarily unavailable' }, 503);
+  }
   if (!limit.allowed) return json({ error: errorMsg }, 429);
   const response = await handler();
   if (response.status < 400) {
-    await db.consumeRateLimit(key);
+    try {
+      await db.consumeRateLimit(key);
+    } catch (err) {
+      console.error(`[chinwag] Rate limit consume failed for ${key}:`, err?.message || err);
+    }
   }
   return response;
 }

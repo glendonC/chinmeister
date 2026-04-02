@@ -24,7 +24,12 @@ export function registerTeamTool(addTool, { team, state, profile }) {
         state.modelReported = false;
         clearContextCache();
 
-        if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+        // Always clear any existing heartbeat before creating a new one —
+        // prevents interval accumulation when joinTeam is called multiple times.
+        if (state.heartbeatInterval != null) {
+          clearInterval(state.heartbeatInterval);
+          state.heartbeatInterval = null;
+        }
         state.heartbeatInterval = setInterval(async () => {
           try { await team.heartbeat(state.teamId); } catch (err) {
             if (err.message?.includes('Not a member')) {
@@ -39,6 +44,7 @@ export function registerTeamTool(addTool, { team, state, profile }) {
             }
           }
         }, 30_000);
+        if (state.heartbeatInterval.unref) state.heartbeatInterval.unref();
 
         let sessionStarted = false;
         try {

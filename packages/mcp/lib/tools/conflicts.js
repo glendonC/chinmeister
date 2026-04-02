@@ -1,13 +1,16 @@
 // chinwag_check_conflicts tool handler.
 
 import * as z from 'zod/v4';
+import path from 'path';
 import { teamPreamble, getCachedContext } from '../context.js';
 import { noTeam, errorResult } from '../utils/responses.js';
 import { formatConflictsList } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
 
 function normalizePath(filePath) {
-  return filePath.replace(/^\.\//, '').replace(/\/+/g, '/').replace(/\/$/, '');
+  // Use path.posix.normalize for robust handling of ./, ../, and duplicate slashes,
+  // then strip any trailing slash. posix ensures consistent forward-slash behavior.
+  return path.posix.normalize(filePath).replace(/\/$/, '');
 }
 
 export function registerConflictsTool(addTool, { team, state }) {

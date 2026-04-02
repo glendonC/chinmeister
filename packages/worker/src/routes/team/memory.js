@@ -40,7 +40,7 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
 
   return withRateLimit(db, `memory:${user.id}`, RATE_LIMIT_MEMORIES, 'Memory save limit reached (20/day). Try again tomorrow.', async () => {
     const result = await team.saveMemory(agentId, text.trim(), tags, user.handle, runtime, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result, 201);
   });
 }
@@ -96,7 +96,7 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
 
   return withRateLimit(db, `memory_update:${user.id}`, RATE_LIMIT_MEMORY_UPDATES, 'Memory update limit reached (50/day). Try again tomorrow.', async () => {
     const result = await team.updateMemory(agentId, id, text, tags, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result);
   });
 }
@@ -117,7 +117,7 @@ export async function handleTeamDeleteMemory(request, user, env, teamId) {
 
   return withRateLimit(db, `memory_delete:${user.id}`, RATE_LIMIT_MEMORY_DELETES, 'Memory delete limit reached (50/day). Try again tomorrow.', async () => {
     const result = await team.deleteMemory(agentId, id, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result);
   });
 }

@@ -84,8 +84,12 @@ export function diffState(prev, curr, stucknessAlerted) {
     const m = currByKey.get(key);
     if (!m?.activity?.updated_at || m.status !== 'active') continue;
 
-    const alertedAt = stucknessAlerted.get(key);
-    if (alertedAt && alertedAt !== m.activity.updated_at) {
+    // Build a fingerprint of the agent's current activity — both the timestamp
+    // and the file list. Clear the alert if either changes, so agents that
+    // switch tasks don't accumulate stale stuckness alerts.
+    const activityFingerprint = `${m.activity.updated_at}|${(m.activity.files || []).sort().join(',')}`;
+    const alertedFingerprint = stucknessAlerted.get(key);
+    if (alertedFingerprint && alertedFingerprint !== activityFingerprint) {
       stucknessAlerted.delete(key);
     }
 
@@ -95,7 +99,7 @@ export function diffState(prev, curr, stucknessAlerted) {
         : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
       if (minutesOnSameActivity > STUCKNESS_THRESHOLD_MINUTES) {
         events.push(`Agent ${formatAgentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min — may be stuck`);
-        stucknessAlerted.set(key, m.activity.updated_at);
+        stucknessAlerted.set(key, activityFingerprint);
       }
     }
   }

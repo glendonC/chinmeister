@@ -18,6 +18,9 @@ export function registerLockTools(addTool, { team, state }) {
       if (!state.teamId) return noTeam();
       try {
         const result = await team.claimFiles(state.teamId, files);
+        if (result?.error) {
+          return { content: [{ type: 'text', text: `Failed to claim files: ${result.error}` }], isError: true };
+        }
         const preamble = await teamPreamble(team, state.teamId);
         const lines = [];
         if (result.claimed?.length > 0) lines.push(`Claimed: ${result.claimed.join(', ')}`);
@@ -45,7 +48,10 @@ export function registerLockTools(addTool, { team, state }) {
     async ({ files }) => {
       if (!state.teamId) return noTeam();
       try {
-        await team.releaseFiles(state.teamId, files);
+        const result = await team.releaseFiles(state.teamId, files);
+        if (result?.error) {
+          return { content: [{ type: 'text', text: `Failed to release files: ${result.error}` }], isError: true };
+        }
         const msg = files ? `Released: ${files.join(', ')}` : 'All locks released.';
         return { content: [{ type: 'text', text: msg }] };
       } catch (err) {

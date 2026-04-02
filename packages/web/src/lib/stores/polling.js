@@ -9,10 +9,16 @@ const POLL_MS = 5000;
 const SLOW_POLL_MS = 30000;
 const RECONCILE_MS = 60_000;
 
-let pollTimer = null;
-let consecutiveFailures = 0;
-let activeWs = null;
-let reconcileTimer = null;
+// Internal state encapsulated in a single resettable object.
+// Keeps timer/WS refs out of the Zustand store (they're not UI state)
+// while making them testable and preventing stale closures.
+const _internal = {
+  pollTimer: null,
+  consecutiveFailures: 0,
+  activeWs: null,
+  reconcileTimer: null,
+  abortController: null,
+};
 
 const pollingStore = createStore((set, get) => ({
   dashboardData: null,
@@ -76,8 +82,8 @@ async function poll() {
 
     pollingStore.setState({ pollError: null, pollErrorData: null, lastUpdate: new Date() });
 
-    if (consecutiveFailures > 0) {
-      consecutiveFailures = 0;
+    if (_internal.consecutiveFailures > 0) {
+      _internal.consecutiveFailures = 0;
       restartPolling();
     }
   } catch (err) {
@@ -90,7 +96,7 @@ async function poll() {
     if (snapshotTeamId === null && err?.data?.failed_teams?.length > 0) {
       await teamActions.loadTeams();
     }
-    consecutiveFailures++;
+    _internal.consecutiveFailures++;
     const pollError = formatError(err);
     const pollErrorData = err?.data || null;
     if (snapshotTeamId === null) {
@@ -115,7 +121,7 @@ async function poll() {
         };
       });
     }
-    if (consecutiveFailures >= 3) restartPolling();
+    if (_internal.consecutiveFailures >= 3) restartPolling();
   }
 }
 
@@ -123,16 +129,16 @@ setRefreshHandler(poll);
 
 function restartPolling() {
   stopPolling();
-  const delay = consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-  pollTimer = setInterval(poll, delay);
+  const delay = _internal.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+  _internal.pollTimer = setInterval(poll, delay);
 }
 
 /** Close any active WebSocket and its reconciliation timer. */
 function closeWebSocket() {
-  if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
-  if (activeWs) {
-    try { activeWs.close(); } catch {}
-    activeWs = null;
+  if (_internal.reconcileTimer) { clearInterval(_internal.reconcileTimer); _internal.reconcileTimer = null; }
+  if (_internal.activeWs) {
+    try { _internal.activeWs.close(); } catch {}
+    _internal.activeWs = null;
   }
 }
 
@@ -166,9 +172,9 @@ async function connectTeamWebSocket(teamId) {
     ws.onopen = () => {
       if (teamActions.getState().activeTeamId !== teamId) { ws.close(); return; }
       // WebSocket connected — stop polling, start reconciliation
-      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-      if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
-      reconcileTimer = setInterval(poll, RECONCILE_MS);
+      if (_internal.pollTimer) { clearInterval(_internal.pollTimer); _internal.pollTimer = null; }
+      if (_internal.reconcileTimer) { clearInterval(_internal.reconcileTimer); _internal.reconcileTimer = null; }
+      _internal.reconcileTimer = setInterval(poll, RECONCILE_MS);
     };
 
     ws.onmessage = (evt) => {
@@ -197,8 +203,8 @@ async function connectTeamWebSocket(teamId) {
     };
 
     ws.onclose = () => {
-      activeWs = null;
-      if (reconcileTimer) { clearInterval(reconcileTimer); reconcileTimer = null; }
+      _internal.activeWs = null;
+      if (_internal.reconcileTimer) { clearInterval(_internal.reconcileTimer); _internal.reconcileTimer = null; }
       // Fall back to polling if we're still on this team
       if (teamActions.getState().activeTeamId === teamId) {
         restartPolling();
@@ -207,7 +213,7 @@ async function connectTeamWebSocket(teamId) {
 
     ws.onerror = () => { /* onclose fires after */ };
 
-    activeWs = ws;
+    _internal.activeWs = ws;
   } catch {
     // WebSocket constructor failed — stay on polling
   }
@@ -231,21 +237,21 @@ export function startPolling() {
   const { activeTeamId } = teamActions.getState();
   if (activeTeamId) {
     // Project view — try WebSocket, polling runs as fallback until WS connects
-    const delay = consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-    pollTimer = setInterval(poll, delay);
+    const delay = _internal.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+    _internal.pollTimer = setInterval(poll, delay);
     connectTeamWebSocket(activeTeamId);
   } else {
     // Overview — polling only (aggregates across all teams, no single-team WS)
-    const delay = consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-    pollTimer = setInterval(poll, delay);
+    const delay = _internal.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+    _internal.pollTimer = setInterval(poll, delay);
   }
 }
 
 /** Stop polling and close WebSocket. */
 export function stopPolling() {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
+  if (_internal.pollTimer) {
+    clearInterval(_internal.pollTimer);
+    _internal.pollTimer = null;
   }
   closeWebSocket();
 }
@@ -253,7 +259,7 @@ export function stopPolling() {
 /** Reset all polling state (call on logout to prevent stale data on re-login). */
 export function resetPollingState() {
   stopPolling();
-  consecutiveFailures = 0;
+  _internal.consecutiveFailures = 0;
   pollingStore.setState({
     dashboardData: null,
     dashboardStatus: 'idle',
@@ -266,8 +272,11 @@ export function resetPollingState() {
   });
 }
 
-// Pause polling when tab is hidden, resume when visible
-if (typeof document !== 'undefined') {
+// Pause polling when tab is hidden, resume when visible.
+// Guard prevents duplicate listeners on HMR re-evaluation.
+let _visibilityListenerAttached = false;
+if (typeof document !== 'undefined' && !_visibilityListenerAttached) {
+  _visibilityListenerAttached = true;
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       stopPolling();

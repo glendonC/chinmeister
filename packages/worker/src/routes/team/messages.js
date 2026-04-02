@@ -25,7 +25,7 @@ export async function handleTeamSendMessage(request, user, env, teamId) {
 
   return withRateLimit(db, `messages:${user.id}`, RATE_LIMIT_MESSAGES, 'Message limit reached (200/day). Try again tomorrow.', async () => {
     const result = await team.sendMessage(agentId, user.handle, runtime, text.trim(), target || null, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result, 201);
   });
 }

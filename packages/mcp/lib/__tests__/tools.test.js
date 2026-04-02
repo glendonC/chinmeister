@@ -150,6 +150,39 @@ describe('conflicts tool (unit)', () => {
     expect(result.content[0].text).toMatch(/eve/);
   });
 
+  it('normalizes paths with ../ segments for offline comparison', async () => {
+    team.checkConflicts.mockRejectedValue(new Error('offline'));
+    getCachedContext.mockReturnValue({
+      members: [{
+        handle: 'frank',
+        tool: 'cursor',
+        status: 'active',
+        activity: { files: ['src/utils.js'] },
+      }],
+    });
+
+    // Request with ../ segments should normalize to match cached path
+    const result = await collector.callTool('chinwag_check_conflicts', { files: ['src/lib/../utils.js'] });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/frank/);
+  });
+
+  it('normalizes paths with duplicate slashes for offline comparison', async () => {
+    team.checkConflicts.mockRejectedValue(new Error('offline'));
+    getCachedContext.mockReturnValue({
+      members: [{
+        handle: 'grace',
+        tool: 'windsurf',
+        status: 'active',
+        activity: { files: ['src/api.js'] },
+      }],
+    });
+
+    const result = await collector.callTool('chinwag_check_conflicts', { files: ['src//api.js'] });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/grace/);
+  });
+
   it('returns "not in a team" when teamId is null', async () => {
     state.teamId = null;
     const result = await collector.callTool('chinwag_check_conflicts', { files: ['a.js'] });
@@ -231,6 +264,13 @@ describe('memory tools (unit)', () => {
       expect(result.content[0].text).not.toMatch(/\[/);
     });
 
+    it('returns error when API returns error object', async () => {
+      team.saveMemory.mockResolvedValue({ error: 'Rate limit exceeded' });
+      const result = await collector.callTool('chinwag_save_memory', { text: 'x' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Failed to save memory.*Rate limit exceeded/);
+    });
+
     it('returns error on API failure', async () => {
       team.saveMemory.mockRejectedValue(new Error('Rate limit exceeded'));
       const result = await collector.callTool('chinwag_save_memory', { text: 'x' });
@@ -278,6 +318,13 @@ describe('memory tools (unit)', () => {
       team.searchMemories.mockResolvedValue({ memories: [] });
       await collector.callTool('chinwag_search_memory', { query: 'redis', tags: ['config'], limit: 5 });
       expect(team.searchMemories).toHaveBeenCalledWith('t_mem', 'redis', ['config'], 5);
+    });
+
+    it('returns error when API returns error object', async () => {
+      team.searchMemories.mockResolvedValue({ error: 'Unauthorized' });
+      const result = await collector.callTool('chinwag_search_memory', { query: 'x' });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Failed to search memories.*Unauthorized/);
     });
 
     it('handles API error gracefully', async () => {
@@ -431,6 +478,13 @@ describe('lock tools (unit)', () => {
       expect(text).not.toMatch(/unknown/);
     });
 
+    it('returns error when API returns error object', async () => {
+      team.claimFiles.mockResolvedValue({ error: 'Too many locks' });
+      const result = await collector.callTool('chinwag_claim_files', { files: ['a.js'] });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Failed to claim files.*Too many locks/);
+    });
+
     it('handles API error', async () => {
       team.claimFiles.mockRejectedValue(new Error('Server error'));
       const result = await collector.callTool('chinwag_claim_files', { files: ['a.js'] });
@@ -463,6 +517,13 @@ describe('lock tools (unit)', () => {
       const result = await collector.callTool('chinwag_release_files', {});
       expect(team.releaseFiles).toHaveBeenCalledWith('t_lock', undefined);
       expect(result.content[0].text).toMatch(/All locks released/);
+    });
+
+    it('returns error when API returns error object', async () => {
+      team.releaseFiles.mockResolvedValue({ error: 'Not lock owner' });
+      const result = await collector.callTool('chinwag_release_files', { files: ['a.js'] });
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toMatch(/Failed to release files.*Not lock owner/);
     });
 
     it('handles API error', async () => {
@@ -642,6 +703,16 @@ describe('activity tool (unit)', () => {
     expect(result.content[0].text).toMatch(/^\[Team:/);
   });
 
+  it('returns error when API returns error object', async () => {
+    team.updateActivity.mockResolvedValue({ error: 'Invalid files' });
+    const result = await collector.callTool('chinwag_update_activity', {
+      files: ['x.js'],
+      summary: 'test',
+    });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/Failed to update activity.*Invalid files/);
+  });
+
   it('handles API error', async () => {
     team.updateActivity.mockRejectedValue(new Error('Rate limited'));
     const result = await collector.callTool('chinwag_update_activity', {
@@ -707,6 +778,13 @@ describe('messaging tool (unit)', () => {
     });
     expect(team.sendMessage).toHaveBeenCalledWith('t_msg', 'Check your tests', 'cursor:abc123');
     expect(result.content[0].text).toMatch(/Message sent to cursor:abc123/);
+  });
+
+  it('returns error when API returns error object', async () => {
+    team.sendMessage.mockResolvedValue({ error: 'Message rejected' });
+    const result = await collector.callTool('chinwag_send_message', { text: 'x' });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/Failed to send message.*Message rejected/);
   });
 
   it('handles API error', async () => {

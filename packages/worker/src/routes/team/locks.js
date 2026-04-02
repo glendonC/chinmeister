@@ -22,7 +22,7 @@ export async function handleTeamClaimFiles(request, user, env, teamId) {
 
   return withRateLimit(db, `locks:${user.id}`, RATE_LIMIT_LOCKS, 'Lock claim limit reached (100/day). Try again tomorrow.', async () => {
     const result = await team.claimFiles(agentId, files, user.handle, runtime, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result);
   });
 }
@@ -39,7 +39,7 @@ export async function handleTeamReleaseFiles(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.releaseFiles(agentId, files, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 

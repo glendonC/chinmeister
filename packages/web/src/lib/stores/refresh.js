@@ -1,9 +1,17 @@
-let refreshHandler = null;
+const refreshSubscribers = new Set();
 
+export function addRefreshHandler(handler) {
+  refreshSubscribers.add(handler);
+  return () => refreshSubscribers.delete(handler);
+}
+
+// Legacy single-handler API — delegates to subscriber set
 export function setRefreshHandler(handler) {
-  refreshHandler = handler;
+  refreshSubscribers.add(handler);
 }
 
 export function requestRefresh() {
-  refreshHandler?.();
+  for (const handler of refreshSubscribers) {
+    handler();
+  }
 }

@@ -18,7 +18,10 @@ export function registerMemoryTools(addTool, { team, state }) {
     async ({ text, tags }) => {
       if (!state.teamId) return noTeam();
       try {
-        await team.saveMemory(state.teamId, text, tags);
+        const result = await team.saveMemory(state.teamId, text, tags);
+        if (result?.error) {
+          return { content: [{ type: 'text', text: `Failed to save memory: ${result.error}` }], isError: true };
+        }
         const preamble = await teamPreamble(team, state.teamId);
         const tagStr = tags?.length ? ` [${tags.join(', ')}]` : '';
         return { content: [{ type: 'text', text: `${preamble}Memory saved${tagStr}: ${text}` }] };
@@ -33,7 +36,7 @@ export function registerMemoryTools(addTool, { team, state }) {
     {
       description: 'Update an existing team memory. Use chinwag_search_memory first to find the ID. Any team member can update any memory — memories are team knowledge. Use this to correct, improve, or re-tag knowledge without creating duplicates.',
       inputSchema: z.object({
-        id: z.string().describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
+        id: z.string().uuid().describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
         text: z.string().max(2000).optional().describe('Updated text content'),
         tags: z.array(z.string().max(50)).max(10).optional().describe('Updated tags'),
       }),
@@ -73,6 +76,9 @@ export function registerMemoryTools(addTool, { team, state }) {
       if (!state.teamId) return noTeam();
       try {
         const result = await team.searchMemories(state.teamId, query, tags, limit);
+        if (result?.error) {
+          return { content: [{ type: 'text', text: `Failed to search memories: ${result.error}` }], isError: true };
+        }
         if (!result.memories || result.memories.length === 0) {
           return { content: [{ type: 'text', text: 'No memories found.' }] };
         }
@@ -92,7 +98,7 @@ export function registerMemoryTools(addTool, { team, state }) {
     {
       description: 'Delete a team memory by ID. Use chinwag_search_memory first to find the ID of the memory to delete. Use this to remove outdated, incorrect, or redundant knowledge.',
       inputSchema: z.object({
-        id: z.string().describe('Memory ID to delete (UUID format, get from chinwag_search_memory)'),
+        id: z.string().uuid().describe('Memory ID to delete (UUID format, get from chinwag_search_memory)'),
       }),
     },
     async ({ id }) => {

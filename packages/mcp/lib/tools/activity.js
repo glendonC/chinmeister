@@ -18,7 +18,10 @@ export function registerActivityTool(addTool, { team, state }) {
     async ({ files, summary }) => {
       if (!state.teamId) return noTeam();
       try {
-        await team.updateActivity(state.teamId, files, summary);
+        const result = await team.updateActivity(state.teamId, files, summary);
+        if (result?.error) {
+          return { content: [{ type: 'text', text: `Failed to update activity: ${result.error}` }], isError: true };
+        }
         // Set terminal tab title to the agent's task — stable identity
         if (state.tty && summary) {
           const label = summary.length > 40 ? summary.slice(0, 39) + '\u2026' : summary;

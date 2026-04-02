@@ -163,7 +163,14 @@ function readStdin() {
     });
     process.stdin.on('end', () => {
       clearTimeout(timeout);
-      try { done(JSON.parse(data)); } catch (err) { console.error('[chinwag]', err?.message || 'stdin parse failed'); done({}); }
+      try {
+        done(JSON.parse(data));
+      } catch (err) {
+        // Log with context so parse failures are diagnosable — include truncated raw data
+        const preview = data.length > 200 ? data.slice(0, 200) + '...' : data;
+        console.error(`[chinwag] stdin parse failed (${data.length} bytes, subcommand=${subcommand}): ${err?.message || 'unknown error'} — data: ${preview}`);
+        done({});
+      }
     });
   });
 }

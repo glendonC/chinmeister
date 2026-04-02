@@ -28,7 +28,8 @@ export function findTeamFile(startDir = process.cwd()) {
           teamId,
           teamName: data.name || basename(dir),
         };
-      } catch {
+      } catch (err) {
+        console.error(`[chinwag] Failed to parse team file at ${filePath}: ${err.message}`);
         return null;
       }
     }

@@ -291,6 +291,32 @@ describe('diffState', () => {
       expect(stucknessAlerted.has('a1')).toBe(false);
     });
 
+    it('clears stuckness alert when agent switches to different files (same updated_at)', () => {
+      const member1 = {
+        handle: 'alice',
+        agent_id: 'a1',
+        status: 'active',
+        activity: { files: ['stuck.js'], updated_at: '2026-01-01T00:00:00Z' },
+        minutes_since_update: 20,
+      };
+      const state1 = { members: [member1] };
+
+      // First diff triggers stuckness alert
+      diffState(state1, state1, stucknessAlerted);
+      expect(stucknessAlerted.has('a1')).toBe(true);
+
+      // Agent switches files but updated_at stays the same (edge case)
+      const member2 = {
+        ...member1,
+        activity: { files: ['different.js'], updated_at: '2026-01-01T00:00:00Z' },
+        minutes_since_update: 25,
+      };
+      const state2 = { members: [member2] };
+      const events = diffState(state1, state2, stucknessAlerted);
+      // Alert should fire again because files changed
+      expect(events.some(e => e.includes('may be stuck'))).toBe(true);
+    });
+
     it('does not alert for inactive agents even if minutes_since_update is high', () => {
       const prev = { members: [] };
       const curr = {

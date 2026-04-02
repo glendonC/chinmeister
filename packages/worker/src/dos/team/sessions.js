@@ -52,7 +52,7 @@ export function endSession(sql, resolvedAgentId, sessionId) {
     sessionId, resolvedAgentId
   );
   const changed = sql.exec('SELECT changes() as c').toArray();
-  if (changed[0].c === 0) return { error: 'Session not found or not owned by this agent' };
+  if (changed[0].c === 0) return { error: 'Session not found or not owned by this agent', code: 'NOT_FOUND' };
   return { ok: true };
 }
 

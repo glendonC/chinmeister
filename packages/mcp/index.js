@@ -106,7 +106,7 @@ async function main() {
       let reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
       let pingTimer = null;
       let lastWsSend = 0;
-      let connecting = false;
+      let connectingPromise = null; // Promise-based guard: subsequent callers await the same attempt
 
       function scheduleReconnect() {
         if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
@@ -118,54 +118,63 @@ async function main() {
       }
 
       function connectTeamWs() {
-        if (connecting || state._shuttingDown) return;
-        connecting = true;
+        // If a connection attempt is already in progress, return the existing promise
+        // so callers await the same attempt instead of starting a new one.
+        if (connectingPromise) return connectingPromise;
+        if (state._shuttingDown) return Promise.resolve();
         reconnectTimer = null;
 
-        // Fetch short-lived ticket, then open WS
-        client.post('/auth/ws-ticket').then(({ ticket }) => {
-          if (state._shuttingDown) { connecting = false; return; }
+        connectingPromise = new Promise((resolve) => {
+          // Fetch short-lived ticket, then open WS
+          client.post('/auth/ws-ticket').then(({ ticket }) => {
+            if (state._shuttingDown) { connectingPromise = null; resolve(); return; }
 
-          const wsBase = getApiUrl().replace(/^http/, 'ws');
-          const wsUrl = `${wsBase}/teams/${state.teamId}/ws?agentId=${encodeURIComponent(agentId)}&ticket=${encodeURIComponent(ticket)}&role=agent`;
+            const wsBase = getApiUrl().replace(/^http/, 'ws');
+            const wsUrl = `${wsBase}/teams/${state.teamId}/ws?agentId=${encodeURIComponent(agentId)}&ticket=${encodeURIComponent(ticket)}&role=agent`;
 
-          const ws = new WebSocket(wsUrl);
+            const ws = new WebSocket(wsUrl);
 
-          ws.onopen = () => {
-            connecting = false;
-            state.ws = ws;
-            reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
-            console.error('[chinwag] WebSocket connected (presence active)');
+            ws.onopen = () => {
+              connectingPromise = null;
+              state.ws = ws;
+              reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
+              console.error('[chinwag] WebSocket connected (presence active)');
 
-            // Ping to keep DB heartbeat fresh — only when no activity was sent recently
-            pingTimer = setInterval(() => {
-              if (Date.now() - lastWsSend > WS_PING_MS - 5000) {
-                try {
-                  ws.send(JSON.stringify({ type: 'ping', lastToolUseAt: state.lastActivity }));
-                  lastWsSend = Date.now();
-                } catch (err) { console.error('[chinwag]', err?.message || 'ws ping failed'); }
-              }
-            }, WS_PING_MS);
-            if (pingTimer.unref) pingTimer.unref();
-          };
+              // Ping to keep DB heartbeat fresh — only when no activity was sent recently
+              pingTimer = setInterval(() => {
+                if (Date.now() - lastWsSend > WS_PING_MS - 5000) {
+                  try {
+                    ws.send(JSON.stringify({ type: 'ping', lastToolUseAt: state.lastActivity }));
+                    lastWsSend = Date.now();
+                  } catch (err) { console.error('[chinwag]', err?.message || 'ws ping failed'); }
+                }
+              }, WS_PING_MS);
+              if (pingTimer.unref) pingTimer.unref();
+              resolve();
+            };
 
-          ws.onmessage = () => {}; // agent doesn't need broadcasts
+            ws.onmessage = () => {}; // agent doesn't need broadcasts
 
-          ws.onclose = () => {
-            connecting = false;
-            state.ws = null;
-            if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+            ws.onclose = () => {
+              connectingPromise = null;
+              state.ws = null;
+              if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+              scheduleReconnect();
+              resolve();
+            };
+
+            ws.onerror = (err) => {
+              console.error('[chinwag] WebSocket error:', err?.message || 'unknown');
+            };
+          }).catch((err) => {
+            connectingPromise = null;
+            console.error('[chinwag]', err?.message || 'ws ticket fetch failed');
             scheduleReconnect();
-          };
-
-          ws.onerror = (err) => {
-            console.error('[chinwag] WebSocket error:', err?.message || 'unknown');
-          };
-        }).catch((err) => {
-          connecting = false;
-          console.error('[chinwag]', err?.message || 'ws ticket fetch failed');
-          scheduleReconnect();
+            resolve();
+          });
         });
+
+        return connectingPromise;
       }
 
       connectTeamWs();

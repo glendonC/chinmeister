@@ -34,7 +34,7 @@ export async function handleTeamActivity(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.updateActivity(agentId, files, summary, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 
@@ -73,7 +73,7 @@ export async function handleTeamFile(request, user, env, teamId) {
 
   return withRateLimit(db, `file:${user.id}`, RATE_LIMIT_FILE_REPORTS, 'File report limit reached (500/day). Try again tomorrow.', async () => {
     const result = await team.reportFile(agentId, file, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result);
   });
 }
@@ -92,7 +92,7 @@ export async function handleTeamStartSession(request, user, env, teamId) {
 
   return withRateLimit(db, `session:${user.id}`, RATE_LIMIT_SESSIONS, 'Session limit reached. Try again tomorrow.', async () => {
     const result = await team.startSession(agentId, user.handle, framework, runtime, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result, 201);
   });
 }
@@ -110,7 +110,7 @@ export async function handleTeamEndSession(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.endSession(agentId, session_id, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 
@@ -131,7 +131,7 @@ export async function handleTeamSessionEdit(request, user, env, teamId) {
 
   return withRateLimit(db, `edit:${user.id}`, RATE_LIMIT_EDITS, 'Edit recording limit reached. Try again tomorrow.', async () => {
     const result = await team.recordEdit(agentId, file, user.id);
-    if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+    if (result.error) return json({ error: result.error }, teamErrorStatus(result));
     return json(result);
   });
 }
@@ -164,6 +164,6 @@ export async function handleTeamEnrichModel(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.enrichModel(agentId, model.trim(), user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }

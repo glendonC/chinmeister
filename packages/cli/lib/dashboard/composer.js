@@ -63,7 +63,10 @@ export function useComposer({ config, teamId, bumpRefreshKey, flash, clearMemory
         flash(targetLabel ? `Sent to ${targetLabel}` : 'Sent to team', { tone: 'success' });
         bumpRefreshKey();
       })
-      .catch(() => flash('Message not sent. Check connection.', { tone: 'error' }));
+      .catch((err) => {
+        console.error('[chinwag] Message send failed:', err?.message || err);
+        flash('Message not sent. Check connection.', { tone: 'error' });
+      });
   }
 
   function onComposeSubmit(commandSuggestions, handleCommandSubmit) {

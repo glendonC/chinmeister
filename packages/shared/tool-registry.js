@@ -208,3 +208,5 @@ export function getMcpToolById(toolId) {
   return MCP_TOOLS.find((tool) => tool.id === toolId) || null;
 }
 
+export const getToolById = getMcpToolById;
+

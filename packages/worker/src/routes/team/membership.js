@@ -22,13 +22,15 @@ export async function handleTeamJoin(request, user, env, teamId) {
     const result = await team.join(agentId, user.id, user.handle, runtime);
     if (result.error) return json({ error: result.error }, 400);
 
+    let warning;
     try {
       await db.addUserTeam(user.id, teamId, name);
     } catch (err) {
       console.error(`[chinwag] Failed to sync joined team ${teamId} for user ${user.id}:`, err);
+      warning = 'Team joined successfully, but team list sync failed';
     }
 
-    return json(result);
+    return json(warning ? { ...result, warning } : result);
   });
 }
 
@@ -68,7 +70,7 @@ export async function handleTeamHeartbeat(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.heartbeat(agentId, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
   return json(result);
 }
 

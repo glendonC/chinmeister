@@ -25,7 +25,9 @@ export function getCurrentTtyPath(pid = process.ppid) {
     if (ttyName && ttyName !== '??' && ttyName !== '?') {
       return `/dev/${ttyName}`;
     }
-  } catch {}
+  } catch (err) {
+    console.error(`[chinwag] Failed to get TTY for pid ${pid}: ${err.message}`);
+  }
   return null;
 }
 
@@ -68,7 +70,8 @@ export function readSessionRecord(agentId, { homeDir = homedir() } = {}) {
   if (!existsSync(filePath)) return null;
   try {
     return JSON.parse(readFileSync(filePath, 'utf-8'));
-  } catch {
+  } catch (err) {
+    console.error(`[chinwag] Failed to parse session record at ${filePath}: ${err.message}`);
     return null;
   }
 }
@@ -99,7 +102,8 @@ export function resolveSessionAgentId({
       .map(name => {
         try {
           return JSON.parse(readFileSync(join(dir, name), 'utf-8'));
-        } catch {
+        } catch (err) {
+          console.error(`[chinwag] Failed to parse session file ${name}: ${err.message}`);
           return null;
         }
       })
@@ -114,7 +118,8 @@ export function resolveSessionAgentId({
       .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 
     return matches[0]?.agentId || fallbackAgentId;
-  } catch {
+  } catch (err) {
+    console.error(`[chinwag] Failed to resolve session agent ID: ${err.message}`);
     return fallbackAgentId;
   }
 }

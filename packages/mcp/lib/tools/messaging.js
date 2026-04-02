@@ -16,7 +16,10 @@ export function registerMessagingTool(addTool, { team, state }) {
     async ({ text, target }) => {
       if (!state.teamId) return noTeam();
       try {
-        await team.sendMessage(state.teamId, text, target);
+        const result = await team.sendMessage(state.teamId, text, target);
+        if (result?.error) {
+          return { content: [{ type: 'text', text: `Failed to send message: ${result.error}` }], isError: true };
+        }
         const dest = target ? `to ${target}` : 'to team';
         return { content: [{ type: 'text', text: `Message sent ${dest}: ${text}` }] };
       } catch (err) {

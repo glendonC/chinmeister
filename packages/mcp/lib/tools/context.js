@@ -3,7 +3,8 @@
 import * as z from 'zod/v4';
 import { refreshContext, offlinePrefix } from '../context.js';
 import { noTeam } from '../utils/responses.js';
-import { formatToolTag, formatWho } from '../utils/formatting.js';
+import { formatWho } from '../utils/formatting.js';
+import { formatMemberLine, formatLockLine, formatMemoryLine } from '../utils/display.js';
 
 export function registerContextTool(addTool, { team, state }) {
   addTool(
@@ -43,11 +44,7 @@ export function registerContextTool(addTool, { team, state }) {
       } else {
         lines.push('Agents:');
         for (const m of ctx.members) {
-          const toolInfo = formatToolTag(m.tool) ? `, ${m.tool}` : '';
-          const activity = m.activity
-            ? `working on ${m.activity.files.join(', ')}${m.activity.summary ? ` — "${m.activity.summary}"` : ''}`
-            : 'idle';
-          lines.push(`  ${m.handle} (${m.status}${toolInfo}): ${activity}`);
+          lines.push(formatMemberLine(m));
         }
       }
 
@@ -55,8 +52,7 @@ export function registerContextTool(addTool, { team, state }) {
         lines.push('');
         lines.push('Locked files:');
         for (const l of ctx.locks) {
-          const who = formatWho(l.owner_handle, l.tool);
-          lines.push(`  ${l.file_path} — ${who} (${Math.round(l.minutes_held)}m)`);
+          lines.push(formatLockLine(l));
         }
       }
 
@@ -73,8 +69,7 @@ export function registerContextTool(addTool, { team, state }) {
         lines.push('');
         lines.push('Project knowledge:');
         for (const mem of ctx.memories) {
-          const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
-          lines.push(`  ${mem.text}${tagStr}`);
+          lines.push(formatMemoryLine(mem));
         }
       }
 

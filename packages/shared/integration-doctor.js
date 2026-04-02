@@ -9,7 +9,8 @@ function readJson(filePath) {
   if (!existsSync(filePath)) return {};
   try {
     return JSON.parse(readFileSync(filePath, 'utf-8'));
-  } catch {
+  } catch (err) {
+    console.error(`[chinwag] Failed to parse JSON at ${filePath}: ${err.message}`);
     return {};
   }
 }
