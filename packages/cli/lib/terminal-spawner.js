@@ -5,6 +5,7 @@ import { homedir } from 'os';
 import { safeAgentId, isProcessAlive } from '../../shared/session-registry.js';
 import { escapeAppleScriptString } from './utils/shell.js';
 
+const EXEC_TIMEOUT_MS = 10000;
 const PIDS_DIR = join(homedir(), '.chinwag', 'pids');
 
 // ── Terminal environment detection ────────────────────
@@ -90,7 +91,7 @@ function spawnInTmux(shellCommand, cwd) {
     const args = ['split-window', '-h'];
     if (cwd) args.push('-c', cwd);
     args.push(shellCommand);
-    execFileSync('tmux', args, { stdio: 'ignore' });
+    execFileSync('tmux', args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -130,7 +131,7 @@ function spawnInIterm2(shellCommand) {
         end tell
       end tell
     `;
-    execFileSync('osascript', ['-e', script], { stdio: 'ignore' });
+    execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -142,7 +143,7 @@ function spawnInMacosTerminal(shellCommand) {
     execFileSync('osascript', [
       '-e', 'tell application "Terminal" to activate',
       '-e', `tell application "Terminal" to do script "${escapeAppleScript(shellCommand)}"`,
-    ], { stdio: 'ignore' });
+    ], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };
@@ -158,7 +159,7 @@ function spawnOnLinux(shellCommand) {
   ];
   for (const [cmd, args] of attempts) {
     try {
-      execFileSync(cmd, args, { stdio: 'ignore' });
+      execFileSync(cmd, args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
       return { ok: true };
     } catch {}
   }
@@ -168,10 +169,10 @@ function spawnOnLinux(shellCommand) {
 function spawnOnWindows(shellCommand) {
   try {
     try {
-      execFileSync('wt', ['new-tab', 'cmd', '/k', shellCommand], { stdio: 'ignore' });
+      execFileSync('wt', ['new-tab', 'cmd', '/k', shellCommand], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
       return { ok: true };
     } catch {}
-    execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], { stdio: 'ignore' });
+    execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: err.message };

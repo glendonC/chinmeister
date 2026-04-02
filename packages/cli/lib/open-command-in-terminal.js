@@ -5,6 +5,8 @@ import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
+const EXEC_TIMEOUT_MS = 10000;
+
 export function openCommandInTerminal(command, cwd = process.cwd()) {
   const env = detectTerminalEnvironment();
 
@@ -32,7 +34,7 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
         'tell application "Terminal" to activate',
         '-e',
         `tell application "Terminal" to do script "${escapeAppleScriptString(shellCommand)}"`,
-      ], { stdio: 'ignore' });
+      ], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
       return { ok: true };
     }
 
@@ -47,7 +49,7 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
 
       for (const [cmd, args] of attempts) {
         try {
-          execFileSync(cmd, args, { stdio: 'ignore' });
+          execFileSync(cmd, args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
           return { ok: true };
         } catch {}
       }
@@ -57,7 +59,7 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
 
     if (process.platform === 'win32') {
       const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
-      execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], { stdio: 'ignore' });
+      execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
       return { ok: true };
     }
 
