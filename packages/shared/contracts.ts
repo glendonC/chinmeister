@@ -1,3 +1,15 @@
+/**
+ * Naming convention: this file mixes camelCase and snake_case deliberately.
+ *
+ * - **camelCase** (hostTool, agentSurface) — ephemeral runtime identity, internal to the MCP process.
+ *   These are set once during detection and never persisted to the API.
+ *
+ * - **snake_case** (host_tool, agent_id) — API contract fields that map directly to database columns
+ *   and JSON responses. Changing these requires API versioning.
+ *
+ * Do not normalize between the two without updating all consumers.
+ */
+
 export type AgentStatus = 'active' | 'idle' | 'offline' | string;
 
 export interface RuntimeIdentityContract {

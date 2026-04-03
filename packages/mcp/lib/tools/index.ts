@@ -42,9 +42,9 @@ export function withTeam(
  */
 function wrapWithActivity(addTool: AddToolFn, { state }: Pick<ToolDeps, 'state'>): AddToolFn {
   return (name, schema, handler) => {
-    const wrappedHandler = async (...args: any[]) => {
+    const wrappedHandler = async (args: Record<string, unknown>) => {
       state.lastActivity = Date.now();
-      return handler(...args);
+      return handler(args);
     };
     return addTool(name, schema, wrappedHandler);
   };

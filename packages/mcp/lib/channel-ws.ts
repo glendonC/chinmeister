@@ -81,7 +81,8 @@ export function createChannelWebSocket({
 
         socket.onmessage = (event: MessageEvent) => {
           try {
-            const data = JSON.parse(event.data as string) as Record<string, unknown>;
+            const raw = typeof event.data === 'string' ? event.data : String(event.data);
+            const data = JSON.parse(raw) as Record<string, unknown>;
 
             // Initial full context frame sent by TeamDO on connect
             if (data.type === 'context' && data.data) {

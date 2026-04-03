@@ -4,18 +4,23 @@ import type { TeamHandlers } from '../team.js';
 import type { McpState } from '../lifecycle.js';
 import type { EnvironmentProfile } from '../profile.js';
 import type { McpToolResult } from '../utils/responses.js';
+import type { IntegrationScanResult, ConfigureResult } from '@chinwag/shared/integration-doctor.js';
 
 /** Function signature for registering an MCP tool. */
 export type AddToolFn = (
   name: string,
-  schema: { description: string; inputSchema: any },
-  handler: (...args: any[]) => Promise<McpToolResult>,
+  schema: { description: string; inputSchema: unknown },
+  handler: (args: Record<string, unknown>) => Promise<McpToolResult>,
 ) => void;
 
-/** Integration doctor interface. */
+/** Integration doctor interface — mirrors shared/integration-doctor.ts exports. */
 export interface IntegrationDoctor {
-  scanHostIntegrations(cwd: string): any[];
-  configureHostIntegration(cwd: string, hostId: string, options?: { surfaceId?: string }): any;
+  scanHostIntegrations(cwd: string): IntegrationScanResult[];
+  configureHostIntegration(
+    cwd: string,
+    hostId: string,
+    options?: { surfaceId?: string | null },
+  ): ConfigureResult;
 }
 
 /** Dependencies injected into tool registration functions. */
