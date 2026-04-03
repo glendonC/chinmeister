@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
+import { applyDelta } from '@chinwag/shared/dashboard-ws.js';
 import { api, getApiUrl } from '../api.js';
 import { detectTools } from '../mcp-config.js';
 import { getProjectContext } from '../project.js';
 import { SPINNER } from './utils.js';
-import { applyDelta } from '../../../shared/dashboard-ws.js';
 import { classifyError } from '../utils/errors.js';
 
 // ── Constants ───────────────────────────────────────

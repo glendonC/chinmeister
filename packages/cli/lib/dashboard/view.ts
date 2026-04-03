@@ -1,4 +1,10 @@
 import { basename } from 'path';
+import type {
+  TeamContext as SharedTeamContext,
+  TeamMemory as SharedTeamMemory,
+  TeamMember as SharedTeamMember,
+  TeamSession as SharedTeamSession,
+} from '@chinwag/shared/contracts.js';
 
 export const MAX_MEMORIES = 8;
 
@@ -11,44 +17,14 @@ export interface DetectedTool {
 
 export interface AgentActivity {
   files: string[];
-  summary?: string;
-  updated_at?: string;
+  summary?: string | null;
+  updated_at?: string | null;
 }
 
-export interface TeamMember {
-  agent_id: string;
-  handle: string;
-  tool: string;
-  status: string;
-  session_minutes?: number;
-  minutes_since_update?: number | null;
-  activity?: AgentActivity | null;
-}
-
-export interface MemoryEntry {
-  id: string;
-  text: string;
-  tags?: string[];
-  source_handle?: string;
-}
-
-export interface SessionEntry {
-  owner_handle?: string;
-  duration_minutes?: number;
-  edit_count?: number;
-  files_touched?: string[];
-  ended_at?: string | null;
-}
-
-export interface TeamContext {
-  members?: TeamMember[];
-  memories?: MemoryEntry[];
-  messages?: Array<{ from_handle: string; from_tool?: string; text: string; created_at?: string }>;
-  locks?: Array<{ file_path: string; owner_handle: string; tool?: string; minutes_held: number }>;
-  tools_configured?: string[];
-  usage?: Record<string, unknown>;
-  recentSessions?: SessionEntry[];
-}
+export type TeamMember = SharedTeamMember;
+export type MemoryEntry = SharedTeamMemory;
+export type SessionEntry = SharedTeamSession;
+export type TeamContext = SharedTeamContext;
 
 export interface ManagedAgent {
   id: number;
@@ -222,7 +198,7 @@ export function buildCombinedAgentRows({
       ...connected,
       ...managed,
       handle: connected.handle || managed.handle || null,
-      tool: managed.tool || connected.host_tool,
+      tool: managed.tool || connected.tool || connected.host_tool,
       activity: connected.activity || managed.activity || null,
       session_minutes: connected.session_minutes ?? managed.session_minutes ?? null,
       minutes_since_update: connected.minutes_since_update ?? null,
@@ -242,8 +218,9 @@ export function buildCombinedAgentRows({
     .map((agent) => ({
       ...agent,
       id: 0,
-      toolId: agent.host_tool,
-      toolName: getToolName(agent.host_tool) || 'Unknown',
+      tool: agent.tool || agent.host_tool || 'unknown',
+      toolId: agent.tool || agent.host_tool,
+      toolName: getToolName(agent.tool || agent.host_tool) || 'Unknown',
       cmd: '',
       args: [],
       taskArg: '',
@@ -253,7 +230,7 @@ export function buildCombinedAgentRows({
       exitCode: null,
       _managed: false,
       _connected: true,
-      _display: getToolName(agent.host_tool) || 'Unknown',
+      _display: getToolName(agent.tool || agent.host_tool) || 'Unknown',
       _summary: smartSummary(agent.activity),
       _duration: formatDuration(agent.session_minutes),
       _dead: false,
@@ -347,7 +324,9 @@ export function buildDashboardView({
   const toolsConfigured = context?.tools_configured || [];
   const usage = context?.usage || {};
 
-  const recentSessions = (context?.sessions || []).filter(hasVisibleSessionActivity);
+  const recentSessions = (context?.recentSessions || context?.sessions || []).filter(
+    hasVisibleSessionActivity,
+  );
   const showRecent = recentSessions.length > 0 && activeAgents.length === 0;
 
   const visibleAgents = activeAgents;
@@ -355,7 +334,8 @@ export function buildDashboardView({
 
   const toolCounts = new Map<string, number>();
   for (const agent of activeAgents) {
-    toolCounts.set(agent.tool, (toolCounts.get(agent.tool) || 0) + 1);
+    const toolId = agent.tool || agent.host_tool || 'unknown';
+    toolCounts.set(toolId, (toolCounts.get(toolId) || 0) + 1);
   }
 
   return {

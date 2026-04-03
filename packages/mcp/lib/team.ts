@@ -2,7 +2,7 @@ import {
   TEAM_ID_PATTERN,
   isValidTeamId,
   findTeamFile as findTeamFileShared,
-} from '../../shared/team-utils.js';
+} from '@chinwag/shared/team-utils.js';
 import type { TeamContext, ConflictInfo, LockedFileInfo, MemoryInfo } from './utils/display.js';
 
 export { TEAM_ID_PATTERN, isValidTeamId };

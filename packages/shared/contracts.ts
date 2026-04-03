@@ -30,6 +30,7 @@ export interface AgentMetadata {
 export interface TeamMember extends AgentMetadata {
   agent_id: string;
   handle: string;
+  tool?: string | null;
   host_tool: string;
   status: AgentStatus;
   framework?: string | null;
@@ -63,6 +64,8 @@ export interface TeamLock extends AgentMetadata {
   file_path: string;
   agent_id: string;
   handle?: string | null;
+  owner_handle?: string | null;
+  tool?: string | null;
   claimed_at?: string;
   minutes_held?: number | null;
 }
@@ -74,12 +77,21 @@ export interface TeamMemory extends AgentMetadata {
   handle?: string | null;
   created_at?: string;
   updated_at?: string;
+  source_handle?: string | null;
+  source_tool?: string | null;
+  source_host_tool?: string | null;
+  source_agent_surface?: string | null;
+  source_model?: string | null;
 }
 
 export interface TeamMessage extends AgentMetadata {
   id?: string;
   agent_id?: string | null;
-  handle: string;
+  handle?: string;
+  from_handle?: string;
+  from_tool?: string | null;
+  from_host_tool?: string | null;
+  from_agent_surface?: string | null;
   text: string;
   created_at: string;
 }
@@ -87,9 +99,11 @@ export interface TeamMessage extends AgentMetadata {
 export interface TeamSession extends AgentMetadata {
   id?: string;
   agent_id: string;
-  handle: string;
+  handle?: string;
+  owner_handle: string;
   framework?: string | null;
   host_tool: string;
+  tool?: string | null;
   started_at: string;
   ended_at?: string | null;
   edit_count?: number;
@@ -101,6 +115,11 @@ export interface TeamSession extends AgentMetadata {
 
 export interface HostJoinMetric {
   host_tool: string;
+  joins: number;
+}
+
+export interface ToolJoinMetric {
+  tool: string;
   joins: number;
 }
 
@@ -120,7 +139,9 @@ export interface TeamContext {
   locks: TeamLock[];
   memories: TeamMemory[];
   messages: TeamMessage[];
-  sessions: TeamSession[];
+  recentSessions: TeamSession[];
+  sessions?: TeamSession[];
+  tools_configured?: ToolJoinMetric[];
   hosts_configured?: HostJoinMetric[];
   surfaces_seen?: SurfaceJoinMetric[];
   models_seen?: ModelMetric[];
@@ -136,6 +157,7 @@ export interface DashboardTeamSummary {
   total_members?: number;
   live_sessions?: number;
   recent_sessions_24h?: number;
+  tools_configured?: ToolJoinMetric[];
   hosts_configured?: HostJoinMetric[];
   surfaces_seen?: SurfaceJoinMetric[];
   models_seen?: ModelMetric[];

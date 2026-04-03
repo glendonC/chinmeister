@@ -1,12 +1,6 @@
-import { createJsonApiClient, DEFAULT_API_URL } from '../../shared/api-client.js';
+import { createJsonApiClient, DEFAULT_API_URL } from '@chinwag/shared/api-client.js';
+import type { RuntimeIdentity } from '@chinwag/shared/agent-identity.js';
 import type { ApiClient } from './team.js';
-
-interface RuntimeIdentity {
-  hostTool: string;
-  agentSurface?: string;
-  transport: string;
-  capabilities: string[];
-}
 
 interface ApiOptions {
   agentId?: string;

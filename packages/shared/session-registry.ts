@@ -21,6 +21,8 @@ export interface SessionRecord {
   commandMarker?: string;
 }
 
+export type SessionRecordInput = Omit<SessionRecord, 'agentId'>;
+
 export interface ResolveSessionOptions {
   tool?: string;
   cwd?: string;
@@ -75,7 +77,7 @@ export function isSessionRecordAlive(
 
 export function writeSessionRecord(
   agentId: string,
-  record: SessionRecord,
+  record: SessionRecordInput,
   { homeDir = homedir() }: { homeDir?: string } = {},
 ): string {
   const filePath = getSessionFilePath(agentId, homeDir);

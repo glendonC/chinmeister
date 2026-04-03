@@ -130,6 +130,7 @@ export {
   setTerminalTitle,
   pingAgentTerminal,
   type SessionRecord,
+  type SessionRecordInput,
   type ResolveSessionOptions,
 } from './session-registry.js';
 

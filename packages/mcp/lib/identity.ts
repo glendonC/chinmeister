@@ -4,4 +4,4 @@ export {
   generateAgentId,
   generateSessionAgentId,
   getConfiguredAgentId,
-} from '../../shared/agent-identity.js';
+} from '@chinwag/shared/agent-identity.js';
