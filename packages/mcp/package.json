@@ -12,6 +12,7 @@
     "clean": "rm -rf dist",
     "build": "node build.mjs",
     "start": "node index.js",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage"
   },

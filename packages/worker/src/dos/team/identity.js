@@ -8,7 +8,7 @@
 
 /**
  * Resolve an agent ID to its canonical form, verifying ownership if ownerId is provided.
- * @param {import('cloudflare:workers').SqlStorage} sql
+ * @param {SqlStorage} sql
  * @param {string} agentId - The agent ID to resolve (exact or prefix)
  * @param {string|null} [ownerId] - If provided, must match the member's owner_id
  * @returns {string|null} The resolved canonical agent_id, or null if not found/unauthorized
@@ -19,7 +19,7 @@ export function resolveOwnedAgentId(sql, agentId, ownerId = null) {
     .exec('SELECT agent_id, owner_id FROM members WHERE agent_id = ?', agentId)
     .toArray()[0];
   if (exact) {
-    return !ownerId || exact.owner_id === ownerId ? exact.agent_id : null;
+    return !ownerId || exact.owner_id === ownerId ? /** @type {string} */ (exact.agent_id) : null;
   }
 
   // 2. Prefix match — find most-recently-active member whose ID starts with the input
@@ -30,7 +30,9 @@ export function resolveOwnedAgentId(sql, agentId, ownerId = null) {
     )
     .toArray()[0];
   if (prefixed) {
-    return !ownerId || prefixed.owner_id === ownerId ? prefixed.agent_id : null;
+    return !ownerId || prefixed.owner_id === ownerId
+      ? /** @type {string} */ (prefixed.agent_id)
+      : null;
   }
 
   return null;

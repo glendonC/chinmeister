@@ -7,6 +7,7 @@ export interface McpToolContent {
 }
 
 export interface McpToolResult {
+  [key: string]: unknown;
   content: McpToolContent[];
   isError?: boolean;
 }

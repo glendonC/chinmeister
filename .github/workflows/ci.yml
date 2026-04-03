@@ -21,6 +21,19 @@ jobs:
       - run: npx eslint .
       - run: npx prettier --check .
 
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+
   audit:
     name: Security Audit
     runs-on: ubuntu-latest
@@ -60,14 +73,14 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run test:shared
+      - run: npm run test:coverage:shared
       - name: Upload Shared coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-shared
           path: packages/shared/coverage/
-          retention-days: 7
+          retention-days: 3
 
   test-mcp:
     name: Test MCP
@@ -88,7 +101,7 @@ jobs:
         with:
           name: coverage-mcp
           path: packages/mcp/coverage/
-          retention-days: 7
+          retention-days: 3
 
   test-cli:
     name: Test CLI
@@ -108,7 +121,7 @@ jobs:
         with:
           name: coverage-cli
           path: packages/cli/coverage/
-          retention-days: 7
+          retention-days: 3
 
   test-web:
     name: Test Web
@@ -128,7 +141,7 @@ jobs:
         with:
           name: coverage-web
           path: packages/web/coverage/
-          retention-days: 7
+          retention-days: 3
 
   test-web-e2e:
     name: Web E2E

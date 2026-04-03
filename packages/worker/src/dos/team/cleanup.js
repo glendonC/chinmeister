@@ -17,7 +17,7 @@ const log = createLogger('TeamDO:cleanup');
 
 /**
  * Run cleanup queries, logging on failure without aborting the transaction.
- * @param {import('cloudflare:workers').SqlStorage} sql
+ * @param {SqlStorage} sql
  * @param {Set<string>} connectedAgentIds - Agents with active WebSocket connections
  * @param {<T>(fn: () => T) => T} transact - Transaction wrapper
  */

@@ -333,6 +333,7 @@ export class TeamDO extends DurableObject {
 
   // ── Identity resolution (delegated to identity.js) ──
 
+  /** @param {string} agentId @param {string|null} [ownerId] */
   #resolveOwnedAgentId(agentId, ownerId = null) {
     return resolveOwnedAgentId(this.sql, agentId, ownerId);
   }

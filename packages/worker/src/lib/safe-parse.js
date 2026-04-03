@@ -10,7 +10,7 @@ export function safeParse(json, context, defaultValue = null, log = console) {
   try {
     return JSON.parse(json);
   } catch (err) {
-    log.warn(`[safeParse] ${context}: ${err.message}`, {
+    log.warn(`[safeParse] ${context}: ${/** @type {Error} */ (err).message}`, {
       preview: String(json).slice(0, 100),
     });
     return defaultValue;

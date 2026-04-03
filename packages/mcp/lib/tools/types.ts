@@ -6,11 +6,19 @@ import type { EnvironmentProfile } from '../profile.js';
 import type { McpToolResult } from '../utils/responses.js';
 import type { IntegrationScanResult, ConfigureResult } from '@chinwag/shared/integration-doctor.js';
 
-/** Function signature for registering an MCP tool. */
+/**
+ * Function signature for registering an MCP tool.
+ * Handler args are typed as `never` in the base signature and widened
+ * at each call site via the Zod schema — the SDK validates input before
+ * the handler runs, so the destructured types are guaranteed correct.
+ */
+ 
+export type ToolHandler = (args: any) => Promise<McpToolResult>;
+
 export type AddToolFn = (
   name: string,
   schema: { description: string; inputSchema: unknown },
-  handler: (args: Record<string, unknown>) => Promise<McpToolResult>,
+  handler: ToolHandler,
 ) => void;
 
 /** Integration doctor interface — mirrors shared/integration-doctor.ts exports. */
