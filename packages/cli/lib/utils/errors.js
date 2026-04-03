@@ -36,6 +36,28 @@ export function classifyError(err) {
 }
 
 /**
+ * Classify an error for the init/welcome screen.
+ * Wraps classifyError() and maps to init-specific title/hint messaging.
+ *
+ * @param {{ message?: string, status?: number }} err
+ * @returns {{ title: string, hint: string }}
+ */
+export function classifyInitError({ message = '', status } = {}) {
+  const classified = classifyError({ message, status });
+
+  if (status === 429)
+    return { title: 'Our servers are busy right now.', hint: 'Try again in a few minutes.' };
+  if (status >= 500)
+    return { title: 'Something went wrong on our end.', hint: 'Try again shortly.' };
+  if (classified.state === 'reconnecting' && (status === 408 || message.includes('timed out')))
+    return { title: 'Request timed out.', hint: 'Check your connection and try again.' };
+  if (classified.state === 'offline' && !classified.fatal)
+    return { title: 'Cannot reach server.', hint: 'Check your internet connection.' };
+
+  return { title: 'Could not connect.', hint: message };
+}
+
+/**
  * Get a user-friendly message for an HTTP error in a form/action context
  * (e.g. updating a handle, saving a color). Falls back to classifyError
  * but returns just the detail string for inline display.

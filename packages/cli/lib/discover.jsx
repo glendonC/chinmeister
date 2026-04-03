@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
-import { MCP_TOOLS } from './tools.js';
-import { configureTool, scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js';
+import { scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js';
 import { api } from './api.js';
+import { addToolToProject } from './utils/tool-actions.js';
+import { computeToolRecommendations } from './utils/tool-recommendations.js';
 import { DetectedToolsList, RecommendationsList, CategoryBrowser } from './tool-display.jsx';
 
-const MAX_RECOMMENDATIONS = 9;
 const LOADING_TIMEOUT_MS = 15000;
 
 function evalToTool(e) {
@@ -89,28 +89,16 @@ export function Discover({ config, navigate }) {
   }
 
   useEffect(() => {
-     
     return () => {
       if (messageTimer.current) clearTimeout(messageTimer.current);
     };
   }, []);
 
-  const detected = integrationStatuses.filter((item) => item.detected);
-  const detectedIds = new Set(detected.map((t) => t.id));
+  const { detected, detectedIds, detectedCategories, recommendations } = computeToolRecommendations(
+    catalog,
+    integrationStatuses,
+  );
   const integrationSummary = summarizeIntegrationScan(integrationStatuses, { onlyDetected: true });
-
-  // Smart recommendations: suggest tools from categories the user DOESN'T already cover.
-  const detectedCategories = new Set(
-    catalog.filter((t) => detectedIds.has(t.id)).map((t) => t.category),
-  );
-  const complementary = catalog.filter(
-    (t) => !detectedIds.has(t.id) && t.category && !detectedCategories.has(t.category),
-  );
-  const recommendations = (
-    complementary.length > 0
-      ? complementary
-      : catalog.filter((t) => !detectedIds.has(t.id) && t.featured)
-  ).slice(0, MAX_RECOMMENDATIONS);
 
   // Group catalog by category -- skip detected tools AND categories the user already covers
   const categoryGroups = {};
@@ -132,20 +120,9 @@ export function Discover({ config, navigate }) {
   }
 
   function addTool(tool) {
-    const mcpTool = MCP_TOOLS.find((t) => t.id === tool.id);
-    if (mcpTool) {
-      const result = configureTool(process.cwd(), tool.id);
-      if (result.ok) {
-        showMessage(`Added ${result.name}: ${result.detail}`);
-        refreshIntegrations();
-      } else {
-        showMessage(`Could not add ${tool.name}: ${result.error}`);
-      }
-    } else if (tool.installCmd) {
-      showMessage(`${tool.name} — Install: ${tool.installCmd}  |  ${tool.website}`);
-    } else if (tool.website) {
-      showMessage(`${tool.name} — Visit: ${tool.website}`);
-    }
+    const result = addToolToProject(tool, process.cwd());
+    showMessage(result.message);
+    if (result.ok) refreshIntegrations();
   }
 
   useInput((ch, key) => {

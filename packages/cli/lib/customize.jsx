@@ -8,9 +8,10 @@ import { fileURLToPath } from 'url';
 import { api } from './api.js';
 import { saveConfig, loadConfig } from './config.js';
 import { getInkColor, getColorList } from './colors.js';
-import { MCP_TOOLS } from './tools.js';
-import { configureTool, scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js';
+import { scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js';
 import { classifyError } from './utils/errors.js';
+import { addToolToProject } from './utils/tool-actions.js';
+import { computeToolRecommendations } from './utils/tool-recommendations.js';
 import { DetectedToolsList, RecommendationsList } from './tool-display.jsx';
 
 function evalToTool(e) {
@@ -53,7 +54,6 @@ try {
 
 const IDE_COMMAND_SHORTCUT = process.platform === 'darwin' ? 'Cmd+Shift+P' : 'Ctrl+Shift+P';
 const IDE_EXTENSION_DIR = fileURLToPath(new URL('../../vscode/', import.meta.url));
-const MAX_RECOMMENDATIONS = 9;
 const FLASH_MIN_DURATION_MS = 3000;
 const FLASH_MS_PER_CHAR = 40;
 
@@ -273,37 +273,18 @@ export function Customize({ config, user, navigate, refreshUser }) {
   }
 
   function addTool(tool) {
-    const mcpTool = MCP_TOOLS.find((t) => t.id === tool.id);
-    if (mcpTool) {
-      const result = configureTool(process.cwd(), tool.id);
-      if (result.ok) {
-        showFlash(`Added ${result.name}: ${result.detail}`);
-        setIntegrationStatuses(scanIntegrationHealth(process.cwd()));
-      } else {
-        showFlash(`Could not add ${result.name || tool.name}: ${result.error}`, 'error');
-      }
-    } else if (tool.installCmd) {
-      showFlash(`${tool.name} — Install: ${tool.installCmd}  |  ${tool.website}`);
-    } else if (tool.website) {
-      showFlash(`${tool.name} — Visit: ${tool.website}`);
+    const result = addToolToProject(tool, process.cwd());
+    if (result.ok) {
+      showFlash(result.message);
+      setIntegrationStatuses(scanIntegrationHealth(process.cwd()));
+    } else {
+      showFlash(result.message, 'error');
     }
   }
 
   // Compute recommendations for tools mode
-  const detected = integrationStatuses.filter((item) => item.detected);
-  const detectedIds = new Set(detected.map((t) => t.id));
+  const { detected, recommendations } = computeToolRecommendations(catalog, integrationStatuses);
   const integrationSummary = summarizeIntegrationScan(integrationStatuses, { onlyDetected: true });
-  const detectedCategories = new Set(
-    catalog.filter((t) => detectedIds.has(t.id)).map((t) => t.category),
-  );
-  const complementary = catalog.filter(
-    (t) => !detectedIds.has(t.id) && t.category && !detectedCategories.has(t.category),
-  );
-  const recommendations = (
-    complementary.length > 0
-      ? complementary
-      : catalog.filter((t) => !detectedIds.has(t.id) && t.featured)
-  ).slice(0, MAX_RECOMMENDATIONS);
 
   async function submitHandle() {
     const newHandle = handleInput.trim().toLowerCase();

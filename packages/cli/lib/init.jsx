@@ -3,20 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import { saveConfig } from './config.js';
 import { initAccount } from './api.js';
 import { getInkColor } from './colors.js';
-
-const NETWORK_CODES = ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'ETIMEDOUT'];
-
-function classifyInitError({ message = '', status } = {}) {
-  if (status === 429)
-    return { title: 'Our servers are busy right now.', hint: 'Try again in a few minutes.' };
-  if (status >= 500)
-    return { title: 'Something went wrong on our end.', hint: 'Try again shortly.' };
-  if (status === 408 || message.includes('timed out'))
-    return { title: 'Request timed out.', hint: 'Check your connection and try again.' };
-  if (NETWORK_CODES.some((c) => message.includes(c)))
-    return { title: 'Cannot reach server.', hint: 'Check your internet connection.' };
-  return { title: 'Could not connect.', hint: message };
-}
+import { classifyInitError } from './utils/errors.js';
 
 export function Welcome({ onComplete }) {
   const [state, setState] = useState('loading');
