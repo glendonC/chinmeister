@@ -124,11 +124,6 @@
  * Memory entry as returned by searchMemories (memory.js).
  * Column names reflect the current schema: `handle`, `host_tool`, `agent_surface`, `agent_model`.
  *
- * The composite context query (queryTeamContext in context.js) also returns these rows with
- * backward-compatible SQL aliases: `source_handle`, `source_tool`, `source_host_tool`,
- * `source_agent_surface`, `source_model`. Consumers of the context endpoint may see both
- * the new names and the aliased names on the same object.
- *
  * @typedef {object} Memory
  * @property {string} id
  * @property {string} text
@@ -139,11 +134,6 @@
  * @property {string | null} agent_model — model identifier if known
  * @property {string} created_at
  * @property {string} updated_at
- * @property {string} [source_handle] - context query alias for `handle` (backward compat)
- * @property {string} [source_tool] - context query alias for `host_tool` (backward compat)
- * @property {string} [source_host_tool] - context query alias for `host_tool` (backward compat)
- * @property {string | null} [source_agent_surface] - context query alias for `agent_surface` (backward compat)
- * @property {string | null} [source_model] - context query alias for `agent_model` (backward compat)
  */
 
 // ── Locks ──

@@ -24,7 +24,7 @@
   max-width: 18px;
   min-height: 10px;
   border-radius: var(--radius-pill);
-  background: rgba(29, 70, 255, 0.14);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .barCurrent {

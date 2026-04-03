@@ -87,7 +87,7 @@ export function KnowledgePanel({
                 )}
                 {tagStr && <Text dimColor>{tagStr} </Text>}
                 <Text>{mem.text}</Text>
-                {isSelected && mem.source_handle && <Text dimColor> — {mem.source_handle}</Text>}
+                {isSelected && mem.handle && <Text dimColor> — {mem.handle}</Text>}
               </Text>
             );
           })}

@@ -117,10 +117,7 @@ export function buildChinwagHookCommand(
 }
 
 function isChinwagHookCommand(command: unknown): boolean {
-  return (
-    typeof command === 'string' &&
-    (command.includes('chinwag-hook') || command.includes('chinwag hook'))
-  );
+  return typeof command === 'string' && command.includes('chinwag hook');
 }
 
 function buildExpectedMcpArgs(

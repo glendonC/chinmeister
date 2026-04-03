@@ -167,7 +167,7 @@
   padding: 0;
   background: var(--dot-color);
   cursor: pointer;
-  box-shadow: 0 0 0 1px rgba(18, 19, 23, 0.08);
+  box-shadow: 0 0 0 1px var(--hairline);
   transition:
     transform var(--motion-fast) var(--motion),
     box-shadow var(--motion-base) var(--motion),
@@ -181,19 +181,59 @@
 
 .colorDotCurrent {
   box-shadow:
-    0 0 0 2px #fff,
+    0 0 0 2px var(--page-bg),
     0 0 0 3px var(--dot-color);
 }
 
 .colorDotCurrent.colorDotPreview {
   box-shadow:
-    0 0 0 2px #fff,
+    0 0 0 2px var(--page-bg),
     0 0 0 3px var(--dot-color);
 }
 
 .colorDot:disabled {
   cursor: default;
   opacity: 0.5;
+}
+
+/* ── Appearance ── */
+
+.appearanceSection {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 24px;
+  animation: fadeSlideIn var(--motion-slow) var(--motion) 0.03s both;
+}
+
+.themeToggle {
+  display: flex;
+  gap: 0;
+}
+
+.themeOption {
+  border: none;
+  background: transparent;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: var(--text-11);
+  letter-spacing: var(--tracking-action);
+  text-transform: uppercase;
+  cursor: pointer;
+  padding: 6px 16px;
+  transition: color var(--motion-fast) var(--motion);
+}
+
+.themeOption:first-child {
+  padding-left: 0;
+}
+
+.themeOption:hover:not(.themeOptionActive) {
+  color: var(--muted);
+}
+
+.themeOptionActive {
+  color: var(--ink);
 }
 
 /* ── GitHub ── */

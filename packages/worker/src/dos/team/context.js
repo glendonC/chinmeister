@@ -74,7 +74,7 @@ export function queryTeamContext(sql, connectedIds) {
 
   const memories = sql
     .exec(
-      `SELECT id, text, tags, handle, handle AS source_handle, host_tool, host_tool AS source_tool, host_tool AS source_host_tool, agent_surface AS source_agent_surface, agent_model AS source_model, created_at, updated_at
+      `SELECT id, text, tags, handle, host_tool, agent_surface, agent_model, created_at, updated_at
      FROM memories
      ORDER BY updated_at DESC, created_at DESC
      LIMIT 20`,

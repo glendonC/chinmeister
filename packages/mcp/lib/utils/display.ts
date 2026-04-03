@@ -28,7 +28,7 @@ export interface MemoryInfo {
   id?: string;
   text: string;
   tags?: string[];
-  source_handle?: string;
+  handle?: string;
 }
 
 export interface TeamContext {

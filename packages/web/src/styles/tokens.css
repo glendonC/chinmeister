@@ -34,3 +34,9 @@
   --tracking-action: 0.08em;
   --tracking-table: 0.1em;
 }
+
+[data-theme='dark'] {
+  --hover-bg: rgba(240, 240, 242, 0.05);
+  --github-bg: #2d333b;
+  --github-bg-hover: #373e47;
+}

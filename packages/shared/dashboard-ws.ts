@@ -116,12 +116,8 @@ export function normalizeDashboardDeltaEvent(value: unknown): DashboardDeltaEven
         id: asString(event.id) || undefined,
         text,
         tags: asStringArray(event.tags),
-        handle: asString(event.handle) || asString(event.source_handle) || undefined,
-        host_tool:
-          asString(event.host_tool) ||
-          asString(event.source_host_tool) ||
-          asString(event.tool) ||
-          undefined,
+        handle: asString(event.handle) || undefined,
+        host_tool: asString(event.host_tool) || undefined,
         created_at: asString(event.created_at) || undefined,
       } satisfies MemoryDeltaEvent;
     }

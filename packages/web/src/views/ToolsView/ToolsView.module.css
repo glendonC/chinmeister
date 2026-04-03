@@ -531,7 +531,7 @@ details[open] > .sourcesToggle::before {
 }
 
 .showMoreButton:hover {
-  background: rgba(0, 0, 0, 0.02);
+  background: var(--hover-bg);
   border-color: var(--soft);
   color: var(--ink);
 }

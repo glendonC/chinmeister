@@ -531,8 +531,8 @@ describe('registerTools', () => {
     it('returns formatted results when memories found', async () => {
       team.searchMemories.mockResolvedValue({
         memories: [
-          { id: 'mem1', text: 'Use port 6379', tags: ['config'], source_handle: 'alice' },
-          { id: 'mem2', text: 'No console.log in MCP', tags: ['gotcha'], source_handle: 'bob' },
+          { id: 'mem1', text: 'Use port 6379', tags: ['config'], handle: 'alice' },
+          { id: 'mem2', text: 'No console.log in MCP', tags: ['gotcha'], handle: 'bob' },
         ],
       });
       const result = await server.callTool('chinwag_search_memory', { query: 'port' });

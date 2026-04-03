@@ -98,7 +98,7 @@ describe('Membership', () => {
     expect(me.transport).toBe('mcp');
 
     expect(ctx.memories[0].host_tool).toBe('cursor');
-    expect(ctx.memories[0].source_agent_surface).toBe('cline');
+    expect(ctx.memories[0].agent_surface).toBe('cline');
 
     expect(ctx.messages[0].from_host_tool).toBe('cursor');
     expect(ctx.messages[0].from_agent_surface).toBe('cline');

@@ -7,6 +7,8 @@
 @import './styles/tokens.css';
 
 :root {
+  color-scheme: light;
+
   --sans: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
   --display: 'Manrope', -apple-system, BlinkMacSystemFont, 'SF Pro Display', sans-serif;
   --mono: 'IBM Plex Mono', 'SF Mono', ui-monospace, monospace;
@@ -52,6 +54,11 @@
   --purple: #8a63ff;
   --purple-bg: rgba(138, 99, 255, 0.08);
 
+  --shimmer-peak: rgba(18, 19, 23, 0.07);
+  --surface-glass: rgba(255, 255, 255, 0.96);
+  --shadow-xs: 0 2px 8px rgba(18, 19, 23, 0.06);
+  --shadow-lg: 0 20px 60px rgba(18, 19, 23, 0.08);
+
   --radius: 12px;
   --radius-sm: 8px;
   --radius-xs: 6px;
@@ -65,6 +72,36 @@
 
   --sidebar-width: 216px;
   --content-max-width: 1120px;
+}
+
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --ink: #f0f0f2;
+  --muted: rgba(240, 240, 242, 0.5);
+  --soft: rgba(240, 240, 242, 0.22);
+  --faint: rgba(240, 240, 242, 0.1);
+  --ghost: rgba(240, 240, 242, 0.035);
+  --hairline: rgba(240, 240, 242, 0.08);
+  --page-bg: #0e0f11;
+
+  --accent: #5878ff;
+  --accent-bg: rgba(88, 120, 255, 0.1);
+  --success: #34d68a;
+  --success-bg: rgba(52, 214, 138, 0.1);
+  --warn: #ffb366;
+  --warn-bg: rgba(255, 179, 102, 0.1);
+  --danger: #ff8a7a;
+  --danger-bg: rgba(255, 138, 122, 0.1);
+  --info: #7e7af0;
+  --info-bg: rgba(126, 122, 240, 0.1);
+  --purple: #a585ff;
+  --purple-bg: rgba(165, 133, 255, 0.1);
+
+  --shimmer-peak: rgba(240, 240, 242, 0.07);
+  --surface-glass: rgba(14, 15, 17, 0.96);
+  --shadow-xs: 0 2px 8px rgba(0, 0, 0, 0.25);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
 
 *,

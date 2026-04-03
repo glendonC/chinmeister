@@ -3,6 +3,7 @@ import { useAuthStore, authActions } from '../../lib/stores/auth.js';
 import { stopPolling } from '../../lib/stores/polling.js';
 import { api } from '../../lib/api.js';
 import { COLOR_PALETTE, getColorHex } from '../../lib/utils.js';
+import { useTheme } from '../../lib/useTheme.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import styles from './SettingsView.module.css';
 
@@ -46,6 +47,7 @@ export default function SettingsView() {
   const [hoveredColor, setHoveredColor] = useState(null);
   const [unlinking, setUnlinking] = useState(false);
   const [linkError, setLinkError] = useState(null);
+  const { theme, setTheme } = useTheme();
 
   const previewColorName = hoveredColor || user?.color || 'white';
   const previewColor = getColorHex(previewColorName) || '#98989d';
@@ -214,6 +216,21 @@ export default function SettingsView() {
             })}
           </div>
           {colorError && <span className={styles.handleError}>{colorError}</span>}
+        </div>
+      </section>
+
+      <section className={styles.appearanceSection}>
+        <span className={styles.sectionLabel}>Appearance</span>
+        <div className={styles.themeToggle}>
+          {['system', 'light', 'dark'].map((option) => (
+            <button
+              key={option}
+              className={`${styles.themeOption} ${theme === option ? styles.themeOptionActive : ''}`}
+              onClick={() => setTheme(option)}
+            >
+              {option.charAt(0).toUpperCase() + option.slice(1)}
+            </button>
+          ))}
         </div>
       </section>
 

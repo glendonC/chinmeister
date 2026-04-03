@@ -18,7 +18,7 @@ describe('detectTools', () => {
   it('detects cursor when .cursor directory exists', () => {
     fs.mkdirSync(path.join(tmpDir, '.cursor'));
     const tools = detectTools(tmpDir);
-    const ids = tools.map(t => t.id);
+    const ids = tools.map((t) => t.id);
     expect(ids).toContain('cursor');
   });
 
@@ -28,9 +28,9 @@ describe('detectTools', () => {
     // directory-detected tools to make the assertion reliable.
     const tools = detectTools(tmpDir);
     // At minimum, no dir-based tools should match in an empty dir
-    const dirOnlyTools = tools.filter(t => {
+    const dirOnlyTools = tools.filter((t) => {
       const dirs = t.detect?.dirs ?? [];
-      return dirs.length > 0 && dirs.some(d => fs.existsSync(path.join(tmpDir, d)));
+      return dirs.length > 0 && dirs.some((d) => fs.existsSync(path.join(tmpDir, d)));
     });
     expect(dirOnlyTools).toHaveLength(0);
   });
@@ -68,7 +68,10 @@ describe('writeMcpConfig', () => {
     writeMcpConfig(tmpDir, 'mcp.json', {});
 
     const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    expect(content.mcpServers['some-other-server']).toEqual({ command: 'node', args: ['other.js'] });
+    expect(content.mcpServers['some-other-server']).toEqual({
+      command: 'node',
+      args: ['other.js'],
+    });
     expect(content.mcpServers.chinwag).toBeDefined();
   });
 
@@ -90,23 +93,6 @@ describe('writeMcpConfig', () => {
 
     const content = JSON.parse(fs.readFileSync(path.join(tmpDir, '.cursor', 'mcp.json'), 'utf-8'));
     expect(content.mcpServers.chinwag.args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
-  });
-
-  it('upgrades legacy unique tool entries in place', () => {
-    const filePath = path.join(tmpDir, '.cursor', 'mcp.json');
-    fs.mkdirSync(path.join(tmpDir, '.cursor'), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify({
-      mcpServers: {
-        chinwag: { command: 'npx', args: ['chinwag-mcp', '--tool', 'cursor'] },
-        'chinwag-cursor': { command: 'npx', args: ['-y', 'chinwag', 'mcp', '--tool', 'cursor'] },
-      },
-    }, null, 2));
-
-    writeMcpConfig(tmpDir, '.cursor/mcp.json', { toolId: 'cursor' });
-
-    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    expect(content.mcpServers.chinwag.args).toEqual(['-y', 'chinwag', 'mcp', '--tool', 'cursor']);
-    expect(content.mcpServers['chinwag-cursor']).toBeUndefined();
   });
 });
 
@@ -155,29 +141,6 @@ describe('writeHooksConfig', () => {
     expect(content.hooks.PreToolUse).toHaveLength(2);
     expect(content.hooks.PreToolUse[0].command).toBe('some-other-hook');
     expect(content.hooks.PreToolUse[1].hooks[0].command).toBe('npx -y chinwag hook check-conflict');
-  });
-
-  it('upgrades legacy chinwag-hook commands in place', () => {
-    const filePath = path.join(tmpDir, '.claude', 'settings.json');
-    fs.mkdirSync(path.join(tmpDir, '.claude'), { recursive: true });
-    const existing = {
-      hooks: {
-        PreToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook check-conflict' }] }],
-        PostToolUse: [{ matcher: 'Edit|Write', hooks: [{ type: 'command', command: 'chinwag-hook report-edit' }] }],
-        SessionStart: [{ hooks: [{ type: 'command', command: 'chinwag-hook session-start' }] }],
-      },
-    };
-    fs.writeFileSync(filePath, JSON.stringify(existing, null, 2));
-
-    writeHooksConfig(tmpDir);
-
-    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    expect(content.hooks.PreToolUse).toHaveLength(1);
-    expect(content.hooks.PostToolUse).toHaveLength(1);
-    expect(content.hooks.SessionStart).toHaveLength(1);
-    expect(content.hooks.PreToolUse[0].hooks[0].command).toBe('npx -y chinwag hook check-conflict');
-    expect(content.hooks.PostToolUse[0].hooks[0].command).toBe('npx -y chinwag hook report-edit');
-    expect(content.hooks.SessionStart[0].hooks[0].command).toBe('npx -y chinwag hook session-start');
   });
 });
 

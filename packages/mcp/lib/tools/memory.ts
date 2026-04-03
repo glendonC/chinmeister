@@ -120,7 +120,7 @@ export function registerMemoryTools(
         }
         const lines = result.memories.map((m) => {
           const tagStr = m.tags?.length ? ` [${m.tags.join(', ')}]` : '';
-          return `${m.text}${tagStr} (id: ${m.id}, by ${m.source_handle})`;
+          return `${m.text}${tagStr} (id: ${m.id}, by ${m.handle})`;
         });
         return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       } catch (err: unknown) {

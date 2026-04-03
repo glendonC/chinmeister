@@ -166,7 +166,7 @@
   top: 16px;
   left: 16px;
   z-index: 30;
-  background: rgba(255, 255, 255, 0.94);
+  background: var(--surface-glass);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-xs);
   padding: var(--space-sm);
@@ -189,7 +189,7 @@
     display: block;
     position: fixed;
     inset: 0;
-    background: rgba(255, 255, 255, 0.72);
+    background: color-mix(in srgb, var(--page-bg) 72%, transparent);
     z-index: 18;
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
@@ -199,12 +199,12 @@
     position: fixed;
     left: 0;
     top: 0;
-    background: rgba(255, 255, 255, 0.96);
+    background: var(--surface-glass);
     backdrop-filter: blur(18px);
     -webkit-backdrop-filter: blur(18px);
     transform: translateX(-100%);
     transition: transform 0.3s var(--motion);
-    box-shadow: 0 20px 60px rgba(18, 19, 23, 0.08);
+    box-shadow: var(--shadow-lg);
   }
 
   .sidebarOpen {

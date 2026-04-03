@@ -328,7 +328,7 @@ describe('memory tools (unit)', () => {
   describe('chinwag_search_memory', () => {
     it('returns formatted results', async () => {
       team.searchMemories.mockResolvedValue({
-        memories: [{ id: 'mem1', text: 'Use port 6379', tags: ['config'], source_handle: 'alice' }],
+        memories: [{ id: 'mem1', text: 'Use port 6379', tags: ['config'], handle: 'alice' }],
       });
       const result = await collector.callTool('chinwag_search_memory', { query: 'port' });
       expect(result.content[0].text).toMatch(/Use port 6379 \[config\].*mem1.*alice/);

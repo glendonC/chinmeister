@@ -110,7 +110,7 @@
 }
 
 .statActive .statLabel {
-  background: rgba(29, 70, 255, 0.08);
+  background: var(--accent-bg);
   color: var(--accent);
 }
 
@@ -196,7 +196,7 @@
 }
 
 .tagPill:hover {
-  background: rgba(18, 19, 23, 0.06);
+  background: var(--hover-bg);
   color: var(--ink);
 }
 

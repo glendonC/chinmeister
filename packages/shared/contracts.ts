@@ -77,11 +77,6 @@ export interface TeamMemory extends AgentMetadata {
   handle?: string | null;
   created_at?: string;
   updated_at?: string;
-  source_handle?: string | null;
-  source_tool?: string | null;
-  source_host_tool?: string | null;
-  source_agent_surface?: string | null;
-  source_model?: string | null;
 }
 
 export interface TeamMessage extends AgentMetadata {
