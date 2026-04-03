@@ -89,11 +89,8 @@ vi.mock('../channel-reconcile.js', () => ({
 }));
 
 import { configExists, loadConfig } from '../../dist/config.js';
-import { findTeamFile, teamHandlers } from '../../dist/team.js';
+import { findTeamFile } from '../../dist/team.js';
 import { detectRuntimeIdentity } from '../../dist/identity.js';
-import { isProcessAlive, pingAgentTerminal } from '@chinwag/shared/session-registry.js';
-import { createChannelWebSocket } from '../channel-ws.js';
-import { createReconciler } from '../channel-reconcile.js';
 
 describe('channel.js entry point coverage', () => {
   let exitSpy;

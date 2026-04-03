@@ -10,10 +10,7 @@ import { deepSearchEvaluate } from './search.js';
 // - integrated: chinwag coordinates with it (MCP support)
 // - installable: chinwag can help set it up (has CLI/install command)
 // - listed: chinwag tells you about it (discovery, no direct integration yet)
-const VALID_VERDICTS = ['integrated', 'installable', 'listed'];
 const VALID_CATEGORIES = ['ide', 'coding-agent', 'terminal', 'review', 'voice', 'docs', 'other'];
-const VALID_CONFIDENCE = ['high', 'medium', 'low'];
-const VALID_TIERS = ['managed', 'connected', 'installable', 'listed'];
 
 // JSON Schema (draft-07) sent to Exa's outputSchema parameter.
 // Exa fills this in from crawled pages and provides per-field grounding.

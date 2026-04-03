@@ -279,7 +279,7 @@ export function MemoryProvider({
     if (memory.memorySelectedIdx >= visibleMemories.length) {
       memory.setMemorySelectedIdx(visibleMemories.length > 0 ? visibleMemories.length - 1 : -1);
     }
-  }, [memory.memorySelectedIdx, visibleMemories.length]);
+  }, [memory.memorySelectedIdx, visibleMemories.length, memory]);
 
   const value = useMemo(
     () => ({

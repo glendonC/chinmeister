@@ -887,7 +887,7 @@ describe('Session lifecycle', () => {
   });
 
   it('memories saved during session are counted', async () => {
-    const s = await team().startSession(agentId, 'alice', 'react', ownerId);
+    await team().startSession(agentId, 'alice', 'react', ownerId);
     await team().saveMemory(
       agentId,
       'Session lifecycle test memory about session counting mechanism',

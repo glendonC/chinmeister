@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // context.js uses module-level state, so we need to re-import fresh for each test.
 // We mock formatToolTag since it's imported by context.js.

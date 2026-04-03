@@ -62,98 +62,106 @@ afterEach(() => {
 
 describe('useTabKeyboard', () => {
   it('advances tab on ArrowRight', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />);
 
-    act(() => { pressKey('ArrowRight'); });
+    act(() => {
+      pressKey('ArrowRight');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('b');
 
-    act(() => { pressKey('ArrowRight'); });
+    act(() => {
+      pressKey('ArrowRight');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('c');
 
     unmount();
   });
 
   it('goes back on ArrowLeft', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="c" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="c" />);
 
-    act(() => { pressKey('ArrowLeft'); });
+    act(() => {
+      pressKey('ArrowLeft');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('b');
 
-    act(() => { pressKey('ArrowLeft'); });
+    act(() => {
+      pressKey('ArrowLeft');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('a');
 
     unmount();
   });
 
   it('wraps around forward (last -> first)', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="c" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="c" />);
 
-    act(() => { pressKey('ArrowRight'); });
+    act(() => {
+      pressKey('ArrowRight');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('a');
 
     unmount();
   });
 
   it('wraps around backward (first -> last)', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />);
 
-    act(() => { pressKey('ArrowLeft'); });
+    act(() => {
+      pressKey('ArrowLeft');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('c');
 
     unmount();
   });
 
   it('ignores arrow keys when an input is focused', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />);
 
     const input = container.querySelector('[data-testid="text-input"]');
-    act(() => { pressKey('ArrowRight', input); });
+    act(() => {
+      pressKey('ArrowRight', input);
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('a');
 
     unmount();
   });
 
   it('ignores arrow keys when a textarea is focused', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />);
 
     const textarea = container.querySelector('[data-testid="text-area"]');
-    act(() => { pressKey('ArrowRight', textarea); });
+    act(() => {
+      pressKey('ArrowRight', textarea);
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('a');
 
     unmount();
   });
 
   it('ignores non-arrow keys', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />);
 
-    act(() => { pressKey('Enter'); });
-    act(() => { pressKey('Tab'); });
-    act(() => { pressKey('ArrowUp'); });
+    act(() => {
+      pressKey('Enter');
+    });
+    act(() => {
+      pressKey('Tab');
+    });
+    act(() => {
+      pressKey('ArrowUp');
+    });
     expect(container.querySelector('[data-testid="active"]').textContent).toBe('a');
 
     unmount();
   });
 
   it('focuses the target tab button', () => {
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />
-    );
+    const { container, unmount } = render(<TestHarness tabIds={['a', 'b', 'c']} initialTab="a" />);
 
-    act(() => { pressKey('ArrowRight'); });
+    act(() => {
+      pressKey('ArrowRight');
+    });
 
     const tabB = container.querySelector('[data-tab="b"]');
     expect(document.activeElement).toBe(tabB);
@@ -163,9 +171,7 @@ describe('useTabKeyboard', () => {
 
   it('cleans up event listener on unmount', () => {
     const spy = vi.spyOn(document, 'removeEventListener');
-    const { container, unmount } = render(
-      <TestHarness tabIds={['a', 'b']} initialTab="a" />
-    );
+    const { unmount } = render(<TestHarness tabIds={['a', 'b']} initialTab="a" />);
 
     unmount();
 

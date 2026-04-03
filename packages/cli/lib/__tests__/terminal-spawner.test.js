@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   detectTerminalEnvironment,
   buildTerminalCommand,
@@ -6,7 +6,7 @@ import {
   cleanPidFile,
   isProcessAlive,
 } from '../terminal-spawner.js';
-import { writeFileSync, mkdirSync, existsSync, unlinkSync, rmSync } from 'fs';
+import { writeFileSync, mkdirSync, existsSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 

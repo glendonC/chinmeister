@@ -23,7 +23,7 @@ import {
   configureHostIntegration,
   scanHostIntegrations,
 } from '../integration-doctor.js';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { execFileSync } from 'child_process';
 
 describe('integration-doctor', () => {
@@ -40,7 +40,9 @@ describe('integration-doctor', () => {
     });
 
     it('returns false when which/where throws', () => {
-      execFileSync.mockImplementation(() => { throw new Error('not found'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
       expect(commandExists('nonexistent')).toBe(false);
     });
   });
@@ -63,7 +65,15 @@ describe('integration-doctor', () => {
 
     it('includes both --tool and --surface', () => {
       const args = buildChinwagCliArgs('channel', { hostId: 'vscode', surfaceId: 'continue' });
-      expect(args).toEqual(['-y', 'chinwag', 'channel', '--tool', 'vscode', '--surface', 'continue']);
+      expect(args).toEqual([
+        '-y',
+        'chinwag',
+        'channel',
+        '--tool',
+        'vscode',
+        '--surface',
+        'continue',
+      ]);
     });
   });
 
@@ -92,10 +102,12 @@ describe('integration-doctor', () => {
   describe('detectHostIntegrations', () => {
     it('detects host when directory exists', () => {
       existsSync.mockImplementation((path) => path.endsWith('.claude'));
-      execFileSync.mockImplementation(() => { throw new Error('not found'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
 
       const detected = detectHostIntegrations('/project');
-      const ids = detected.map(h => h.id);
+      const ids = detected.map((h) => h.id);
       expect(ids).toContain('claude-code');
     });
 
@@ -107,13 +119,15 @@ describe('integration-doctor', () => {
       });
 
       const detected = detectHostIntegrations('/project');
-      const ids = detected.map(h => h.id);
+      const ids = detected.map((h) => h.id);
       expect(ids).toContain('claude-code');
     });
 
     it('returns empty array when nothing is detected', () => {
       existsSync.mockReturnValue(false);
-      execFileSync.mockImplementation(() => { throw new Error('not found'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
 
       const detected = detectHostIntegrations('/project');
       expect(detected).toEqual([]);
@@ -127,15 +141,17 @@ describe('integration-doctor', () => {
     });
 
     it('formats detected integration with status and config path', () => {
-      const results = [{
-        name: 'Claude Code',
-        tier: 'managed',
-        detected: true,
-        status: 'ready',
-        configPath: '.mcp.json',
-        capabilities: ['mcp', 'hooks'],
-        issues: [],
-      }];
+      const results = [
+        {
+          name: 'Claude Code',
+          tier: 'managed',
+          detected: true,
+          status: 'ready',
+          configPath: '.mcp.json',
+          capabilities: ['mcp', 'hooks'],
+          issues: [],
+        },
+      ];
       const output = formatIntegrationScanResults(results);
       expect(output).toContain('Claude Code');
       expect(output).toContain('managed');
@@ -145,23 +161,40 @@ describe('integration-doctor', () => {
     });
 
     it('formats issues when present', () => {
-      const results = [{
-        name: 'Cursor',
-        tier: 'connected',
-        detected: true,
-        status: 'needs_setup',
-        configPath: '.cursor/mcp.json',
-        capabilities: ['mcp'],
-        issues: ['Missing or outdated config'],
-      }];
+      const results = [
+        {
+          name: 'Cursor',
+          tier: 'connected',
+          detected: true,
+          status: 'needs_setup',
+          configPath: '.cursor/mcp.json',
+          capabilities: ['mcp'],
+          issues: ['Missing or outdated config'],
+        },
+      ];
       const output = formatIntegrationScanResults(results);
       expect(output).toContain('issue: Missing or outdated config');
     });
 
     it('filters to only detected when onlyDetected is true', () => {
       const results = [
-        { name: 'A', detected: true, status: 'ready', tier: 't', capabilities: [], issues: [], configPath: 'a' },
-        { name: 'B', detected: false, status: 'not_detected', tier: 't', capabilities: [], issues: [] },
+        {
+          name: 'A',
+          detected: true,
+          status: 'ready',
+          tier: 't',
+          capabilities: [],
+          issues: [],
+          configPath: 'a',
+        },
+        {
+          name: 'B',
+          detected: false,
+          status: 'not_detected',
+          tier: 't',
+          capabilities: [],
+          issues: [],
+        },
       ];
       const output = formatIntegrationScanResults(results, { onlyDetected: true });
       expect(output).toContain('A');
@@ -239,13 +272,15 @@ describe('integration-doctor', () => {
     });
 
     it('cleans up old chinwag- entries for host-specific config', () => {
-      readFileSync.mockReturnValue(JSON.stringify({
-        mcpServers: {
-          chinwag: { command: 'old' },
-          'chinwag-old': { command: 'old' },
-          'other-server': { command: 'keep' },
-        },
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          mcpServers: {
+            chinwag: { command: 'old' },
+            'chinwag-old': { command: 'old' },
+            'other-server': { command: 'keep' },
+          },
+        }),
+      );
       existsSync.mockReturnValue(true);
 
       writeMcpConfig('/project', '.cursor/mcp.json', { hostId: 'cursor' });
@@ -257,7 +292,9 @@ describe('integration-doctor', () => {
     it('returns error when writeFileSync throws', () => {
       readFileSync.mockReturnValue('{}');
       existsSync.mockReturnValue(false);
-      writeFileSync.mockImplementation(() => { throw new Error('EACCES'); });
+      writeFileSync.mockImplementation(() => {
+        throw new Error('EACCES');
+      });
 
       const result = writeMcpConfig('/project', '.cursor/mcp.json');
       expect(result.error).toContain('Failed to write');
@@ -288,35 +325,39 @@ describe('integration-doctor', () => {
     });
 
     it('preserves non-chinwag hooks', () => {
-      readFileSync.mockReturnValue(JSON.stringify({
-        hooks: {
-          PreToolUse: [{ command: 'other-tool check' }],
-        },
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [{ command: 'other-tool check' }],
+          },
+        }),
+      );
       existsSync.mockReturnValue(true);
 
       writeHooksConfig('/project');
       const writtenContent = JSON.parse(writeFileSync.mock.calls[0][1].trim());
       const preToolHooks = writtenContent.hooks.PreToolUse;
-      const otherHook = preToolHooks.find(h => h.command === 'other-tool check');
+      const otherHook = preToolHooks.find((h) => h.command === 'other-tool check');
       expect(otherHook).toBeDefined();
     });
 
     it('replaces existing chinwag hooks', () => {
-      readFileSync.mockReturnValue(JSON.stringify({
-        hooks: {
-          PreToolUse: [
-            { hooks: [{ command: 'npx -y chinwag hook check-conflict' }] },
-            { command: 'other-tool' },
-          ],
-        },
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          hooks: {
+            PreToolUse: [
+              { hooks: [{ command: 'npx -y chinwag hook check-conflict' }] },
+              { command: 'other-tool' },
+            ],
+          },
+        }),
+      );
       existsSync.mockReturnValue(true);
 
       writeHooksConfig('/project');
       const writtenContent = JSON.parse(writeFileSync.mock.calls[0][1].trim());
       const preToolHooks = writtenContent.hooks.PreToolUse;
-      const chinwagHooks = preToolHooks.filter(h =>
+      const chinwagHooks = preToolHooks.filter((h) =>
         (h.hooks?.[0]?.command || h.command || '').includes('chinwag'),
       );
       // Should have exactly 1 chinwag hook (the new one)
@@ -326,7 +367,9 @@ describe('integration-doctor', () => {
     it('returns error when writeFileSync throws', () => {
       readFileSync.mockReturnValue('{}');
       existsSync.mockReturnValue(false);
-      writeFileSync.mockImplementation(() => { throw new Error('EACCES'); });
+      writeFileSync.mockImplementation(() => {
+        throw new Error('EACCES');
+      });
 
       const result = writeHooksConfig('/project');
       expect(result.error).toContain('Failed to write');
@@ -374,7 +417,9 @@ describe('integration-doctor', () => {
   describe('scanHostIntegrations', () => {
     it('returns an entry for every known host integration', () => {
       existsSync.mockReturnValue(false);
-      execFileSync.mockImplementation(() => { throw new Error('not found'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
       readFileSync.mockReturnValue('{}');
 
       const results = scanHostIntegrations('/project');
@@ -395,7 +440,9 @@ describe('integration-doctor', () => {
         if (path.endsWith('settings.json')) return true;
         return false;
       });
-      execFileSync.mockImplementation(() => { throw new Error('not found'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
 
       const correctMcpConfig = {
         mcpServers: {
@@ -418,7 +465,7 @@ describe('integration-doctor', () => {
       });
 
       const results = scanHostIntegrations('/project');
-      const cc = results.find(r => r.id === 'claude-code');
+      const cc = results.find((r) => r.id === 'claude-code');
       expect(cc.detected).toBe(true);
       expect(cc.status).toBe('ready');
       expect(cc.issues).toHaveLength(0);
@@ -429,11 +476,13 @@ describe('integration-doctor', () => {
         if (path.endsWith('.cursor')) return true;
         return false;
       });
-      execFileSync.mockImplementation(() => { throw new Error('not found'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('not found');
+      });
       readFileSync.mockReturnValue('{}');
 
       const results = scanHostIntegrations('/project');
-      const cursor = results.find(r => r.id === 'cursor');
+      const cursor = results.find((r) => r.id === 'cursor');
       expect(cursor.detected).toBe(true);
       expect(cursor.status).toBe('needs_setup');
       expect(cursor.issues.length).toBeGreaterThan(0);

@@ -295,7 +295,7 @@ export function useDashboardConnection({ config, stdout }) {
         wsRef.current = null;
       }
     };
-  }, [teamId, teamName, refreshKey, config?.token]);
+  }, [teamId, teamName, refreshKey, config]);
 
   function retry() {
     setError(null);

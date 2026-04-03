@@ -1,19 +1,10 @@
 // Team lock routes — claim, release, get locks.
 
-import { getDB, getTeam } from '../../lib/env.js';
+import { getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import {
-  requireJson,
-  validateFileArray,
-  withRateLimit,
-  withTeamRateLimit,
-} from '../../lib/validation.js';
-import {
-  LOCK_CLAIM_MAX_FILES,
-  MAX_FILE_PATH_LENGTH,
-  RATE_LIMIT_LOCKS,
-} from '../../lib/constants.js';
+import { requireJson, validateFileArray, withTeamRateLimit } from '../../lib/validation.js';
+import { LOCK_CLAIM_MAX_FILES, RATE_LIMIT_LOCKS } from '../../lib/constants.js';
 
 export async function handleTeamClaimFiles(request, user, env, teamId) {
   const body = await parseBody(request);

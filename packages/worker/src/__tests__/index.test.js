@@ -444,7 +444,7 @@ describe('POST /teams (create team)', () => {
 
 describe('Team join/leave/context', () => {
   it('join and context workflow', async () => {
-    const { headers, user } = await createAuthUser();
+    const { headers } = await createAuthUser();
 
     // Create team
     const createRes = await SELF.fetch('http://localhost/teams', {

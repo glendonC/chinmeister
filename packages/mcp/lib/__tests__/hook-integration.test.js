@@ -224,7 +224,7 @@ describe('hook.js entry point coverage', () => {
     });
     fakeStdin.setEncoding =
       fakeStdin.setEncoding ||
-      function (enc) {
+      function (_enc) {
         return this;
       };
     Object.defineProperty(process, 'stdin', {
@@ -257,7 +257,7 @@ describe('hook.js entry point coverage', () => {
     });
     fakeStdin.setEncoding =
       fakeStdin.setEncoding ||
-      function (enc) {
+      function (_enc) {
         return this;
       };
     Object.defineProperty(process, 'stdin', {
@@ -296,7 +296,7 @@ describe('hook.js entry point coverage', () => {
     });
     fakeStdin.setEncoding =
       fakeStdin.setEncoding ||
-      function (enc) {
+      function (_enc) {
         return this;
       };
     Object.defineProperty(process, 'stdin', {
@@ -328,7 +328,7 @@ describe('hook.js entry point coverage', () => {
     });
     fakeStdin.setEncoding =
       fakeStdin.setEncoding ||
-      function (enc) {
+      function (_enc) {
         return this;
       };
     Object.defineProperty(process, 'stdin', {

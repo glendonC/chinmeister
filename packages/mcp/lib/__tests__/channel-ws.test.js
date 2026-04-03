@@ -7,8 +7,6 @@ vi.mock('@chinwag/shared/dashboard-ws.js', () => ({
   normalizeDashboardDeltaEvent: vi.fn((e) => e),
 }));
 
-import { applyDelta, normalizeDashboardDeltaEvent } from '@chinwag/shared/dashboard-ws.js';
-
 // Mock WebSocket
 class MockWebSocket {
   static OPEN = 1;
@@ -102,7 +100,6 @@ describe('createChannelWebSocket', () => {
     await vi.advanceTimersByTimeAsync(10);
 
     // Get the created WebSocket instance
-    const ctx = { members: [{ agent_id: 'a1', handle: 'alice' }] };
     // Find the ws instance via the manager
     // Simulate the initial context frame
     // The WS is created inside connect(), so we access via the onmessage path

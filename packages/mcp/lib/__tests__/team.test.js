@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Mock the shared team-utils module
 vi.mock('@chinwag/shared/team-utils.js', () => ({
@@ -7,7 +7,7 @@ vi.mock('@chinwag/shared/team-utils.js', () => ({
   findTeamFile: vi.fn(),
 }));
 
-import { findTeamFile, isValidTeamId, teamHandlers } from '../team.js';
+import { findTeamFile, teamHandlers } from '../team.js';
 import { findTeamFile as findTeamFileShared } from '@chinwag/shared/team-utils.js';
 
 // --- findTeamFile ---

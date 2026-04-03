@@ -2,7 +2,7 @@ import React, { useState, useEffect, Component } from 'react';
 import { render, Box, Text, useApp, useInput } from 'ink';
 import { basename } from 'path';
 import { readFileSync } from 'fs';
-import { loadConfig, saveConfig, configExists, deleteConfig } from './lib/config.js';
+import { loadConfig, configExists, deleteConfig } from './lib/config.js';
 import { api } from './lib/api.js';
 import { Welcome } from './lib/init.jsx';
 import { Chat } from './lib/chat.jsx';
@@ -271,7 +271,7 @@ function App() {
 
   return (
     <ControlShell modeItems={shellModes} activeMode={screen} user={user} footerHints={footerHints}>
-      {({ viewportRows, compact }) => (
+      {({ viewportRows, compact: _compact }) => (
         <ErrorBoundary>{renderScreen({ viewportRows })}</ErrorBoundary>
       )}
     </ControlShell>

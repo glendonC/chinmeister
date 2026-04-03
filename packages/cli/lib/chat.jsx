@@ -76,75 +76,78 @@ export function Chat({ config, user, navigate }) {
     }
   }, []);
 
-  function connect(shuffle = false) {
-    dispatch({ type: WS_ACTIONS.CONNECTING });
+  const connect = useCallback(
+    function connect(shuffle = false) {
+      dispatch({ type: WS_ACTIONS.CONNECTING });
 
-    const url = new URL(WS_URL);
-    if (shuffle) url.searchParams.set('shuffle', '1');
+      const url = new URL(WS_URL);
+      if (shuffle) url.searchParams.set('shuffle', '1');
 
-    const ws = new WebSocket(url.toString(), {
-      headers: { Authorization: `Bearer ${config.token}` },
-    });
+      const ws = new WebSocket(url.toString(), {
+        headers: { Authorization: `Bearer ${config.token}` },
+      });
 
-    ws.addEventListener('open', () => {
-      dispatch({ type: WS_ACTIONS.CONNECTED });
-    });
+      ws.addEventListener('open', () => {
+        dispatch({ type: WS_ACTIONS.CONNECTED });
+      });
 
-    ws.addEventListener('message', (event) => {
-      let data;
-      try {
-        data = JSON.parse(event.data);
-      } catch (err) {
-        console.error('[chinwag]', err?.message || err);
-        return;
-      }
+      ws.addEventListener('message', (event) => {
+        let data;
+        try {
+          data = JSON.parse(event.data);
+        } catch (err) {
+          console.error('[chinwag]', err?.message || err);
+          return;
+        }
 
-      if (data.type === 'history') {
-        setMessages(data.messages || []);
-        setRoomCount(data.roomCount || 0);
-        return;
-      }
+        if (data.type === 'history') {
+          setMessages(data.messages || []);
+          setRoomCount(data.roomCount || 0);
+          return;
+        }
 
-      if (data.type === 'system') {
-        setMessages((prev) => [
-          ...prev.slice(-(CHAT_HISTORY_LIMIT - 1)),
-          {
-            type: 'system',
-            content: data.content,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        return;
-      }
+        if (data.type === 'system') {
+          setMessages((prev) => [
+            ...prev.slice(-(CHAT_HISTORY_LIMIT - 1)),
+            {
+              type: 'system',
+              content: data.content,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          return;
+        }
 
-      if (data.type === 'join' || data.type === 'leave') {
-        setRoomCount(data.roomCount || 0);
-        setMessages((prev) => [
-          ...prev.slice(-(CHAT_HISTORY_LIMIT - 1)),
-          {
-            type: 'system',
-            content: `${data.handle} ${data.type === 'join' ? 'joined' : 'left'}`,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
-        return;
-      }
+        if (data.type === 'join' || data.type === 'leave') {
+          setRoomCount(data.roomCount || 0);
+          setMessages((prev) => [
+            ...prev.slice(-(CHAT_HISTORY_LIMIT - 1)),
+            {
+              type: 'system',
+              content: `${data.handle} ${data.type === 'join' ? 'joined' : 'left'}`,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+          return;
+        }
 
-      if (data.type === 'message') {
-        setMessages((prev) => [...prev.slice(-(CHAT_HISTORY_LIMIT - 1)), data]);
-      }
-    });
+        if (data.type === 'message') {
+          setMessages((prev) => [...prev.slice(-(CHAT_HISTORY_LIMIT - 1)), data]);
+        }
+      });
 
-    ws.addEventListener('close', () => {
-      dispatch({ type: WS_ACTIONS.DISCONNECTED });
-    });
+      ws.addEventListener('close', () => {
+        dispatch({ type: WS_ACTIONS.DISCONNECTED });
+      });
 
-    ws.addEventListener('error', () => {
-      dispatch({ type: WS_ACTIONS.ERROR, error: 'Connection error' });
-    });
+      ws.addEventListener('error', () => {
+        dispatch({ type: WS_ACTIONS.ERROR, error: 'Connection error' });
+      });
 
-    wsRef.current = ws;
-  }
+      wsRef.current = ws;
+    },
+    [config.token],
+  );
 
   // Schedule reconnect when state transitions to disconnected with retryCount > 0
   useEffect(() => {
@@ -162,7 +165,7 @@ export function Chat({ config, user, navigate }) {
       connect();
     }, delay);
     return clearReconnectTimer;
-  }, [wsState.status, wsState.retryCount, wsState.intentionalClose]);
+  }, [wsState.status, wsState.retryCount, wsState.intentionalClose, clearReconnectTimer, connect]);
 
   useEffect(() => {
     connect();
@@ -174,7 +177,7 @@ export function Chat({ config, user, navigate }) {
         wsRef.current.close();
       }
     };
-  }, []);
+  }, [connect, clearReconnectTimer, clearErrorTimer]);
 
   function showError(message) {
     setDisplayError(message);

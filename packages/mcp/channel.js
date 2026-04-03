@@ -72,7 +72,6 @@ async function main() {
   // Channel only observes via watcher WebSocket + reconciliation.
 
   // State diffing infrastructure
-  let prevState = null;
   const stucknessAlerted = new Map();
 
   const logger = {
@@ -89,15 +88,13 @@ async function main() {
     agentId,
     onContextUpdate: (prev, curr) => {
       if (prev === null) {
-        // Initial context on connect — store, don't diff
-        prevState = curr;
+        // Initial context on connect — no diff needed
         return;
       }
       const events = diffState(prev, curr, stucknessAlerted);
       for (const event of events) {
         pushEvent(server, agentId, event);
       }
-      prevState = curr;
     },
     logger,
   });
@@ -109,7 +106,6 @@ async function main() {
     getLocalContext: () => channelWs.getContext(),
     replaceContext: (ctx) => {
       channelWs.setContext(ctx);
-      prevState = ctx;
     },
     onEvents: (events) => {
       for (const event of events) {

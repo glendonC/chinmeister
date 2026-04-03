@@ -308,8 +308,6 @@ describe('useAgentLifecycle', () => {
       const mountEffect = effects.find((e) => Array.isArray(e.deps) && e.deps.length === 0);
       mountEffect.fn();
 
-      const callsBefore = getAgentsMock.mock.calls.length;
-
       // Simulate unmount
       refs[1].current = false;
 

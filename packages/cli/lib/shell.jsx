@@ -9,7 +9,7 @@ function getRailWidth(items, compact) {
   if (!items?.length) return 0;
 
   return items.reduce((total, item) => {
-    const label = compact ? (item.shortLabel || item.label) : item.label;
+    const label = compact ? item.shortLabel || item.label : item.label;
     const meta = item.meta ? ` ${item.meta}` : '';
     // Approximate pill width: borders + internal padding + label + gap.
     return total + label.length + meta.length + 6;
@@ -21,19 +21,15 @@ function getActiveModeItem(items, activeKey) {
 }
 
 function getNavHintWidth(compact) {
-  const labels = compact
-    ? ['← shift+tab', 'tab →']
-    : ['← shift+tab', 'tab →'];
-  return Math.max(...labels.map(label => label.length)) + 5;
+  const labels = compact ? ['← shift+tab', 'tab →'] : ['← shift+tab', 'tab →'];
+  return Math.max(...labels.map((label) => label.length)) + 5;
 }
 
 function RailPill({ item, active, compact, fillMode }) {
   const accent = item.accent || 'cyan';
-  const label = compact ? (item.shortLabel || item.label) : item.label;
+  const label = compact ? item.shortLabel || item.label : item.label;
   const backgroundColor = fillMode ? (active ? accent : 'blackBright') : undefined;
-  const textColor = fillMode
-    ? (active ? 'black' : 'white')
-    : (active ? accent : 'white');
+  const textColor = fillMode ? (active ? 'black' : 'white') : active ? accent : 'white';
 
   return (
     <Box
@@ -43,7 +39,9 @@ function RailPill({ item, active, compact, fillMode }) {
       paddingX={1}
       marginRight={1}
     >
-      <Text color={textColor} dimColor={!active && !fillMode} bold={active}>{label}</Text>
+      <Text color={textColor} dimColor={!active && !fillMode} bold={active}>
+        {label}
+      </Text>
       {item.meta ? <Text dimColor> {item.meta}</Text> : null}
     </Box>
   );
@@ -55,21 +53,27 @@ export function ModeRail({ items = [], activeKey, compact = false, fillMode = fa
   return (
     <Box flexDirection="row">
       {items.map((item) => (
-        <RailPill key={item.key} item={item} active={item.key === activeKey} compact={compact} fillMode={fillMode} />
+        <RailPill
+          key={item.key}
+          item={item}
+          active={item.key === activeKey}
+          compact={compact}
+          fillMode={fillMode}
+        />
       ))}
     </Box>
   );
 }
 
-function NavControlHint({ direction, align = 'left', compact = false }) {
-  const label = direction === 'left'
-    ? '← shift+tab'
-    : 'tab →';
+function NavControlHint({ direction, align = 'left' }) {
+  const label = direction === 'left' ? '← shift+tab' : 'tab →';
 
   return (
     <Box justifyContent={align === 'right' ? 'flex-end' : 'flex-start'}>
       <Box borderStyle="round" borderColor="gray" paddingX={1}>
-        <Text color="cyan" bold>{label}</Text>
+        <Text color="cyan" bold>
+          {label}
+        </Text>
       </Box>
     </Box>
   );
@@ -83,18 +87,14 @@ function OperatorBadge({ user }) {
   return (
     <Text>
       <Text dimColor>@</Text>
-      <Text color={getInkColor(user.color || 'white')} bold>{user.handle}</Text>
+      <Text color={getInkColor(user.color || 'white')} bold>
+        {user.handle}
+      </Text>
     </Text>
   );
 }
 
-export function ControlShell({
-  modeItems = [],
-  activeMode,
-  user,
-  footerHints = null,
-  children,
-}) {
+export function ControlShell({ modeItems = [], activeMode, user, footerHints = null, children }) {
   const { stdout } = useStdout();
   const [dimensions, setDimensions] = useState({
     cols: stdout?.columns || 80,
@@ -125,7 +125,7 @@ export function ControlShell({
   const compactMinCols = Math.max(60, getRailWidth(modeItems, true) + compactHintWidth + 8);
   const narrowMinCols = Math.max(
     48,
-    getRailWidth(activeModeItem ? [activeModeItem] : [], true) + compactHintWidth + 8
+    getRailWidth(activeModeItem ? [activeModeItem] : [], true) + compactHintWidth + 8,
   );
 
   let layoutMode = 'full';
@@ -139,9 +139,15 @@ export function ControlShell({
   if (cols < minCols || rows < MIN_ROWS) {
     return (
       <Box flexDirection="column" paddingX={2} paddingTop={1}>
-        <Text color="yellow" bold>chinwag needs a larger terminal</Text>
-        <Text dimColor>Current size: {cols} x {rows}</Text>
-        <Text dimColor>Recommended minimum: {minCols} x {MIN_ROWS}</Text>
+        <Text color="yellow" bold>
+          chinwag needs a larger terminal
+        </Text>
+        <Text dimColor>
+          Current size: {cols} x {rows}
+        </Text>
+        <Text dimColor>
+          Recommended minimum: {minCols} x {MIN_ROWS}
+        </Text>
         <Text>{''}</Text>
         <Text>Resize the terminal pane or reduce the terminal font size.</Text>
         <Text dimColor>chinwag cannot force-resize the host terminal for you.</Text>
@@ -187,13 +193,19 @@ export function ControlShell({
         <Text dimColor>{divider}</Text>
         <Box justifyContent="space-between">
           <Text>
-            {footerHints ? footerHints.map((h, i) => (
-              <Text key={h.key}>
-                {i > 0 ? '  ' : ''}
-                <Text color={h.color || 'cyan'} bold>[{h.key}]</Text>
-                <Text dimColor> {h.label}</Text>
-              </Text>
-            )) : <Text dimColor>[q] quit</Text>}
+            {footerHints ? (
+              footerHints.map((h, i) => (
+                <Text key={h.key}>
+                  {i > 0 ? '  ' : ''}
+                  <Text color={h.color || 'cyan'} bold>
+                    [{h.key}]
+                  </Text>
+                  <Text dimColor> {h.label}</Text>
+                </Text>
+              ))
+            ) : (
+              <Text dimColor>[q] quit</Text>
+            )}
           </Text>
           <OperatorBadge user={user} />
         </Box>

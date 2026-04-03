@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('fs', () => ({
   existsSync: vi.fn(),
@@ -30,7 +30,15 @@ import {
   setTerminalTitle,
   pingAgentTerminal,
 } from '../session-registry.js';
-import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, unlinkSync, appendFileSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+  appendFileSync,
+} from 'fs';
 import { execFileSync } from 'child_process';
 
 describe('session-registry', () => {
@@ -98,7 +106,9 @@ describe('session-registry', () => {
     });
 
     it('returns null when ps throws', () => {
-      execFileSync.mockImplementation(() => { throw new Error('No such process'); });
+      execFileSync.mockImplementation(() => {
+        throw new Error('No such process');
+      });
       expect(getCurrentTtyPath(1234)).toBeNull();
     });
 
@@ -134,57 +144,57 @@ describe('session-registry', () => {
     });
 
     it('returns false when process is not alive', () => {
-      expect(isSessionRecordAlive(
-        { pid: 1234 },
-        { processAlive: () => false },
-      )).toBe(false);
+      expect(isSessionRecordAlive({ pid: 1234 }, { processAlive: () => false })).toBe(false);
     });
 
     it('returns true when process is alive and no commandMarker', () => {
-      expect(isSessionRecordAlive(
-        { pid: 1234 },
-        { processAlive: () => true },
-      )).toBe(true);
+      expect(isSessionRecordAlive({ pid: 1234 }, { processAlive: () => true })).toBe(true);
     });
 
     it('returns true when process is alive and command includes commandMarker', () => {
-      expect(isSessionRecordAlive(
-        { pid: 1234, commandMarker: 'chinwag-mcp' },
-        {
-          processAlive: () => true,
-          processCommand: () => 'node chinwag-mcp serve',
-        },
-      )).toBe(true);
+      expect(
+        isSessionRecordAlive(
+          { pid: 1234, commandMarker: 'chinwag-mcp' },
+          {
+            processAlive: () => true,
+            processCommand: () => 'node chinwag-mcp serve',
+          },
+        ),
+      ).toBe(true);
     });
 
     it('returns false when process is alive but command does not include commandMarker', () => {
-      expect(isSessionRecordAlive(
-        { pid: 1234, commandMarker: 'chinwag-mcp' },
-        {
-          processAlive: () => true,
-          processCommand: () => '/bin/bash',
-        },
-      )).toBe(false);
+      expect(
+        isSessionRecordAlive(
+          { pid: 1234, commandMarker: 'chinwag-mcp' },
+          {
+            processAlive: () => true,
+            processCommand: () => '/bin/bash',
+          },
+        ),
+      ).toBe(false);
     });
 
     it('returns false when processCommand returns null', () => {
-      expect(isSessionRecordAlive(
-        { pid: 1234, commandMarker: 'chinwag-mcp' },
-        {
-          processAlive: () => true,
-          processCommand: () => null,
-        },
-      )).toBe(false);
+      expect(
+        isSessionRecordAlive(
+          { pid: 1234, commandMarker: 'chinwag-mcp' },
+          {
+            processAlive: () => true,
+            processCommand: () => null,
+          },
+        ),
+      ).toBe(false);
     });
   });
 
   describe('writeSessionRecord', () => {
     it('writes session file with correct path and content', () => {
       writeSessionRecord('cursor:abc', { pid: 1234, tool: 'cursor' }, { homeDir: '/tmp/test' });
-      expect(mkdirSync).toHaveBeenCalledWith(
-        '/tmp/test/.chinwag/sessions',
-        { recursive: true, mode: 0o700 },
-      );
+      expect(mkdirSync).toHaveBeenCalledWith('/tmp/test/.chinwag/sessions', {
+        recursive: true,
+        mode: 0o700,
+      });
       expect(writeFileSync).toHaveBeenCalledWith(
         '/tmp/test/.chinwag/sessions/cursor_abc.json',
         expect.stringContaining('"agentId":"cursor:abc"'),
@@ -225,7 +235,9 @@ describe('session-registry', () => {
     });
 
     it('returns false when unlinkSync throws', () => {
-      unlinkSync.mockImplementation(() => { throw new Error('ENOENT'); });
+      unlinkSync.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
       expect(deleteSessionRecord('missing', { homeDir: '/tmp' })).toBe(false);
     });
   });
@@ -236,18 +248,22 @@ describe('session-registry', () => {
     });
 
     it('returns fallbackAgentId when tty is not provided', () => {
-      expect(resolveSessionAgentId({ tool: 'cursor', tty: null, fallbackAgentId: 'fb' })).toBe('fb');
+      expect(resolveSessionAgentId({ tool: 'cursor', tty: null, fallbackAgentId: 'fb' })).toBe(
+        'fb',
+      );
     });
 
     it('resolves matching session from directory', () => {
       readdirSync.mockReturnValue(['cursor_abc.json']);
-      readFileSync.mockReturnValue(JSON.stringify({
-        agentId: 'cursor:abc',
-        tool: 'cursor',
-        cwd: '/project',
-        tty: '/dev/ttys001',
-        createdAt: 100,
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          agentId: 'cursor:abc',
+          tool: 'cursor',
+          cwd: '/project',
+          tty: '/dev/ttys001',
+          createdAt: 100,
+        }),
+      );
 
       const result = resolveSessionAgentId({
         tool: 'cursor',
@@ -262,20 +278,24 @@ describe('session-registry', () => {
     it('returns most recent session when multiple match', () => {
       readdirSync.mockReturnValue(['a.json', 'b.json']);
       readFileSync
-        .mockReturnValueOnce(JSON.stringify({
-          agentId: 'cursor:old',
-          tool: 'cursor',
-          cwd: '/project',
-          tty: '/dev/ttys001',
-          createdAt: 50,
-        }))
-        .mockReturnValueOnce(JSON.stringify({
-          agentId: 'cursor:new',
-          tool: 'cursor',
-          cwd: '/project',
-          tty: '/dev/ttys001',
-          createdAt: 100,
-        }));
+        .mockReturnValueOnce(
+          JSON.stringify({
+            agentId: 'cursor:old',
+            tool: 'cursor',
+            cwd: '/project',
+            tty: '/dev/ttys001',
+            createdAt: 50,
+          }),
+        )
+        .mockReturnValueOnce(
+          JSON.stringify({
+            agentId: 'cursor:new',
+            tool: 'cursor',
+            cwd: '/project',
+            tty: '/dev/ttys001',
+            createdAt: 100,
+          }),
+        );
 
       const result = resolveSessionAgentId({
         tool: 'cursor',
@@ -289,12 +309,14 @@ describe('session-registry', () => {
 
     it('skips dead sessions', () => {
       readdirSync.mockReturnValue(['a.json']);
-      readFileSync.mockReturnValue(JSON.stringify({
-        agentId: 'cursor:dead',
-        tool: 'cursor',
-        cwd: '/project',
-        tty: '/dev/ttys001',
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          agentId: 'cursor:dead',
+          tool: 'cursor',
+          cwd: '/project',
+          tty: '/dev/ttys001',
+        }),
+      );
 
       const result = resolveSessionAgentId({
         tool: 'cursor',
@@ -320,7 +342,9 @@ describe('session-registry', () => {
     });
 
     it('returns fallbackAgentId when readdirSync throws', () => {
-      readdirSync.mockImplementation(() => { throw new Error('ENOENT'); });
+      readdirSync.mockImplementation(() => {
+        throw new Error('ENOENT');
+      });
       const result = resolveSessionAgentId({
         tool: 'cursor',
         cwd: '/project',
@@ -333,15 +357,15 @@ describe('session-registry', () => {
 
     it('skips files with invalid JSON', () => {
       readdirSync.mockReturnValue(['bad.json', 'good.json']);
-      readFileSync
-        .mockReturnValueOnce('bad json')
-        .mockReturnValueOnce(JSON.stringify({
+      readFileSync.mockReturnValueOnce('bad json').mockReturnValueOnce(
+        JSON.stringify({
           agentId: 'cursor:good',
           tool: 'cursor',
           cwd: '/project',
           tty: '/dev/ttys001',
           createdAt: 100,
-        }));
+        }),
+      );
 
       const result = resolveSessionAgentId({
         tool: 'cursor',
@@ -358,10 +382,7 @@ describe('session-registry', () => {
     it('returns true and writes escape sequence when tty is valid', () => {
       appendFileSync.mockImplementation(() => {});
       expect(setTerminalTitle('/dev/ttys001', 'My Title')).toBe(true);
-      expect(appendFileSync).toHaveBeenCalledWith(
-        '/dev/ttys001',
-        '\x1b]0;My Title\x07',
-      );
+      expect(appendFileSync).toHaveBeenCalledWith('/dev/ttys001', '\x1b]0;My Title\x07');
     });
 
     it('returns false when tty is null', () => {
@@ -369,7 +390,9 @@ describe('session-registry', () => {
     });
 
     it('returns false when appendFileSync throws', () => {
-      appendFileSync.mockImplementation(() => { throw new Error('EACCES'); });
+      appendFileSync.mockImplementation(() => {
+        throw new Error('EACCES');
+      });
       expect(setTerminalTitle('/dev/ttys001', 'Title')).toBe(false);
     });
   });
@@ -383,32 +406,40 @@ describe('session-registry', () => {
     it('returns false when session record has no tty', () => {
       existsSync.mockReturnValue(true);
       readFileSync.mockReturnValue(JSON.stringify({ agentId: 'agent-1', pid: 1234 }));
-      expect(pingAgentTerminal('agent-1', {
-        homeDir: '/tmp',
-        recordAlive: () => true,
-      })).toBe(false);
+      expect(
+        pingAgentTerminal('agent-1', {
+          homeDir: '/tmp',
+          recordAlive: () => true,
+        }),
+      ).toBe(false);
     });
 
     it('returns false when session is not alive', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockReturnValue(JSON.stringify({
-        agentId: 'agent-1',
-        pid: 1234,
-        tty: '/dev/ttys001',
-      }));
-      expect(pingAgentTerminal('agent-1', {
-        homeDir: '/tmp',
-        recordAlive: () => false,
-      })).toBe(false);
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          agentId: 'agent-1',
+          pid: 1234,
+          tty: '/dev/ttys001',
+        }),
+      );
+      expect(
+        pingAgentTerminal('agent-1', {
+          homeDir: '/tmp',
+          recordAlive: () => false,
+        }),
+      ).toBe(false);
     });
 
     it('returns true and writes attention sequences when session is alive', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockReturnValue(JSON.stringify({
-        agentId: 'agent-1',
-        pid: 1234,
-        tty: '/dev/ttys001',
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          agentId: 'agent-1',
+          pid: 1234,
+          tty: '/dev/ttys001',
+        }),
+      );
       appendFileSync.mockImplementation(() => {});
 
       const result = pingAgentTerminal('agent-1', {

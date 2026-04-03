@@ -1,14 +1,13 @@
 // Team memory routes — save, search, update, delete memory.
 
 import { isBlocked } from '../../moderation.js';
-import { getDB, getTeam } from '../../lib/env.js';
+import { getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
 import {
   requireJson,
   requireString,
   validateTagsArray,
-  withRateLimit,
   withTeamRateLimit,
 } from '../../lib/validation.js';
 import {

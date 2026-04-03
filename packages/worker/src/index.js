@@ -194,7 +194,7 @@ const routes = buildRoutes([
     method: 'GET',
     path: '/me',
     handler: (_req, _env, user) => {
-      const { id, ...profile } = user;
+      const { id: _id, ...profile } = user;
       return json(profile);
     },
   },

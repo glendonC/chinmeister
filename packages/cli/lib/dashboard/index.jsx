@@ -25,14 +25,7 @@ import {
 
 // ── Main Dashboard component ────────────────────────
 
-export function Dashboard({
-  config,
-  navigate,
-  layout,
-  projectLabel = null,
-  appVersion = '0.1.0',
-  setFooterHints,
-}) {
+export function Dashboard({ config, navigate, layout, setFooterHints }) {
   const { stdout } = useStdout();
   const viewportRows = layout?.viewportRows || 18;
 
@@ -166,7 +159,7 @@ function DashboardInner({
 function DashboardView({
   config,
   navigate,
-  viewportRows,
+  viewportRows: _viewportRows,
   setFooterHints,
   connection,
   memoryHook,
@@ -235,7 +228,13 @@ function DashboardView({
         { key: 'q', label: 'quit', color: 'gray' },
       ]);
     }
-  }, [composer.isComposing, agentsHook.installedCliAgents, agentsHook.managedToolStates]);
+  }, [
+    composer.isComposing,
+    agentsHook.installedCliAgents,
+    agentsHook.managedToolStates,
+    agentsHook.readyCliAgents,
+    setFooterHints,
+  ]);
 
   // ── Handlers ───────────────────────────────────────
   const handleOpenWebDashboard = useCallback(() => {
@@ -248,7 +247,6 @@ function DashboardView({
     );
   }, [config?.token, flash]);
 
-   
   // Factory function patterns — React Compiler can't infer closure deps
   // from createCommandHandler/createInputHandler factories.
   const handleCommandSubmit = useMemo(
@@ -327,7 +325,6 @@ function DashboardView({
       navigate,
     ],
   );
-   
 
   const onComposeSubmit = useCallback(() => {
     composer.onComposeSubmit(commandSuggestions, handleCommandSubmit);

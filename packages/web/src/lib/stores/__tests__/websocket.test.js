@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -128,10 +128,9 @@ describe('websocket module', () => {
   // -----------------------------------------------------------------------
   describe('setPollingBridge', () => {
     it('wires up the cross-store bridge callbacks', async () => {
-      const { setPollingBridge, connectTeamWebSocket, apiMock, setWsConnectedMock } =
-        await loadWebSocketModule({
-          apiMock: vi.fn().mockResolvedValue({ ticket: 'tkt_1' }),
-        });
+      const { setPollingBridge, connectTeamWebSocket } = await loadWebSocketModule({
+        apiMock: vi.fn().mockResolvedValue({ ticket: 'tkt_1' }),
+      });
 
       const bridge = {
         setState: vi.fn(),
@@ -161,8 +160,7 @@ describe('websocket module', () => {
   describe('connectTeamWebSocket', () => {
     it('fetches a WS ticket and opens a WebSocket with correct URL', async () => {
       const apiMock = vi.fn().mockResolvedValue({ ticket: 'tkt_abc' });
-      const { connectTeamWebSocket, setPollingBridge, setWsConnectedMock } =
-        await loadWebSocketModule({ apiMock });
+      const { connectTeamWebSocket, setPollingBridge } = await loadWebSocketModule({ apiMock });
 
       setPollingBridge({
         setState: vi.fn(),
@@ -271,7 +269,6 @@ describe('websocket module', () => {
 
       await connectTeamWebSocket('t_team1');
       await flushPromises();
-      const firstWs = instances[0];
 
       await connectTeamWebSocket('t_team1');
       await flushPromises();
@@ -290,8 +287,7 @@ describe('websocket module', () => {
       vi.useFakeTimers();
       const apiMock = vi.fn().mockResolvedValue({ ticket: 'tkt_1' });
       const stopPollTimer = vi.fn();
-      const { connectTeamWebSocket, setPollingBridge, setWsConnectedMock } =
-        await loadWebSocketModule({ apiMock });
+      const { connectTeamWebSocket, setPollingBridge } = await loadWebSocketModule({ apiMock });
 
       setPollingBridge({
         setState: vi.fn(),
@@ -955,7 +951,7 @@ describe('websocket module', () => {
         poll: vi.fn(),
       });
 
-      const { MockWebSocket, instances } = createMockWebSocketClass();
+      const { MockWebSocket } = createMockWebSocketClass();
       globalThis.WebSocket = MockWebSocket;
 
       await connectTeamWebSocket('t_team1');

@@ -1,9 +1,5 @@
 export function createHeaderUi({
   floatingUi,
-  controlRail,
-  controlSurface,
-  commandPill,
-  commandLabel,
   commandEl,
   copyButton,
   mobileUtilityToggle,

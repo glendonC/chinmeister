@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 // classifyError is not exported, so we need to test it via the module internals.
 // We re-implement the function to test its logic since it's a private function.
