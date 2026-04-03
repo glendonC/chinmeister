@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useEffect, useCallback, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import { HintRow } from './ui.jsx';
 import { useDashboardConnection } from './connection.jsx';
@@ -12,84 +12,16 @@ import { AgentFocusView } from './agent-focus.jsx';
 import { MIN_WIDTH, SPINNER, openWebDashboard, formatProjectPath } from './utils.js';
 import { isAgentAddressable } from './agent-display.js';
 import {
+  ViewProvider,
   ConnectionProvider,
   AgentProvider,
   MemoryProvider,
   CommandPaletteProvider,
+  useView,
   useAgents,
   useMemory,
   useCommandPalette,
 } from './context.jsx';
-
-// ── View management hook ────────────────────────────
-
-function useViewManager() {
-  const [selectedIdx, setSelectedIdx] = useState(-1);
-  const [mainFocus, setMainFocus] = useState('input');
-  const [view, setView] = useState('home');
-  const [heroInput, setHeroInput] = useState('');
-  const [heroInputActive, setHeroInputActive] = useState(false);
-  const [focusedAgent, setFocusedAgent] = useState(null);
-  const [showDiagnostics, setShowDiagnostics] = useState(false);
-
-  const isHomeView = view === 'home';
-  const isSessionsView = view === 'sessions';
-  const isMemoryView = view === 'memory';
-  const isAgentFocusView = view === 'agent-focus';
-
-  return {
-    selectedIdx,
-    setSelectedIdx,
-    mainFocus,
-    setMainFocus,
-    view,
-    setView,
-    heroInput,
-    setHeroInput,
-    heroInputActive,
-    setHeroInputActive,
-    focusedAgent,
-    setFocusedAgent,
-    showDiagnostics,
-    setShowDiagnostics,
-    isHomeView,
-    isSessionsView,
-    isMemoryView,
-    isAgentFocusView,
-  };
-}
-
-// ── Flash notification hook ─────────────────────────
-
-function useFlashNotification() {
-  const [notice, setNotice] = useState(null);
-  const noticeTimer = useRef(null);
-
-  const flash = useCallback(function flash(msg, opts = {}) {
-    const tone = typeof opts === 'object' ? opts.tone || 'info' : 'info';
-    const autoClearMs = typeof opts === 'object' ? opts.autoClearMs : null;
-    if (noticeTimer.current) {
-      clearTimeout(noticeTimer.current);
-      noticeTimer.current = null;
-    }
-    setNotice({ text: msg, tone });
-    if (autoClearMs && autoClearMs > 0) {
-      noticeTimer.current = setTimeout(() => {
-        setNotice((current) => (current?.text === msg ? null : current));
-        noticeTimer.current = null;
-      }, autoClearMs);
-    }
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (noticeTimer.current) clearTimeout(noticeTimer.current);
-    },
-    [],
-  );
-
-  return { notice, flash };
-}
 
 // ── Main Dashboard component ────────────────────────
 
@@ -104,64 +36,51 @@ export function Dashboard({
   const { stdout } = useStdout();
   const viewportRows = layout?.viewportRows || 18;
 
+  // ViewProvider owns the reducer (view, selectedIdx, mainFocus, etc.)
+  // and the flash notification — no more prop drilling.
+  return (
+    <ViewProvider>
+      <DashboardProviders
+        config={config}
+        navigate={navigate}
+        viewportRows={viewportRows}
+        setFooterHints={setFooterHints}
+        stdout={stdout}
+      />
+    </ViewProvider>
+  );
+}
+
+/**
+ * Sets up connection + domain hooks, wires them into the provider tree.
+ * Must be a child of ViewProvider so hooks can call useView().
+ */
+function DashboardProviders({ config, navigate, viewportRows, setFooterHints, stdout }) {
+  const { flash } = useView();
+
   // ── Connection + project state ─────────────────────
   const connection = useDashboardConnection({ config, stdout });
-  const {
-    teamId,
-    teamName,
-    projectRoot,
-    detectedTools,
-    context,
-    error,
-    connState,
-    connDetail,
-    spinnerFrame,
-    cols,
-    retry: connectionRetry,
-    bumpRefreshKey,
-  } = connection;
-
-  // ── View state ─────────────────────────────────────
-  const vm = useViewManager();
-  const {
-    selectedIdx,
-    setSelectedIdx,
-    mainFocus,
-    setMainFocus,
-    view,
-    setView,
-    heroInput,
-    setHeroInput,
-    heroInputActive,
-    setHeroInputActive,
-    focusedAgent,
-    setFocusedAgent,
-    showDiagnostics,
-    setShowDiagnostics,
-    isHomeView,
-    isSessionsView,
-    isMemoryView,
-    isAgentFocusView,
-  } = vm;
-
-  // ── Flash notification ─────────────────────────────
-  const { notice, flash } = useFlashNotification();
+  const { teamId, teamName, projectRoot, detectedTools, context, cols } = connection;
 
   // ── Custom hooks ───────────────────────────────────
-  const memoryHook = useMemoryManager({ config, teamId, bumpRefreshKey, flash });
+  const memoryHook = useMemoryManager({
+    config,
+    teamId,
+    bumpRefreshKey: connection.bumpRefreshKey,
+    flash,
+  });
   const agentsHook = useAgentLifecycle({ config, teamId, projectRoot, stdout, flash });
   const integrations = useIntegrationDoctor({ projectRoot, flash });
   const composer = useComposer({
     config,
     teamId,
-    bumpRefreshKey,
+    bumpRefreshKey: connection.bumpRefreshKey,
     flash,
     clearMemorySearch: memoryHook.clearMemorySearch,
     clearMemoryInput: memoryHook.clearMemoryInput,
   });
 
   // ── Compose the providers, then render the inner component ──
-  // The inner component uses context hooks to access derived data.
   return (
     <ConnectionProvider connection={connection}>
       <AgentProvider
@@ -170,10 +89,6 @@ export function Dashboard({
         detectedTools={detectedTools}
         teamName={teamName}
         cols={cols}
-        selectedIdx={selectedIdx}
-        setSelectedIdx={setSelectedIdx}
-        mainFocus={mainFocus}
-        setMainFocus={setMainFocus}
         viewportRows={viewportRows}
       >
         <MemoryProvider
@@ -191,9 +106,6 @@ export function Dashboard({
             viewportRows={viewportRows}
             setFooterHints={setFooterHints}
             connection={connection}
-            vm={vm}
-            notice={notice}
-            flash={flash}
             memoryHook={memoryHook}
             agentsHook={agentsHook}
             integrations={integrations}
@@ -215,9 +127,6 @@ function DashboardInner({
   viewportRows,
   setFooterHints,
   connection,
-  vm,
-  notice,
-  flash,
   memoryHook,
   agentsHook,
   integrations,
@@ -241,9 +150,6 @@ function DashboardInner({
         viewportRows={viewportRows}
         setFooterHints={setFooterHints}
         connection={connection}
-        vm={vm}
-        notice={notice}
-        flash={flash}
         memoryHook={memoryHook}
         agentsHook={agentsHook}
         integrations={integrations}
@@ -255,7 +161,7 @@ function DashboardInner({
 
 /**
  * Handles input, rendering, and all view-level logic.
- * Consumes all 4 domain contexts for derived data.
+ * Consumes all 5 domain contexts for derived data.
  */
 function DashboardView({
   config,
@@ -263,16 +169,12 @@ function DashboardView({
   viewportRows,
   setFooterHints,
   connection,
-  vm,
-  notice,
-  flash,
   memoryHook,
   agentsHook,
   integrations,
   composer,
 }) {
   const {
-    teamId,
     context,
     error,
     connState,
@@ -283,24 +185,12 @@ function DashboardView({
     retry: connectionRetry,
   } = connection;
 
-  const {
-    selectedIdx,
-    setSelectedIdx,
-    mainFocus,
-    setMainFocus,
-    view,
-    setView,
-    heroInput,
-    setHeroInput,
-    setHeroInputActive,
-    focusedAgent,
-    setFocusedAgent,
-    showDiagnostics,
-    setShowDiagnostics,
-    isSessionsView,
-    isMemoryView,
-    isAgentFocusView,
-  } = vm;
+  // ── View state from ViewProvider ───────────────────
+  const { state, dispatch, notice, flash } = useView();
+  const { view, focusedAgent, showDiagnostics } = state;
+  const isSessionsView = view === 'sessions';
+  const isMemoryView = view === 'memory';
+  const isAgentFocusView = view === 'agent-focus';
 
   // ── Context-derived data ───────────────────────────
   const {
@@ -358,7 +248,7 @@ function DashboardView({
     );
   }, [config?.token, flash]);
 
-  /* eslint-disable react-hooks/exhaustive-deps */
+   
   // Factory function patterns — React Compiler can't infer closure deps
   // from createCommandHandler/createInputHandler factories.
   const handleCommandSubmit = useMemo(
@@ -369,11 +259,7 @@ function DashboardView({
         composer,
         memory: memoryHook,
         flash,
-        setView,
-        setSelectedIdx,
-        setHeroInput,
-        setHeroInputActive,
-        setMainFocus,
+        dispatch,
         handleOpenWebDashboard,
         liveAgents,
         selectedAgent,
@@ -385,6 +271,7 @@ function DashboardView({
       composer,
       memoryHook,
       flash,
+      dispatch,
       handleOpenWebDashboard,
       liveAgents,
       selectedAgent,
@@ -394,18 +281,8 @@ function DashboardView({
   const inputHandler = useMemo(
     () =>
       createInputHandler({
-        view,
-        setView,
-        mainFocus,
-        setMainFocus,
-        selectedIdx,
-        setSelectedIdx,
-        focusedAgent,
-        setFocusedAgent,
-        showDiagnostics,
-        setShowDiagnostics,
-        setHeroInput,
-        setHeroInputActive,
+        state,
+        dispatch,
         cols,
         error,
         context,
@@ -427,11 +304,8 @@ function DashboardView({
         navigate,
       }),
     [
-      view,
-      mainFocus,
-      selectedIdx,
-      focusedAgent,
-      showDiagnostics,
+      state,
+      dispatch,
       cols,
       error,
       context,
@@ -453,7 +327,7 @@ function DashboardView({
       navigate,
     ],
   );
-  /* eslint-enable react-hooks/exhaustive-deps */
+   
 
   const onComposeSubmit = useCallback(() => {
     composer.onComposeSubmit(commandSuggestions, handleCommandSubmit);
@@ -617,7 +491,7 @@ function DashboardView({
         visibleKnowledgeRows={visibleKnowledgeRows}
         memory={memoryHook}
         composer={composer}
-        notice={notice}
+        state={state}
         commandSuggestions={commandSuggestions}
         onComposeSubmit={onComposeSubmit}
         onMemorySubmit={onMemorySubmit}
@@ -631,11 +505,10 @@ function DashboardView({
       <SessionsView
         liveAgents={liveAgents}
         visibleSessionRows={visibleSessionRows}
-        selectedIdx={selectedIdx}
+        state={state}
         cols={cols}
         composer={composer}
         memory={memoryHook}
-        notice={notice}
         commandSuggestions={commandSuggestions}
         onComposeSubmit={onComposeSubmit}
         onMemorySubmit={onMemorySubmit}
@@ -646,22 +519,16 @@ function DashboardView({
   // ── Home view ──────────────────────────────────────
   return (
     <MainPane
-      projectDisplayName={projectDisplayName}
-      connState={connState}
-      connDetail={connDetail}
-      spinnerFrame={spinnerFrame}
-      cols={cols}
+      state={state}
+      connection={{ connState, connDetail, spinnerFrame, cols, projectDisplayName }}
       allVisibleAgents={allVisibleAgents}
       liveAgents={liveAgents}
       visibleSessionRows={visibleSessionRows}
-      selectedIdx={selectedIdx}
-      mainFocus={mainFocus}
       liveAgentNameCounts={liveAgentNameCounts}
       agents={agentsHook}
       integrationIssues={integrations.integrationIssues}
       composer={composer}
       memory={memoryHook}
-      notice={notice}
       contextHints={contextHints}
       commandSuggestions={commandSuggestions}
       onComposeSubmit={onComposeSubmit}

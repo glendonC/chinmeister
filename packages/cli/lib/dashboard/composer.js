@@ -65,10 +65,10 @@ export function useComposer({
   function sendMessage(text, target, targetLabel = null) {
     if (!config?.token) {
       flash('Not signed in.', { tone: 'error' });
-      return;
+      return Promise.reject();
     }
-    if (!teamId || !text.trim()) return;
-    api(config)
+    if (!teamId || !text.trim()) return Promise.reject();
+    return api(config)
       .post(`/teams/${teamId}/messages`, { text: text.trim(), target: target || undefined })
       .then(() => {
         flash(targetLabel ? `Sent to ${targetLabel}` : 'Sent to team', { tone: 'success' });
@@ -76,7 +76,11 @@ export function useComposer({
       })
       .catch((err) => {
         console.error('[chinwag] Could not send message:', err?.message || err);
-        flash('Could not send message. Check connection.', { tone: 'error' });
+        flash('Send failed \u2014 message preserved, try again', {
+          tone: 'error',
+          autoClearMs: 5000,
+        });
+        throw err; // re-throw so caller can restore compose state
       });
   }
 
@@ -90,8 +94,18 @@ export function useComposer({
       }
       return;
     }
-    sendMessage(composeText, composeTarget, composeTargetLabel);
+    const savedText = composeText;
+    const savedTarget = composeTarget;
+    const savedTargetLabel = composeTargetLabel;
+    const savedMode = composeMode;
     clearCompose();
+    sendMessage(savedText, savedTarget, savedTargetLabel).catch(() => {
+      // Restore compose state so user can retry without retyping
+      setComposeMode(savedMode);
+      setComposeText(savedText);
+      setComposeTarget(savedTarget);
+      setComposeTargetLabel(savedTargetLabel);
+    });
   }
 
   return {

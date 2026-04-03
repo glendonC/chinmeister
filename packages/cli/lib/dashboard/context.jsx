@@ -1,8 +1,18 @@
-import React, { createContext, useContext, useMemo, useEffect } from 'react';
+import React, {
+  createContext,
+  useContext,
+  useMemo,
+  useEffect,
+  useReducer,
+  useRef,
+  useCallback,
+  useState,
+} from 'react';
 import { basename } from 'path';
 import { buildCombinedAgentRows, buildDashboardView } from './view.js';
 import { isAgentAddressable } from './agent-display.js';
 import { getVisibleWindow } from './utils.js';
+import { dashboardReducer, createInitialState, clampSelection } from './reducer.js';
 
 // ── Constants ───────────────────────────────────────
 const RECENTLY_FINISHED_LIMIT = 3;
@@ -12,12 +22,19 @@ const COMMAND_SUGGESTION_LIMIT = 5;
 
 // ── Contexts ────────────────────────────────────────
 
+const ViewContext = createContext(null);
 const ConnectionContext = createContext(null);
 const AgentContext = createContext(null);
 const MemoryContext = createContext(null);
 const CommandPaletteContext = createContext(null);
 
 // ── Hooks ───────────────────────────────────────────
+
+export function useView() {
+  const ctx = useContext(ViewContext);
+  if (!ctx) throw new Error('useView must be used within ViewProvider');
+  return ctx;
+}
 
 export function useConnection() {
   const ctx = useContext(ConnectionContext);
@@ -46,6 +63,47 @@ export function useCommandPalette() {
 // ── Providers ───────────────────────────────────────
 
 /**
+ * View state: owns the dashboard reducer (view, selectedIdx, mainFocus,
+ * focusedAgent, showDiagnostics, heroInput) plus the flash notification.
+ * Every component that previously received these as props can now
+ * `useView()` instead.
+ */
+export function ViewProvider({ children }) {
+  const [state, dispatch] = useReducer(dashboardReducer, undefined, createInitialState);
+
+  // ── Flash notification ───────────────────────────
+  const [notice, setNotice] = useState(null);
+  const noticeTimer = useRef(null);
+
+  const flash = useCallback(function flash(msg, opts = {}) {
+    const tone = typeof opts === 'object' ? opts.tone || 'info' : 'info';
+    const autoClearMs = typeof opts === 'object' ? opts.autoClearMs : null;
+    if (noticeTimer.current) {
+      clearTimeout(noticeTimer.current);
+      noticeTimer.current = null;
+    }
+    setNotice({ text: msg, tone });
+    if (autoClearMs && autoClearMs > 0) {
+      noticeTimer.current = setTimeout(() => {
+        setNotice((current) => (current?.text === msg ? null : current));
+        noticeTimer.current = null;
+      }, autoClearMs);
+    }
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (noticeTimer.current) clearTimeout(noticeTimer.current);
+    },
+    [],
+  );
+
+  const value = useMemo(() => ({ state, dispatch, notice, flash }), [state, notice, flash]);
+
+  return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>;
+}
+
+/**
  * Connection state: teamId, teamName, projectRoot, connState, etc.
  * Thin wrapper — the useDashboardConnection hook does the real work.
  */
@@ -57,6 +115,9 @@ export function ConnectionProvider({ connection, children }) {
  * Agent context: raw agents hook + derived agent data.
  * Owns: combinedAgents, liveAgents, allVisibleAgents, selection clamping,
  * visibleSessionRows, liveAgentNameCounts, conflicts.
+ *
+ * Reads selectedIdx/mainFocus from ViewProvider (useView) instead of
+ * receiving them as props — eliminates the prop-drilling anti-pattern.
  */
 export function AgentProvider({
   agents,
@@ -64,13 +125,12 @@ export function AgentProvider({
   detectedTools,
   teamName,
   cols,
-  selectedIdx,
-  setSelectedIdx,
-  mainFocus,
-  setMainFocus,
   viewportRows,
   children,
 }) {
+  const { state, dispatch } = useView();
+  const { selectedIdx, mainFocus } = state;
+
   // Build dashboard view data (tool name resolver, visible agents, conflicts)
   const dashboardView = useMemo(
     () =>
@@ -137,15 +197,8 @@ export function AgentProvider({
 
   // Clamp selection indices when agent list shrinks
   useEffect(() => {
-    if (allVisibleAgents.length === 0) {
-      if (selectedIdx !== -1) setSelectedIdx(-1);
-      if (mainFocus === 'agents') setMainFocus('input');
-      return;
-    }
-    if (selectedIdx >= allVisibleAgents.length) {
-      setSelectedIdx(allVisibleAgents.length > 0 ? allVisibleAgents.length - 1 : -1);
-    }
-  }, [selectedIdx, allVisibleAgents.length, mainFocus]);
+    dispatch(clampSelection(allVisibleAgents.length));
+  }, [allVisibleAgents.length, dispatch]);
 
   const value = useMemo(
     () => ({

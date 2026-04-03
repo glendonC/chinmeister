@@ -16,8 +16,9 @@ export function useMemoryManager({ config, teamId, bumpRefreshKey, flash }) {
   const [memoryInput, setMemoryInput] = useState('');
 
   function saveMemory(text) {
-    if (!teamId || !text.trim()) return;
-    api(config)
+    if (!teamId || !text.trim()) return Promise.resolve();
+    flash('Saving to shared memory\u2026', { tone: 'info' });
+    return api(config)
       .post(`/teams/${teamId}/memory`, { text: text.trim() })
       .then(() => {
         flash('Saved to shared memory', { tone: 'success' });
@@ -25,7 +26,11 @@ export function useMemoryManager({ config, teamId, bumpRefreshKey, flash }) {
       })
       .catch((err) => {
         console.error('[chinwag] Could not save memory:', err?.message || err);
-        flash('Could not save memory. Check connection.', { tone: 'error' });
+        flash('Could not save \u2014 check connection and try again', {
+          tone: 'error',
+          autoClearMs: 5000,
+        });
+        throw err; // re-throw so caller can preserve input
       });
   }
 
@@ -42,9 +47,9 @@ export function useMemoryManager({ config, teamId, bumpRefreshKey, flash }) {
       })
       .catch((err) => {
         console.error('[chinwag] Could not delete memory:', err?.message || err);
-        setDeleteMsg('Could not delete.');
-        setDeleteConfirm(false);
-        setTimeout(() => setDeleteMsg(null), DELETE_FEEDBACK_MS);
+        setDeleteMsg('Failed to delete. Press d to retry.');
+        // Keep deleteConfirm so user can retry with another 'd' press
+        setTimeout(() => setDeleteMsg(null), 5000);
       });
   }
 
@@ -57,8 +62,11 @@ export function useMemoryManager({ config, teamId, bumpRefreshKey, flash }) {
   const clearMemoryInput = () => setMemoryInput('');
 
   function onMemorySubmit() {
-    saveMemory(memoryInput);
+    const savedText = memoryInput;
     setMemoryInput('');
+    saveMemory(savedText).catch(() => {
+      setMemoryInput(savedText); // restore on failure so user can retry
+    });
   }
 
   return {
