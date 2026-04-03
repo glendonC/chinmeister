@@ -11,6 +11,7 @@ export interface ToolDirectoryEvaluation {
   integration_tier?: string;
   mcp_support?: boolean | string;
   metadata?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface CatalogItem {
@@ -21,6 +22,7 @@ export interface CatalogItem {
   featured: boolean;
   installCmd: string | null;
   mcp_support?: boolean | string;
+  [key: string]: unknown;
 }
 
 interface ToolDirectoryResponse {

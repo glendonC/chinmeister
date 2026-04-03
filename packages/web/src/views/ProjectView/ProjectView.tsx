@@ -181,7 +181,7 @@ export default function ProjectView(_props: Props) {
               filesInPlay={filesInPlay}
               locks={locks}
               liveToolMix={liveToolMix}
-              sessions={sessions}
+              sessions={sessions as never[]}
             />
           </div>
         )}
