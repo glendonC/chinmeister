@@ -6,11 +6,17 @@ const CLEAR_SCREEN = '\x1b[2J\x1b[H';
 const ESC = String.fromCharCode(27);
 const BELL = String.fromCharCode(7);
 
-function canControlTerminal() {
+interface TerminalUiCapabilities {
+  hasBasicColor: boolean;
+  hasBackgroundFill: boolean;
+  isLowFidelity: boolean;
+}
+
+function canControlTerminal(): boolean {
   return Boolean(process.stdout?.isTTY);
 }
 
-export function getTerminalUiCapabilities() {
+export function getTerminalUiCapabilities(): TerminalUiCapabilities {
   const term = String(process.env.TERM || '').toLowerCase();
   const noColor = process.env.NO_COLOR != null && process.env.NO_COLOR !== '0';
   const forceColor = process.env.FORCE_COLOR != null && process.env.FORCE_COLOR !== '0';
@@ -18,8 +24,9 @@ export function getTerminalUiCapabilities() {
   let colorDepth = 1;
   try {
     colorDepth = process.stdout?.getColorDepth?.() || 1;
-  } catch (err) {
-    console.error('[chinwag]', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[chinwag]', message);
   }
 
   const hasNamedTerminal = Boolean(term && term !== 'dumb' && term !== 'unknown');
@@ -33,29 +40,29 @@ export function getTerminalUiCapabilities() {
   };
 }
 
-function supportsAlternateScreen() {
+function supportsAlternateScreen(): boolean {
   if (!canControlTerminal()) return false;
   return !getTerminalUiCapabilities().isLowFidelity;
 }
 
-function writeEscape(sequence) {
+function writeEscape(sequence: string): void {
   if (!canControlTerminal()) return;
   process.stdout.write(sequence);
 }
 
-function sanitizeTitle(title) {
+function sanitizeTitle(title: string | undefined): string {
   return String(title || 'chinwag')
     .replaceAll(ESC, '')
     .replaceAll(BELL, '')
     .trim();
 }
 
-function setTerminalTitle(title) {
+function setTerminalTitle(title: string | undefined): void {
   if (!supportsAlternateScreen()) return;
   writeEscape(`\x1b]0;${sanitizeTitle(title)}\x07`);
 }
 
-export function useTerminalControl(title) {
+export function useTerminalControl(title: string | undefined): void {
   useEffect(() => {
     if (!supportsAlternateScreen()) return undefined;
 

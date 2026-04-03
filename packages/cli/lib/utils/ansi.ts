@@ -7,11 +7,8 @@
 
 /* eslint-disable no-control-regex */
 
-/** Strip all ANSI escape codes, OSC sequences, control characters, and carriage returns.
- * @param {string} str
- * @returns {string}
- */
-export function stripAnsi(str) {
+/** Strip all ANSI escape codes, OSC sequences, control characters, and carriage returns. */
+export function stripAnsi(str: string): string {
   return str
     .replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '') // OSC sequences (title, hyperlinks, etc.)
     .replace(/\x1b[P^_][\s\S]*?\x1b\\/g, '') // DCS, PM, APC sequences

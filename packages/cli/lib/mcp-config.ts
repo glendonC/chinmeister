@@ -10,28 +10,38 @@ import {
   writeHooksConfig as writeHostHooksConfig,
   writeMcpConfig as writeHostMcpConfig,
 } from '@chinwag/shared/integration-doctor.js';
+import type {
+  ConfigureResult,
+  IntegrationScanResult,
+  WriteResult,
+} from '@chinwag/shared/integration-doctor.js';
+import type { HostIntegration } from '@chinwag/shared/integration-model.js';
 
 export { commandExists };
 
-export function detectTools(cwd) {
+export function detectTools(cwd: string): HostIntegration[] {
   return detectHostIntegrations(cwd);
 }
 
-export function scanIntegrationHealth(cwd) {
+export function scanIntegrationHealth(cwd: string): IntegrationScanResult[] {
   return scanHostIntegrations(cwd);
 }
 
 export { summarizeIntegrationScan };
 
-export function writeMcpConfig(cwd, relativePath, { channel = false, toolId = null } = {}) {
+export function writeMcpConfig(
+  cwd: string,
+  relativePath: string,
+  { channel = false, toolId = null }: { channel?: boolean; toolId?: string | null } = {},
+): WriteResult {
   return writeHostMcpConfig(cwd, relativePath, { channel, hostId: toolId });
 }
 
-export function writeHooksConfig(cwd) {
+export function writeHooksConfig(cwd: string): WriteResult {
   return writeHostHooksConfig(cwd, { hostId: 'claude-code' });
 }
 
-export function configureTool(cwd, toolId) {
+export function configureTool(cwd: string, toolId: string): ConfigureResult {
   const result = configureHostIntegration(cwd, toolId);
   if (result?.error?.startsWith('Unknown host integration:')) {
     return { error: result.error.replace('Unknown host integration:', 'Unknown MCP tool:') };

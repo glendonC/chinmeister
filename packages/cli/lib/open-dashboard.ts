@@ -5,9 +5,9 @@ import { execFileSync } from 'child_process';
 import { configExists, loadConfig } from './config.js';
 
 const EXEC_TIMEOUT_MS = 10000;
-const DASHBOARD_URL = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
+const DASHBOARD_URL: string = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
 
-export async function openDashboard() {
+export async function openDashboard(): Promise<void> {
   if (!configExists()) {
     console.log('  Run `npx chinwag init` first to create an account.');
     return;
@@ -33,14 +33,14 @@ export async function openDashboard() {
     // Windows
     else if (process.platform === 'win32') {
       execFileSync('cmd', ['/c', 'start', '', url], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
-    }
-    else {
+    } else {
       console.log(`  Open this URL in your browser:`);
       console.log(`  ${url}`);
       return;
     }
-  } catch (err) {
-    console.error('[chinwag]', err?.message || err);
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[chinwag]', message);
     console.log(`  Could not open browser. Open this URL manually:`);
     console.log(`  ${url}`);
   }

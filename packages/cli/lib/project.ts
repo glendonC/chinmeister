@@ -1,6 +1,13 @@
 import { findTeamFile } from '@chinwag/shared/team-utils.js';
 
-export function getProjectContext(cwd = process.cwd()) {
+interface ProjectContext {
+  filePath: string;
+  root: string;
+  teamId: string;
+  teamName: string;
+}
+
+export function getProjectContext(cwd: string = process.cwd()): ProjectContext | null {
   const result = findTeamFile(cwd);
   if (!result) return null;
   return {

@@ -2,7 +2,12 @@ import { execFileSync } from 'child_process';
 
 const EXEC_TIMEOUT_MS = 10000;
 
-export function openPath(targetPath) {
+interface OpenPathResult {
+  ok: boolean;
+  error?: string;
+}
+
+export function openPath(targetPath: string): OpenPathResult {
   if (!targetPath) {
     return { ok: false, error: 'Missing path' };
   }
@@ -19,12 +24,16 @@ export function openPath(targetPath) {
     }
 
     if (process.platform === 'win32') {
-      execFileSync('cmd', ['/c', 'start', '', targetPath], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
+      execFileSync('cmd', ['/c', 'start', '', targetPath], {
+        stdio: 'ignore',
+        timeout: EXEC_TIMEOUT_MS,
+      });
       return { ok: true };
     }
 
     return { ok: false, error: 'Unsupported platform' };
-  } catch (err) {
-    return { ok: false, error: err.message || 'Could not open path' };
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : typeof err === 'string' ? err : '';
+    return { ok: false, error: message || 'Could not open path' };
   }
 }

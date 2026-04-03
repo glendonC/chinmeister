@@ -1,15 +1,23 @@
 import { MCP_TOOLS } from '../tools.js';
 import { configureTool } from '../mcp-config.js';
 
+interface ToolEntry {
+  id: string;
+  name: string;
+  installCmd?: string | null;
+  website?: string;
+}
+
+interface ToolActionResult {
+  ok: boolean;
+  message: string;
+}
+
 /**
  * Attempt to add a tool to the project. Handles MCP-configured tools,
  * install-command tools, and website-only tools.
- *
- * @param {object} tool - Tool object with id, name, installCmd, website
- * @param {string} projectRoot - Absolute path to the project root
- * @returns {{ ok: boolean, message: string }} Result with user-facing message
  */
-export function addToolToProject(tool, projectRoot) {
+export function addToolToProject(tool: ToolEntry, projectRoot: string): ToolActionResult {
   const mcpTool = MCP_TOOLS.find((t) => t.id === tool.id);
   if (mcpTool) {
     const result = configureTool(projectRoot, tool.id);

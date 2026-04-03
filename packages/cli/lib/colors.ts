@@ -4,7 +4,7 @@
 // supported across iTerm2, Terminal.app, Windows Terminal, gnome-terminal.
 // Bright variants (codes 90-97) render as distinct hues on modern terminals:
 // redBright→orange, greenBright→lime, magentaBright→pink, etc.
-const COLOR_MAP = {
+const COLOR_MAP: Record<string, string> = {
   red: 'red',
   cyan: 'cyan',
   yellow: 'yellow',
@@ -19,17 +19,16 @@ const COLOR_MAP = {
   white: 'white',
 };
 
-const COLOR_LIST = Object.keys(COLOR_MAP);
+const COLOR_LIST: string[] = Object.keys(COLOR_MAP);
 
-export function getInkColor(colorName) {
+export function getInkColor(colorName: string): string {
   return COLOR_MAP[colorName] || 'white';
 }
 
 // Chalk uses the same ANSI color names as Ink.
 // Alias for callers that need chalk-compatible color names.
-export const getChalkColor = getInkColor;
+export const getChalkColor: (colorName: string) => string = getInkColor;
 
-export function getColorList() {
+export function getColorList(): string[] {
   return COLOR_LIST;
 }
-

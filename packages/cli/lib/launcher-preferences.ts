@@ -1,26 +1,45 @@
 import { loadConfig, saveConfig } from './config.js';
+import type { ChinwagConfig } from './config.js';
 
-function normalizeScopeId(scopeId) {
+interface LauncherConfig extends ChinwagConfig {
+  launcherPreferences?: {
+    managedToolByScope?: Record<string, string>;
+  };
+}
+
+export interface ToolWithId {
+  id: string;
+  [key: string]: unknown;
+}
+
+function normalizeScopeId(scopeId: string | null | undefined): string | null {
   const value = String(scopeId || '').trim();
   return value || null;
 }
 
-function normalizeToolId(toolId) {
+function normalizeToolId(toolId: string | null | undefined): string | null {
   const value = String(toolId || '').trim();
   return value || null;
 }
 
-export function getLauncherPreference(config, scopeId) {
+export function getLauncherPreference(
+  config: LauncherConfig | null,
+  scopeId: string | null | undefined,
+): string | null {
   const normalizedScopeId = normalizeScopeId(scopeId);
   if (!normalizedScopeId) return null;
 
   return config?.launcherPreferences?.managedToolByScope?.[normalizedScopeId] || null;
 }
 
-export function setLauncherPreference(config, scopeId, toolId) {
+export function setLauncherPreference(
+  config: LauncherConfig | null,
+  scopeId: string | null | undefined,
+  toolId: string | null | undefined,
+): LauncherConfig {
   const normalizedScopeId = normalizeScopeId(scopeId);
   const normalizedToolId = normalizeToolId(toolId);
-  if (!normalizedScopeId || !normalizedToolId) return config;
+  if (!normalizedScopeId || !normalizedToolId) return config || {};
 
   return {
     ...(config || {}),
@@ -34,13 +53,13 @@ export function setLauncherPreference(config, scopeId, toolId) {
   };
 }
 
-export function getSavedLauncherPreference(scopeId) {
-  const config = loadConfig();
+export function getSavedLauncherPreference(scopeId: string): string | null {
+  const config = loadConfig() as LauncherConfig | null;
   return getLauncherPreference(config, scopeId);
 }
 
-export function saveLauncherPreference(scopeId, toolId) {
-  const config = loadConfig();
+export function saveLauncherPreference(scopeId: string, toolId: string): boolean {
+  const config = loadConfig() as LauncherConfig | null;
   if (!config) return false;
 
   const nextConfig = setLauncherPreference(config, scopeId, toolId);
@@ -48,7 +67,10 @@ export function saveLauncherPreference(scopeId, toolId) {
   return true;
 }
 
-export function resolvePreferredManagedTool(tools = [], preferredToolId = null) {
+export function resolvePreferredManagedTool(
+  tools: ToolWithId[] = [],
+  preferredToolId: string | null = null,
+): ToolWithId | null {
   if (!tools.length) return null;
 
   const normalizedToolId = normalizeToolId(preferredToolId);

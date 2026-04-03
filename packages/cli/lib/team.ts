@@ -3,7 +3,7 @@ import { basename, join } from 'path';
 import { loadConfig, configExists } from './config.js';
 import { api } from './api.js';
 
-export async function handleTeamCommand(subcmd, arg) {
+export async function handleTeamCommand(subcmd: string, arg?: string): Promise<void> {
   if (!configExists()) {
     console.log('Run `npx chinwag` first to create an account.');
     return;
@@ -15,7 +15,7 @@ export async function handleTeamCommand(subcmd, arg) {
   if (subcmd === 'create') {
     try {
       const projectName = basename(process.cwd());
-      const result = await client.post('/teams', { name: projectName });
+      const result = await client.post<{ team_id: string }>('/teams', { name: projectName });
       const teamId = result.team_id;
 
       const chinwagFile = join(process.cwd(), '.chinwag');
@@ -27,9 +27,10 @@ export async function handleTeamCommand(subcmd, arg) {
       console.log(`Team created: ${teamId}`);
       console.log(`Wrote .chinwag to ${chinwagFile}`);
       console.log('Commit this file so teammates auto-join.');
-    } catch (err) {
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
       console.log(
-        `  Could not create team. ${err.status >= 500 ? 'Try again shortly.' : 'Check your connection.'}`,
+        `  Could not create team. ${status != null && status >= 500 ? 'Try again shortly.' : 'Check your connection.'}`,
       );
     }
   } else if (subcmd === 'join') {
@@ -46,9 +47,10 @@ export async function handleTeamCommand(subcmd, arg) {
 
       console.log(`Joined team: ${arg}`);
       console.log(`Wrote .chinwag to ${chinwagFile}`);
-    } catch (err) {
+    } catch (err: unknown) {
+      const status = (err as { status?: number }).status;
       console.log(
-        `  Could not join team. ${err.status >= 500 ? 'Try again shortly.' : 'Check your connection.'}`,
+        `  Could not join team. ${status != null && status >= 500 ? 'Try again shortly.' : 'Check your connection.'}`,
       );
     }
   } else {
