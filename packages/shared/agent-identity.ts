@@ -42,8 +42,11 @@ function includesAlias(command = '', alias = ''): boolean {
 }
 
 function getArgValue(flag: string, argv = process.argv): string | null {
-  const idx = argv.indexOf(flag);
-  return idx !== -1 && argv[idx + 1] ? argv[idx + 1] : null;
+  for (let i = 0; i < argv.length; i++) {
+    if (argv[i] === flag) return argv[i + 1] || null;
+    if (argv[i].startsWith(flag + '=')) return argv[i].slice(flag.length + 1) || null;
+  }
+  return null;
 }
 
 function inferToolFromCommand(command = ''): string | null {
