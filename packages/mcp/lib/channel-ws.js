@@ -105,8 +105,10 @@ export function createChannelWebSocket({
 
   function scheduleReconnect() {
     if (destroyed || reconnectTimer) return;
-    logger.info(`WebSocket reconnecting in ${reconnectDelay / 1000}s`);
-    reconnectTimer = setTimeout(connect, reconnectDelay);
+    // Jitter: 50-100% of delay to prevent thundering herd on mass reconnect
+    const jitteredDelay = Math.round(reconnectDelay * (0.5 + Math.random() * 0.5));
+    logger.info(`WebSocket reconnecting in ${(jitteredDelay / 1000).toFixed(1)}s`);
+    reconnectTimer = setTimeout(connect, jitteredDelay);
     if (reconnectTimer.unref) reconnectTimer.unref();
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }

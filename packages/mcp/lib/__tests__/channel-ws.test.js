@@ -170,7 +170,7 @@ describe('createChannelWebSocket', () => {
     ws.connect();
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('reconnecting in 1s'));
+    expect(logger.info).toHaveBeenCalledWith(expect.stringContaining('reconnecting in'));
 
     // After 1s delay, should retry
     client.post.mockResolvedValueOnce({ ticket: 'tk_retry' });

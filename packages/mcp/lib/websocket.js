@@ -40,10 +40,12 @@ export function createWebSocketManager({ client, getApiUrl, teamId, agentId, sta
       reconnectTimer = null;
     }
     if (state.shuttingDown) return;
-    log.info(`WebSocket disconnected, reconnecting in ${reconnectDelay / 1000}s`, {
+    // Jitter: 50-100% of delay to prevent thundering herd on mass reconnect
+    const jitteredDelay = Math.round(reconnectDelay * (0.5 + Math.random() * 0.5));
+    log.info(`WebSocket disconnected, reconnecting in ${(jitteredDelay / 1000).toFixed(1)}s`, {
       reconnectDelay,
     });
-    reconnectTimer = setTimeout(connectWs, reconnectDelay);
+    reconnectTimer = setTimeout(connectWs, jitteredDelay);
     if (reconnectTimer.unref) reconnectTimer.unref();
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }

@@ -108,8 +108,8 @@ describe('createWebSocketManager', () => {
     const ws1 = state.ws;
     ws1.onclose();
 
-    // First reconnect after 1s
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('reconnecting in 1s'));
+    // First reconnect (with jitter, delay varies)
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('reconnecting in'));
   });
 
   it('does not reconnect when shutting down', async () => {
@@ -161,6 +161,6 @@ describe('createWebSocketManager', () => {
     const ws1 = state.ws;
     ws1.onclose();
 
-    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('reconnecting in 1s'));
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('reconnecting in'));
   });
 });

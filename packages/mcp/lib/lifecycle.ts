@@ -127,7 +127,11 @@ export function setupShutdownHandlers({ agentId, state, team, onDisconnectWs }: 
     cleaned = true;
     if (onDisconnectWs) onDisconnectWs();
     clearInterval(parentWatch);
+    // Force exit if cleanup hangs (e.g. backend unreachable)
+    const forceExit = setTimeout(() => process.exit(0), FORCE_EXIT_TIMEOUT_MS);
+    forceExit.unref?.();
     cleanupProcessSession(agentId, state, team).then(() => {
+      clearTimeout(forceExit);
       setTimeout(() => process.exit(0), 100);
     });
   };
