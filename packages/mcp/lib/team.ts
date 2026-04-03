@@ -10,7 +10,7 @@ export { TEAM_ID_PATTERN, isValidTeamId };
 /** API client interface expected by teamHandlers. */
 export interface ApiClient {
   get(path: string): Promise<any>;
-  post(path: string, body: Record<string, unknown>): Promise<any>;
+  post(path: string, body?: Record<string, unknown>): Promise<any>;
   put(path: string, body: Record<string, unknown>): Promise<any>;
   del(path: string, body?: Record<string, unknown>): Promise<any>;
 }

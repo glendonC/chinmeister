@@ -107,8 +107,8 @@ export interface McpState {
 
 // ── Shutdown ──
 
-const FORCE_EXIT_TIMEOUT_MS = 3_000;
-const PARENT_WATCH_INTERVAL_MS = 5_000;
+export const FORCE_EXIT_TIMEOUT_MS = 3_000;
+export const PARENT_WATCH_INTERVAL_MS = 5_000;
 
 interface ShutdownOptions {
   agentId: string;

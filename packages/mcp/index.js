@@ -18,10 +18,10 @@ import {
   getConfiguredAgentId,
 } from './dist/identity.js';
 import { registerProcessSession, setupShutdownHandlers } from './dist/lifecycle.js';
-import { validateConfig, registerProfile } from './lib/auth.js';
-import { createWebSocketManager } from './lib/websocket.js';
+import { validateConfig, registerProfile } from './dist/auth.js';
+import { createWebSocketManager } from './dist/websocket.js';
 import { registerTools, registerResources } from './dist/tools/index.js';
-import { createAgentState } from './lib/state.js';
+import { createAgentState } from './dist/state.js';
 import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import {
   scanHostIntegrations,

@@ -175,12 +175,12 @@ describe('conflicts tool (unit)', () => {
       ],
     });
 
-    // normalizePath does not resolve ../ segments, so no overlap is found
+    // path.posix.normalize resolves ../ segments, so src/lib/../utils.js → src/utils.js → overlap
     const result = await collector.callTool('chinwag_check_conflicts', {
       files: ['src/lib/../utils.js'],
     });
-    expect(result.isError).toBeUndefined();
-    expect(result.content[0].text).toMatch(/No overlapping files were found in cache/);
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/frank/);
   });
 
   it('normalizes paths with duplicate slashes for offline comparison', async () => {

@@ -116,10 +116,7 @@ describe('context cache', () => {
       await refreshContext(team, 't_abc');
 
       expect(offlinePrefix()).toBe('[offline -- using cached data] ');
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining('API unreachable'),
-        expect.anything(),
-      );
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('API unreachable'));
       consoleSpy.mockRestore();
     });
 

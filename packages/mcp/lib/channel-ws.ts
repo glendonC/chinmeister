@@ -9,19 +9,36 @@
 // CRITICAL: Never console.log — stdio transport.
 
 import { applyDelta, normalizeDashboardDeltaEvent } from '@chinwag/shared/dashboard-ws.js';
+import type { TeamContext } from '@chinwag/shared/contracts.js';
+import type { ApiClient } from './team.js';
+import { getErrorMessage } from './utils/responses.js';
 
 const INITIAL_RECONNECT_DELAY_MS = 1_000;
 const MAX_RECONNECT_DELAY_MS = 60_000;
 
-/**
- * @param {object} options
- * @param {object} options.client - API client (.post for ws-ticket)
- * @param {() => string} options.getApiUrl - Returns API base URL
- * @param {string} options.teamId
- * @param {string} options.agentId
- * @param {(prev: object|null, curr: object) => void} options.onContextUpdate
- * @param {{ info: Function, error: Function, warn: Function }} options.logger
- */
+interface Logger {
+  info: (msg: string) => void;
+  error: (msg: string) => void;
+  warn: (msg: string) => void;
+}
+
+interface ChannelWebSocketOptions {
+  client: ApiClient;
+  getApiUrl: () => string;
+  teamId: string;
+  agentId: string;
+  onContextUpdate: (prev: TeamContext | null, curr: TeamContext) => void;
+  logger: Logger;
+}
+
+export interface ChannelWebSocket {
+  connect: () => void;
+  disconnect: () => void;
+  getContext: () => TeamContext | null;
+  setContext: (ctx: TeamContext | null) => void;
+  isConnected: () => boolean;
+}
+
 export function createChannelWebSocket({
   client,
   getApiUrl,
@@ -29,22 +46,22 @@ export function createChannelWebSocket({
   agentId,
   onContextUpdate,
   logger,
-}) {
-  let localContext = null;
-  let ws = null;
+}: ChannelWebSocketOptions): ChannelWebSocket {
+  let localContext: TeamContext | null = null;
+  let ws: WebSocket | null = null;
   let reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
-  let reconnectTimer = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
   let connecting = false;
 
-  function connect() {
+  function connect(): void {
     if (destroyed || connecting) return;
     connecting = true;
     reconnectTimer = null;
 
     client
       .post('/auth/ws-ticket')
-      .then(({ ticket }) => {
+      .then(({ ticket }: { ticket: string }) => {
         if (destroyed) {
           connecting = false;
           return;
@@ -62,14 +79,14 @@ export function createChannelWebSocket({
           logger.info('WebSocket connected (watcher)');
         };
 
-        socket.onmessage = (event) => {
+        socket.onmessage = (event: MessageEvent) => {
           try {
-            const data = JSON.parse(event.data);
+            const data = JSON.parse(event.data as string) as Record<string, unknown>;
 
             // Initial full context frame sent by TeamDO on connect
             if (data.type === 'context' && data.data) {
               const prev = localContext;
-              localContext = data.data;
+              localContext = data.data as TeamContext;
               onContextUpdate(prev, localContext);
               return;
             }
@@ -79,10 +96,10 @@ export function createChannelWebSocket({
             if (!normalized || !localContext) return;
 
             const prev = localContext;
-            localContext = applyDelta(localContext, normalized) || localContext;
+            localContext = (applyDelta(localContext, normalized) as TeamContext) || localContext;
             onContextUpdate(prev, localContext);
-          } catch (err) {
-            logger.error('WebSocket message parse error: ' + (err.message || err));
+          } catch (err: unknown) {
+            logger.error('WebSocket message parse error: ' + getErrorMessage(err));
           }
         };
 
@@ -92,18 +109,18 @@ export function createChannelWebSocket({
           scheduleReconnect();
         };
 
-        socket.onerror = (err) => {
-          logger.error('WebSocket error: ' + (err?.message || 'unknown'));
+        socket.onerror = () => {
+          logger.error('WebSocket error: unknown');
         };
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         connecting = false;
-        logger.error('WebSocket ticket fetch failed: ' + (err?.message || 'unknown'));
+        logger.error('WebSocket ticket fetch failed: ' + getErrorMessage(err));
         scheduleReconnect();
       });
   }
 
-  function scheduleReconnect() {
+  function scheduleReconnect(): void {
     if (destroyed || reconnectTimer) return;
     // Jitter: 50-100% of delay to prevent thundering herd on mass reconnect
     const jitteredDelay = Math.round(reconnectDelay * (0.5 + Math.random() * 0.5));
@@ -113,7 +130,7 @@ export function createChannelWebSocket({
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }
 
-  function disconnect() {
+  function disconnect(): void {
     destroyed = true;
     connecting = false;
     if (reconnectTimer) {
@@ -130,15 +147,15 @@ export function createChannelWebSocket({
     }
   }
 
-  function getContext() {
+  function getContext(): TeamContext | null {
     return localContext;
   }
 
-  function setContext(ctx) {
+  function setContext(ctx: TeamContext | null): void {
     localContext = ctx;
   }
 
-  function isConnected() {
+  function isConnected(): boolean {
     return ws !== null && ws.readyState === WebSocket.OPEN;
   }
 

@@ -8,21 +8,36 @@
 // CRITICAL: Never console.log — stdio transport.
 
 import { diffState } from '../dist/diff-state.js';
+import type { TeamContext } from './utils/display.js';
+import type { TeamHandlers } from './team.js';
+import { getErrorMessage } from './utils/responses.js';
 
 const RECONCILE_INTERVAL_MS = 60_000;
 const FALLBACK_POLL_MS = 10_000;
 
-/**
- * @param {object} options
- * @param {object} options.team - teamHandlers instance
- * @param {string} options.teamId
- * @param {() => object|null} options.getLocalContext
- * @param {(ctx: object) => void} options.replaceContext
- * @param {(events: string[]) => void} options.onEvents
- * @param {Map} options.stucknessAlerted
- * @param {() => boolean} options.isWsConnected
- * @param {{ info: Function, error: Function, warn: Function }} options.logger
- */
+interface Logger {
+  info: (msg: string) => void;
+  error: (msg: string) => void;
+  warn: (msg: string) => void;
+}
+
+interface ReconcilerOptions {
+  team: TeamHandlers;
+  teamId: string;
+  getLocalContext: () => TeamContext | null;
+  replaceContext: (ctx: TeamContext) => void;
+  onEvents: (events: string[]) => void;
+  stucknessAlerted: Map<string, string>;
+  isWsConnected: () => boolean;
+  logger: Logger;
+}
+
+export interface Reconciler {
+  start: () => void;
+  stop: () => void;
+  reconcile: () => Promise<void>;
+}
+
 export function createReconciler({
   team,
   teamId,
@@ -32,12 +47,12 @@ export function createReconciler({
   stucknessAlerted,
   isWsConnected,
   logger,
-}) {
-  let timer = null;
+}: ReconcilerOptions): Reconciler {
+  let timer: ReturnType<typeof setTimeout> | null = null;
   let stopped = false;
   let consecutiveFailures = 0;
 
-  async function reconcile() {
+  async function reconcile(): Promise<void> {
     try {
       const httpContext = await team.getTeamContext(teamId);
       if (consecutiveFailures > 0) {
@@ -56,15 +71,15 @@ export function createReconciler({
 
       // Replace local state with server truth
       replaceContext(httpContext);
-    } catch (err) {
+    } catch (err: unknown) {
       consecutiveFailures++;
       logger.error(
-        `Reconciliation failed (attempt ${consecutiveFailures}): ${err?.message || 'unknown'}`,
+        `Reconciliation failed (attempt ${consecutiveFailures}): ${getErrorMessage(err)}`,
       );
     }
   }
 
-  function scheduleNext() {
+  function scheduleNext(): void {
     if (stopped) return;
     const delay = isWsConnected() ? RECONCILE_INTERVAL_MS : FALLBACK_POLL_MS;
     timer = setTimeout(async () => {
@@ -74,12 +89,12 @@ export function createReconciler({
     if (timer.unref) timer.unref();
   }
 
-  function start() {
+  function start(): void {
     stopped = false;
     scheduleNext();
   }
 
-  function stop() {
+  function stop(): void {
     stopped = true;
     if (timer) {
       clearTimeout(timer);

@@ -1,7 +1,6 @@
 // Build script: compile .ts files from lib/ to dist/.
 // Entry points (index.js, hook.js, channel.js) import from ./dist/ at runtime.
-// Hand-written .js files in lib/ (auth.js, state.js, websocket.js, paths.js)
-// are imported directly and not compiled.
+// All source in lib/ is TypeScript — no hand-written .js files remain.
 
 import { readdirSync, statSync } from 'fs';
 import { join } from 'path';

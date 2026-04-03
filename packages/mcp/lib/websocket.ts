@@ -2,39 +2,66 @@
 // Handles connect, reconnect with exponential backoff, heartbeat pings.
 // CRITICAL: Never console.log — stdio transport. Use console.error.
 
-import { createLogger } from '../dist/utils/logger.js';
+import { createLogger } from './utils/logger.js';
+import { getErrorMessage } from './utils/responses.js';
+import type { ApiClient } from './team.js';
 
 const log = createLogger('ws');
 
-/** @type {number} Ping interval to keep DB heartbeat fresh */
-export const WS_PING_MS = 60_000;
-/** @type {number} Initial delay before first reconnect attempt */
-export const INITIAL_RECONNECT_DELAY_MS = 1_000;
-/** @type {number} Maximum reconnect backoff cap */
-export const MAX_RECONNECT_DELAY_MS = 60_000;
+/** Ping interval to keep DB heartbeat fresh */
+export const WS_PING_MS: number = 60_000;
+/** Initial delay before first reconnect attempt */
+export const INITIAL_RECONNECT_DELAY_MS: number = 1_000;
+/** Maximum reconnect backoff cap */
+export const MAX_RECONNECT_DELAY_MS: number = 60_000;
+
+/** Shared mutable state that the WebSocket manager reads and writes. */
+interface WsManagerState {
+  ws: WebSocket | null;
+  lastActivity: number;
+  shuttingDown: boolean;
+}
+
+/** Options for creating a WebSocket manager. */
+interface WsManagerOptions {
+  /** API client (needs .post() for ws-ticket) */
+  client: ApiClient;
+  /** Returns the API base URL */
+  getApiUrl: () => string;
+  /** Team ID to connect to */
+  teamId: string;
+  /** Agent ID for the connection */
+  agentId: string;
+  /** Shared mutable state (reads/writes .ws, .lastActivity, .shuttingDown) */
+  state: WsManagerState;
+}
+
+/** Return type of createWebSocketManager. */
+export interface WsManager {
+  connect: () => void;
+  disconnect: () => void;
+}
 
 /**
  * Creates a WebSocket manager for team presence.
  *
  * The connection IS the heartbeat — pings every 60s keep the DB timestamp
  * fresh for SQL queries. Reconnects with exponential backoff on disconnect.
- *
- * @param {object} options
- * @param {object} options.client - API client (needs .post() for ws-ticket)
- * @param {() => string} options.getApiUrl - Returns the API base URL
- * @param {string} options.teamId - Team ID to connect to
- * @param {string} options.agentId - Agent ID for the connection
- * @param {object} options.state - Shared mutable state (reads/writes .ws, .lastActivity, .shuttingDown)
- * @returns {{ connect: () => void, disconnect: () => void }}
  */
-export function createWebSocketManager({ client, getApiUrl, teamId, agentId, state }) {
+export function createWebSocketManager({
+  client,
+  getApiUrl,
+  teamId,
+  agentId,
+  state,
+}: WsManagerOptions): WsManager {
   let reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
-  let reconnectTimer = null;
-  let pingTimer = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let pingTimer: ReturnType<typeof setInterval> | null = null;
   let lastWsSend = 0;
   let connecting = false;
 
-  function scheduleReconnect() {
+  function scheduleReconnect(): void {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -50,14 +77,14 @@ export function createWebSocketManager({ client, getApiUrl, teamId, agentId, sta
     reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
   }
 
-  function connectWs() {
+  function connectWs(): void {
     if (connecting || state.shuttingDown) return;
     connecting = true;
     reconnectTimer = null;
 
     client
       .post('/auth/ws-ticket')
-      .then(({ ticket }) => {
+      .then(({ ticket }: { ticket: string }) => {
         if (state.shuttingDown) {
           connecting = false;
           return;
@@ -68,7 +95,7 @@ export function createWebSocketManager({ client, getApiUrl, teamId, agentId, sta
 
         const ws = new WebSocket(wsUrl);
 
-        ws.onopen = () => {
+        ws.onopen = (): void => {
           connecting = false;
           state.ws = ws;
           reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
@@ -79,17 +106,17 @@ export function createWebSocketManager({ client, getApiUrl, teamId, agentId, sta
               try {
                 ws.send(JSON.stringify({ type: 'ping', lastToolUseAt: state.lastActivity }));
                 lastWsSend = Date.now();
-              } catch (err) {
-                log.debug(err?.message || 'ws ping failed');
+              } catch (err: unknown) {
+                log.debug(getErrorMessage(err));
               }
             }
           }, WS_PING_MS);
           if (pingTimer.unref) pingTimer.unref();
         };
 
-        ws.onmessage = () => {}; // agent doesn't need broadcasts
+        ws.onmessage = (_event: MessageEvent): void => {}; // agent doesn't need broadcasts
 
-        ws.onclose = () => {
+        ws.onclose = (_event: CloseEvent): void => {
           connecting = false;
           state.ws = null;
           if (pingTimer) {
@@ -99,18 +126,18 @@ export function createWebSocketManager({ client, getApiUrl, teamId, agentId, sta
           scheduleReconnect();
         };
 
-        ws.onerror = (err) => {
-          log.error('WebSocket error: ' + (err?.message || 'unknown'));
+        ws.onerror = (event: Event): void => {
+          log.error('WebSocket error: ' + getErrorMessage(event));
         };
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         connecting = false;
-        log.error(err?.message || 'ws ticket fetch failed');
+        log.error(getErrorMessage(err));
         scheduleReconnect();
       });
   }
 
-  function disconnect() {
+  function disconnect(): void {
     if (reconnectTimer) {
       clearTimeout(reconnectTimer);
       reconnectTimer = null;
@@ -123,8 +150,8 @@ export function createWebSocketManager({ client, getApiUrl, teamId, agentId, sta
     if (state.ws) {
       try {
         state.ws.close();
-      } catch (err) {
-        log.error('Failed to close WebSocket: ' + err.message);
+      } catch (err: unknown) {
+        log.error('Failed to close WebSocket: ' + getErrorMessage(err));
       }
       state.ws = null;
     }

@@ -23,8 +23,8 @@ import { detectRuntimeIdentity } from './dist/identity.js';
 import { resolveAgentIdentity } from './dist/lifecycle.js';
 import { diffState } from './dist/diff-state.js';
 import { isProcessAlive, pingAgentTerminal } from '@chinwag/shared/session-registry.js';
-import { createChannelWebSocket } from './lib/channel-ws.js';
-import { createReconciler } from './lib/channel-reconcile.js';
+import { createChannelWebSocket } from './dist/channel-ws.js';
+import { createReconciler } from './dist/channel-reconcile.js';
 
 const PARENT_WATCH_INTERVAL_MS = 5_000;
 

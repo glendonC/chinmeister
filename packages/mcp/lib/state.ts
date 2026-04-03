@@ -5,17 +5,15 @@
 // this is intentional for a single-process, single-threaded MCP server where
 // serial tool execution is guaranteed by the stdio transport.
 
+import type { McpState } from './lifecycle.js';
+
 /**
- * @typedef {Object} AgentStateShape
- * @property {string|null}  teamId           - Current team ID (from .chinwag file)
- * @property {WebSocket|null} ws             - WebSocket to TeamDO (presence channel)
- * @property {string|null}  sessionId        - Active session ID
- * @property {string|null}  tty              - Parent TTY path for terminal title
- * @property {string|null}  modelReported    - Model identifier last reported to server (null = not yet reported)
- * @property {number}       lastActivity     - Epoch ms of last tool invocation
- * @property {*}            heartbeatInterval - setInterval handle for team heartbeat
- * @property {boolean}      shuttingDown     - True once cleanup begins (prevents reconnect)
+ * Proxy handler that rejects writes to undeclared keys and prevents deletion.
  */
+type GuardedHandler<T extends object> = ProxyHandler<T> & {
+  set(target: T, prop: string | symbol, value: unknown): boolean;
+  deleteProperty(target: T, prop: string | symbol): never;
+};
 
 /**
  * Creates a guarded agent state container.
@@ -25,16 +23,13 @@
  * not present in the initial shape. This catches typos like
  * `state.temId = x` at the call site instead of letting them become
  * silent no-ops that surface as unreproducible bugs later.
- *
- * @param {AgentStateShape} initial
- * @returns {AgentStateShape}
  */
-export function createAgentState(initial) {
-  const data = { ...initial };
-  const validKeys = new Set(Object.keys(data));
+export function createAgentState(initial: McpState): McpState {
+  const data: McpState = { ...initial };
+  const validKeys = new Set<string>(Object.keys(data));
 
-  return new Proxy(data, {
-    set(target, prop, value) {
+  const handler: GuardedHandler<McpState> = {
+    set(target: McpState, prop: string | symbol, value: unknown): boolean {
       const key = String(prop);
       if (!validKeys.has(key)) {
         throw new Error(
@@ -42,11 +37,13 @@ export function createAgentState(initial) {
             'Declare it in the createAgentState() initial object.',
         );
       }
-      target[key] = value;
+      (target as unknown as Record<string, unknown>)[key] = value;
       return true;
     },
-    deleteProperty(_target, prop) {
+    deleteProperty(_target: McpState, prop: string | symbol): never {
       throw new Error(`[chinwag] AgentState: cannot delete property "${String(prop)}".`);
     },
-  });
+  };
+
+  return new Proxy(data, handler);
 }
