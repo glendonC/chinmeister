@@ -2,6 +2,7 @@
 
 import { checkContent } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
+import { getErrorMessage } from '../../lib/errors.js';
 import { json } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
@@ -56,7 +57,9 @@ export async function handleTeamJoin(request, user, env, teamId) {
       if (dbResult.error) {
         log.error('failed to sync joined team', { teamId, userId: user.id, error: dbResult.error });
         // Roll back: leave the team since the DB record failed
-        await team.leave(agentId, user.id).catch(() => {});
+        await team.leave(agentId, user.id).catch((err) => {
+          log.error('rollback leave failed', { teamId, agentId, error: getErrorMessage(err) });
+        });
         auditLog('team.join', {
           actor: user.handle,
           outcome: 'failure',

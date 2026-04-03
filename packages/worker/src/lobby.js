@@ -33,6 +33,7 @@ const lobbyMigrations = [
 
 export class LobbyDO extends DurableObject {
   #schemaReady = false;
+  #lastPresenceCleanup = 0;
 
   /** @type {<T>(fn: () => T) => T} */
   #transact;
@@ -67,6 +68,25 @@ export class LobbyDO extends DurableObject {
     this.#schemaReady = true;
   }
 
+  /** Evict stale presence entries — at most once per PRESENCE_TTL_MS. */
+  #maybeCleanupPresence() {
+    const now = Date.now();
+    if (now - this.#lastPresenceCleanup < PRESENCE_TTL_MS) return;
+    this.#lastPresenceCleanup = now;
+
+    const staleHandles = [];
+    for (const [handle, lastSeen] of this.presence) {
+      if (now - lastSeen > PRESENCE_TTL_MS) {
+        this.presence.delete(handle);
+        staleHandles.push(handle);
+      }
+    }
+    if (staleHandles.length > 0) {
+      const placeholders = staleHandles.map(() => '?').join(', ');
+      this.sql.exec(`DELETE FROM presence WHERE handle IN (${placeholders})`, ...staleHandles);
+    }
+  }
+
   async heartbeat(handle) {
     this.#ensureSchema();
     const now = Date.now();
@@ -76,6 +96,7 @@ export class LobbyDO extends DurableObject {
       handle,
       now,
     );
+    this.#maybeCleanupPresence();
     return { ok: true };
   }
 
@@ -129,22 +150,7 @@ export class LobbyDO extends DurableObject {
 
   async getStats() {
     this.#ensureSchema();
-    const now = Date.now();
-    const staleHandles = [];
-
-    // Clean stale presence entries
-    for (const [handle, lastSeen] of this.presence) {
-      if (now - lastSeen > PRESENCE_TTL_MS) {
-        this.presence.delete(handle);
-        staleHandles.push(handle);
-      }
-    }
-
-    // Batch-delete stale presence from SQLite
-    if (staleHandles.length > 0) {
-      const placeholders = staleHandles.map(() => '?').join(', ');
-      this.sql.exec(`DELETE FROM presence WHERE handle IN (${placeholders})`, ...staleHandles);
-    }
+    this.#maybeCleanupPresence();
 
     let chatUsers = 0;
     let activeRooms = 0;

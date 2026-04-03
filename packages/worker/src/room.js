@@ -3,6 +3,7 @@
 // Uses fetch() for WebSocket upgrades, RPC for Lobby communication.
 
 import { DurableObject } from 'cloudflare:workers';
+import { getErrorMessage } from './lib/errors.js';
 import { createLogger } from './lib/logger.js';
 
 const log = createLogger('RoomDO');
@@ -179,14 +180,18 @@ export class RoomDO extends DurableObject {
    */
   broadcast(message, exclude) {
     const data = JSON.stringify(message);
+    let failures = 0;
     for (const [ws] of this.sessions) {
       if (ws !== exclude) {
         try {
           ws.send(data);
         } catch {
-          /* dead connection */
+          failures++;
         }
       }
+    }
+    if (failures > 0) {
+      log.warn('broadcast partial failure', { roomId: this.roomId, failures });
     }
   }
 
@@ -197,7 +202,7 @@ export class RoomDO extends DurableObject {
     } catch (err) {
       log.error('failed to update lobby', {
         roomId: this.roomId,
-        error: err?.message || String(err),
+        error: getErrorMessage(err),
       });
     }
   }
