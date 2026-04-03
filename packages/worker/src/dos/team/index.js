@@ -3,13 +3,15 @@
 // shared project memory, and session history (observability).
 //
 // Business logic is split into submodules:
-//   schema.js    — DDL, migrations, index creation
-//   context.js   — composite read queries (getContext, getSummary)
+//   schema.js      — DDL, migrations, index creation
+//   context.js     — composite read queries (getContext, getSummary)
+//   identity.js    — agent ID resolution and ownership verification
+//   cleanup.js     — stale member eviction and data pruning
 //   membership.js, activity.js, memory.js, locks.js, sessions.js, messages.js — domain logic
-//   runtime.js   — agent ID / host tool inference
+//   runtime.js     — agent ID / host tool inference
 //
-// This file owns the class shell, WebSocket handling, cleanup, identity
-// resolution, caching, and the thin RPC wrappers that tie it all together.
+// This file owns the class shell, WebSocket handling, caching, and the
+// thin RPC wrappers that tie it all together.
 
 import { DurableObject } from 'cloudflare:workers';
 import { getErrorMessage, isDOError } from '../../lib/errors.js';
@@ -19,6 +21,8 @@ import { toSQLDateTime } from '../../lib/text-utils.js';
 const log = createLogger('TeamDO');
 import { ensureSchema } from './schema.js';
 import { queryTeamContext, queryTeamSummary } from './context.js';
+import { resolveOwnedAgentId } from './identity.js';
+import { runCleanup } from './cleanup.js';
 import { join, leave, heartbeat as heartbeatFn } from './membership.js';
 import {
   updateActivity as updateActivityFn,
@@ -46,13 +50,10 @@ import {
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
 import {
-  HEARTBEAT_STALE_WINDOW_S,
-  SESSION_RETENTION_DAYS,
   CONTEXT_CACHE_TTL_MS,
   CLEANUP_INTERVAL_MS,
   HEARTBEAT_BROADCAST_DEBOUNCE_MS,
 } from '../../lib/constants.js';
-import { buildInClause, withTransaction } from '../../lib/validation.js';
 
 export class TeamDO extends DurableObject {
   #schemaReady = false;
@@ -315,95 +316,11 @@ export class TeamDO extends DurableObject {
   }
 
   // Evict stale members and prune old sessions — at most once per minute.
-  // Preserves agents with active WebSocket connections regardless of heartbeat age.
-  // Wrapped in a transaction so partial cleanup can't leave inconsistent state
-  // (e.g. activities deleted but their parent member still present).
   #maybeCleanup() {
     const now = Date.now();
     if (now - this.#lastCleanup < CLEANUP_INTERVAL_MS) return;
     this.#lastCleanup = now;
-
-    const ws = buildInClause([...this.#getConnectedAgentIds()]);
-
-    /** Run a cleanup query, logging on failure without aborting the transaction. */
-    const step = (label, fn) => {
-      try {
-        fn();
-      } catch (err) {
-        log.error(`cleanup: ${label} failed`, { error: getErrorMessage(err) });
-      }
-    };
-
-    withTransaction(this.#transact, () => {
-      step('clamp future heartbeats', () =>
-        this.sql.exec(
-          "UPDATE members SET last_heartbeat = datetime('now') WHERE last_heartbeat > datetime('now')",
-        ),
-      );
-
-      step('delete stale activities', () =>
-        this.sql.exec(
-          `DELETE FROM activities WHERE agent_id IN (
-            SELECT agent_id FROM members
-            WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
-              AND agent_id NOT IN (${ws.sql})
-          )`,
-          HEARTBEAT_STALE_WINDOW_S,
-          ...ws.params,
-        ),
-      );
-
-      step('delete stale members', () =>
-        this.sql.exec(
-          `DELETE FROM members
-           WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
-             AND agent_id NOT IN (${ws.sql})`,
-          HEARTBEAT_STALE_WINDOW_S,
-          ...ws.params,
-        ),
-      );
-
-      step('delete old sessions', () =>
-        this.sql.exec(
-          `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
-          SESSION_RETENTION_DAYS,
-        ),
-      );
-
-      step('delete old messages', () =>
-        this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')"),
-      );
-
-      step('delete orphaned locks', () =>
-        this.sql.exec(
-          `DELETE FROM locks WHERE agent_id NOT IN (
-            SELECT agent_id FROM members
-            WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
-              OR agent_id IN (${ws.sql})
-          )`,
-          HEARTBEAT_STALE_WINDOW_S,
-          ...ws.params,
-        ),
-      );
-
-      step('close orphaned sessions', () =>
-        this.sql.exec(
-          `UPDATE sessions SET ended_at = datetime('now')
-           WHERE ended_at IS NULL
-           AND agent_id NOT IN (
-             SELECT agent_id FROM members
-             WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
-               OR agent_id IN (${ws.sql})
-           )`,
-          HEARTBEAT_STALE_WINDOW_S,
-          ...ws.params,
-        ),
-      );
-
-      step('delete old telemetry', () =>
-        this.sql.exec("DELETE FROM telemetry WHERE last_at < datetime('now', '-30 days')"),
-      );
-    });
+    runCleanup(this.sql, this.#getConnectedAgentIds(), this.#transact);
   }
 
   #recordMetric(metric) {
@@ -414,37 +331,21 @@ export class TeamDO extends DurableObject {
     );
   }
 
-  // ── Identity resolution ──
-
-  #findExactMember(agentId) {
-    const rows = this.sql
-      .exec('SELECT agent_id, owner_id FROM members WHERE agent_id = ?', agentId)
-      .toArray();
-    return rows[0] || null;
-  }
-
-  #findPrefixedMember(agentId) {
-    const rows = this.sql
-      .exec(
-        "SELECT agent_id, owner_id FROM members WHERE agent_id LIKE ? || ':%' ORDER BY last_heartbeat DESC LIMIT 1",
-        agentId,
-      )
-      .toArray();
-    return rows[0] || null;
-  }
+  // ── Identity resolution (delegated to identity.js) ──
 
   #resolveOwnedAgentId(agentId, ownerId = null) {
-    const exact = this.#findExactMember(agentId);
-    if (exact) {
-      return !ownerId || exact.owner_id === ownerId ? exact.agent_id : null;
-    }
+    return resolveOwnedAgentId(this.sql, agentId, ownerId);
+  }
 
-    const prefixed = this.#findPrefixedMember(agentId);
-    if (prefixed) {
-      return !ownerId || prefixed.owner_id === ownerId ? prefixed.agent_id : null;
-    }
-
-    return null;
+  /**
+   * Common RPC wrapper: ensure schema, resolve agent, run callback.
+   * Eliminates the repeated NOT_MEMBER check across 18+ RPC methods.
+   */
+  #withMember(agentId, ownerId, fn) {
+    this.#ensureSchema();
+    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
+    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    return fn(resolved);
   }
 
   // --- Bound helper for submodules that need to record telemetry ---
@@ -485,258 +386,230 @@ export class TeamDO extends DurableObject {
   }
 
   async heartbeat(agentId, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = heartbeatFn(this.sql, resolved);
-    if (!isDOError(result)) {
-      const now = Date.now();
-      const last = this.#lastHeartbeatBroadcast.get(resolved) || 0;
-      if (now - last >= HEARTBEAT_BROADCAST_DEBOUNCE_MS) {
-        this.#lastHeartbeatBroadcast.set(resolved, now);
-        // Heartbeats don't change context data (members/locks/memory) — skip cache invalidation.
-        // The 5s cache TTL handles natural staleness.
-        this.#broadcastToWatchers(
-          { type: 'heartbeat', agent_id: resolved, ts: now },
-          { invalidateCache: false },
-        );
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = heartbeatFn(this.sql, resolved);
+      if (!isDOError(result)) {
+        const now = Date.now();
+        const last = this.#lastHeartbeatBroadcast.get(resolved) || 0;
+        if (now - last >= HEARTBEAT_BROADCAST_DEBOUNCE_MS) {
+          this.#lastHeartbeatBroadcast.set(resolved, now);
+          this.#broadcastToWatchers(
+            { type: 'heartbeat', agent_id: resolved, ts: now },
+            { invalidateCache: false },
+          );
+        }
       }
-    }
-    return result;
+      return result;
+    });
   }
 
   // ── Activity ──
 
   async updateActivity(agentId, files, summary, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = updateActivityFn(this.sql, resolved, files, summary, this.#transact);
-    if (!isDOError(result)) {
-      this.#broadcastToWatchers({ type: 'activity', agent_id: resolved, files, summary });
-    }
-    return result;
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = updateActivityFn(this.sql, resolved, files, summary, this.#transact);
+      if (!isDOError(result)) {
+        this.#broadcastToWatchers({ type: 'activity', agent_id: resolved, files, summary });
+      }
+      return result;
+    });
   }
 
   async checkConflicts(agentId, files, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return checkConflictsFn(
-      this.sql,
-      resolved,
-      files,
-      this.#boundRecordMetric,
-      this.#getConnectedAgentIds(),
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      checkConflictsFn(
+        this.sql,
+        resolved,
+        files,
+        this.#boundRecordMetric,
+        this.#getConnectedAgentIds(),
+      ),
     );
   }
 
   async reportFile(agentId, filePath, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = reportFileFn(this.sql, resolved, filePath, this.#transact);
-    if (!isDOError(result)) {
-      this.#broadcastToWatchers({ type: 'file', agent_id: resolved, file: filePath });
-    }
-    return result;
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = reportFileFn(this.sql, resolved, filePath, this.#transact);
+      if (!isDOError(result)) {
+        this.#broadcastToWatchers({ type: 'file', agent_id: resolved, file: filePath });
+      }
+      return result;
+    });
   }
 
   // ── Context (composite queries — logic in context.js) ──
 
   async getContext(agentId, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-
-    // Always bump calling agent's heartbeat
-    this.sql.exec(
-      "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-      resolved,
-    );
-
-    // Per-agent messages (always fresh — has target_agent filter, can't be cached team-wide)
-    const messages = this.sql
-      .exec(
-        `SELECT handle AS from_handle, host_tool AS from_tool, host_tool AS from_host_tool, agent_surface AS from_agent_surface, text, created_at
-       FROM messages
-       WHERE created_at > datetime('now', '-1 hour')
-         AND (target_agent IS NULL OR target_agent = ?)
-       ORDER BY created_at DESC LIMIT 10`,
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      // Always bump calling agent's heartbeat
+      this.sql.exec(
+        "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
         resolved,
-      )
-      .toArray();
+      );
 
-    // Return cached team-wide context if fresh
-    const now = Date.now();
-    if (this.#contextCache && now < this.#contextCacheExpire) {
-      return { ...this.#contextCache, messages };
-    }
+      // Per-agent messages (always fresh — has target_agent filter, can't be cached team-wide)
+      const messages = this.sql
+        .exec(
+          `SELECT handle AS from_handle, host_tool AS from_tool, host_tool AS from_host_tool, agent_surface AS from_agent_surface, text, created_at
+         FROM messages
+         WHERE created_at > datetime('now', '-1 hour')
+           AND (target_agent IS NULL OR target_agent = ?)
+         ORDER BY created_at DESC LIMIT 10`,
+          resolved,
+        )
+        .toArray();
 
-    this.#maybeCleanup();
+      // Return cached team-wide context if fresh
+      const now = Date.now();
+      if (this.#contextCache && now < this.#contextCacheExpire) {
+        return { ...this.#contextCache, messages };
+      }
 
-    const connectedIds = this.#getConnectedAgentIds();
-    const teamContext = queryTeamContext(this.sql, connectedIds);
+      this.#maybeCleanup();
 
-    this.#contextCache = teamContext;
-    this.#contextCacheExpire = Date.now() + CONTEXT_CACHE_TTL_MS;
+      const connectedIds = this.#getConnectedAgentIds();
+      const teamContext = queryTeamContext(this.sql, connectedIds);
 
-    return { ...teamContext, messages };
+      this.#contextCache = teamContext;
+      this.#contextCacheExpire = Date.now() + CONTEXT_CACHE_TTL_MS;
+
+      return { ...teamContext, messages };
+    });
   }
 
   // ── Sessions (observability) ──
 
   async startSession(agentId, handle, framework, runtimeOrOwnerId = null, ownerId = null) {
-    this.#ensureSchema();
     const runtime =
       runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
     const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
-    const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return startSessionFn(this.sql, resolved, handle, framework, runtime, this.#transact);
+    return this.#withMember(agentId, resolvedOwnerId, (resolved) =>
+      startSessionFn(this.sql, resolved, handle, framework, runtime, this.#transact),
+    );
   }
 
   async endSession(agentId, sessionId, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return endSessionFn(this.sql, resolved, sessionId);
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      endSessionFn(this.sql, resolved, sessionId),
+    );
   }
 
   async recordEdit(agentId, filePath, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return recordEditFn(this.sql, resolved, filePath);
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      recordEditFn(this.sql, resolved, filePath),
+    );
   }
 
   async getHistory(agentId, days, ownerId = null) {
-    this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId))
-      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return getSessionHistory(this.sql, days);
+    return this.#withMember(agentId, ownerId, () => getSessionHistory(this.sql, days));
   }
 
   async enrichModel(agentId, model, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return enrichSessionModelFn(this.sql, resolved, model, this.#boundRecordMetric, this.#transact);
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      enrichSessionModelFn(this.sql, resolved, model, this.#boundRecordMetric, this.#transact),
+    );
   }
 
   // ── Memory ──
 
   async saveMemory(agentId, text, tags, handle, runtimeOrOwnerId = null, ownerId = null) {
-    this.#ensureSchema();
     const runtime =
       runtimeOrOwnerId && typeof runtimeOrOwnerId === 'object' ? runtimeOrOwnerId : null;
     const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
-    const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = saveMemoryFn(
-      this.sql,
-      resolved,
-      text,
-      tags,
-      handle,
-      runtime,
-      this.#boundRecordMetric,
-      this.#transact,
-    );
-    if (!isDOError(result)) {
-      this.#broadcastToWatchers({ type: 'memory', text, tags });
-    }
-    return result;
+    return this.#withMember(agentId, resolvedOwnerId, (resolved) => {
+      const result = saveMemoryFn(
+        this.sql,
+        resolved,
+        text,
+        tags,
+        handle,
+        runtime,
+        this.#boundRecordMetric,
+        this.#transact,
+      );
+      if (!isDOError(result)) {
+        this.#broadcastToWatchers({ type: 'memory', text, tags });
+      }
+      return result;
+    });
   }
 
   async searchMemories(agentId, query, tags, limit = 20, ownerId = null) {
-    this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId))
-      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return searchMemoriesFn(this.sql, query, tags, limit);
+    return this.#withMember(agentId, ownerId, () => searchMemoriesFn(this.sql, query, tags, limit));
   }
 
   async updateMemory(agentId, memoryId, text, tags, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return updateMemoryFn(this.sql, resolved, memoryId, text, tags);
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      updateMemoryFn(this.sql, resolved, memoryId, text, tags),
+    );
   }
 
   async deleteMemory(agentId, memoryId, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return deleteMemoryFn(this.sql, memoryId);
+    return this.#withMember(agentId, ownerId, () => deleteMemoryFn(this.sql, memoryId));
   }
 
   // ── File Locks ──
 
   async claimFiles(agentId, files, handle, runtimeOrTool, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool);
-    if (!isDOError(result)) {
-      this.#broadcastToWatchers({
-        type: 'lock_change',
-        action: 'claim',
-        agent_id: resolved,
-        files,
-      });
-    }
-    return result;
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool);
+      if (!isDOError(result)) {
+        this.#broadcastToWatchers({
+          type: 'lock_change',
+          action: 'claim',
+          agent_id: resolved,
+          files,
+        });
+      }
+      return result;
+    });
   }
 
   async releaseFiles(agentId, files, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = releaseFilesFn(this.sql, resolved, files);
-    if (!isDOError(result)) {
-      this.#broadcastToWatchers({
-        type: 'lock_change',
-        action: 'release',
-        agent_id: resolved,
-        files,
-      });
-    }
-    return result;
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = releaseFilesFn(this.sql, resolved, files);
+      if (!isDOError(result)) {
+        this.#broadcastToWatchers({
+          type: 'lock_change',
+          action: 'release',
+          agent_id: resolved,
+          files,
+        });
+      }
+      return result;
+    });
   }
 
   async getLockedFiles(agentId, ownerId = null) {
-    this.#ensureSchema();
-    if (!this.#resolveOwnedAgentId(agentId, ownerId))
-      return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return getLockedFilesFn(this.sql, this.#getConnectedAgentIds());
+    return this.#withMember(agentId, ownerId, () =>
+      getLockedFilesFn(this.sql, this.#getConnectedAgentIds()),
+    );
   }
 
   // ── Messages ──
 
   async sendMessage(agentId, handle, runtimeOrTool, text, targetAgent, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = sendMessageFn(
-      this.sql,
-      resolved,
-      handle,
-      runtimeOrTool,
-      text,
-      targetAgent,
-      this.#boundRecordMetric,
-    );
-    if (!isDOError(result)) {
-      this.#broadcastToWatchers({ type: 'message', from_handle: handle, text });
-    }
-    return result;
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = sendMessageFn(
+        this.sql,
+        resolved,
+        handle,
+        runtimeOrTool,
+        text,
+        targetAgent,
+        this.#boundRecordMetric,
+      );
+      if (!isDOError(result)) {
+        this.#broadcastToWatchers({ type: 'message', from_handle: handle, text });
+      }
+      return result;
+    });
   }
 
   async getMessages(agentId, since, ownerId = null) {
-    this.#ensureSchema();
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return getMessagesFn(this.sql, resolved, since);
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      getMessagesFn(this.sql, resolved, since),
+    );
   }
 
   // ── Summary (lightweight, for cross-project dashboard) ──
