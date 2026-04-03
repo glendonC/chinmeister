@@ -94,7 +94,7 @@ describe('Atomic lock claim enforcement', () => {
     expect(claim2.claimed).toHaveLength(0);
     expect(claim2.blocked).toHaveLength(1);
     expect(claim2.blocked[0].file).toBe('src/atomic.js');
-    expect(claim2.blocked[0].handle).toBe('alice');
+    expect(claim2.blocked[0].held_by).toBe('alice');
   });
 
   it('same agent re-claiming refreshes lock (idempotent)', async () => {
@@ -418,7 +418,7 @@ describe('recordEdit extended', () => {
     await team().recordEdit(agentId, 'src/a.js', ownerId); // same file again
 
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find((s) => s.handle === 'alice');
+    const session = history.sessions.find((s) => s.owner_handle === 'alice');
     expect(session).toBeDefined();
     expect(session.edit_count).toBe(3);
     // files_touched should have both unique files
@@ -430,7 +430,7 @@ describe('recordEdit extended', () => {
   it('normalizes paths on record', async () => {
     await team().recordEdit(agentId, './src//c.js', ownerId);
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find((s) => s.handle === 'alice');
+    const session = history.sessions.find((s) => s.owner_handle === 'alice');
     expect(session.files_touched).toContain('src/c.js');
     expect(session.files_touched).not.toContain('./src//c.js');
   });
@@ -759,8 +759,8 @@ describe('getContext extended', () => {
 
   it('includes sessions', async () => {
     const ctx = await team().getContext(agent1, owner1);
-    expect(ctx.sessions).toBeDefined();
-    expect(ctx.sessions.length).toBeGreaterThan(0);
+    expect(ctx.recentSessions).toBeDefined();
+    expect(ctx.recentSessions.length).toBeGreaterThan(0);
   });
 
   it('includes messages', async () => {
@@ -850,7 +850,7 @@ describe('Conflict detection with locks', () => {
     const res = await team().checkConflicts(agent2, ['src/locked.js'], owner2);
     expect(res.locked.length).toBeGreaterThan(0);
     expect(res.locked[0].file).toBe('src/locked.js');
-    expect(res.locked[0].handle).toBe('alice');
+    expect(res.locked[0].held_by).toBe('alice');
   });
 
   it('own lock does not show as conflict', async () => {
@@ -897,7 +897,7 @@ describe('Session lifecycle', () => {
     );
 
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find((ses) => ses.handle === 'alice' && !ses.ended_at);
+    const session = history.sessions.find((ses) => ses.owner_handle === 'alice' && !ses.ended_at);
     if (session) {
       expect(session.memories_saved).toBeGreaterThanOrEqual(1);
     }

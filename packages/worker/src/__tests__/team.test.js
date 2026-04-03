@@ -24,7 +24,7 @@ describe('Membership', () => {
 
   it('heartbeat fails for non-member', async () => {
     const res = await team().heartbeat('cursor:nonexistent');
-    expect(res).toEqual({ error: 'Not a member of this team', code: 'NOT_MEMBER' });
+    expect(res).toEqual({ error: 'Not a member of this team' });
   });
 
   it('leave removes member', async () => {
@@ -98,15 +98,15 @@ describe('Membership', () => {
     expect(me.transport).toBe('mcp');
 
     expect(ctx.memories[0].host_tool).toBe('cursor');
-    expect(ctx.memories[0].agent_surface).toBe('cline');
+    expect(ctx.memories[0].source_agent_surface).toBe('cline');
 
-    expect(ctx.messages[0].host_tool).toBe('cursor');
-    expect(ctx.messages[0].agent_surface).toBe('cline');
+    expect(ctx.messages[0].from_host_tool).toBe('cursor');
+    expect(ctx.messages[0].from_agent_surface).toBe('cline');
 
     expect(ctx.locks[0].host_tool).toBe('cursor');
     expect(ctx.locks[0].agent_surface).toBe('cline');
 
-    const session = ctx.sessions.find((s) => s.agent_id === runtimeAgent);
+    const session = ctx.recentSessions.find((s) => s.agent_id === runtimeAgent);
     expect(session.host_tool).toBe('cursor');
     expect(session.agent_surface).toBe('cline');
     expect(session.transport).toBe('mcp');
@@ -203,7 +203,7 @@ describe('Locks', () => {
     const res = await team().claimFiles(agent2, ['src/main.js'], 'bob', 'claude', owner2);
     expect(res.blocked.length).toBeGreaterThan(0);
     expect(res.blocked[0].file).toBe('src/main.js');
-    expect(res.blocked[0].handle).toBe('alice');
+    expect(res.blocked[0].held_by).toBe('alice');
     expect(res.claimed).toHaveLength(0);
   });
 
@@ -352,7 +352,7 @@ describe('Sessions', () => {
 
     // Verify via getHistory
     const history = await team().getHistory(agentId, 1, ownerId);
-    const session = history.sessions.find((s) => s.handle === 'alice');
+    const session = history.sessions.find((s) => s.owner_handle === 'alice');
     expect(session).toBeDefined();
     expect(session.edit_count).toBe(2);
     expect(session.files_touched).toContain('src/app.js');
@@ -558,7 +558,7 @@ describe('Conflict detection — edge cases', () => {
 
     const res = await team().checkConflicts(agent1, ['src/shared.js'], owner1);
     expect(res.conflicts.length).toBe(2); // two others on same file
-    const conflictHandles = res.conflicts.map((c) => c.handle);
+    const conflictHandles = res.conflicts.map((c) => c.owner_handle);
     expect(conflictHandles).toContain('bob');
     expect(conflictHandles).toContain('carol');
   });
@@ -609,7 +609,7 @@ describe('Lock release — edge cases', () => {
     // agent1's lock should still be in place
     const claim = await team().claimFiles(agent2, ['src/owned.js'], 'bob', 'claude', owner2);
     expect(claim.blocked).toHaveLength(1);
-    expect(claim.blocked[0].handle).toBe('alice');
+    expect(claim.blocked[0].held_by).toBe('alice');
   });
 
   it('releasing a file nobody holds is a no-op', async () => {
