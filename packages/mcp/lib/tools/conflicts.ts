@@ -2,7 +2,7 @@
 
 import * as z from 'zod/v4';
 import { teamPreamble, getCachedContext } from '../context.js';
-import { noTeam, errorResult } from '../utils/responses.js';
+import { noTeam, errorResult, getHttpStatus } from '../utils/responses.js';
 import { formatConflictsList } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
 import { normalizePath } from '../utils/paths.js';
@@ -34,9 +34,7 @@ export function registerConflictsTool(
         }
         return { content: [{ type: 'text' as const, text: `${preamble}${lines.join('\n')}` }] };
       } catch (err: unknown) {
-        const status =
-          err instanceof Error && 'status' in err ? (err as { status: number }).status : undefined;
-        if (status === 401) return errorResult(err);
+        if (getHttpStatus(err) === 401) return errorResult(err);
         // Offline fallback: check cached context for potential conflicts
         const cached = getCachedContext();
         if (cached?.members) {

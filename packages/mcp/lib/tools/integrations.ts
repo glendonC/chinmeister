@@ -1,7 +1,8 @@
 // chinwag_scan_integrations and chinwag_configure_integration tool handlers.
 
 import * as z from 'zod/v4';
-import { formatIntegrationScanResults } from '../../../shared/integration-doctor.js';
+import { formatIntegrationScanResults } from '@chinwag/shared/integration-doctor.js';
+import { getErrorMessage } from '../utils/responses.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 export function registerIntegrationTools(
@@ -34,7 +35,7 @@ export function registerIntegrationTools(
           ],
         };
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = getErrorMessage(err);
         return {
           content: [{ type: 'text' as const, text: `Failed to scan integrations: ${message}` }],
           isError: true,
@@ -84,7 +85,7 @@ export function registerIntegrationTools(
         }
         return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
+        const message = getErrorMessage(err);
         return {
           content: [{ type: 'text' as const, text: `Failed to configure integration: ${message}` }],
           isError: true,

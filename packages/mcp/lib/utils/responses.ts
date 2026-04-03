@@ -1,4 +1,4 @@
-// Standard MCP tool response builders.
+// Standard MCP tool response builders and error extraction helpers.
 // Centralizes the response shape so tool handlers stay focused on logic.
 
 export interface McpToolContent {
@@ -13,6 +13,16 @@ export interface McpToolResult {
 
 interface HttpError extends Error {
   status?: number;
+}
+
+/** Extract HTTP status from an unknown error (e.g. from fetch). */
+export function getHttpStatus(err: unknown): number | undefined {
+  return err instanceof Error && 'status' in err ? (err as HttpError).status : undefined;
+}
+
+/** Extract a message string from an unknown error. */
+export function getErrorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 /**
@@ -31,8 +41,8 @@ export function noTeam(): McpToolResult {
  * Accepts unknown to support `catch (err: unknown)` in callers.
  */
 export function errorResult(err: unknown): McpToolResult {
-  const status = err instanceof Error && 'status' in err ? (err as HttpError).status : undefined;
-  const message = err instanceof Error ? err.message : String(err);
+  const status = getHttpStatus(err);
+  const message = getErrorMessage(err);
   const msg =
     status === 401 ? 'Authentication expired. Please restart your editor to reconnect.' : message;
   return { content: [{ type: 'text', text: msg }], isError: true };

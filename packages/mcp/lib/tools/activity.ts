@@ -1,8 +1,8 @@
 // chinwag_update_activity tool handler.
 
 import * as z from 'zod/v4';
+import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import { teamPreamble } from '../context.js';
-import { setTerminalTitle } from '../../../shared/session-registry.js';
 import { noTeam, errorResult } from '../utils/responses.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 

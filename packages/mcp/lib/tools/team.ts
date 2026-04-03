@@ -4,7 +4,7 @@ import { basename } from 'path';
 import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
-import { errorResult } from '../utils/responses.js';
+import { errorResult, getHttpStatus, getErrorMessage } from '../utils/responses.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
@@ -45,24 +45,21 @@ export function registerTeamTool(
               consecutiveFailures = 0;
             } catch (err: unknown) {
               consecutiveFailures++;
-              const status =
-                err instanceof Error && 'status' in err
-                  ? (err as { status: number }).status
-                  : undefined;
-              if (status === 403) {
+              if (getHttpStatus(err) === 403) {
                 try {
                   await team.joinTeam(state.teamId!, basename(process.cwd()));
                   log.info('Rejoined team after eviction');
                   consecutiveFailures = 0;
                 } catch (joinErr: unknown) {
-                  const joinMessage = joinErr instanceof Error ? joinErr.message : String(joinErr);
-                  log.error('Rejoin failed: ' + joinMessage);
+                  log.error('Rejoin failed: ' + getErrorMessage(joinErr));
                 }
               } else {
-                const message = err instanceof Error ? err.message : String(err);
-                log.warn(`Heartbeat failed (attempt ${consecutiveFailures}): ${message}`, {
-                  attempt: consecutiveFailures,
-                });
+                log.warn(
+                  `Heartbeat failed (attempt ${consecutiveFailures}): ${getErrorMessage(err)}`,
+                  {
+                    attempt: consecutiveFailures,
+                  },
+                );
               }
             }
           })();
@@ -76,8 +73,7 @@ export function registerTeamTool(
             sessionStarted = true;
           }
         } catch (err: unknown) {
-          const message = err instanceof Error ? err.message : String(err);
-          log.error('Failed to start session after join: ' + message);
+          log.error('Failed to start session after join: ' + getErrorMessage(err));
         }
 
         if (previousTeamId && previousTeamId !== team_id) {
