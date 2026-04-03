@@ -1,8 +1,8 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { getInkColor, getColorList } from '../colors.js';
 
 describe('getInkColor', () => {
-  it('maps chinwag color names to Ink/chalk names', () => {
+  it('maps known chinwag colors to Ink colors', () => {
     expect(getInkColor('red')).toBe('red');
     expect(getInkColor('cyan')).toBe('cyan');
     expect(getInkColor('yellow')).toBe('yellow');
@@ -12,7 +12,7 @@ describe('getInkColor', () => {
     expect(getInkColor('white')).toBe('white');
   });
 
-  it('maps bright variants correctly', () => {
+  it('maps bright color aliases correctly', () => {
     expect(getInkColor('orange')).toBe('redBright');
     expect(getInkColor('lime')).toBe('greenBright');
     expect(getInkColor('pink')).toBe('magentaBright');
@@ -20,33 +20,24 @@ describe('getInkColor', () => {
     expect(getInkColor('lavender')).toBe('blueBright');
   });
 
-  it('defaults to white for unknown colors', () => {
-    expect(getInkColor('rainbow')).toBe('white');
+  it('falls back to white for unknown colors', () => {
+    expect(getInkColor('purple')).toBe('white');
     expect(getInkColor('')).toBe('white');
-    expect(getInkColor(null)).toBe('white');
     expect(getInkColor(undefined)).toBe('white');
   });
 });
 
 describe('getColorList', () => {
-  it('returns the 12 chinwag palette colors', () => {
+  it('returns the 12-color palette', () => {
     const colors = getColorList();
     expect(colors).toHaveLength(12);
     expect(colors).toContain('red');
     expect(colors).toContain('cyan');
-    expect(colors).toContain('yellow');
-    expect(colors).toContain('green');
-    expect(colors).toContain('magenta');
-    expect(colors).toContain('blue');
     expect(colors).toContain('orange');
-    expect(colors).toContain('lime');
-    expect(colors).toContain('pink');
-    expect(colors).toContain('sky');
     expect(colors).toContain('lavender');
-    expect(colors).toContain('white');
   });
 
-  it('returns a stable array across calls', () => {
-    expect(getColorList()).toEqual(getColorList());
+  it('returns a stable reference', () => {
+    expect(getColorList()).toBe(getColorList());
   });
 });

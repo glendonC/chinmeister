@@ -35,6 +35,10 @@ async function startCliApiServer() {
       return json(response, 201, { team_id: 't_cli_init' });
     }
 
+    if (method === 'POST' && /^\/teams\/[^/]+\/join$/.test(url.pathname)) {
+      return json(response, 200, { ok: true });
+    }
+
     if (method === 'GET' && url.pathname === '/tools/directory') {
       state.directoryCalls += 1;
       return json(response, 200, {
@@ -129,7 +133,6 @@ describe('cli command flow integration', () => {
         token: 'tok_cli_init',
         handle: 'alice_cli',
         color: 'cyan',
-        refresh_token: 'refresh_cli_init',
       });
       expect(teamFile).toMatchObject({
         team: 't_cli_init',

@@ -11,10 +11,27 @@ import { basename, join } from 'path';
 import { configExists, loadConfig, saveConfig } from '../config.js';
 import { api, initAccount } from '../api.js';
 import { detectTools, configureTool } from '../mcp-config.js';
-import { getChalkColor } from '../colors.js';
+import { classifyError } from '../utils/errors.js';
+
+// Map chinwag color names to chalk methods
+const CHALK_COLORS = {
+  red: 'red',
+  cyan: 'cyan',
+  yellow: 'yellow',
+  green: 'green',
+  magenta: 'magenta',
+  blue: 'blue',
+  orange: 'redBright',
+  lime: 'greenBright',
+  pink: 'magentaBright',
+  sky: 'cyanBright',
+  lavender: 'blueBright',
+  white: 'white',
+};
 
 function colorize(text, colorName) {
-  return chalk[getChalkColor(colorName)](text);
+  const fn = CHALK_COLORS[colorName] || 'white';
+  return chalk[fn](text);
 }
 
 const dim = chalk.dim;
@@ -44,37 +61,13 @@ export async function runInit() {
       color = me.color;
       accountVerb = null; // existing, verified
     } catch (err) {
-      if ((err.status === 401 || err.status === 403) && config.refresh_token) {
-        // Token expired but we have a refresh token — try to renew
-        try {
-          const client = api(null);
-          const refreshResult = await client.post('/auth/refresh', {
-            refresh_token: config.refresh_token,
-          });
-          config = {
-            ...config,
-            token: refreshResult.token,
-            refresh_token: refreshResult.refresh_token,
-          };
-          saveConfig(config);
-          const me = await api(config).get('/me');
-          handle = me.handle;
-          color = me.color;
-          accountVerb = 'refreshed';
-        } catch {
-          // Refresh failed — fall through to account creation
-          config = await createAccount();
-          handle = config.handle;
-          color = config.color;
-          accountVerb = 'created';
-        }
-      } else if (err.status === 401 || err.status === 403) {
+      if (err.status === 401 || err.status === 403) {
         config = await createAccount();
         handle = config.handle;
         color = config.color;
         accountVerb = 'created';
       } else {
-        console.log(`  ${chalk.red('✖')} Could not reach the server.`);
+        console.log(`  ${chalk.red('✖')} Could not reach server: ${err.message}`);
         console.log(`  ${dim('Check your internet connection and try again.')}`);
         console.log('');
         return;
@@ -105,15 +98,14 @@ export async function runInit() {
       teamName = data.name || teamId;
       teamVerb = 'joined';
     } catch (err) {
+      const classified = classifyError(err);
       const hint =
         err.status === 404
-          ? 'This team no longer exists. Delete .chinwag and re-run init.'
+          ? 'Team not found — the .chinwag file may be stale. Delete it and re-run init.'
           : err.status === 403
-            ? "You don't have access. Ask a team member to verify your access."
-            : err.status >= 500
-              ? 'Something went wrong on our end. Try again in a moment.'
-              : 'Check your connection and try again.';
-      console.log(`  ${chalk.red('✖')} Could not join team.`);
+            ? 'Access denied. Ask a team member to verify your access.'
+            : classified.detail || 'Check your connection and try again.';
+      console.log(`  ${chalk.red('✖')} Failed to join team: ${err.message}`);
       console.log(`    ${chalk.dim(hint)}`);
       console.log('');
       return;
@@ -121,10 +113,9 @@ export async function runInit() {
   } else {
     try {
       const projectName = basename(cwd);
-      // POST /teams creates the team and joins the creator in one step.
-      // Write the .chinwag file only after creation succeeds — never before.
       const result = await client.post('/teams', { name: projectName });
       teamId = result.team_id;
+      await client.post(`/teams/${teamId}/join`, { name: projectName });
       writeFileSync(
         chinwagFile,
         JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n',
@@ -132,13 +123,12 @@ export async function runInit() {
       teamName = projectName;
       teamVerb = 'created';
     } catch (err) {
+      const classified = classifyError(err);
       const hint =
         err.status === 429
-          ? 'Our servers are busy right now. Try again later.'
-          : err.status >= 500
-            ? 'Something went wrong on our end. Try again in a moment.'
-            : 'Check your connection and try again.';
-      console.log(`  ${chalk.red('✖')} Could not create team.`);
+          ? 'Rate limit reached. Try again tomorrow.'
+          : classified.detail || 'Check your connection and try again.';
+      console.log(`  ${chalk.red('✖')} Failed to create team: ${err.message}`);
       console.log(`    ${chalk.dim(hint)}`);
       console.log('');
       return;
@@ -194,12 +184,7 @@ export async function runInit() {
 
 async function createAccount() {
   const result = await initAccount();
-  const config = {
-    token: result.token,
-    handle: result.handle,
-    color: result.color,
-    ...(result.refresh_token ? { refresh_token: result.refresh_token } : {}),
-  };
+  const config = { token: result.token, handle: result.handle, color: result.color };
   saveConfig(config);
   return config;
 }

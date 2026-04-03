@@ -158,7 +158,7 @@ describe('runInit', () => {
 
       // Should print error, not crash
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Could not reach the server/);
+      expect(logCalls).toMatch(/Could not reach server/);
     });
   });
 
@@ -239,8 +239,8 @@ describe('runInit', () => {
       }
 
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Could not join team/);
-      expect(logCalls).toMatch(/no longer exists/i);
+      expect(logCalls).toMatch(/Failed to join team/);
+      expect(logCalls).toMatch(/Team not found/i);
     });
 
     it('handles team creation rate limit', async () => {
@@ -261,7 +261,7 @@ describe('runInit', () => {
       }
 
       const logCalls = consoleLogSpy.mock.calls.flat().join('\n');
-      expect(logCalls).toMatch(/Could not create team/);
+      expect(logCalls).toMatch(/Failed to create team/);
     });
   });
 

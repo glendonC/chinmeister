@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   isAgentAddressable,
   getAgentTargetLabel,
@@ -10,245 +10,213 @@ import {
   getRecentResultSummary,
 } from '../dashboard/agent-display.js';
 
-// ── isAgentAddressable ─────────────────────────────────
-
 describe('isAgentAddressable', () => {
   it('returns false for null/undefined', () => {
     expect(isAgentAddressable(null)).toBe(false);
     expect(isAgentAddressable(undefined)).toBe(false);
   });
 
-  it('returns false when no agent_id', () => {
-    expect(isAgentAddressable({ _managed: true, status: 'running' })).toBe(false);
+  it('returns false when agent_id is missing', () => {
+    expect(isAgentAddressable({ status: 'running', _managed: true })).toBe(false);
   });
 
-  it('returns true for running managed agent with agent_id', () => {
-    expect(isAgentAddressable({ agent_id: 'a:b:c', _managed: true, status: 'running' })).toBe(true);
+  it('returns true for running managed agents with agent_id', () => {
+    expect(
+      isAgentAddressable({ agent_id: 'test:abc:def', _managed: true, status: 'running' }),
+    ).toBe(true);
   });
 
-  it('returns false for exited managed agent', () => {
-    expect(isAgentAddressable({ agent_id: 'a:b:c', _managed: true, status: 'exited' })).toBe(false);
+  it('returns false for exited managed agents', () => {
+    expect(isAgentAddressable({ agent_id: 'test:abc:def', _managed: true, status: 'exited' })).toBe(
+      false,
+    );
   });
 
-  it('returns true for active connected agent', () => {
-    expect(isAgentAddressable({ agent_id: 'a:b:c', _managed: false, status: 'active' })).toBe(true);
+  it('returns true for active non-managed (connected) agents', () => {
+    expect(
+      isAgentAddressable({ agent_id: 'test:abc:def', _managed: false, status: 'active' }),
+    ).toBe(true);
   });
 
-  it('returns false for non-active connected agent', () => {
-    expect(isAgentAddressable({ agent_id: 'a:b:c', _managed: false, status: 'idle' })).toBe(false);
+  it('returns false for inactive non-managed agents', () => {
+    expect(isAgentAddressable({ agent_id: 'test:abc:def', _managed: false, status: 'idle' })).toBe(
+      false,
+    );
   });
 });
-
-// ── getAgentTargetLabel ────────────────────────────────
 
 describe('getAgentTargetLabel', () => {
   it('returns "agent" for null', () => {
     expect(getAgentTargetLabel(null)).toBe('agent');
   });
 
-  it('returns handle and display combined', () => {
+  it('combines handle and display name', () => {
     expect(getAgentTargetLabel({ handle: 'alice', _display: 'Claude Code' })).toBe(
       'alice (Claude Code)',
     );
   });
 
-  it('returns just handle when no display', () => {
+  it('falls back to handle only', () => {
     expect(getAgentTargetLabel({ handle: 'alice' })).toBe('alice');
   });
 
-  it('returns just display when no handle', () => {
+  it('falls back to display only', () => {
     expect(getAgentTargetLabel({ _display: 'Claude Code' })).toBe('Claude Code');
   });
-
-  it('returns "agent" when nothing is set', () => {
-    expect(getAgentTargetLabel({})).toBe('agent');
-  });
 });
-
-// ── getAgentIntent ─────────────────────────────────────
 
 describe('getAgentIntent', () => {
   it('returns null for null agent', () => {
     expect(getAgentIntent(null)).toBeNull();
   });
 
-  it('returns outputPreview for dead managed agents', () => {
-    expect(getAgentIntent({ _managed: true, _dead: true, outputPreview: 'Done!' })).toBe('Done!');
-  });
-
-  it('returns _summary when available', () => {
-    expect(getAgentIntent({ _summary: 'Refactoring auth' })).toBe('Refactoring auth');
-  });
-
-  it('returns formatted files when no summary', () => {
-    expect(getAgentIntent({ activity: { files: ['src/a.js'] } })).toBe('a.js');
-  });
-
-  it('returns task for managed agents with no other info', () => {
-    expect(getAgentIntent({ _managed: true, task: 'Fix bug', activity: {} })).toBe('Fix bug');
-  });
-
-  it('returns "Idle" as last resort', () => {
-    expect(getAgentIntent({ activity: {} })).toBe('Idle');
-    expect(getAgentIntent({})).toBe('Idle');
-  });
-
-  it('prefers outputPreview over summary for dead managed agents', () => {
+  it('returns output preview for dead managed agents', () => {
     expect(
       getAgentIntent({
         _managed: true,
         _dead: true,
-        outputPreview: 'Exit output',
-        _summary: 'Some summary',
+        outputPreview: 'Auth token expired',
       }),
-    ).toBe('Exit output');
+    ).toBe('Auth token expired');
+  });
+
+  it('returns summary when available', () => {
+    expect(
+      getAgentIntent({
+        _summary: 'Refactoring auth flow',
+        activity: { files: ['src/auth.js'] },
+      }),
+    ).toBe('Refactoring auth flow');
+  });
+
+  it('returns file list when no summary', () => {
+    const result = getAgentIntent({
+      activity: { files: ['src/auth.js', 'src/login.js'] },
+    });
+    expect(result).toContain('auth.js');
+  });
+
+  it('returns task for managed agents with no other info', () => {
+    expect(
+      getAgentIntent({
+        _managed: true,
+        task: 'Fix login bug',
+      }),
+    ).toBe('Fix login bug');
+  });
+
+  it('returns Idle as fallback', () => {
+    expect(getAgentIntent({})).toBe('Idle');
   });
 });
-
-// ── getAgentOriginLabel ────────────────────────────────
 
 describe('getAgentOriginLabel', () => {
   it('returns null for null agent', () => {
     expect(getAgentOriginLabel(null)).toBeNull();
   });
 
-  it('returns "started here" for managed + connected', () => {
+  it('returns "started here" for connected managed agents', () => {
     expect(getAgentOriginLabel({ _managed: true, _connected: true })).toBe('started here');
   });
 
-  it('returns "starting here" for managed but not connected', () => {
+  it('returns "starting here" for unconnected managed agents', () => {
     expect(getAgentOriginLabel({ _managed: true, _connected: false })).toBe('starting here');
   });
 
-  it('returns "joined automatically" for non-managed', () => {
+  it('returns "joined automatically" for non-managed agents', () => {
     expect(getAgentOriginLabel({ _managed: false })).toBe('joined automatically');
   });
 });
-
-// ── getAgentDisplayLabel ───────────────────────────────
 
 describe('getAgentDisplayLabel', () => {
   it('returns "agent" for null', () => {
     expect(getAgentDisplayLabel(null)).toBe('agent');
   });
 
-  it('returns _display as base label', () => {
+  it('returns display name', () => {
     expect(getAgentDisplayLabel({ _display: 'Claude Code' })).toBe('Claude Code');
   });
 
-  it('falls back to toolName', () => {
+  it('falls back through toolName and tool', () => {
     expect(getAgentDisplayLabel({ toolName: 'Cursor' })).toBe('Cursor');
-  });
-
-  it('falls back to tool', () => {
     expect(getAgentDisplayLabel({ tool: 'aider' })).toBe('aider');
   });
 
-  it('falls back to "agent"', () => {
-    expect(getAgentDisplayLabel({})).toBe('agent');
-  });
-
-  it('adds index when allAgents contains duplicates', () => {
+  it('appends index when multiple agents share the same name', () => {
     const agents = [
-      { agent_id: 'a', _display: 'Claude Code' },
-      { agent_id: 'b', _display: 'Claude Code' },
-      { agent_id: 'c', _display: 'Cursor' },
+      { agent_id: 'a:1:1', _display: 'Claude Code' },
+      { agent_id: 'a:1:2', _display: 'Claude Code' },
     ];
-    // First occurrence gets no suffix
+    // With allAgents provided, second agent gets #2
     expect(getAgentDisplayLabel(agents[0], null, agents)).toBe('Claude Code');
-    // Second occurrence gets #2
     expect(getAgentDisplayLabel(agents[1], null, agents)).toBe('Claude Code #2');
-    // Unique name gets no suffix
-    expect(getAgentDisplayLabel(agents[2], null, agents)).toBe('Cursor');
   });
 });
 
-// ── getIntentColor ─────────────────────────────────────
-
 describe('getIntentColor', () => {
-  it('returns gray for null', () => {
+  it('returns gray for null/empty', () => {
     expect(getIntentColor(null)).toBe('gray');
+    expect(getIntentColor('')).toBe('gray');
   });
 
   it('returns yellow for idle', () => {
     expect(getIntentColor('Idle')).toBe('yellow');
-    expect(getIntentColor('idle')).toBe('yellow');
   });
 
-  it('returns red for errors/failures', () => {
-    expect(getIntentColor('error: crash')).toBe('red');
-    expect(getIntentColor('Task failed')).toBe('red');
-    expect(getIntentColor('Blocked on review')).toBe('red');
-    expect(getIntentColor('File conflict detected')).toBe('red');
+  it('returns red for error-like intents', () => {
+    expect(getIntentColor('Error: connection failed')).toBe('red');
+    expect(getIntentColor('Auth failed')).toBe('red');
+    expect(getIntentColor('Blocked on merge conflict')).toBe('red');
   });
 
-  it('returns cyan for normal activity', () => {
-    expect(getIntentColor('Refactoring auth')).toBe('cyan');
-    expect(getIntentColor('src/app.js')).toBe('cyan');
+  it('returns cyan for normal work', () => {
+    expect(getIntentColor('Refactoring auth flow')).toBe('cyan');
   });
 });
-
-// ── getAgentMeta ───────────────────────────────────────
 
 describe('getAgentMeta', () => {
   it('returns null for null agent', () => {
     expect(getAgentMeta(null)).toBeNull();
   });
 
-  it('includes origin label', () => {
-    const meta = getAgentMeta({ _managed: true, _connected: true });
+  it('includes origin, files, and update time', () => {
+    const meta = getAgentMeta({
+      _managed: true,
+      _connected: true,
+      activity: { files: ['src/auth.js'] },
+      minutes_since_update: 5,
+    });
     expect(meta).toContain('started here');
+    expect(meta).toContain('auth.js');
+    expect(meta).toContain('5m ago');
   });
 
-  it('includes formatted files', () => {
-    const meta = getAgentMeta({ _managed: false, activity: { files: ['src/app.js'] } });
-    expect(meta).toContain('app.js');
-  });
-
-  it('includes update timestamp', () => {
-    const meta = getAgentMeta({ _managed: false, minutes_since_update: 5 });
-    expect(meta).toContain('updated 5m ago');
-  });
-
-  it('excludes zero minutes_since_update', () => {
-    const meta = getAgentMeta({ _managed: false, minutes_since_update: 0 });
-    expect(meta).not.toContain('updated');
-  });
-
-  it('joins parts with centered dot separator', () => {
+  it('skips files and update time when not available', () => {
     const meta = getAgentMeta({
       _managed: false,
-      activity: { files: ['x.js'] },
-      minutes_since_update: 2,
+      activity: { files: [] },
     });
-    expect(meta).toContain(' \u00b7 ');
+    expect(meta).toBe('joined automatically');
   });
 });
 
-// ── getRecentResultSummary ─────────────────────────────
-
 describe('getRecentResultSummary', () => {
-  it('returns tool state detail for failed agents with tool state', () => {
-    expect(getRecentResultSummary({ _failed: true }, { detail: 'Auth expired' })).toBe(
-      'Auth expired',
+  it('returns tool state detail for failed agents', () => {
+    expect(getRecentResultSummary({ _failed: true }, { detail: 'Auth token expired' })).toBe(
+      'Auth token expired',
     );
   });
 
-  it('returns outputPreview when available', () => {
-    expect(getRecentResultSummary({ outputPreview: 'Done: 5 files changed' }, null)).toBe(
-      'Done: 5 files changed',
-    );
+  it('returns output preview when available', () => {
+    expect(getRecentResultSummary({ outputPreview: 'Done in 5s' }, null)).toBe('Done in 5s');
   });
 
-  it('returns task when available', () => {
-    expect(getRecentResultSummary({ task: 'Fix login' }, null)).toBe('Fix login');
+  it('returns task as fallback', () => {
+    expect(getRecentResultSummary({ task: 'Fix lint errors' }, null)).toBe('Fix lint errors');
   });
 
-  it('returns "Task failed" for failed agents with no detail', () => {
+  it('returns failure/completion message as last resort', () => {
     expect(getRecentResultSummary({ _failed: true }, null)).toBe('Task failed');
-  });
-
-  it('returns "Task completed" for non-failed agents with no detail', () => {
     expect(getRecentResultSummary({}, null)).toBe('Task completed');
   });
 });

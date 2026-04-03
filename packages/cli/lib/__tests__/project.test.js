@@ -1,0 +1,53 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { mkdirSync, writeFileSync, rmSync, mkdtempSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
+import { getProjectContext } from '../project.js';
+
+let tmpDir;
+
+beforeEach(() => {
+  tmpDir = mkdtempSync(join(tmpdir(), 'chinwag-project-test-'));
+});
+
+afterEach(() => {
+  rmSync(tmpDir, { recursive: true, force: true });
+});
+
+describe('getProjectContext', () => {
+  it('returns null when no .chinwag file exists', () => {
+    expect(getProjectContext(tmpDir)).toBeNull();
+  });
+
+  it('returns project context when .chinwag exists', () => {
+    writeFileSync(
+      join(tmpDir, '.chinwag'),
+      JSON.stringify({
+        team: 't_abc123',
+        name: 'my-project',
+      }),
+    );
+
+    const ctx = getProjectContext(tmpDir);
+    expect(ctx).not.toBeNull();
+    expect(ctx.teamId).toBe('t_abc123');
+    expect(ctx.teamName).toBe('my-project');
+    expect(ctx.root).toBe(tmpDir);
+  });
+
+  it('walks up parent directories to find .chinwag', () => {
+    const subDir = join(tmpDir, 'src', 'lib');
+    mkdirSync(subDir, { recursive: true });
+    writeFileSync(
+      join(tmpDir, '.chinwag'),
+      JSON.stringify({
+        team: 't_parent',
+        name: 'parent-project',
+      }),
+    );
+
+    const ctx = getProjectContext(subDir);
+    expect(ctx).not.toBeNull();
+    expect(ctx.teamId).toBe('t_parent');
+  });
+});

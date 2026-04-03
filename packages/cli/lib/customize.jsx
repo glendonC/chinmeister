@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Box, Text, useInput, useStdout } from 'ink';
 import TextInput from 'ink-text-input';
+import { cpSync, existsSync, mkdirSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+import { fileURLToPath } from 'url';
 import { api } from './api.js';
 import { saveConfig, loadConfig } from './config.js';
 import { getInkColor, getColorList } from './colors.js';
 import { MCP_TOOLS } from './tools.js';
 import { configureTool, scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js';
+import { classifyError } from './utils/errors.js';
+import { DetectedToolsList, RecommendationsList } from './tool-display.jsx';
 
 function evalToTool(e) {
   const meta = e.metadata || {};
@@ -23,12 +29,137 @@ function evalToTool(e) {
   };
 }
 
-// IDE extension support is disabled — packages/vscode was removed.
-// When the extension is rebuilt, update IDE_EXTENSION_DIR and re-enable the menu item.
-const IDE_EXTENSION_AVAILABLE = false;
+let PKG_VERSION = '0.1.0';
+try {
+  const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
+  PKG_VERSION = pkg.version;
+} catch (err) {
+  console.error('[chinwag]', err?.message || err);
+}
+
+let VSCODE_EXTENSION = { publisher: 'chinwag', name: 'chinwag', version: PKG_VERSION };
+try {
+  const pkg = JSON.parse(
+    readFileSync(new URL('../../vscode/package.json', import.meta.url), 'utf-8'),
+  );
+  VSCODE_EXTENSION = {
+    publisher: pkg.publisher || 'chinwag',
+    name: pkg.name || 'chinwag',
+    version: pkg.version || PKG_VERSION,
+  };
+} catch (err) {
+  console.error('[chinwag]', err?.message || err);
+}
+
+const IDE_COMMAND_SHORTCUT = process.platform === 'darwin' ? 'Cmd+Shift+P' : 'Ctrl+Shift+P';
+const IDE_EXTENSION_DIR = fileURLToPath(new URL('../../vscode/', import.meta.url));
 const MAX_RECOMMENDATIONS = 9;
 const FLASH_MIN_DURATION_MS = 3000;
 const FLASH_MS_PER_CHAR = 40;
+
+// ── Sub-screen: Handle editor ─────────────────────────
+
+function HandleMode({ handleInput, setHandleInput, submitHandle, message }) {
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Text bold>Change handle</Text>
+      <Text dimColor>3-20 characters, letters, numbers, underscores</Text>
+      <Text>{''}</Text>
+      <Box>
+        <Text color="cyan">{'> '}</Text>
+        <TextInput
+          value={handleInput}
+          onChange={setHandleInput}
+          onSubmit={submitHandle}
+          placeholder="newhandle"
+        />
+      </Box>
+      <Text>{''}</Text>
+      {message && <Text color={message.type === 'error' ? 'red' : 'green'}>{message.text}</Text>}
+      <Text dimColor>[enter] save [esc] back</Text>
+    </Box>
+  );
+}
+
+// ── Sub-screen: Color picker ──────────────────────────
+
+function ColorMode({ handle, currentColor, colors, colorIdx }) {
+  const previewColor = colors[colorIdx];
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Text bold>Change color</Text>
+      <Text>{''}</Text>
+      <Text>
+        Preview:{' '}
+        <Text color={getInkColor(previewColor)} bold>
+          {handle}
+        </Text>
+      </Text>
+      <Text>{''}</Text>
+      {colors.map((c, i) => {
+        const isSelected = i === colorIdx;
+        return (
+          <Text key={c}>
+            <Text>{isSelected ? '▸' : ' '} </Text>
+            <Text color={getInkColor(c)} bold={isSelected}>
+              {c}
+            </Text>
+            {c === currentColor && <Text dimColor> (current)</Text>}
+          </Text>
+        );
+      })}
+      <Text>{''}</Text>
+      <Text dimColor>[up/down] select [enter] save [esc] back</Text>
+    </Box>
+  );
+}
+
+// ── Sub-screen: Connected tools ───────────────────────
+
+function ToolsMode({ detected, integrationSummary, recommendations, cols, message }) {
+  return (
+    <Box flexDirection="column" padding={1}>
+      <Box marginBottom={1}>
+        <Text bold>Connected tools</Text>
+        <Text dimColor> ({detected.length} detected)</Text>
+      </Box>
+
+      <DetectedToolsList
+        detected={detected}
+        integrationSummary={detected.length > 0 ? integrationSummary : null}
+      />
+
+      {recommendations.length > 0 && (
+        <>
+          <Box marginBottom={1}>
+            <Text bold>Recommended</Text>
+          </Box>
+          <RecommendationsList recommendations={recommendations} cols={cols} />
+        </>
+      )}
+
+      {message && (
+        <Box marginBottom={1}>
+          <Text color={message.type === 'error' ? 'red' : 'green'}>{message.text}</Text>
+        </Box>
+      )}
+
+      <Text>
+        {recommendations.length > 0 && (
+          <>
+            <Text color="cyan" bold>
+              [1-{recommendations.length}]
+            </Text>
+            <Text dimColor> add </Text>
+          </>
+        )}
+        <Text dimColor>[esc] back</Text>
+      </Text>
+    </Box>
+  );
+}
+
+// ── Main Customize component ──────────────────────────
 
 export function Customize({ config, user, navigate, refreshUser }) {
   const { stdout } = useStdout();
@@ -50,17 +181,15 @@ export function Customize({ config, user, navigate, refreshUser }) {
   const [catalog, setCatalog] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
 
-  const menuItems = useMemo(() => {
-    const items = [
+  const menuItems = useMemo(
+    () => [
       { key: 'h', label: 'Change handle', action: 'handle' },
       { key: 'k', label: 'Change color', action: 'color' },
       { key: 't', label: 'Connected tools', action: 'tools' },
-    ];
-    if (IDE_EXTENSION_AVAILABLE) {
-      items.push({ key: 'e', label: 'IDE extension', action: 'ide' });
-    }
-    return items;
-  }, []);
+      { key: 'e', label: 'IDE extension', action: 'ide' },
+    ],
+    [],
+  );
 
   useEffect(() => {
     return () => {
@@ -104,8 +233,8 @@ export function Customize({ config, user, navigate, refreshUser }) {
         try {
           const fallback = await api(config).get('/tools/catalog');
           setCatalog(fallback.tools || []);
-        } catch {
-          showFlash('Could not load tool catalog.', 'error');
+        } catch (err) {
+          showFlash(`Could not fetch tool catalog: ${err.message}`, 'error');
         }
       }
       setToolsLoading(false);
@@ -114,7 +243,33 @@ export function Customize({ config, user, navigate, refreshUser }) {
   }
 
   function installIdeExtension() {
-    showFlash('IDE extension is not yet available.', 'error');
+    const extName = `${VSCODE_EXTENSION.publisher}.${VSCODE_EXTENSION.name}-${VSCODE_EXTENSION.version}`;
+    const ideDirs = ['.cursor', '.windsurf', '.vscode'];
+    const ideDir = ideDirs.find((d) => existsSync(join(homedir(), d))) || '.vscode';
+    const target = join(homedir(), ideDir, 'extensions', extName);
+    const wasInstalled = existsSync(target);
+    try {
+      mkdirSync(target, { recursive: true });
+      cpSync(join(IDE_EXTENSION_DIR, 'package.json'), join(target, 'package.json'));
+      cpSync(join(IDE_EXTENSION_DIR, 'dist', 'extension.js'), join(target, 'extension.js'));
+      try {
+        cpSync(join(IDE_EXTENSION_DIR, 'logo-mark.svg'), join(target, 'logo-mark.svg'));
+      } catch (err) {
+        console.error('[chinwag]', err?.message || err);
+      }
+      showFlash(
+        wasInstalled
+          ? `Updated — ${IDE_COMMAND_SHORTCUT} → "chinwag: Open Dashboard"`
+          : `Installed — restart IDE, then ${IDE_COMMAND_SHORTCUT} → "chinwag: Open Dashboard"`,
+      );
+    } catch (err) {
+      console.error('[chinwag]', err?.message || err);
+      if (wasInstalled) {
+        showFlash(`${IDE_COMMAND_SHORTCUT} → "chinwag: Open Dashboard"`);
+      } else {
+        showFlash('Could not install IDE extension. Check file permissions.', 'error');
+      }
+    }
   }
 
   function addTool(tool) {
@@ -125,7 +280,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
         showFlash(`Added ${result.name}: ${result.detail}`);
         setIntegrationStatuses(scanIntegrationHealth(process.cwd()));
       } else {
-        showFlash(`Could not add ${result.name || tool.name}.`, 'error');
+        showFlash(`Could not add ${result.name || tool.name}: ${result.error}`, 'error');
       }
     } else if (tool.installCmd) {
       showFlash(`${tool.name} — Install: ${tool.installCmd}  |  ${tool.website}`);
@@ -172,14 +327,12 @@ export function Customize({ config, user, navigate, refreshUser }) {
           ? 'That handle is already taken.'
           : err.status === 400
             ? 'Invalid handle. Use 3-20 alphanumeric characters.'
-            : err.status >= 500
-              ? 'Something went wrong on our end. Try again shortly.'
-              : 'Could not update handle.';
+            : classifyError(err).detail || 'Could not update handle.';
       setMessage({ type: 'error', text: msg });
     }
   }
 
-  async function doSaveColor(color) {
+  async function saveColor(color) {
     try {
       await api(config).put('/me/color', { color });
       const cfg = loadConfig();
@@ -189,10 +342,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
       setMessage({ type: 'success', text: 'Color updated!' });
       setMode('menu');
     } catch (err) {
-      const msg =
-        err.status >= 500
-          ? 'Something went wrong on our end. Try again shortly.'
-          : 'Could not update color.';
+      const msg = classifyError(err).detail || 'Could not update color.';
       setMessage({ type: 'error', text: msg });
     }
   }
@@ -237,7 +387,7 @@ export function Customize({ config, user, navigate, refreshUser }) {
         return;
       }
       if (key.return) {
-        doSaveColor(colors[colorIdx]);
+        saveColor(colors[colorIdx]);
         return;
       }
     }
@@ -257,56 +407,18 @@ export function Customize({ config, user, navigate, refreshUser }) {
   // ── Handle mode ──────────────────────────────────────
   if (mode === 'handle') {
     return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold>Change handle</Text>
-        <Text dimColor>3-20 characters, letters, numbers, underscores</Text>
-        <Text>{''}</Text>
-        <Box>
-          <Text color="cyan">{'> '}</Text>
-          <TextInput
-            value={handleInput}
-            onChange={setHandleInput}
-            onSubmit={submitHandle}
-            placeholder="newhandle"
-          />
-        </Box>
-        <Text>{''}</Text>
-        {message && <Text color={message.type === 'error' ? 'red' : 'green'}>{message.text}</Text>}
-        <Text dimColor>[enter] save [esc] back</Text>
-      </Box>
+      <HandleMode
+        handleInput={handleInput}
+        setHandleInput={setHandleInput}
+        submitHandle={submitHandle}
+        message={message}
+      />
     );
   }
 
   // ── Color mode ───────────────────────────────────────
   if (mode === 'color') {
-    const previewColor = colors[colorIdx];
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text bold>Change color</Text>
-        <Text>{''}</Text>
-        <Text>
-          Preview:{' '}
-          <Text color={getInkColor(previewColor)} bold>
-            {handle}
-          </Text>
-        </Text>
-        <Text>{''}</Text>
-        {colors.map((c, i) => {
-          const isSelected = i === colorIdx;
-          return (
-            <Text key={c}>
-              <Text>{isSelected ? '▸' : ' '} </Text>
-              <Text color={getInkColor(c)} bold={isSelected}>
-                {c}
-              </Text>
-              {c === color && <Text dimColor> (current)</Text>}
-            </Text>
-          );
-        })}
-        <Text>{''}</Text>
-        <Text dimColor>[up/down] select [enter] save [esc] back</Text>
-      </Box>
-    );
+    return <ColorMode handle={handle} currentColor={color} colors={colors} colorIdx={colorIdx} />;
   }
 
   // ── Tools mode ───────────────────────────────────────
@@ -320,117 +432,13 @@ export function Customize({ config, user, navigate, refreshUser }) {
     }
 
     return (
-      <Box flexDirection="column" padding={1}>
-        <Box marginBottom={1}>
-          <Text bold>Connected tools</Text>
-          <Text dimColor> ({detected.length} detected)</Text>
-        </Box>
-
-        {detected.length === 0 ? (
-          <Box marginBottom={1}>
-            <Text dimColor>No tools detected. Run `npx chinwag init` first.</Text>
-          </Box>
-        ) : (
-          (() => {
-            const maxName = Math.max(...detected.map((t) => t.name.length));
-            return (
-              <Box flexDirection="column" marginBottom={1}>
-                {detected.map((tool) => {
-                  let detail = tool.mcpConfig;
-                  if (tool.hooks) detail += ' + hooks';
-                  if (tool.channel) detail += ' + channel';
-                  const statusColor =
-                    tool.status === 'ready'
-                      ? 'green'
-                      : tool.status === 'needs_repair'
-                        ? 'yellow'
-                        : tool.status === 'needs_setup'
-                          ? 'yellow'
-                          : 'gray';
-                  const statusText = tool.status.replace(/_/g, ' ');
-                  return (
-                    <Box key={tool.id} flexDirection="column">
-                      <Text>
-                        <Text color={tool.status === 'ready' ? 'green' : 'yellow'}>{'● '}</Text>
-                        <Text>{tool.name.padEnd(maxName + 1)}</Text>
-                        <Text dimColor>{detail}</Text>
-                        <Text dimColor> </Text>
-                        <Text color={statusColor}>{statusText}</Text>
-                      </Text>
-                      {tool.issues?.[0] && <Text dimColor> {tool.issues[0]}</Text>}
-                    </Box>
-                  );
-                })}
-              </Box>
-            );
-          })()
-        )}
-
-        {detected.length > 0 && (
-          <Box marginBottom={1}>
-            <Text
-              color={
-                integrationSummary.tone === 'success'
-                  ? 'green'
-                  : integrationSummary.tone === 'warning'
-                    ? 'yellow'
-                    : 'cyan'
-              }
-            >
-              {integrationSummary.text}
-            </Text>
-          </Box>
-        )}
-
-        {recommendations.length > 0 &&
-          (() => {
-            const maxName = Math.max(...recommendations.map((t) => t.name.length));
-            const descAvail = cols - 3 - 4 - (maxName + 1) - 6;
-            return (
-              <>
-                <Box marginBottom={1}>
-                  <Text bold>Recommended</Text>
-                </Box>
-                <Box flexDirection="column" marginBottom={1}>
-                  {recommendations.map((tool, i) => {
-                    const desc =
-                      descAvail > 10 && tool.description.length > descAvail
-                        ? tool.description.slice(0, descAvail - 1) + '\u2026'
-                        : tool.description;
-                    return (
-                      <Text key={tool.id}>
-                        <Text color="cyan" bold>
-                          [{i + 1}]
-                        </Text>
-                        <Text> {tool.name.padEnd(maxName + 1)}</Text>
-                        <Text dimColor>{desc}</Text>
-                        {tool.mcpCompatible && <Text color="green"> [MCP]</Text>}
-                      </Text>
-                    );
-                  })}
-                </Box>
-              </>
-            );
-          })()}
-
-        {message && (
-          <Box marginBottom={1}>
-            <Text color={message.type === 'error' ? 'red' : 'green'}>{message.text}</Text>
-          </Box>
-        )}
-
-        <Text>
-          {recommendations.length > 0 && (
-            <>
-              <Text color="cyan" bold>
-                [1-{recommendations.length}]
-              </Text>
-              <Text dimColor> add </Text>
-            </>
-          )}
-          <Text dimColor>[esc] back</Text>
-        </Text>
-      </Box>
+      <ToolsMode
+        detected={detected}
+        integrationSummary={integrationSummary}
+        recommendations={recommendations}
+        cols={cols}
+        message={message}
+      />
     );
   }
 

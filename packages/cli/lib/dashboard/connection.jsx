@@ -3,7 +3,8 @@ import { api, getApiUrl } from '../api.js';
 import { detectTools } from '../mcp-config.js';
 import { getProjectContext } from '../project.js';
 import { SPINNER } from './utils.js';
-import { applyDelta } from '@chinwag/shared/dashboard-ws.js';
+import { applyDelta } from '../../../shared/dashboard-ws.js';
+import { classifyError } from '../utils/errors.js';
 
 // ── Constants ───────────────────────────────────────
 const SPINNER_INTERVAL_MS = 80;
@@ -17,26 +18,8 @@ const IDLE_TIER_2 = 12; // 1min idle -> slow poll
 const IDLE_TIER_3 = 60; // 5min idle -> idle poll
 const RECONCILE_INTERVAL_MS = 60_000;
 
-export function classifyError(err) {
-  const msg = err.message || '';
-  const status = err.status;
-  if (status === 401) return { state: 'offline', detail: 'Your session has expired.', fatal: true };
-  if (status === 403) return { state: 'offline', detail: "You don't have access to this team." };
-  if (status === 404) return { state: 'offline', detail: 'This team no longer exists.' };
-  if (status === 429)
-    return { state: 'reconnecting', detail: 'Our servers are busy. Retrying shortly.' };
-  if (status >= 500)
-    return { state: 'reconnecting', detail: 'Something went wrong on our end. Retrying...' };
-  if (status === 408 || msg.includes('timed out'))
-    return { state: 'reconnecting', detail: 'Connection timed out. Retrying...' };
-  if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some((c) => msg.includes(c))) {
-    return { state: 'offline', detail: "Can't reach the server. Check your internet connection." };
-  }
-  return { state: 'reconnecting', detail: 'Connection interrupted. Retrying...' };
-}
-
 // Minimal fingerprint of context for change detection (avoids JSON.stringify on every poll)
-export function contextFingerprint(ctx) {
+function contextFingerprint(ctx) {
   if (!ctx) return '';
   const members = (ctx.members || [])
     .map(
@@ -51,29 +34,24 @@ export function contextFingerprint(ctx) {
 }
 
 export function useDashboardConnection({ config, stdout }) {
-  // ── .chinwag file discovery (sync, computed once via lazy init) ───
-  const [initialProject] = useState(() => {
+  // Connection state
+  const [context, setContext] = useState(null);
+  // ── .chinwag file discovery (computed once at mount) ──
+  const initProject = () => {
     const project = getProjectContext(process.cwd());
     if (!project) return { error: 'No .chinwag file found. Run `npx chinwag init` first.' };
     if (project.error) return { error: project.error };
     let tools = [];
     try {
       tools = detectTools(project.root);
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch {
+      /* detection failed */
     }
     return { teamId: project.teamId, teamName: project.teamName, root: project.root, tools };
-  });
+  };
+  const [initState] = useState(initProject);
 
-  // Project state
-  const [teamId] = useState(initialProject.teamId ?? null);
-  const [teamName] = useState(initialProject.teamName ?? null);
-  const [projectRoot] = useState(initialProject.root ?? process.cwd());
-  const [detectedTools] = useState(initialProject.tools ?? []);
-
-  // Connection state
-  const [context, setContext] = useState(null);
-  const [error, setError] = useState(initialProject.error ?? null);
+  const [error, setError] = useState(initState.error || null);
   const [connState, setConnState] = useState('connecting');
   const [connDetail, setConnDetail] = useState(null);
   const consecutiveFailures = useRef(0);
@@ -81,6 +59,11 @@ export function useDashboardConnection({ config, stdout }) {
   const lastFingerprint = useRef('');
   const [refreshKey, setRefreshKey] = useState(0);
   const [spinnerFrame, setSpinnerFrame] = useState(0);
+
+  const [teamId, _setTeamId] = useState(initState.teamId || null);
+  const [teamName, _setTeamName] = useState(initState.teamName || null);
+  const [projectRoot, _setProjectRoot] = useState(initState.root || null);
+  const [detectedTools, _setDetectedTools] = useState(initState.tools || []);
 
   // Terminal
   const [cols, setCols] = useState(stdout?.columns || 80);
@@ -289,7 +272,7 @@ export function useDashboardConnection({ config, stdout }) {
         wsRef.current = null;
       }
     };
-  }, [teamId, teamName, refreshKey, config]);
+  }, [teamId, teamName, refreshKey, config?.token]);
 
   function retry() {
     setError(null);
