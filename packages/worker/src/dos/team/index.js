@@ -47,7 +47,7 @@ import {
   CLEANUP_INTERVAL_MS,
   HEARTBEAT_BROADCAST_DEBOUNCE_MS,
 } from '../../lib/constants.js';
-import { buildInClause } from '../../lib/validation.js';
+import { buildInClause, withTransaction } from '../../lib/validation.js';
 
 export class TeamDO extends DurableObject {
   #schemaReady = false;
@@ -56,9 +56,13 @@ export class TeamDO extends DurableObject {
   #contextCache = null;
   #contextCacheExpire = 0;
 
+  /** @type {<T>(fn: () => T) => T} */
+  #transact;
+
   constructor(ctx, env) {
     super(ctx, env);
     this.sql = ctx.storage.sql;
+    this.#transact = (fn) => ctx.storage.transactionSync(fn);
   }
 
   // ── Schema ──
@@ -179,7 +183,13 @@ export class TeamDO extends DurableObject {
         ws.send(JSON.stringify({ type: 'pong' }));
       } else if (data.type === 'activity' && isAgent) {
         this.#ensureSchema();
-        const result = updateActivityFn(this.sql, agentId, data.files || [], data.summary || '');
+        const result = updateActivityFn(
+          this.sql,
+          agentId,
+          data.files || [],
+          data.summary || '',
+          this.#transact,
+        );
         if (!result.error) {
           this.#broadcastToWatchers({
             type: 'activity',
@@ -190,7 +200,7 @@ export class TeamDO extends DurableObject {
         }
       } else if (data.type === 'file' && isAgent) {
         this.#ensureSchema();
-        const result = reportFileFn(this.sql, agentId, data.file);
+        const result = reportFileFn(this.sql, agentId, data.file, this.#transact);
         if (!result.error) {
           this.#broadcastToWatchers({ type: 'file', agent_id: agentId, file: data.file });
         }
@@ -297,68 +307,64 @@ export class TeamDO extends DurableObject {
 
   // Evict stale members and prune old sessions — at most once per minute.
   // Preserves agents with active WebSocket connections regardless of heartbeat age.
+  // Wrapped in a transaction so partial cleanup can't leave inconsistent state
+  // (e.g. activities deleted but their parent member still present).
   #maybeCleanup() {
     const now = Date.now();
     if (now - this.#lastCleanup < CLEANUP_INTERVAL_MS) return;
     this.#lastCleanup = now;
 
-    // Clamp future heartbeats (clock skew) — any last_heartbeat ahead of now
-    // is reset to now so stale-window comparisons remain correct.
-    this.sql.exec(
-      "UPDATE members SET last_heartbeat = datetime('now') WHERE last_heartbeat > datetime('now')",
-    );
-
-    // Agents with live WebSocket connections must not be evicted.
-    // Snapshot this AFTER clamping heartbeats so the eviction queries
-    // below see a consistent view.
     const ws = buildInClause([...this.#getConnectedAgentIds()]);
 
-    this.sql.exec(
-      `DELETE FROM activities WHERE agent_id IN (
-        SELECT agent_id FROM members
-        WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
-          AND agent_id NOT IN (${ws.sql})
-      )`,
-      HEARTBEAT_STALE_WINDOW_S,
-      ...ws.params,
-    );
-    this.sql.exec(
-      `DELETE FROM members
-       WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
-         AND agent_id NOT IN (${ws.sql})`,
-      HEARTBEAT_STALE_WINDOW_S,
-      ...ws.params,
-    );
-    this.sql.exec(
-      `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
-      SESSION_RETENTION_DAYS,
-    );
-    // Expire messages older than 1 hour
-    this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')");
-    // Auto-release locks for stale agents (WS-connected agents keep their locks)
-    this.sql.exec(
-      `DELETE FROM locks WHERE agent_id NOT IN (
-        SELECT agent_id FROM members
-        WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
-          OR agent_id IN (${ws.sql})
-      )`,
-      HEARTBEAT_STALE_WINDOW_S,
-      ...ws.params,
-    );
-    // Auto-close orphaned sessions
-    this.sql.exec(
-      `UPDATE sessions SET ended_at = datetime('now')
-       WHERE ended_at IS NULL
-       AND agent_id NOT IN (
-         SELECT agent_id FROM members
-         WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
-           OR agent_id IN (${ws.sql})
-       )`,
-      HEARTBEAT_STALE_WINDOW_S,
-      ...ws.params,
-    );
-    // Prune stale telemetry
-    this.sql.exec("DELETE FROM telemetry WHERE last_at < datetime('now', '-30 days')");
+    withTransaction(this.#transact, () => {
+      // Clamp future heartbeats (clock skew)
+      this.sql.exec(
+        "UPDATE members SET last_heartbeat = datetime('now') WHERE last_heartbeat > datetime('now')",
+      );
+
+      this.sql.exec(
+        `DELETE FROM activities WHERE agent_id IN (
+          SELECT agent_id FROM members
+          WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
+            AND agent_id NOT IN (${ws.sql})
+        )`,
+        HEARTBEAT_STALE_WINDOW_S,
+        ...ws.params,
+      );
+      this.sql.exec(
+        `DELETE FROM members
+         WHERE last_heartbeat < datetime('now', '-' || ? || ' seconds')
+           AND agent_id NOT IN (${ws.sql})`,
+        HEARTBEAT_STALE_WINDOW_S,
+        ...ws.params,
+      );
+      this.sql.exec(
+        `DELETE FROM sessions WHERE started_at < datetime('now', '-' || ? || ' days')`,
+        SESSION_RETENTION_DAYS,
+      );
+      this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')");
+      this.sql.exec(
+        `DELETE FROM locks WHERE agent_id NOT IN (
+          SELECT agent_id FROM members
+          WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+            OR agent_id IN (${ws.sql})
+        )`,
+        HEARTBEAT_STALE_WINDOW_S,
+        ...ws.params,
+      );
+      this.sql.exec(
+        `UPDATE sessions SET ended_at = datetime('now')
+         WHERE ended_at IS NULL
+         AND agent_id NOT IN (
+           SELECT agent_id FROM members
+           WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+             OR agent_id IN (${ws.sql})
+         )`,
+        HEARTBEAT_STALE_WINDOW_S,
+        ...ws.params,
+      );
+      this.sql.exec("DELETE FROM telemetry WHERE last_at < datetime('now', '-30 days')");
+    });
   }
 
   #recordMetric(metric) {
@@ -447,7 +453,7 @@ export class TeamDO extends DurableObject {
 
   async leave(agentId, ownerId = null) {
     this.#ensureSchema();
-    const result = leave(this.sql, agentId, ownerId);
+    const result = leave(this.sql, agentId, ownerId, this.#transact);
     if (!result.error) {
       this.#broadcastToWatchers({ type: 'member_left', agent_id: agentId });
     }
@@ -476,7 +482,7 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = updateActivityFn(this.sql, resolved, files, summary);
+    const result = updateActivityFn(this.sql, resolved, files, summary, this.#transact);
     if (!result.error) {
       this.#broadcastToWatchers({ type: 'activity', agent_id: resolved, files, summary });
     }
@@ -500,7 +506,7 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = reportFileFn(this.sql, resolved, filePath);
+    const result = reportFileFn(this.sql, resolved, filePath, this.#transact);
     if (!result.error) {
       this.#broadcastToWatchers({ type: 'file', agent_id: resolved, file: filePath });
     }
@@ -558,7 +564,7 @@ export class TeamDO extends DurableObject {
     const resolvedOwnerId = runtime ? ownerId : runtimeOrOwnerId;
     const resolved = this.#resolveOwnedAgentId(agentId, resolvedOwnerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return startSessionFn(this.sql, resolved, handle, framework, runtime);
+    return startSessionFn(this.sql, resolved, handle, framework, runtime, this.#transact);
   }
 
   async endSession(agentId, sessionId, ownerId = null) {
@@ -586,7 +592,7 @@ export class TeamDO extends DurableObject {
     this.#ensureSchema();
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    return enrichSessionModelFn(this.sql, resolved, model, this.#boundRecordMetric);
+    return enrichSessionModelFn(this.sql, resolved, model, this.#boundRecordMetric, this.#transact);
   }
 
   // ── Memory ──
@@ -606,6 +612,7 @@ export class TeamDO extends DurableObject {
       handle,
       runtime,
       this.#boundRecordMetric,
+      this.#transact,
     );
     if (!result.error) {
       this.#broadcastToWatchers({ type: 'memory', text, tags });

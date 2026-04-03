@@ -4,54 +4,60 @@
 import { normalizePath } from '../../lib/text-utils.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
 import { HEARTBEAT_STALE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
+import { withTransaction } from '../../lib/validation.js';
 
-export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrTool) {
+export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrTool, transact) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
-  // End any existing open session for this agent
-  sql.exec(
-    `UPDATE sessions SET ended_at = datetime('now') WHERE agent_id = ? AND ended_at IS NULL`,
-    resolvedAgentId,
-  );
-  // Also close orphaned sessions for same owner where agent is no longer active
-  // (handles agent_id changes, e.g. --tool flag added/removed)
-  sql.exec(
-    `UPDATE sessions SET ended_at = datetime('now')
-     WHERE handle = ? AND ended_at IS NULL
-     AND agent_id NOT IN (
-       SELECT agent_id FROM members
-       WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
-     )`,
-    handle,
-    HEARTBEAT_STALE_WINDOW_S,
-  );
-
   const id = crypto.randomUUID();
-  sql.exec(
-    `INSERT INTO sessions (id, agent_id, handle, framework, host_tool, agent_surface, transport, agent_model, started_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-    id,
-    resolvedAgentId,
-    handle,
-    framework || 'unknown',
-    runtime.hostTool,
-    runtime.agentSurface,
-    runtime.transport,
-    runtime.model,
-  );
-  return { ok: true, session_id: id };
+
+  // Transaction ensures old sessions are closed and the new one is created
+  // atomically. Without this, closing orphans but failing the INSERT leaves
+  // the agent with no session record.
+  return withTransaction(transact, () => {
+    sql.exec(
+      `UPDATE sessions SET ended_at = datetime('now') WHERE agent_id = ? AND ended_at IS NULL`,
+      resolvedAgentId,
+    );
+    sql.exec(
+      `UPDATE sessions SET ended_at = datetime('now')
+       WHERE handle = ? AND ended_at IS NULL
+       AND agent_id NOT IN (
+         SELECT agent_id FROM members
+         WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
+       )`,
+      handle,
+      HEARTBEAT_STALE_WINDOW_S,
+    );
+
+    sql.exec(
+      `INSERT INTO sessions (id, agent_id, handle, framework, host_tool, agent_surface, transport, agent_model, started_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      id,
+      resolvedAgentId,
+      handle,
+      framework || 'unknown',
+      runtime.hostTool,
+      runtime.agentSurface,
+      runtime.transport,
+      runtime.model,
+    );
+    return { ok: true, session_id: id };
+  });
 }
 
-export function enrichSessionModel(sql, resolvedAgentId, model, recordMetric) {
-  sql.exec(
-    `UPDATE sessions SET agent_model = ? WHERE agent_id = ? AND ended_at IS NULL AND agent_model IS NULL`,
-    model,
-    resolvedAgentId,
-  );
-  sql.exec(
-    `UPDATE members SET agent_model = ? WHERE agent_id = ? AND agent_model IS NULL`,
-    model,
-    resolvedAgentId,
-  );
+export function enrichSessionModel(sql, resolvedAgentId, model, recordMetric, transact) {
+  withTransaction(transact, () => {
+    sql.exec(
+      `UPDATE sessions SET agent_model = ? WHERE agent_id = ? AND ended_at IS NULL AND agent_model IS NULL`,
+      model,
+      resolvedAgentId,
+    );
+    sql.exec(
+      `UPDATE members SET agent_model = ? WHERE agent_id = ? AND agent_model IS NULL`,
+      model,
+      resolvedAgentId,
+    );
+  });
   recordMetric(`model:${model}`);
   return { ok: true };
 }

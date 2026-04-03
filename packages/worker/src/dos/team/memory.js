@@ -3,13 +3,23 @@
 
 import { normalizeRuntimeMetadata } from './runtime.js';
 import { MEMORY_MAX_COUNT } from '../../lib/constants.js';
+import { withTransaction } from '../../lib/validation.js';
 
 // Escape LIKE wildcards so user-supplied text is matched literally
 function escapeLike(s) {
   return s.replace(/[%_]/g, (ch) => `\\${ch}`);
 }
 
-export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTool, recordMetric) {
+export function saveMemory(
+  sql,
+  resolvedAgentId,
+  text,
+  tags,
+  handle,
+  runtimeOrTool,
+  recordMetric,
+  transact,
+) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
 
   // Inherit model from active session (session is the source of truth for model)
@@ -22,33 +32,39 @@ export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTo
   const model = sessionRow[0]?.agent_model || runtime.model || null;
 
   const id = crypto.randomUUID();
-  sql.exec(
-    `INSERT INTO memories (id, text, tags, agent_id, handle, host_tool, agent_surface, agent_model, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    id,
-    text,
-    JSON.stringify(tags || []),
-    resolvedAgentId,
-    handle || 'unknown',
-    runtime.hostTool,
-    runtime.agentSurface,
-    model,
-  );
 
-  // Prune oldest beyond storage cap
-  sql.exec(
-    `DELETE FROM memories WHERE id NOT IN (
-      SELECT id FROM memories ORDER BY updated_at DESC, created_at DESC LIMIT ?
-    )`,
-    MEMORY_MAX_COUNT,
-  );
+  // Transaction ensures insert + pruning + session update are atomic.
+  // Without this, a crash after insert but before pruning could exceed
+  // the memory cap, or a failed session update would lose the counter.
+  withTransaction(transact, () => {
+    sql.exec(
+      `INSERT INTO memories (id, text, tags, agent_id, handle, host_tool, agent_surface, agent_model, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      id,
+      text,
+      JSON.stringify(tags || []),
+      resolvedAgentId,
+      handle || 'unknown',
+      runtime.hostTool,
+      runtime.agentSurface,
+      model,
+    );
 
-  // Record in active session
-  sql.exec(
-    `UPDATE sessions SET memories_saved = memories_saved + 1
-     WHERE agent_id = ? AND ended_at IS NULL`,
-    resolvedAgentId,
-  );
+    // Prune oldest beyond storage cap
+    sql.exec(
+      `DELETE FROM memories WHERE id NOT IN (
+        SELECT id FROM memories ORDER BY updated_at DESC, created_at DESC LIMIT ?
+      )`,
+      MEMORY_MAX_COUNT,
+    );
+
+    // Record in active session
+    sql.exec(
+      `UPDATE sessions SET memories_saved = memories_saved + 1
+       WHERE agent_id = ? AND ended_at IS NULL`,
+      resolvedAgentId,
+    );
+  });
   recordMetric('memories_saved');
 
   return { ok: true, id };

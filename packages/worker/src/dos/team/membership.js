@@ -3,7 +3,7 @@
 
 /** @import { DOResult } from '../../types.js' */
 import { normalizeRuntimeMetadata } from './runtime.js';
-import { sqlChanges } from '../../lib/validation.js';
+import { sqlChanges, withTransaction } from '../../lib/validation.js';
 
 /**
  * Join a team. Atomic ownership-safe upsert: re-joining refreshes heartbeat,
@@ -61,49 +61,48 @@ export function join(sql, agentId, ownerId, handle, runtimeOrTool, recordMetric)
  * @param {string | null} ownerId
  * @returns {DOResult}
  */
-export function leave(sql, agentId, ownerId) {
-  // Atomic ownership check: delete the member only if the owner matches (or no
-  // ownerId was provided). Avoids a separate SELECT+check TOCTOU pattern.
-  if (ownerId) {
-    sql.exec(
-      'DELETE FROM locks WHERE agent_id = ? AND agent_id IN (SELECT agent_id FROM members WHERE agent_id = ? AND owner_id = ?)',
-      agentId,
-      agentId,
-      ownerId,
-    );
-    sql.exec(
-      'DELETE FROM activities WHERE agent_id = ? AND agent_id IN (SELECT agent_id FROM members WHERE agent_id = ? AND owner_id = ?)',
-      agentId,
-      agentId,
-      ownerId,
-    );
-    sql.exec('DELETE FROM members WHERE agent_id = ? AND owner_id = ?', agentId, ownerId);
-    if (sqlChanges(sql) === 0) {
-      // Could be wrong owner or non-existent agent. Check which.
-      const exists = sql.exec('SELECT 1 FROM members WHERE agent_id = ?', agentId).toArray();
-      if (exists.length > 0) {
-        return { error: 'Not your agent', code: 'NOT_OWNER' };
+export function leave(sql, agentId, ownerId, transact) {
+  // Wrap in transaction so locks/activities/members are removed atomically.
+  // Without this, a partial failure could orphan locks or activities.
+  return withTransaction(transact, () => {
+    if (ownerId) {
+      sql.exec(
+        'DELETE FROM locks WHERE agent_id = ? AND agent_id IN (SELECT agent_id FROM members WHERE agent_id = ? AND owner_id = ?)',
+        agentId,
+        agentId,
+        ownerId,
+      );
+      sql.exec(
+        'DELETE FROM activities WHERE agent_id = ? AND agent_id IN (SELECT agent_id FROM members WHERE agent_id = ? AND owner_id = ?)',
+        agentId,
+        agentId,
+        ownerId,
+      );
+      sql.exec('DELETE FROM members WHERE agent_id = ? AND owner_id = ?', agentId, ownerId);
+      if (sqlChanges(sql) === 0) {
+        const exists = sql.exec('SELECT 1 FROM members WHERE agent_id = ?', agentId).toArray();
+        if (exists.length > 0) {
+          return { error: 'Not your agent', code: 'NOT_OWNER' };
+        }
+      }
+    } else {
+      sql.exec('DELETE FROM locks WHERE agent_id = ?', agentId);
+      sql.exec('DELETE FROM activities WHERE agent_id = ?', agentId);
+      sql.exec('DELETE FROM members WHERE agent_id = ?', agentId);
+      if (sqlChanges(sql) === 0) {
+        sql.exec(
+          'DELETE FROM locks WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)',
+          agentId,
+        );
+        sql.exec(
+          'DELETE FROM activities WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)',
+          agentId,
+        );
+        sql.exec('DELETE FROM members WHERE owner_id = ?', agentId);
       }
     }
-  } else {
-    sql.exec('DELETE FROM locks WHERE agent_id = ?', agentId);
-    sql.exec('DELETE FROM activities WHERE agent_id = ?', agentId);
-    sql.exec('DELETE FROM members WHERE agent_id = ?', agentId);
-    // Fallback: if specific agent_id not found, remove all agents for this owner
-    // (handles legacy callers sending user UUID as agentId)
-    if (sqlChanges(sql) === 0) {
-      sql.exec(
-        'DELETE FROM locks WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)',
-        agentId,
-      );
-      sql.exec(
-        'DELETE FROM activities WHERE agent_id IN (SELECT agent_id FROM members WHERE owner_id = ?)',
-        agentId,
-      );
-      sql.exec('DELETE FROM members WHERE owner_id = ?', agentId);
-    }
-  }
-  return { ok: true };
+    return { ok: true };
+  });
 }
 
 /**

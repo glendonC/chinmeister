@@ -160,6 +160,23 @@ export function sqlChanges(sql) {
 }
 
 /**
+ * Run a function inside a Durable Object storage transaction.
+ * Uses `ctx.storage.transactionSync()` for atomicity — if `fn` throws,
+ * all SQL operations inside are rolled back automatically.
+ *
+ * Callers pass the DO's `transact` function (bound to ctx.storage.transactionSync)
+ * so submodules don't need a direct reference to ctx.
+ *
+ * @template T
+ * @param {(fn: () => T) => T} transact - ctx.storage.transactionSync bound to the DO
+ * @param {() => T} fn - Synchronous function containing sql.exec calls
+ * @returns {T} The return value of `fn`
+ */
+export function withTransaction(transact, fn) {
+  return transact(fn);
+}
+
+/**
  * Build an SQL IN clause from an array of items.
  * Returns a placeholder string and params array suitable for embedding in a query.
  * When the array is empty, returns a literal that matches nothing (`'__none__'`),

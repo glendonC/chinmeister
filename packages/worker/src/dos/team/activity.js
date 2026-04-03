@@ -3,27 +3,29 @@
 
 import { normalizePath } from '../../lib/text-utils.js';
 import { HEARTBEAT_ACTIVE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
-import { buildInClause } from '../../lib/validation.js';
+import { buildInClause, withTransaction } from '../../lib/validation.js';
 
-export function updateActivity(sql, resolvedAgentId, files, summary) {
+export function updateActivity(sql, resolvedAgentId, files, summary, transact) {
   const normalized = files.map(normalizePath);
 
-  sql.exec(
-    `INSERT INTO activities (agent_id, files, summary, updated_at)
-     VALUES (?, ?, ?, datetime('now'))
-     ON CONFLICT(agent_id) DO UPDATE SET
-       files = excluded.files,
-       summary = excluded.summary,
-       updated_at = datetime('now')`,
-    resolvedAgentId,
-    JSON.stringify(normalized),
-    summary,
-  );
-  sql.exec(
-    "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-    resolvedAgentId,
-  );
-  return { ok: true };
+  return withTransaction(transact, () => {
+    sql.exec(
+      `INSERT INTO activities (agent_id, files, summary, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(agent_id) DO UPDATE SET
+         files = excluded.files,
+         summary = excluded.summary,
+         updated_at = datetime('now')`,
+      resolvedAgentId,
+      JSON.stringify(normalized),
+      summary,
+    );
+    sql.exec(
+      "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
+      resolvedAgentId,
+    );
+    return { ok: true };
+  });
 }
 
 export function checkConflicts(
@@ -120,7 +122,7 @@ export function checkConflicts(
   return { ok: true, conflicts, locked: lockedFiles };
 }
 
-export function reportFile(sql, resolvedAgentId, filePath) {
+export function reportFile(sql, resolvedAgentId, filePath, transact) {
   const normalized = normalizePath(filePath);
 
   const existing = sql
@@ -145,19 +147,21 @@ export function reportFile(sql, resolvedAgentId, filePath) {
     if (files.length > ACTIVITY_MAX_FILES) files = files.slice(-ACTIVITY_MAX_FILES);
   }
 
-  sql.exec(
-    `INSERT INTO activities (agent_id, files, summary, updated_at)
-     VALUES (?, ?, ?, datetime('now'))
-     ON CONFLICT(agent_id) DO UPDATE SET
-       files = excluded.files,
-       updated_at = datetime('now')`,
-    resolvedAgentId,
-    JSON.stringify(files),
-    `Editing ${normalized}`,
-  );
-  sql.exec(
-    "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-    resolvedAgentId,
-  );
-  return { ok: true };
+  return withTransaction(transact, () => {
+    sql.exec(
+      `INSERT INTO activities (agent_id, files, summary, updated_at)
+       VALUES (?, ?, ?, datetime('now'))
+       ON CONFLICT(agent_id) DO UPDATE SET
+         files = excluded.files,
+         updated_at = datetime('now')`,
+      resolvedAgentId,
+      JSON.stringify(files),
+      `Editing ${normalized}`,
+    );
+    sql.exec(
+      "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
+      resolvedAgentId,
+    );
+    return { ok: true };
+  });
 }
