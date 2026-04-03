@@ -70,6 +70,42 @@ export async function authenticate(request, env) {
   return null;
 }
 
+export async function handleRefreshToken(request, env) {
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return json({ error: 'refresh_token is required' }, 400);
+  }
+
+  const refreshToken = body?.refresh_token;
+  if (!refreshToken || typeof refreshToken !== 'string') {
+    return json({ error: 'refresh_token is required' }, 400);
+  }
+
+  if (!refreshToken.startsWith('rt_')) {
+    return json({ error: 'Invalid refresh token format' }, 400);
+  }
+
+  const userId = await env.AUTH_KV.get(`refresh:${refreshToken}`);
+  if (!userId) {
+    return json({ error: 'Invalid or expired refresh token' }, 401);
+  }
+
+  // Invalidate the old refresh token (rotation)
+  await env.AUTH_KV.delete(`refresh:${refreshToken}`);
+
+  // Issue new access token
+  const newToken = crypto.randomUUID();
+  await env.AUTH_KV.put(`token:${newToken}`, userId);
+
+  // Issue new refresh token
+  const newRefreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
+  await env.AUTH_KV.put(`refresh:${newRefreshToken}`, userId, { expirationTtl: 30 * 24 * 60 * 60 });
+
+  return json({ ok: true, token: newToken, refresh_token: newRefreshToken });
+}
+
 export async function handleGetWsTicket(user, env) {
   const db = getDB(env);
   return withRateLimit(
@@ -98,6 +134,11 @@ export async function handleUpdateHandle(request, user, env) {
   const { handle } = body;
   if (!handle || typeof handle !== 'string') {
     return json({ error: 'Handle is required' }, 400);
+  }
+
+  const modResult = await checkContent(handle, env);
+  if (modResult.blocked) {
+    return json({ error: 'Content blocked' }, 400);
   }
 
   const result = await getDB(env).updateHandle(user.id, handle);
@@ -313,6 +354,13 @@ export async function handleCreateTeam(request, user, env) {
       typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
   } catch {
     /* body may be empty or non-JSON — name stays null */
+  }
+
+  if (name) {
+    const modResult = await checkContent(name, env);
+    if (modResult.blocked) {
+      return json({ error: 'Content blocked' }, 400);
+    }
   }
 
   const db = getDB(env);

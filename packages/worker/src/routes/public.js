@@ -2,7 +2,11 @@ import { TOOL_CATALOG, CATEGORY_NAMES } from '../catalog.js';
 import { getDB, getLobby } from '../lib/env.js';
 import { json } from '../lib/http.js';
 import { auditLog } from '../lib/audit.js';
-import { RATE_LIMIT_ACCOUNTS_PER_IP } from '../lib/constants.js';
+import {
+  RATE_LIMIT_ACCOUNTS_PER_IP,
+  RATE_LIMIT_STATS_PER_IP,
+  RATE_LIMIT_CATALOG_PER_IP,
+} from '../lib/constants.js';
 
 const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -43,27 +47,54 @@ export async function handleInit(request, env) {
   await db.consumeRateLimit(ip);
   await env.AUTH_KV.put(`token:${result.token}`, result.id);
 
+  // Issue a refresh token alongside the access token
+  const refreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
+  await env.AUTH_KV.put(`refresh:${refreshToken}`, result.id, { expirationTtl: 30 * 24 * 60 * 60 });
+
   auditLog('auth.account_created', {
     actor: result.handle,
     outcome: 'success',
     meta: { method: 'init' },
   });
-  return json({ ok: true, handle: result.handle, color: result.color, token: result.token }, 201);
+  return json(
+    {
+      ok: true,
+      handle: result.handle,
+      color: result.color,
+      token: result.token,
+      refresh_token: refreshToken,
+    },
+    201,
+  );
 }
 
-export async function handleStats(env) {
-  const [lobbyStats, dbStats] = await Promise.all([
-    getLobby(env).getStats(),
-    getDB(env).getStats(),
-  ]);
+export async function handleStats(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const db = getDB(env);
+
+  const limit = await db.checkRateLimit(`pub:stats:${ip}`, RATE_LIMIT_STATS_PER_IP);
+  if (!limit.allowed) {
+    return json({ error: 'Rate limit exceeded. Try again later.' }, 429);
+  }
+  await db.consumeRateLimit(`pub:stats:${ip}`);
+
+  const [lobbyStats, dbStats] = await Promise.all([getLobby(env).getStats(), db.getStats()]);
   // Strip ok flags from sub-results, return a single merged response
   const { ok: _ok1, ...lobby } = lobbyStats;
-  const { ok: _ok2, ...db } = dbStats;
-  return json({ ok: true, ...db, ...lobby });
+  const { ok: _ok2, ...dbData } = dbStats;
+  return json({ ok: true, ...dbData, ...lobby });
 }
 
-export async function handleToolCatalog(env) {
+export async function handleToolCatalog(request, env) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   const db = getDB(env);
+
+  const limit = await db.checkRateLimit(`pub:catalog:${ip}`, RATE_LIMIT_CATALOG_PER_IP);
+  if (!limit.allowed) {
+    return json({ error: 'Rate limit exceeded. Try again later.' }, 429);
+  }
+  await db.consumeRateLimit(`pub:catalog:${ip}`);
+
   const result = await db.listEvaluations({});
 
   let tools;

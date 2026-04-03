@@ -1,5 +1,6 @@
 // Team membership routes — join, leave, heartbeat, context.
 
+import { checkContent } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
 import { json } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
@@ -15,6 +16,13 @@ export async function handleTeamJoin(request, user, env, teamId) {
       typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
   } catch {
     /* body may be empty or non-JSON — name stays null */
+  }
+
+  if (name) {
+    const modResult = await checkContent(name, env);
+    if (modResult.blocked) {
+      return json({ error: 'Content blocked' }, 400);
+    }
   }
 
   const db = getDB(env);
