@@ -153,11 +153,6 @@ export default function ToolsView() {
     <div className={styles.page}>
       <ViewHeader eyebrow="Across projects" title="Tools" />
 
-      <p className={styles.intro}>
-        Discover your full Chinwag tool stack across projects: configured hosts, observed agent
-        surfaces, and the wider directory of evaluated tools.
-      </p>
-
       <div className={styles.hero}>
         <StatCard
           label="Configured"

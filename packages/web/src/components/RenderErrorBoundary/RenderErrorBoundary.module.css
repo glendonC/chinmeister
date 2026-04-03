@@ -1,45 +1,35 @@
-/* ── RenderErrorBoundary — inline error fallback ── */
+/* ── RenderErrorBoundary — view-level crash fallback ── */
 
 .wrapper {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 280px;
-  padding: 24px;
-}
-
-.banner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  align-items: flex-start;
   gap: var(--space-sm);
-  width: 100%;
-  max-width: 480px;
-  padding: 10px 20px;
-  border-radius: var(--radius-sm);
-  background: linear-gradient(
-    135deg,
-    var(--danger-bg) 0%,
-    rgba(255, 107, 87, 0.03) 50%,
-    var(--warn-bg) 100%
-  );
+  padding: 64px 0;
+  animation: fadeSlideIn 0.4s var(--motion) both;
 }
 
-.eyebrow {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-  color: var(--danger);
-}
-
-.text {
-  font-size: var(--text-sm);
+.title {
+  font-family: var(--display);
+  font-size: clamp(1.35rem, 2vw, 1.8rem);
+  font-weight: 300;
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
   color: var(--ink);
+  opacity: 0.7;
+}
+
+.hint {
+  font-family: var(--sans);
+  font-size: var(--text-md);
+  font-weight: 400;
+  color: var(--ink);
+  opacity: 0.45;
+  line-height: 1.5;
 }
 
 .action {
+  margin-top: 4px;
   border: none;
   background: transparent;
   padding: 0;

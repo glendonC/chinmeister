@@ -15,7 +15,7 @@ interface BuildJoinShareConfig {
   outputKey: string;
 }
 
-interface JoinShareEntry {
+export interface JoinShareEntry {
   [key: string]: string | number | string[];
   label: string;
   value: number;
@@ -40,14 +40,14 @@ interface MemberInput {
   [key: string]: unknown;
 }
 
-interface ToolMixEntry {
+export interface ToolMixEntry {
   tool: string;
   label: string;
   value: number;
   share: number;
 }
 
-interface CategoryEntry {
+export interface CategoryEntry {
   id: string;
   label: string;
   value: number;
@@ -67,7 +67,7 @@ interface ToolEntry {
   [key: string]: unknown;
 }
 
-interface ProjectState {
+export interface ProjectState {
   id: string;
   label: string;
   value: number;
@@ -83,7 +83,7 @@ interface UsageInput {
   [key: string]: unknown;
 }
 
-interface UsageEntry {
+export interface UsageEntry {
   id: string;
   label: string;
   value: number;
@@ -258,18 +258,20 @@ export function buildLiveToolMix(members: MemberInput[] = []): ToolMixEntry[] {
 
 export function buildUsageEntries(usage: UsageInput = {}): UsageEntry[] {
   return [
-    usage.joins > 0 ? { id: 'joins', label: 'Recorded joins', value: usage.joins } : null,
-    usage.conflict_checks > 0
-      ? { id: 'conflict_checks', label: 'Conflict checks', value: usage.conflict_checks }
+    (usage.joins ?? 0) > 0
+      ? { id: 'joins', label: 'Recorded joins', value: usage.joins ?? 0 }
       : null,
-    usage.conflicts_found > 0
-      ? { id: 'conflicts_found', label: 'Conflicts found', value: usage.conflicts_found }
+    (usage.conflict_checks ?? 0) > 0
+      ? { id: 'conflict_checks', label: 'Conflict checks', value: usage.conflict_checks ?? 0 }
       : null,
-    usage.memories_saved > 0
-      ? { id: 'memories_saved', label: 'Memories saved', value: usage.memories_saved }
+    (usage.conflicts_found ?? 0) > 0
+      ? { id: 'conflicts_found', label: 'Conflicts found', value: usage.conflicts_found ?? 0 }
       : null,
-    usage.messages_sent > 0
-      ? { id: 'messages_sent', label: 'Messages sent', value: usage.messages_sent }
+    (usage.memories_saved ?? 0) > 0
+      ? { id: 'memories_saved', label: 'Memories saved', value: usage.memories_saved ?? 0 }
+      : null,
+    (usage.messages_sent ?? 0) > 0
+      ? { id: 'messages_sent', label: 'Messages sent', value: usage.messages_sent ?? 0 }
       : null,
   ]
     .filter((entry): entry is UsageEntry => entry !== null)

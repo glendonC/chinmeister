@@ -32,14 +32,12 @@ export default class RenderErrorBoundary extends Component {
       const reset = () => this.setState({ hasError: false });
       if (this.props.fallback) return this.props.fallback({ reset });
       return (
-        <div className={styles.wrapper}>
-          <div className={styles.banner} role="status">
-            <span className={styles.eyebrow}>Error</span>
-            <span className={styles.text}>Something went wrong.</span>
-            <button onClick={reset} className={styles.action}>
-              Try again
-            </button>
-          </div>
+        <div className={styles.wrapper} role="status">
+          <p className={styles.title}>Something went wrong.</p>
+          <p className={styles.hint}>This section failed to render.</p>
+          <button onClick={reset} className={styles.action}>
+            Try again
+          </button>
         </div>
       );
     }

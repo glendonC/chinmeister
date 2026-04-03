@@ -2,7 +2,7 @@ import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
 import { authActions } from './auth.js';
 
-interface ToolDirectoryEvaluation {
+export interface ToolDirectoryEvaluation {
   id: string;
   name: string;
   category?: string;
@@ -13,7 +13,7 @@ interface ToolDirectoryEvaluation {
   metadata?: Record<string, unknown>;
 }
 
-interface CatalogItem {
+export interface CatalogItem {
   id: string;
   name: string;
   category?: string;
