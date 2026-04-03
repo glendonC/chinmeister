@@ -136,8 +136,14 @@ export function createJsonApiClient({
       }
 
       return data as T;
-    } catch (error) {
-      const err = error as ApiError;
+    } catch (error: unknown) {
+      const err: ApiError =
+        error instanceof Error
+          ? (error as ApiError)
+          : (Object.assign(new Error(String(error)), {
+              status: undefined,
+              code: undefined,
+            }) as ApiError);
       if (err.name === 'AbortError') {
         if (attempt < maxTimeoutRetryAttempts) {
           await sleep(timeoutRetryDelayMs);

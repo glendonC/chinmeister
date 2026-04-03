@@ -14,6 +14,7 @@ import { registerMessagingTool } from './messaging.js';
 import { registerIntegrationTools } from './integrations.js';
 import type { ToolDeps, AddToolFn } from './types.js';
 import type { EnvironmentProfile } from '../profile.js';
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
 /**
  * Middleware that guards a tool handler with team membership check,
@@ -50,8 +51,9 @@ function wrapWithActivity(addTool: AddToolFn, { state }: Pick<ToolDeps, 'state'>
   };
 }
 
-export function registerTools(server: any, deps: ToolDeps): void {
-  const addTool: AddToolFn = server.registerTool?.bind(server) || server.tool?.bind(server);
+export function registerTools(server: McpServer, deps: ToolDeps): void {
+  const addTool: AddToolFn = (server.registerTool?.bind(server) ||
+    server.tool?.bind(server)) as AddToolFn;
   if (!addTool) {
     throw new TypeError('MCP server does not support tool registration');
   }
@@ -68,7 +70,7 @@ export function registerTools(server: any, deps: ToolDeps): void {
   registerIntegrationTools(wrappedAddTool, deps);
 }
 
-export function registerResources(server: any, profile: EnvironmentProfile): void {
+export function registerResources(server: McpServer, profile: EnvironmentProfile): void {
   server.resource(
     'profile',
     'chinwag://profile',
