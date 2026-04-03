@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { useAuthStore, authActions } from './lib/stores/auth.js';
 import { useTeamStore, teamActions } from './lib/stores/teams.js';
 import {
@@ -64,15 +65,31 @@ export default function App() {
   const [dismissedError, setDismissedError] = useState(null);
   const [activeNav, setActiveNav] = useState(null);
 
-  const token = useAuthStore((s) => s.token);
-  const user = useAuthStore((s) => s.user);
-  const dashboardData = usePollingStore((s) => s.dashboardData);
-  const dashboardStatus = usePollingStore((s) => s.dashboardStatus);
-  const contextData = usePollingStore((s) => s.contextData);
-  const contextStatus = usePollingStore((s) => s.contextStatus);
-  const contextTeamId = usePollingStore((s) => s.contextTeamId);
-  const pollError = usePollingStore((s) => s.pollError);
-  const lastUpdate = usePollingStore((s) => s.lastUpdate);
+  const { token, user } = useAuthStore(
+    useShallow((s) => ({
+      token: s.token,
+      user: s.user,
+    })),
+  );
+  const {
+    dashboardData,
+    dashboardStatus,
+    contextData,
+    contextStatus,
+    contextTeamId,
+    pollError,
+    lastUpdate,
+  } = usePollingStore(
+    useShallow((s) => ({
+      dashboardData: s.dashboardData,
+      dashboardStatus: s.dashboardStatus,
+      contextData: s.contextData,
+      contextStatus: s.contextStatus,
+      contextTeamId: s.contextTeamId,
+      pollError: s.pollError,
+      lastUpdate: s.lastUpdate,
+    })),
+  );
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
 
   const isAuthenticated = !!token && !!user;

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 import { usePollingStore, forceRefresh } from '../../lib/stores/polling.js';
 import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
@@ -27,15 +28,23 @@ function summarizeNames(items) {
 }
 
 export default function OverviewView() {
-  const dashboardData = usePollingStore((s) => s.dashboardData);
-  const dashboardStatus = usePollingStore((s) => s.dashboardStatus);
-  const pollError = usePollingStore((s) => s.pollError);
-  const pollErrorData = usePollingStore((s) => s.pollErrorData);
-  const lastUpdate = usePollingStore((s) => s.lastUpdate);
+  const { dashboardData, dashboardStatus, pollError, pollErrorData, lastUpdate } = usePollingStore(
+    useShallow((s) => ({
+      dashboardData: s.dashboardData,
+      dashboardStatus: s.dashboardStatus,
+      pollError: s.pollError,
+      pollErrorData: s.pollErrorData,
+      lastUpdate: s.lastUpdate,
+    })),
+  );
   const user = useAuthStore((s) => s.user);
-  const teams = useTeamStore((s) => s.teams);
-  const teamsError = useTeamStore((s) => s.teamsError);
-  const selectTeam = useTeamStore((s) => s.selectTeam);
+  const { teams, teamsError, selectTeam } = useTeamStore(
+    useShallow((s) => ({
+      teams: s.teams,
+      teamsError: s.teamsError,
+      selectTeam: s.selectTeam,
+    })),
+  );
   const summaries = dashboardData?.teams ?? [];
   const failedTeams = dashboardData?.failed_teams ?? pollErrorData?.failed_teams ?? [];
   const [activeViz, setActiveViz] = useState('projects');

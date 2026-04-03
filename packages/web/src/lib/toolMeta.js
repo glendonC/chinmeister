@@ -82,6 +82,41 @@ const ALIASES = {
   windsurfeditor: 'windsurf',
 };
 
+// Explicit ordered partial matches for tools whose real-world IDs include
+// the canonical key with extra suffixes (e.g. "jetbrainsaiassistant" → "jetbrains").
+// Checked in order — put longer substrings first to avoid ambiguous matches.
+// Only add entries here when an alias can't cover the variant.
+const PARTIAL_MATCHES = [
+  { substring: 'jetbrains', key: 'jetbrains' },
+  { substring: 'amazonq', key: 'amazonq' },
+  { substring: 'windsurf', key: 'windsurf' },
+  { substring: 'continue', key: 'continue' },
+  { substring: 'copilot', key: 'copilot' },
+  { substring: 'cursor', key: 'cursor' },
+  { substring: 'claude', key: 'claude' },
+  { substring: 'codex', key: 'codex' },
+  { substring: 'cline', key: 'cline' },
+  { substring: 'aider', key: 'aider' },
+  { substring: 'devin', key: 'devin' },
+  { substring: 'goose', key: 'goose' },
+];
+
+// Dev-time validation: verify ALIASES and PARTIAL_MATCHES reference valid TOOL_META keys
+if (import.meta.env?.DEV) {
+  for (const [alias, target] of Object.entries(ALIASES)) {
+    if (!TOOL_META[target]) {
+      console.warn(`[toolMeta] ALIAS "${alias}" → "${target}" not found in TOOL_META`);
+    }
+  }
+  for (const { substring, key } of PARTIAL_MATCHES) {
+    if (!TOOL_META[key]) {
+      console.warn(
+        `[toolMeta] PARTIAL_MATCHES key "${key}" (substring: "${substring}") not found in TOOL_META`,
+      );
+    }
+  }
+}
+
 export function getToolMeta(toolId) {
   const normalized = normalizeToolId(toolId);
 
@@ -96,10 +131,15 @@ export function getToolMeta(toolId) {
     return { id: normalized, ...TOOL_META[normalized] };
   }
 
-  // Partial match (e.g., "jetbrainsaiassistant" → "jetbrains")
-  for (const [key, meta] of Object.entries(TOOL_META)) {
-    if (normalized.startsWith(key) || normalized.includes(key)) {
-      return { id: key, ...meta };
+  // Explicit partial matches — deterministic order, no iteration-order surprises
+  for (const { substring, key } of PARTIAL_MATCHES) {
+    if (normalized.includes(substring)) {
+      if (import.meta.env?.DEV) {
+        console.warn(
+          `[toolMeta] Partial match: "${toolId}" → "${key}" (consider adding an explicit ALIAS)`,
+        );
+      }
+      return { id: key, ...TOOL_META[key] };
     }
   }
 
@@ -115,3 +155,6 @@ export function getToolMeta(toolId) {
     color: '#6366f1',
   };
 }
+
+// Exported for testing only
+export { TOOL_META, ALIASES, PARTIAL_MATCHES };

@@ -11,6 +11,9 @@ let consecutiveFailures = 0;
 /** Incremented on every WebSocket state update. If a poll started before
  *  a WS update and finishes after, the poll result is stale — skip it. */
 let dataVersion = 0;
+/** AbortController for the current poll cycle. Aborted on new polls,
+ *  team switches, stop, and logout so stale fetches never land. */
+let pollAbortController = null;
 
 const pollingStore = createStore((set, get) => ({
   dashboardData: null,
@@ -41,11 +44,20 @@ setPollingBridge({
   poll,
 });
 
+/** Abort the current poll controller (if any) and return a fresh signal. */
+function resetAbortController() {
+  if (pollAbortController) pollAbortController.abort();
+  pollAbortController = new AbortController();
+  return pollAbortController.signal;
+}
+
 /** Single poll cycle. */
 async function poll() {
   const snapshotTeamId = teamActions.getState().activeTeamId;
   const { token } = authActions.getState();
   if (!token) return;
+
+  const signal = resetAbortController();
 
   try {
     if (snapshotTeamId === null) {
@@ -55,7 +67,7 @@ async function poll() {
         contextStatus: 'idle',
         dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
       }));
-      const data = await api('GET', '/me/dashboard', null, token);
+      const data = await api('GET', '/me/dashboard', null, token, { signal });
       if (data.failed_teams?.length > 0) {
         await teamActions.loadTeams();
       }
@@ -80,7 +92,7 @@ async function poll() {
         };
       });
       await teamActions.ensureJoined(snapshotTeamId);
-      const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token);
+      const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token, { signal });
       if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
       // Skip if WebSocket delivered newer data while this fetch was in flight
       if (dataVersion !== versionBeforeFetch) return;
@@ -100,6 +112,9 @@ async function poll() {
       restartPolling();
     }
   } catch (err) {
+    // Aborted requests are not failures — silently discard them.
+    if (err?.name === 'AbortError') return;
+
     if (err.status === 401) {
       authActions.logout();
       stopPolling();
@@ -148,6 +163,10 @@ function restartPolling() {
 
 /** Stop only the HTTP poll timer (leaves WebSocket untouched). */
 function stopPollTimer() {
+  if (pollAbortController) {
+    pollAbortController.abort();
+    pollAbortController = null;
+  }
   if (pollTimer) {
     clearInterval(pollTimer);
     pollTimer = null;
@@ -191,6 +210,10 @@ export function stopPolling() {
 /** Reset all polling state (call on logout to prevent stale data on re-login). */
 export function resetPollingState() {
   stopPolling();
+  if (pollAbortController) {
+    pollAbortController.abort();
+    pollAbortController = null;
+  }
   consecutiveFailures = 0;
   pollingStore.setState({
     dashboardData: null,

@@ -68,7 +68,9 @@ describe('polling store', () => {
     forceRefresh();
     await flushPromises();
 
-    expect(apiMock).toHaveBeenCalledWith('GET', '/me/dashboard', null, 'tok_123');
+    expect(apiMock).toHaveBeenCalledWith('GET', '/me/dashboard', null, 'tok_123', {
+      signal: expect.any(AbortSignal),
+    });
     expect(pollingActions.getState()).toMatchObject({
       dashboardData: { teams: [{ team_id: 't_one' }] },
       dashboardStatus: 'ready',
@@ -91,7 +93,9 @@ describe('polling store', () => {
     await flushPromises();
 
     expect(ensureJoinedMock).toHaveBeenCalledWith('t_active');
-    expect(apiMock).toHaveBeenCalledWith('GET', '/teams/t_active/context', null, 'tok_123');
+    expect(apiMock).toHaveBeenCalledWith('GET', '/teams/t_active/context', null, 'tok_123', {
+      signal: expect.any(AbortSignal),
+    });
     expect(pollingActions.getState()).toMatchObject({
       contextData: { members: [] },
       contextStatus: 'ready',
@@ -218,5 +222,64 @@ describe('polling store', () => {
 
     expect(apiMock).toHaveBeenCalledTimes(1);
     stopPolling();
+  });
+
+  it('does not count AbortError as a failure or set pollError', async () => {
+    const abortErr = new DOMException('The operation was aborted.', 'AbortError');
+    const apiMock = vi.fn().mockRejectedValue(abortErr);
+    const { forceRefresh, pollingActions } = await loadPollingModule({ apiMock });
+
+    forceRefresh();
+    await flushPromises();
+
+    expect(pollingActions.getState()).toMatchObject({
+      pollError: null,
+      dashboardStatus: 'loading',
+    });
+  });
+
+  it('passes an AbortSignal to api calls', async () => {
+    const apiMock = vi.fn().mockResolvedValue({ teams: [] });
+    const { forceRefresh } = await loadPollingModule({ apiMock });
+
+    forceRefresh();
+    await flushPromises();
+
+    const callArgs = apiMock.mock.calls[0];
+    expect(callArgs[4]).toEqual({ signal: expect.any(AbortSignal) });
+  });
+
+  it('aborts the previous request when a new poll starts', async () => {
+    const apiMock = vi
+      .fn()
+      .mockImplementationOnce(
+        (_m, _p, _b, _t, opts) =>
+          new Promise((resolve, reject) => {
+            // Simulate real fetch: reject with AbortError when signal fires
+            opts?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('The operation was aborted.', 'AbortError')),
+            );
+          }),
+      )
+      .mockResolvedValueOnce({ teams: [{ team_id: 't_two' }] });
+    const { forceRefresh, pollingActions } = await loadPollingModule({ apiMock });
+
+    // Start first poll — will hang until aborted
+    forceRefresh();
+
+    // Capture the signal from the first call
+    const firstSignal = apiMock.mock.calls[0][4].signal;
+    expect(firstSignal.aborted).toBe(false);
+
+    // Start second poll — should abort the first
+    forceRefresh();
+    expect(firstSignal.aborted).toBe(true);
+    await flushPromises();
+
+    // Second poll's data should land, first was silently discarded
+    expect(pollingActions.getState()).toMatchObject({
+      dashboardData: { teams: [{ team_id: 't_two' }] },
+      dashboardStatus: 'ready',
+    });
   });
 });
