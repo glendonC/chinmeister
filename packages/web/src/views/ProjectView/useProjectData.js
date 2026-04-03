@@ -51,7 +51,7 @@ export function useProjectData() {
     [members],
   );
   const sortedAgents = useMemo(
-    () => [...activeAgents, ...offlineAgents],
+    () => activeAgents.concat(offlineAgents),
     [activeAgents, offlineAgents],
   );
   const liveToolMix = useMemo(() => buildLiveToolMix(members), [members]);

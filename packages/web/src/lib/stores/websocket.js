@@ -1,11 +1,9 @@
 import { api, getApiUrl } from '../api.js';
+import { RECONCILE_INITIAL_MS, RECONCILE_MAX_MS } from '../constants.js';
 import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { setWsConnected } from './refresh.js';
 import { applyDelta } from '../../../../shared/dashboard-ws.js';
-
-const RECONCILE_INITIAL_MS = 30_000;
-const RECONCILE_MAX_MS = 300_000; // 5 minutes
 
 let activeWs = null;
 let reconcileTimer = null;

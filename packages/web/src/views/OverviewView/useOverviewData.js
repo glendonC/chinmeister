@@ -20,9 +20,11 @@ export function useOverviewData(summaries) {
   const toolUsage = useMemo(() => {
     const totals = new Map();
     for (const team of summaries)
-      for (const { host_tool, joins } of team.hosts_configured || [])
+      for (const { host_tool, joins } of team.hosts_configured || []) {
+        if (!host_tool) continue;
         if (getToolMeta(host_tool).icon)
           totals.set(host_tool, (totals.get(host_tool) || 0) + joins);
+      }
     const entries = [...totals.entries()]
       .map(([tool, joins]) => ({ tool, joins }))
       .sort((a, b) => b.joins - a.joins);
@@ -61,7 +63,7 @@ export function useOverviewData(summaries) {
     const rows = [];
     for (const team of summaries)
       for (const t of (team.hosts_configured || []).filter(
-        (t) => getToolMeta(t.host_tool).icon && t.joins > 0,
+        (t) => t.host_tool && getToolMeta(t.host_tool).icon && t.joins > 0,
       ))
         rows.push({
           tool: t.host_tool,

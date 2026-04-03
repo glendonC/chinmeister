@@ -1,12 +1,10 @@
 import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
+import { POLL_MS, SLOW_POLL_MS } from '../constants.js';
 import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
 import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
-
-const POLL_MS = 5000;
-const SLOW_POLL_MS = 30000;
 
 let pollTimer = null;
 let consecutiveFailures = 0;
