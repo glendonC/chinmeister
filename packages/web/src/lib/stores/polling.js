@@ -1,32 +1,15 @@
-// Polling store — manages cross-project overview and single-team context.
-// WebSocket connection lifecycle is delegated to teamWebSocket.js.
-
 import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
 import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
-import { applyDelta, normalizeDashboardDeltaEvent } from '@chinwag/shared/dashboard-ws.js';
-import {
-  createEmptyDashboardSummary,
-  createEmptyTeamContext,
-  dashboardSummarySchema,
-  teamContextSchema,
-  validateResponse,
-} from '../apiSchemas.js';
-import { connectTeamWebSocket, closeWebSocket } from './teamWebSocket.js';
+import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
 
 const POLL_MS = 5000;
 const SLOW_POLL_MS = 30000;
 
-// Internal state encapsulated in a single resettable object.
-// Keeps timer/WS refs out of the Zustand store (they're not UI state)
-// while making them testable and preventing stale closures.
-const _internal = {
-  pollTimer: null,
-  consecutiveFailures: 0,
-  abortController: null,
-};
+let pollTimer = null;
+let consecutiveFailures = 0;
 
 const pollingStore = createStore((set, get) => ({
   dashboardData: null,
@@ -39,78 +22,74 @@ const pollingStore = createStore((set, get) => ({
   lastUpdate: null,
 }));
 
-/** Poll the cross-project overview (no active team selected). */
-async function pollOverview(signal, token) {
-  pollingStore.setState((state) => ({
-    contextData: null,
-    contextTeamId: null,
-    contextStatus: 'idle',
-    dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
-  }));
-  const raw = await api('GET', '/me/dashboard', null, token);
-  if (signal?.aborted) return;
-  const data = validateResponse(dashboardSummarySchema, raw, 'dashboard', {
-    fallback: createEmptyDashboardSummary(),
-  });
-  if (data.failed_teams?.length > 0) {
-    await teamActions.loadTeams();
-  }
-  if (teamActions.getState().activeTeamId !== null) return;
-  pollingStore.setState({
-    dashboardData: data,
-    dashboardStatus: 'ready',
-    contextData: null,
-    contextStatus: 'idle',
-    contextTeamId: null,
-  });
-}
+// Wire up the bridge so the WebSocket module can update polling state
+// without a circular import.
+setPollingBridge({
+  setState: pollingStore.setState,
+  getState: pollingStore.getState,
+  stopPollTimer() {
+    if (pollTimer) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+    }
+  },
+  restartPolling,
+  poll,
+});
 
-/** Poll a single project's team context. */
-async function pollProject(signal, token, teamId) {
-  pollingStore.setState((state) => {
-    const sameTeam = state.contextTeamId === teamId;
-    return {
-      dashboardData: null,
-      dashboardStatus: 'idle',
-      contextData: sameTeam ? state.contextData : null,
-      contextStatus: sameTeam && state.contextData ? state.contextStatus : 'loading',
-      contextTeamId: teamId,
-    };
-  });
-  await teamActions.ensureJoined(teamId);
-  if (signal?.aborted) return;
-  const raw = await api('GET', `/teams/${teamId}/context`, null, token);
-  if (signal?.aborted || teamActions.getState().activeTeamId !== teamId) return;
-  const data = validateResponse(teamContextSchema, raw, 'context', {
-    fallback: createEmptyTeamContext(),
-  });
-  pollingStore.setState({
-    contextData: data,
-    contextStatus: 'ready',
-    contextTeamId: teamId,
-    dashboardData: null,
-    dashboardStatus: 'idle',
-  });
-}
-
-/** Single poll cycle. Routes to overview or project poller based on active team. */
+/** Single poll cycle. */
 async function poll() {
-  const signal = _internal.abortController?.signal;
   const snapshotTeamId = teamActions.getState().activeTeamId;
   const { token } = authActions.getState();
   if (!token) return;
 
   try {
     if (snapshotTeamId === null) {
-      await pollOverview(signal, token);
+      pollingStore.setState((state) => ({
+        contextData: null,
+        contextTeamId: null,
+        contextStatus: 'idle',
+        dashboardStatus: state.dashboardData ? state.dashboardStatus : 'loading',
+      }));
+      const data = await api('GET', '/me/dashboard', null, token);
+      if (data.failed_teams?.length > 0) {
+        await teamActions.loadTeams();
+      }
+      if (teamActions.getState().activeTeamId !== null) return;
+      pollingStore.setState({
+        dashboardData: data,
+        dashboardStatus: 'ready',
+        contextData: null,
+        contextStatus: 'idle',
+        contextTeamId: null,
+      });
     } else {
-      await pollProject(signal, token, snapshotTeamId);
+      pollingStore.setState((state) => {
+        const sameTeam = state.contextTeamId === snapshotTeamId;
+        return {
+          dashboardData: null,
+          dashboardStatus: 'idle',
+          contextData: sameTeam ? state.contextData : null,
+          contextStatus: sameTeam && state.contextData ? state.contextStatus : 'loading',
+          contextTeamId: snapshotTeamId,
+        };
+      });
+      await teamActions.ensureJoined(snapshotTeamId);
+      const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token);
+      if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
+      pollingStore.setState({
+        contextData: data,
+        contextStatus: 'ready',
+        contextTeamId: snapshotTeamId,
+        dashboardData: null,
+        dashboardStatus: 'idle',
+      });
     }
 
     pollingStore.setState({ pollError: null, pollErrorData: null, lastUpdate: new Date() });
 
-    if (_internal.consecutiveFailures > 0) {
-      _internal.consecutiveFailures = 0;
+    if (consecutiveFailures > 0) {
+      consecutiveFailures = 0;
       restartPolling();
     }
   } catch (err) {
@@ -123,7 +102,7 @@ async function poll() {
     if (snapshotTeamId === null && err?.data?.failed_teams?.length > 0) {
       await teamActions.loadTeams();
     }
-    _internal.consecutiveFailures++;
+    consecutiveFailures++;
     const pollError = formatError(err);
     const pollErrorData = err?.data || null;
     if (snapshotTeamId === null) {
@@ -148,16 +127,24 @@ async function poll() {
         };
       });
     }
-    if (_internal.consecutiveFailures >= 3) restartPolling();
+    if (consecutiveFailures >= 3) restartPolling();
   }
 }
 
 setRefreshHandler(poll);
 
 function restartPolling() {
-  stopPolling();
-  const delay = _internal.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-  _internal.pollTimer = setInterval(poll, delay);
+  stopPollTimer();
+  const delay = consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+  pollTimer = setInterval(poll, delay);
+}
+
+/** Stop only the HTTP poll timer (leaves WebSocket untouched). */
+function stopPollTimer() {
+  if (pollTimer) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+  }
 }
 
 function formatError(err) {
@@ -173,75 +160,31 @@ function formatError(err) {
 /** Start polling. Attempts WebSocket for project view, falls back to polling. */
 export function startPolling() {
   stopPolling();
-  _internal.abortController = new AbortController();
   poll(); // immediate first poll
 
   const { activeTeamId } = teamActions.getState();
-  const delay = _internal.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-  _internal.pollTimer = setInterval(poll, delay);
-
   if (activeTeamId) {
     // Project view — try WebSocket, polling runs as fallback until WS connects
-    connectTeamWebSocket(activeTeamId, {
-      onConnected() {
-        // WebSocket connected — stop interval polling
-        if (_internal.pollTimer) {
-          clearInterval(_internal.pollTimer);
-          _internal.pollTimer = null;
-        }
-      },
-      onContextSnapshot(data) {
-        pollingStore.setState({
-          contextData: validateResponse(teamContextSchema, data, 'ws-context', {
-            fallback: createEmptyTeamContext(),
-          }),
-          contextStatus: 'ready',
-          contextTeamId: activeTeamId,
-          pollError: null,
-          pollErrorData: null,
-          lastUpdate: new Date(),
-        });
-      },
-      onDeltaEvent(event) {
-        const normalized = normalizeDashboardDeltaEvent(event);
-        if (!normalized) {
-          console.warn('[chinwag] Ignoring malformed WS delta event');
-          return;
-        }
-        pollingStore.setState((state) => {
-          if (state.contextTeamId !== activeTeamId || !state.contextData) return state;
-          return {
-            contextData: applyDelta(state.contextData, normalized),
-            lastUpdate: new Date(),
-          };
-        });
-      },
-      onClose: restartPolling,
-      onMalformed(msg) {
-        console.warn('[chinwag] Malformed WS event:', msg);
-      },
-      onReconcile: poll,
-    });
+    const delay = consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+    pollTimer = setInterval(poll, delay);
+    connectTeamWebSocket(activeTeamId);
+  } else {
+    // Overview — polling only (aggregates across all teams, no single-team WS)
+    const delay = consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+    pollTimer = setInterval(poll, delay);
   }
 }
 
 /** Stop polling and close WebSocket. */
 export function stopPolling() {
-  if (_internal.abortController) {
-    _internal.abortController.abort();
-    _internal.abortController = null;
-  }
-  if (_internal.pollTimer) {
-    clearInterval(_internal.pollTimer);
-    _internal.pollTimer = null;
-  }
+  stopPollTimer();
   closeWebSocket();
 }
 
 /** Reset all polling state (call on logout to prevent stale data on re-login). */
 export function resetPollingState() {
   stopPolling();
-  _internal.consecutiveFailures = 0;
+  consecutiveFailures = 0;
   pollingStore.setState({
     dashboardData: null,
     dashboardStatus: 'idle',
@@ -254,11 +197,8 @@ export function resetPollingState() {
   });
 }
 
-// Pause polling when tab is hidden, resume when visible.
-// Guard prevents duplicate listeners on HMR re-evaluation.
-let _visibilityListenerAttached = false;
-if (typeof document !== 'undefined' && !_visibilityListenerAttached) {
-  _visibilityListenerAttached = true;
+// Pause polling when tab is hidden, resume when visible
+if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {
       stopPolling();

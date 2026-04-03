@@ -34,6 +34,7 @@ async function loadPollingModule({
     authActions: {
       getState: () => ({ token }),
       logout: logoutMock,
+      subscribe: vi.fn(),
     },
   }));
   vi.doMock('./teams.js', () => ({
@@ -42,6 +43,11 @@ async function loadPollingModule({
       ensureJoined: ensureJoinedMock,
       loadTeams: loadTeamsMock,
     },
+  }));
+  vi.doMock('./websocket.js', () => ({
+    closeWebSocket: vi.fn(),
+    connectTeamWebSocket: vi.fn(),
+    setPollingBridge: vi.fn(),
   }));
 
   const mod = await import('./polling.js');
@@ -99,14 +105,7 @@ describe('polling store', () => {
     const apiMock = vi
       .fn()
       .mockResolvedValueOnce({ teams: [{ team_id: 't_one' }] })
-      .mockResolvedValueOnce({
-        members: [{ agent_id: 'agent-1', handle: 'alice', status: 'active', host_tool: 'cursor' }],
-        memories: [],
-        locks: [],
-        messages: [],
-        sessions: [],
-        conflicts: [],
-      });
+      .mockResolvedValueOnce({ members: [{ handle: 'alice' }] });
     const ensureJoinedMock = vi.fn().mockResolvedValue({ ok: true });
     const { forceRefresh, pollingActions } = await loadPollingModule({
       teamState,
@@ -116,16 +115,14 @@ describe('polling store', () => {
 
     forceRefresh();
     await flushPromises();
-    expect(pollingActions.getState().dashboardData).toMatchObject({
-      teams: [{ team_id: 't_one' }],
-    });
+    expect(pollingActions.getState().dashboardData).toEqual({ teams: [{ team_id: 't_one' }] });
 
     teamState.activeTeamId = 't_active';
     forceRefresh();
     await flushPromises();
 
     expect(pollingActions.getState().dashboardData).toBeNull();
-    expect(pollingActions.getState().contextData).toMatchObject({ members: [{ handle: 'alice' }] });
+    expect(pollingActions.getState().contextData).toEqual({ members: [{ handle: 'alice' }] });
   });
 
   it('keeps the last overview snapshot when refresh fails', async () => {
