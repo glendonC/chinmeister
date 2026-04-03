@@ -231,9 +231,11 @@ describe('heartbeat logic', () => {
     expect(team.heartbeat).toHaveBeenCalledWith('t_abc');
   });
 
-  it('rejoins team when heartbeat returns "Not a member"', async () => {
+  it('rejoins team when heartbeat returns 403 (not a member)', async () => {
+    const err403 = new Error('Not a member');
+    err403.status = 403;
     const team = {
-      heartbeat: vi.fn().mockRejectedValue(new Error('Not a member')),
+      heartbeat: vi.fn().mockRejectedValue(err403),
       joinTeam: vi.fn().mockResolvedValue({ ok: true }),
     };
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -241,7 +243,7 @@ describe('heartbeat logic', () => {
     try {
       await team.heartbeat('t_abc');
     } catch (err) {
-      if (err.message?.includes('Not a member')) {
+      if (err.status === 403) {
         try {
           await team.joinTeam('t_abc');
         } catch (rejoinErr) {
@@ -255,8 +257,10 @@ describe('heartbeat logic', () => {
   });
 
   it('handles rejoin failure gracefully', async () => {
+    const err403 = new Error('Not a member');
+    err403.status = 403;
     const team = {
-      heartbeat: vi.fn().mockRejectedValue(new Error('Not a member')),
+      heartbeat: vi.fn().mockRejectedValue(err403),
       joinTeam: vi.fn().mockRejectedValue(new Error('Team deleted')),
     };
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -264,7 +268,7 @@ describe('heartbeat logic', () => {
     try {
       await team.heartbeat('t_abc');
     } catch (err) {
-      if (err.message?.includes('Not a member')) {
+      if (err.status === 403) {
         try {
           await team.joinTeam('t_abc');
         } catch (rejoinErr) {

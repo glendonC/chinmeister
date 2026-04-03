@@ -38,8 +38,11 @@ export function registerTeamTool(
           try {
             await team.heartbeat(state.teamId!);
           } catch (err: unknown) {
-            const message = err instanceof Error ? err.message : String(err);
-            if (message.includes('Not a member')) {
+            const status =
+              err instanceof Error && 'status' in err
+                ? (err as { status: number }).status
+                : undefined;
+            if (status === 403) {
               try {
                 await team.joinTeam(state.teamId!, basename(process.cwd()));
                 console.error('[chinwag] Rejoined team after eviction');
@@ -48,6 +51,7 @@ export function registerTeamTool(
                 console.error('[chinwag] Rejoin failed:', joinMessage);
               }
             } else {
+              const message = err instanceof Error ? err.message : String(err);
               console.error('[chinwag] Heartbeat failed:', message);
             }
           }

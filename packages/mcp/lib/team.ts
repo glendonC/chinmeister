@@ -43,15 +43,23 @@ export interface OkResult {
   error?: string;
 }
 
-/** All team handler methods available to tools. */
-export interface TeamHandlers {
+/** Team membership: join, leave, heartbeat. */
+export interface TeamMemberHandlers {
   joinTeam(teamId: string, name?: string | null): Promise<OkResult>;
   leaveTeam(teamId: string): Promise<OkResult>;
+  heartbeat(teamId: string): Promise<OkResult>;
+}
+
+/** Activity reporting: status updates, file tracking, conflict checks, context. */
+export interface TeamActivityHandlers {
   updateActivity(teamId: string, files: string[], summary: string): Promise<OkResult>;
   checkConflicts(teamId: string, files: string[]): Promise<ConflictCheckResult>;
   getTeamContext(teamId: string): Promise<TeamContext>;
-  heartbeat(teamId: string): Promise<OkResult>;
   reportFile(teamId: string, file: string): Promise<OkResult>;
+}
+
+/** Shared memory: save, search, update, delete. */
+export interface TeamMemoryHandlers {
   saveMemory(teamId: string, text: string, tags?: string[]): Promise<OkResult>;
   searchMemories(
     teamId: string,
@@ -61,6 +69,10 @@ export interface TeamHandlers {
   ): Promise<MemorySearchResult>;
   updateMemory(teamId: string, id: string, text?: string, tags?: string[]): Promise<OkResult>;
   deleteMemory(teamId: string, id: string): Promise<OkResult>;
+}
+
+/** Coordination: file locks, messaging, sessions. */
+export interface TeamCoordinationHandlers {
   claimFiles(teamId: string, files: string[]): Promise<ClaimResult>;
   releaseFiles(teamId: string, files?: string[]): Promise<OkResult>;
   sendMessage(teamId: string, text: string, target?: string): Promise<OkResult>;
@@ -69,6 +81,12 @@ export interface TeamHandlers {
   recordEdit(teamId: string, file: string): Promise<OkResult>;
   reportModel(teamId: string, model: string): Promise<OkResult>;
 }
+
+/** All team handler methods available to tools. */
+export type TeamHandlers = TeamMemberHandlers &
+  TeamActivityHandlers &
+  TeamMemoryHandlers &
+  TeamCoordinationHandlers;
 
 /**
  * Find .chinwag file and return the team ID, or null.

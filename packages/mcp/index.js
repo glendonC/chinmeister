@@ -145,6 +145,6 @@ This coordination prevents merge conflicts across tools and builds shared projec
 }
 
 main().catch((err) => {
-  console.error('[chinwag] Fatal error:', err);
+  console.error('[chinwag] Fatal error:', err?.stack || err);
   process.exit(1);
 });
