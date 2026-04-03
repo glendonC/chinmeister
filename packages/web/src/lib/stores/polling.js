@@ -197,7 +197,8 @@ export function resetPollingState() {
   });
 }
 
-// Pause polling when tab is hidden, resume when visible
+// Module-level listener — intentionally never removed. This store is a singleton
+// that lives for the entire app lifetime. Attaching once is correct.
 if (typeof document !== 'undefined') {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) {

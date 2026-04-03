@@ -182,8 +182,8 @@ export async function connectTeamWebSocket(teamId) {
   }
 }
 
-// Close WebSocket when auth changes (logout or token swap) to prevent
-// connection leaks and stale-token data from arriving.
+// Module-level subscription — intentionally never unsubscribed. Ensures the
+// WebSocket is closed whenever the auth token changes (logout, refresh, etc.).
 authActions.subscribe((state, prev) => {
   if (state.token !== prev?.token) {
     closeWebSocket();
