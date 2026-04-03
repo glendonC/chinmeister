@@ -272,6 +272,7 @@
  * @property {boolean} blocked
  * @property {string} [reason]
  * @property {string[]} [categories]
+ * @property {boolean} [degraded] — true when AI moderation was unavailable (blocklist still ran)
  */
 
 // ── Worker environment bindings (from wrangler.toml) ──

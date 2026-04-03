@@ -29,14 +29,14 @@ export function registerContextTool(
       if (!state.teamId) return noTeam();
 
       // Deferred model enrichment -- fire-and-forget on first report.
-      // Set flag optimistically to prevent duplicate reports from concurrent calls.
-      if (model && !state.modelReported && state.teamId) {
-        state.modelReported = true;
+      // Tracks which model was reported (not just a boolean) so a different
+      // model triggers a new report. Set on success, cleared on failure.
+      if (model && model !== state.modelReported && state.teamId) {
         (async () => {
           try {
             await team.reportModel(state.teamId!, model);
+            state.modelReported = model;
           } catch (err: unknown) {
-            state.modelReported = false;
             const message = err instanceof Error ? err.message : 'unknown';
             console.error('[chinwag] Model report failed:', message);
           }

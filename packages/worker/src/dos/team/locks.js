@@ -17,11 +17,10 @@ export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
     // The WHERE clause makes ownership enforcement part of the SQL constraint,
     // so there's no TOCTOU window between checking and writing.
     sql.exec(
-      `INSERT INTO locks (file_path, agent_id, owner_handle, tool, host_tool, agent_surface, claimed_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+      `INSERT INTO locks (file_path, agent_id, handle, host_tool, agent_surface, claimed_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(file_path) DO UPDATE SET
-         owner_handle = excluded.owner_handle,
-         tool = excluded.tool,
+         handle = excluded.handle,
          host_tool = excluded.host_tool,
          agent_surface = excluded.agent_surface,
          claimed_at = datetime('now')
@@ -29,7 +28,6 @@ export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
       file,
       resolvedAgentId,
       handle || 'unknown',
-      runtime.tool,
       runtime.hostTool,
       runtime.agentSurface,
     );
@@ -41,15 +39,15 @@ export function claimFiles(sql, resolvedAgentId, files, handle, runtimeOrTool) {
       // Lock held by another agent — fetch their details for the blocked response.
       const lock = sql
         .exec(
-          'SELECT owner_handle, tool, host_tool, agent_surface, claimed_at FROM locks WHERE file_path = ?',
+          'SELECT handle, host_tool, agent_surface, claimed_at FROM locks WHERE file_path = ?',
           file,
         )
         .toArray()[0];
       blocked.push({
         file,
-        held_by: lock.owner_handle,
-        tool: lock.tool || lock.host_tool || 'unknown',
-        host_tool: lock.host_tool || lock.tool || 'unknown',
+        held_by: lock.handle,
+        tool: lock.host_tool || 'unknown',
+        host_tool: lock.host_tool || 'unknown',
         agent_surface: lock.agent_surface || null,
         claimed_at: lock.claimed_at,
       });
@@ -81,7 +79,7 @@ export function getLockedFiles(sql, connectedAgentIds = new Set()) {
 
   const locks = sql
     .exec(
-      `SELECT l.file_path, l.agent_id, l.owner_handle, l.tool, l.host_tool, l.agent_surface, l.claimed_at,
+      `SELECT l.file_path, l.agent_id, l.handle, l.host_tool, l.agent_surface, l.claimed_at,
             ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
      FROM locks l
      JOIN members m ON m.agent_id = l.agent_id

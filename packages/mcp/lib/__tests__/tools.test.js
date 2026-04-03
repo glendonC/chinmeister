@@ -591,7 +591,7 @@ describe('context tool (unit)', () => {
     vi.clearAllMocks();
     collector = createToolCollector();
     team = createMockTeam();
-    state = { teamId: 't_ctx', reportedModel: null };
+    state = { teamId: 't_ctx', modelReported: null };
     refreshContext.mockResolvedValue(null);
     registerContextTool(collector.addTool, { team, state });
   });
@@ -623,7 +623,7 @@ describe('context tool (unit)', () => {
     // First call with model — should report
     await collector.callTool('chinwag_get_team_context', { model: 'claude-opus-4-6' });
     expect(team.reportModel).toHaveBeenCalledWith('t_ctx', 'claude-opus-4-6');
-    expect(state.reportedModel).toBe('claude-opus-4-6');
+    expect(state.modelReported).toBe('claude-opus-4-6');
 
     team.reportModel.mockClear();
 
@@ -632,7 +632,7 @@ describe('context tool (unit)', () => {
     expect(team.reportModel).not.toHaveBeenCalled();
   });
 
-  it('keeps reportedModel null if reportModel fails', async () => {
+  it('keeps modelReported null if reportModel fails', async () => {
     refreshContext.mockResolvedValue({ members: [] });
     team.reportModel.mockRejectedValue(new Error('network error'));
 
@@ -641,7 +641,7 @@ describe('context tool (unit)', () => {
     // reportModel is fire-and-forget, but on rejection state is not set
     // Wait for the promise to settle
     await new Promise((r) => setTimeout(r, 10));
-    expect(state.reportedModel).toBeNull();
+    expect(state.modelReported).toBeNull();
   });
 
   it('handles offline/cached context (null)', async () => {

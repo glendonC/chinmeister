@@ -116,7 +116,7 @@ describe('checkContent — AI moderation layer', () => {
     const env = {}; // no AI binding
 
     const result = await checkContent('some text that is actually fine', env);
-    expect(result).toEqual({ blocked: false });
+    expect(result).toEqual({ blocked: false, degraded: true });
   });
 
   it('degrades gracefully when AI throws an error', async () => {
@@ -127,7 +127,7 @@ describe('checkContent — AI moderation layer', () => {
 
     const result = await checkContent('some text', env);
     // Should not block — AI failure means graceful degradation
-    expect(result).toEqual({ blocked: false });
+    expect(result).toEqual({ blocked: false, degraded: true });
   });
 
   it('handles AI returning empty response', async () => {

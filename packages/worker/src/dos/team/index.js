@@ -513,7 +513,7 @@ export class TeamDO extends DurableObject {
     // Per-agent messages (always fresh — has target_agent filter, can't be cached team-wide)
     const messages = this.sql
       .exec(
-        `SELECT from_handle, from_tool, from_host_tool, from_agent_surface, text, created_at
+        `SELECT handle AS from_handle, host_tool AS from_tool, host_tool AS from_host_tool, agent_surface AS from_agent_surface, text, created_at
        FROM messages
        WHERE created_at > datetime('now', '-1 hour')
          AND (target_agent IS NULL OR target_agent = ?)

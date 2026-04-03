@@ -40,7 +40,7 @@ describe('model report race condition', () => {
       reportModel: vi.fn(),
       getTeamContext: vi.fn().mockResolvedValue({ members: [] }),
     };
-    state = { teamId: 't_race', reportedModel: null };
+    state = { teamId: 't_race', modelReported: null };
     refreshContext.mockResolvedValue({ members: [] });
     registerContextTool(collector.addTool, { team, state });
   });
@@ -72,7 +72,7 @@ describe('model report race condition', () => {
     await new Promise((r) => setTimeout(r, 10));
 
     // State should track which model was reported
-    expect(state.reportedModel).toBe('claude-opus-4-6');
+    expect(state.modelReported).toBe('claude-opus-4-6');
 
     // A fourth call with the SAME model should NOT call reportModel again
     team.reportModel.mockClear();
@@ -85,13 +85,13 @@ describe('model report race condition', () => {
 
     await collector.callTool('chinwag_get_team_context', { model: 'gpt-4o' });
     await new Promise((r) => setTimeout(r, 10));
-    expect(state.reportedModel).toBe('gpt-4o');
+    expect(state.modelReported).toBe('gpt-4o');
 
     // A call with a DIFFERENT model should trigger a new report
     await collector.callTool('chinwag_get_team_context', { model: 'claude-opus-4-6' });
     await new Promise((r) => setTimeout(r, 10));
     expect(team.reportModel).toHaveBeenCalledTimes(2);
-    expect(state.reportedModel).toBe('claude-opus-4-6');
+    expect(state.modelReported).toBe('claude-opus-4-6');
   });
 
   it('flag is only set after successful completion, not before', async () => {
@@ -106,13 +106,13 @@ describe('model report race condition', () => {
     await collector.callTool('chinwag_get_team_context', { model: 'gpt-4o' });
 
     // State should NOT be set yet (report is still in-flight)
-    expect(state.reportedModel).toBeNull();
+    expect(state.modelReported).toBeNull();
 
     // Complete the report
     resolveReport();
     await new Promise((r) => setTimeout(r, 10));
 
-    expect(state.reportedModel).toBe('gpt-4o');
+    expect(state.modelReported).toBe('gpt-4o');
   });
 
   it('allows retry after failure (promise is cleared)', async () => {
@@ -123,7 +123,7 @@ describe('model report race condition', () => {
     await new Promise((r) => setTimeout(r, 10));
 
     // State should remain null after failure
-    expect(state.reportedModel).toBeNull();
+    expect(state.modelReported).toBeNull();
 
     // Second call should retry
     team.reportModel.mockResolvedValueOnce({ ok: true });
@@ -131,13 +131,13 @@ describe('model report race condition', () => {
     await new Promise((r) => setTimeout(r, 10));
 
     expect(team.reportModel).toHaveBeenCalledTimes(2);
-    expect(state.reportedModel).toBe('gpt-4o');
+    expect(state.modelReported).toBe('gpt-4o');
   });
 
   it('does not report when model is not provided', async () => {
     await collector.callTool('chinwag_get_team_context', {});
     expect(team.reportModel).not.toHaveBeenCalled();
-    expect(state.reportedModel).toBeNull();
+    expect(state.modelReported).toBeNull();
   });
 
   it('does not report when not in a team', async () => {

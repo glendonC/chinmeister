@@ -16,7 +16,7 @@ export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrT
   // (handles agent_id changes, e.g. --tool flag added/removed)
   sql.exec(
     `UPDATE sessions SET ended_at = datetime('now')
-     WHERE owner_handle = ? AND ended_at IS NULL
+     WHERE handle = ? AND ended_at IS NULL
      AND agent_id NOT IN (
        SELECT agent_id FROM members
        WHERE last_heartbeat > datetime('now', '-' || ? || ' seconds')
@@ -27,7 +27,7 @@ export function startSession(sql, resolvedAgentId, handle, framework, runtimeOrT
 
   const id = crypto.randomUUID();
   sql.exec(
-    `INSERT INTO sessions (id, agent_id, owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at)
+    `INSERT INTO sessions (id, agent_id, handle, framework, host_tool, agent_surface, transport, agent_model, started_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     id,
     resolvedAgentId,
@@ -103,7 +103,7 @@ export function recordEdit(sql, resolvedAgentId, filePath) {
 export function getSessionHistory(sql, days) {
   const sessions = sql
     .exec(
-      `SELECT owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
+      `SELECT handle AS owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
            ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
      FROM sessions

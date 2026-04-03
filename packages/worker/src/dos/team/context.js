@@ -65,7 +65,7 @@ export function getTelemetryBreakdown(sql) {
 export function queryTeamContext(sql, connectedIds) {
   const members = sql
     .exec(
-      `SELECT m.agent_id, m.owner_handle, m.tool, m.host_tool, m.agent_surface, m.transport, m.agent_model,
+      `SELECT m.agent_id, m.handle, m.host_tool, m.agent_surface, m.transport, m.agent_model,
             m.last_tool_use, a.files, a.summary, a.updated_at,
             s.framework, s.started_at as session_started,
             ROUND((julianday('now') - julianday(s.started_at)) * 24 * 60) as session_minutes,
@@ -82,7 +82,7 @@ export function queryTeamContext(sql, connectedIds) {
 
   const memories = sql
     .exec(
-      `SELECT id, text, tags, source_handle, source_tool, source_host_tool, source_agent_surface, source_model, created_at, updated_at
+      `SELECT id, text, tags, handle, handle AS source_handle, host_tool, host_tool AS source_tool, host_tool AS source_host_tool, agent_surface AS source_agent_surface, agent_model AS source_model, created_at, updated_at
      FROM memories
      ORDER BY updated_at DESC, created_at DESC
      LIMIT 20`,
@@ -101,7 +101,7 @@ export function queryTeamContext(sql, connectedIds) {
   const recentSessions = sql
     .exec(
       `
-    SELECT agent_id, owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
+    SELECT agent_id, handle AS owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
            ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
     FROM sessions
@@ -118,9 +118,9 @@ export function queryTeamContext(sql, connectedIds) {
     const status = wsConnected ? 'active' : m.heartbeat_active ? 'active' : 'offline';
     return {
       agent_id: m.agent_id,
-      handle: m.owner_handle,
-      tool: m.tool || m.host_tool || 'unknown',
-      host_tool: m.host_tool || m.tool || 'unknown',
+      handle: m.handle,
+      tool: m.host_tool || 'unknown',
+      host_tool: m.host_tool || 'unknown',
       agent_surface: m.agent_surface || null,
       transport: m.transport || null,
       agent_model: m.agent_model || null,
@@ -168,7 +168,7 @@ export function queryTeamContext(sql, connectedIds) {
   // Active file locks
   const locks = sql
     .exec(
-      `SELECT l.file_path, l.owner_handle, l.tool, l.host_tool, l.agent_surface,
+      `SELECT l.file_path, l.handle AS owner_handle, l.host_tool AS tool, l.host_tool, l.agent_surface,
             ROUND((julianday('now') - julianday(l.claimed_at)) * 1440) as minutes_held
      FROM locks l
      JOIN members m ON m.agent_id = l.agent_id

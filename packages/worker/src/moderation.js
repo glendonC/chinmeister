@@ -63,9 +63,12 @@ export function isBlocked(text) {
 // S4 (child safety), S5 (defamation), S6 (specialized advice), S7 (privacy),
 // S8 (IP), S9 (indiscriminate weapons), S10 (hate), S11 (suicide/self-harm),
 // S12 (sexual content), S13 (elections), S14 (code interpreter abuse).
-// Returns { flagged, categories } or null if AI binding unavailable.
+// Returns { flagged, categories, degraded? }.
 async function moderateWithAI(text, env) {
-  if (!env.AI) return null;
+  if (!env.AI) {
+    console.error('AI moderation degraded: env.AI binding unavailable');
+    return { flagged: false, degraded: true };
+  }
 
   try {
     const response = await env.AI.run('@cf/meta/llama-guard-3-8b', {
@@ -90,8 +93,8 @@ async function moderateWithAI(text, env) {
 
     return { flagged: true, categories };
   } catch (err) {
-    console.error('AI moderation error:', err);
-    return null; // AI unavailable — degrade gracefully, blocklist still active
+    console.error('AI moderation degraded:', err);
+    return { flagged: false, degraded: true };
   }
 }
 
@@ -109,8 +112,12 @@ export async function checkContent(text, env) {
 
   // Layer 2: AI moderation
   const ai = await moderateWithAI(text, env);
-  if (ai?.flagged) {
+  if (ai.flagged) {
     return { blocked: true, reason: 'ai_flagged', categories: ai.categories };
+  }
+
+  if (ai.degraded) {
+    return { blocked: false, degraded: true };
   }
 
   return { blocked: false };

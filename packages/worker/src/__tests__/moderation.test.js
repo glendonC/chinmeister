@@ -145,9 +145,10 @@ describe('checkContent', () => {
     expect(result.reason).toBe('blocked_term');
   });
 
-  it('returns not blocked for clean text with no AI binding', async () => {
+  it('returns not blocked but degraded for clean text with no AI binding', async () => {
     const result = await checkContent('hello world', {});
     expect(result.blocked).toBe(false);
+    expect(result.degraded).toBe(true);
   });
 
   it('returns not blocked when AI returns safe', async () => {
@@ -187,29 +188,37 @@ describe('checkContent', () => {
   it('degrades gracefully when AI binding throws', async () => {
     const mockEnv = {
       AI: {
-        run: async () => { throw new Error('AI service unavailable'); },
+        run: async () => {
+          throw new Error('AI service unavailable');
+        },
       },
     };
-    // Clean text + AI throws = should pass (not crash)
+    // Clean text + AI throws = should pass (not crash) but signal degradation
     const result = await checkContent('normal text here', mockEnv);
     expect(result.blocked).toBe(false);
+    expect(result.degraded).toBe(true);
   });
 
   it('degrades gracefully when AI binding is undefined', async () => {
     const result = await checkContent('normal text here', {});
     expect(result.blocked).toBe(false);
+    expect(result.degraded).toBe(true);
   });
 
   it('degrades gracefully when AI binding is null', async () => {
     const result = await checkContent('normal text here', { AI: null });
     expect(result.blocked).toBe(false);
+    expect(result.degraded).toBe(true);
   });
 
   it('blocklist takes priority over AI (short-circuits)', async () => {
     let aiCalled = false;
     const mockEnv = {
       AI: {
-        run: async () => { aiCalled = true; return { response: 'safe' }; },
+        run: async () => {
+          aiCalled = true;
+          return { response: 'safe' };
+        },
       },
     };
     const result = await checkContent('nigger', mockEnv);
@@ -246,4 +255,3 @@ describe('checkContent', () => {
     expect(result.blocked).toBe(true);
   });
 });
-

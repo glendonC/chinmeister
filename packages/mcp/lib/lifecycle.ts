@@ -97,7 +97,7 @@ export interface McpState {
   ws: WebSocket | null;
   sessionId: string | null;
   tty: string | null;
-  modelReported: boolean;
+  modelReported: string | null;
   lastActivity: number;
   heartbeatInterval?: ReturnType<typeof setInterval> | null;
   _shuttingDown?: boolean;

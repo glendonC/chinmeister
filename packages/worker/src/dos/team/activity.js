@@ -39,7 +39,7 @@ export function checkConflicts(
 
   const others = sql
     .exec(
-      `SELECT m.agent_id, m.owner_handle, m.tool, a.files, a.summary
+      `SELECT m.agent_id, m.handle AS owner_handle, m.host_tool AS tool, a.files, a.summary
      FROM members m
      LEFT JOIN activities a ON a.agent_id = m.agent_id
      WHERE m.agent_id != ?
@@ -80,7 +80,7 @@ export function checkConflicts(
     const placeholders = fileList.map(() => '?').join(',');
     const lockRows = sql
       .exec(
-        `SELECT l.file_path, l.owner_handle, l.tool, l.claimed_at FROM locks l
+        `SELECT l.file_path, l.handle AS owner_handle, l.host_tool AS tool, l.claimed_at FROM locks l
        JOIN members m ON m.agent_id = l.agent_id
        WHERE l.file_path IN (${placeholders}) AND l.agent_id != ?
          AND (m.last_heartbeat > datetime('now', '-' || ? || ' seconds')

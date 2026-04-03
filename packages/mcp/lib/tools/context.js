@@ -34,11 +34,11 @@ export function registerContextTool(addTool, { team, state }) {
       // Tracks which model was reported (not just a boolean) so a different
       // model triggers a new report. Concurrent calls share the in-flight
       // promise. Cleared on failure to allow retry.
-      if (model && model !== state.reportedModel && state.teamId && !modelReportPromise) {
+      if (model && model !== state.modelReported && state.teamId && !modelReportPromise) {
         modelReportPromise = team
           .reportModel(state.teamId, model)
           .then(() => {
-            state.reportedModel = model;
+            state.modelReported = model;
           })
           .catch((err) => {
             console.error('[chinwag] Model report failed:', err.message);
