@@ -4,17 +4,6 @@
 
 import { normalizeRuntimeMetadata } from './runtime.js';
 
-/**
- * Send a message from one agent to another (or broadcast to all).
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string} handle - Sender's display handle
- * @param {string | Record<string, any>} runtimeOrTool
- * @param {string} text - Message content
- * @param {string | null} targetAgent - Target agent ID, or null for broadcast
- * @param {(metric: string) => void} recordMetric
- * @returns {{ ok: boolean, id: string }}
- */
 export function sendMessage(
   sql,
   resolvedAgentId,
@@ -27,11 +16,12 @@ export function sendMessage(
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
   const id = crypto.randomUUID();
   sql.exec(
-    `INSERT INTO messages (id, agent_id, handle, host_tool, agent_surface, target_agent, text, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+    `INSERT INTO messages (id, from_agent, from_handle, from_tool, from_host_tool, from_agent_surface, target_agent, text, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
     id,
     resolvedAgentId,
     handle || 'unknown',
+    runtime.tool,
     runtime.hostTool,
     runtime.agentSurface,
     targetAgent || null,
@@ -41,17 +31,10 @@ export function sendMessage(
   return { ok: true, id };
 }
 
-/**
- * Get messages for an agent (broadcast + targeted). Defaults to last hour.
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string | null} since - ISO datetime cutoff, or null for last hour
- * @returns {{ messages: import('../../types.js').AgentMessage[] }}
- */
 export function getMessages(sql, resolvedAgentId, since) {
   const messages = sql
     .exec(
-      `SELECT id, agent_id, handle, host_tool, agent_surface, target_agent, text, created_at
+      `SELECT id, from_handle, from_tool, from_host_tool, from_agent_surface, target_agent, text, created_at
      FROM messages
      WHERE created_at > COALESCE(?, datetime('now', '-1 hour'))
        AND (target_agent IS NULL OR target_agent = ?)
@@ -62,5 +45,5 @@ export function getMessages(sql, resolvedAgentId, since) {
     )
     .toArray();
 
-  return { messages };
+  return { ok: true, messages };
 }

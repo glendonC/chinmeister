@@ -1,19 +1,9 @@
 // Activity tracking — updateActivity, checkConflicts, reportFile.
 // Each function takes `sql` as the first parameter.
 
-/** @import { DOResult, ConflictResult } from '../../types.js' */
-import { normalizePath, safeParseJSON } from '../../lib/text-utils.js';
+import { normalizePath } from '../../lib/text-utils.js';
 import { HEARTBEAT_ACTIVE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
 
-/**
- * Report the files an agent is currently working on, plus a summary.
- * Normalizes file paths and bumps the agent's heartbeat.
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string[]} files - File paths the agent is editing
- * @param {string} summary - Human-readable activity summary
- * @returns {DOResult}
- */
 export function updateActivity(sql, resolvedAgentId, files, summary) {
   const normalized = files.map(normalizePath);
 
@@ -35,16 +25,6 @@ export function updateActivity(sql, resolvedAgentId, files, summary) {
   return { ok: true };
 }
 
-/**
- * Check if any active agents are editing the same files.
- * Returns conflicts (activity overlap) and locked files (advisory locks).
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string[]} files - File paths to check
- * @param {(metric: string) => void} recordMetric
- * @param {Set<string>} [connectedAgentIds] - Agent IDs with active WebSocket connections
- * @returns {ConflictResult}
- */
 export function checkConflicts(
   sql,
   resolvedAgentId,
@@ -59,7 +39,7 @@ export function checkConflicts(
 
   const others = sql
     .exec(
-      `SELECT m.agent_id, m.handle, m.host_tool, a.files, a.summary
+      `SELECT m.agent_id, m.owner_handle, m.tool, a.files, a.summary
      FROM members m
      LEFT JOIN activities a ON a.agent_id = m.agent_id
      WHERE m.agent_id != ?
@@ -85,8 +65,8 @@ export function checkConflicts(
     const overlap = theirFiles.filter((f) => myFiles.has(f));
     if (overlap.length > 0) {
       conflicts.push({
-        handle: row.handle,
-        host_tool: row.host_tool || 'unknown',
+        owner_handle: row.owner_handle,
+        tool: row.tool || 'unknown',
         files: overlap,
         summary: row.summary || '',
       });
@@ -100,7 +80,7 @@ export function checkConflicts(
     const placeholders = fileList.map(() => '?').join(',');
     const lockRows = sql
       .exec(
-        `SELECT l.file_path, l.handle, l.host_tool, l.claimed_at FROM locks l
+        `SELECT l.file_path, l.owner_handle, l.tool, l.claimed_at FROM locks l
        JOIN members m ON m.agent_id = l.agent_id
        WHERE l.file_path IN (${placeholders}) AND l.agent_id != ?
          AND (m.last_heartbeat > datetime('now', '-' || ? || ' seconds')
@@ -114,8 +94,8 @@ export function checkConflicts(
     for (const lock of lockRows) {
       lockedFiles.push({
         file: lock.file_path,
-        handle: lock.handle,
-        host_tool: lock.host_tool || 'unknown',
+        held_by: lock.owner_handle,
+        tool: lock.tool || 'unknown',
         claimed_at: lock.claimed_at,
       });
     }
@@ -132,17 +112,9 @@ export function checkConflicts(
     );
   }
 
-  return { conflicts, locked: lockedFiles };
+  return { ok: true, conflicts, locked: lockedFiles };
 }
 
-/**
- * Append a single file to an agent's activity list (used for real-time edit reporting).
- * Creates activity row if none exists. Caps at ACTIVITY_MAX_FILES.
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string} filePath
- * @returns {DOResult}
- */
 export function reportFile(sql, resolvedAgentId, filePath) {
   const normalized = normalizePath(filePath);
 
@@ -150,7 +122,14 @@ export function reportFile(sql, resolvedAgentId, filePath) {
     .exec('SELECT files FROM activities WHERE agent_id = ?', resolvedAgentId)
     .toArray();
 
-  let files = existing.length > 0 ? safeParseJSON(existing[0].files, [], 'activity.files') : [];
+  let files = [];
+  if (existing.length > 0 && existing[0].files) {
+    try {
+      files = JSON.parse(existing[0].files);
+    } catch {
+      /* malformed JSON in stored files — reset to empty */
+    }
+  }
 
   if (!files.includes(normalized)) {
     files.push(normalized);

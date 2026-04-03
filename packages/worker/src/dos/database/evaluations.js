@@ -2,17 +2,24 @@
 // Each evaluation records whether a tool is integrated, installable, or listed,
 // along with metadata, sources, and confidence level.
 
-import { sqlChanges } from '../../lib/validation.js';
-
 /**
  * Upsert a tool evaluation.
  * @param {object} sql - DO SQL handle
  * @param {object} evaluation - Evaluation record
  */
 export function saveEvaluation(sql, evaluation) {
-  const metadata = typeof evaluation.metadata === 'string' ? evaluation.metadata : JSON.stringify(evaluation.metadata ?? {});
-  const sources = typeof evaluation.sources === 'string' ? evaluation.sources : JSON.stringify(evaluation.sources ?? []);
-  const blockingIssues = typeof evaluation.blocking_issues === 'string' ? evaluation.blocking_issues : JSON.stringify(evaluation.blocking_issues ?? []);
+  const metadata =
+    typeof evaluation.metadata === 'string'
+      ? evaluation.metadata
+      : JSON.stringify(evaluation.metadata ?? {});
+  const sources =
+    typeof evaluation.sources === 'string'
+      ? evaluation.sources
+      : JSON.stringify(evaluation.sources ?? []);
+  const blockingIssues =
+    typeof evaluation.blocking_issues === 'string'
+      ? evaluation.blocking_issues
+      : JSON.stringify(evaluation.blocking_issues ?? []);
 
   sql.exec(
     `INSERT INTO tool_evaluations (id, name, tagline, category, mcp_support, has_cli, hooks_support, channel_support, process_detectable, open_source, verdict, integration_tier, blocking_issues, metadata, sources, in_registry, evaluated_at, confidence, evaluated_by)
@@ -54,7 +61,7 @@ export function saveEvaluation(sql, evaluation) {
     evaluation.in_registry ?? 0,
     evaluation.evaluated_at,
     evaluation.confidence ?? 'medium',
-    evaluation.evaluated_by ?? null
+    evaluation.evaluated_by ?? null,
   );
 
   return { ok: true };
@@ -62,8 +69,8 @@ export function saveEvaluation(sql, evaluation) {
 
 export function getEvaluation(sql, toolId) {
   const rows = sql.exec('SELECT * FROM tool_evaluations WHERE id = ?', toolId).toArray();
-  if (rows.length === 0) return { evaluation: null };
-  return { evaluation: parseEvaluation(rows[0]) };
+  if (rows.length === 0) return { ok: true, evaluation: null };
+  return { ok: true, evaluation: parseEvaluation(rows[0]) };
 }
 
 export function listEvaluations(sql, filters = {}) {
@@ -91,32 +98,41 @@ export function listEvaluations(sql, filters = {}) {
   const limit = Math.min(filters.limit || 100, 200);
   const offset = filters.offset || 0;
 
-  const rows = sql.exec(
-    `SELECT * FROM tool_evaluations ${where} ORDER BY name ASC LIMIT ? OFFSET ?`,
-    ...params, limit, offset
-  ).toArray();
+  const rows = sql
+    .exec(
+      `SELECT * FROM tool_evaluations ${where} ORDER BY name ASC LIMIT ? OFFSET ?`,
+      ...params,
+      limit,
+      offset,
+    )
+    .toArray();
 
-  return { evaluations: rows.map(r => parseEvaluation(r)) };
+  return { ok: true, evaluations: rows.map((r) => parseEvaluation(r)) };
 }
 
 export function searchEvaluations(sql, query, limit = 20) {
   const pattern = `%${query}%`;
-  const rows = sql.exec(
-    'SELECT * FROM tool_evaluations WHERE name LIKE ? OR tagline LIKE ? ORDER BY name ASC LIMIT ?',
-    pattern, pattern, limit
-  ).toArray();
+  const rows = sql
+    .exec(
+      'SELECT * FROM tool_evaluations WHERE name LIKE ? OR tagline LIKE ? ORDER BY name ASC LIMIT ?',
+      pattern,
+      pattern,
+      limit,
+    )
+    .toArray();
 
-  return { evaluations: rows.map(r => parseEvaluation(r)) };
+  return { ok: true, evaluations: rows.map((r) => parseEvaluation(r)) };
 }
 
 export function deleteEvaluation(sql, toolId) {
   sql.exec('DELETE FROM tool_evaluations WHERE id = ?', toolId);
-  return { ok: true, deleted: sqlChanges(sql) > 0 };
+  const changed = sql.exec('SELECT changes() as c').toArray();
+  return { ok: true, deleted: changed[0].c > 0 };
 }
 
 export function hasEvaluations(sql) {
   const rows = sql.exec('SELECT COUNT(*) as count FROM tool_evaluations').toArray();
-  return { count: rows[0].count };
+  return { ok: true, count: rows[0].count };
 }
 
 function parseEvaluation(row) {

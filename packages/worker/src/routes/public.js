@@ -1,15 +1,8 @@
 import { TOOL_CATALOG, CATEGORY_NAMES } from '../catalog.js';
 import { getDB, getLobby } from '../lib/env.js';
 import { json } from '../lib/http.js';
-import { withIpRateLimit } from '../lib/validation.js';
-import {
-  RATE_LIMIT_ACCOUNTS_PER_IP,
-  RATE_LIMIT_STATS_PER_IP,
-  RATE_LIMIT_CATALOG_PER_IP,
-  ACCESS_TOKEN_TTL_S,
-  REFRESH_TOKEN_TTL_S,
-  WEB_SESSION_TTL_S,
-} from '../lib/constants.js';
+import { auditLog } from '../lib/audit.js';
+import { RATE_LIMIT_ACCOUNTS_PER_IP } from '../lib/constants.js';
 
 const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -20,7 +13,7 @@ function getDashboardUrl(env) {
 }
 
 function evaluationToCatalogEntry(e) {
-  const metadata = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {});
+  const metadata = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : e.metadata || {};
   return {
     id: e.tool_id,
     name: e.name,
@@ -42,50 +35,47 @@ export async function handleInit(request, env) {
     return json({ error: 'Too many accounts created today. Try again tomorrow.' }, 429);
   }
 
-  const user = await db.createUser();
-  if (user.error) {
-    return json({ error: user.error }, 400);
+  const result = await db.createUser();
+  if (result.error) {
+    return json({ error: result.error }, 400);
   }
 
   await db.consumeRateLimit(ip);
-  await env.AUTH_KV.put(`token:${user.token}`, user.id, { expirationTtl: ACCESS_TOKEN_TTL_S });
+  await env.AUTH_KV.put(`token:${result.token}`, result.id);
 
-  // Issue a refresh token so CLI/MCP clients can renew without re-init
-  const refreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
-  await Promise.all([
-    env.AUTH_KV.put(`refresh:${refreshToken}`, user.id, { expirationTtl: REFRESH_TOKEN_TTL_S }),
-    db.storeRefreshToken(user.id, refreshToken),
-  ]);
-
-  return json({ handle: user.handle, color: user.color, token: user.token, refresh_token: refreshToken }, 201);
-}
-
-export async function handleStats(request, env) {
-  return withIpRateLimit(request, env, 'stats', RATE_LIMIT_STATS_PER_IP, async () => {
-    const [lobbyStats, dbStats] = await Promise.all([
-      getLobby(env).getStats(),
-      getDB(env).getStats(),
-    ]);
-    return json({ ...dbStats, ...lobbyStats });
+  auditLog('auth.account_created', {
+    actor: result.handle,
+    outcome: 'success',
+    meta: { method: 'init' },
   });
+  return json({ ok: true, handle: result.handle, color: result.color, token: result.token }, 201);
 }
 
-export async function handleToolCatalog(request, env) {
-  return withIpRateLimit(request, env, 'catalog', RATE_LIMIT_CATALOG_PER_IP, async () => {
-    const db = getDB(env);
-    const result = await db.listEvaluations({});
+export async function handleStats(env) {
+  const [lobbyStats, dbStats] = await Promise.all([
+    getLobby(env).getStats(),
+    getDB(env).getStats(),
+  ]);
+  // Strip ok flags from sub-results, return a single merged response
+  const { ok: _ok1, ...lobby } = lobbyStats;
+  const { ok: _ok2, ...db } = dbStats;
+  return json({ ok: true, ...db, ...lobby });
+}
 
-    let tools;
-    if (result.evaluations && result.evaluations.length > 0) {
-      tools = result.evaluations.map(evaluationToCatalogEntry);
-    } else {
-      // Fallback to static catalog if no evaluations in DB yet
-      tools = TOOL_CATALOG;
-    }
+export async function handleToolCatalog(env) {
+  const db = getDB(env);
+  const result = await db.listEvaluations({});
 
-    return json({ tools, categories: CATEGORY_NAMES }, 200, {
-      'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
-    });
+  let tools;
+  if (result.evaluations && result.evaluations.length > 0) {
+    tools = result.evaluations.map(evaluationToCatalogEntry);
+  } else {
+    // Fallback to static catalog if no evaluations in DB yet
+    tools = TOOL_CATALOG;
+  }
+
+  return json({ tools, categories: CATEGORY_NAMES }, 200, {
+    'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
   });
 }
 
@@ -169,8 +159,9 @@ export async function handleGithubCallback(request, env) {
   const db = getDB(env);
 
   // Look up existing account by GitHub ID, or create new one
-  let user = await db.getUserByGithubId(githubId);
-  if (!user) {
+  const ghLookup = await db.getUserByGithubId(githubId);
+  let userId;
+  if (!ghLookup.ok) {
     const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
     const limit = await db.checkRateLimit(ip, RATE_LIMIT_ACCOUNTS_PER_IP);
     if (!limit.allowed) {
@@ -183,25 +174,30 @@ export async function handleGithubCallback(request, env) {
     }
 
     await db.consumeRateLimit(ip);
-    // Store the CLI token in KV with TTL (so the user could use it from CLI later)
-    await env.AUTH_KV.put(`token:${created.token}`, created.id, { expirationTtl: ACCESS_TOKEN_TTL_S });
-
-    // Issue a refresh token for the CLI token
-    const refreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
-    await Promise.all([
-      env.AUTH_KV.put(`refresh:${refreshToken}`, created.id, { expirationTtl: REFRESH_TOKEN_TTL_S }),
-      db.storeRefreshToken(created.id, refreshToken),
-    ]);
-    user = { id: created.id };
+    // Store the CLI token in KV (so the user could use it from CLI later)
+    await env.AUTH_KV.put(`token:${created.token}`, created.id);
+    userId = created.id;
+    auditLog('auth.account_created', {
+      actor: githubLogin,
+      outcome: 'success',
+      meta: { method: 'github' },
+    });
+  } else {
+    userId = ghLookup.user.id;
+    auditLog('auth.github_login', { actor: githubLogin, outcome: 'success' });
   }
 
   // Create a web session token
   const userAgent = request.headers.get('User-Agent') || null;
-  const session = await db.createWebSession(user.id, userAgent);
+  const session = await db.createWebSession(userId, userAgent);
 
-  // Store session token in KV with sliding 30-day TTL
-  await env.AUTH_KV.put(`token:${session.token}`, user.id, {
-    expirationTtl: WEB_SESSION_TTL_S,
+  if (session.error) {
+    return Response.redirect(`${getDashboardUrl(env)}#error=session_failed`, 302);
+  }
+
+  // Store session token in KV with 30-day TTL
+  await env.AUTH_KV.put(`token:${session.token}`, userId, {
+    expirationTtl: 30 * 24 * 60 * 60,
   });
 
   return Response.redirect(`${getDashboardUrl(env)}#token=${session.token}`, 302);
@@ -277,7 +273,12 @@ export async function handleGithubLinkCallback(request, env) {
   const ghUser = await userRes.json();
   const db = getDB(env);
 
-  const result = await db.linkGithub(storedUserId, String(ghUser.id), ghUser.login, ghUser.avatar_url);
+  const result = await db.linkGithub(
+    storedUserId,
+    String(ghUser.id),
+    ghUser.login,
+    ghUser.avatar_url,
+  );
   if (result.error) {
     return Response.redirect(`${getDashboardUrl(env)}#error=github_already_linked`, 302);
   }

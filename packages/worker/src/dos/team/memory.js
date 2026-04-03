@@ -1,10 +1,7 @@
 // Shared project memory — saveMemory, searchMemories, updateMemory, deleteMemory.
 // Each function takes `sql` as the first parameter.
 
-/** @import { DOResult } from '../../types.js' */
 import { normalizeRuntimeMetadata } from './runtime.js';
-import { safeParseJSON } from '../../lib/text-utils.js';
-import { sqlChanges } from '../../lib/validation.js';
 import { MEMORY_MAX_COUNT } from '../../lib/constants.js';
 
 // Escape LIKE wildcards so user-supplied text is matched literally
@@ -12,18 +9,6 @@ function escapeLike(s) {
   return s.replace(/[%_]/g, (ch) => `\\${ch}`);
 }
 
-/**
- * Save a new memory entry. Inherits model from the agent's active session.
- * Prunes oldest memories beyond the MEMORY_MAX_COUNT cap.
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string} text - Memory content
- * @param {string[]} tags - Freeform tags
- * @param {string} handle - Source agent's display handle
- * @param {string | Record<string, any> | null | undefined} runtimeOrTool
- * @param {(metric: string) => void} recordMetric
- * @returns {{ ok: boolean, id: string } | { error: string }}
- */
 export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTool, recordMetric) {
   const runtime = normalizeRuntimeMetadata(runtimeOrTool, resolvedAgentId);
 
@@ -38,13 +23,14 @@ export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTo
 
   const id = crypto.randomUUID();
   sql.exec(
-    `INSERT INTO memories (id, text, tags, agent_id, handle, host_tool, agent_surface, agent_model, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    `INSERT INTO memories (id, text, tags, source_agent, source_handle, source_tool, source_host_tool, source_agent_surface, source_model, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
     id,
     text,
     JSON.stringify(tags || []),
     resolvedAgentId,
     handle || 'unknown',
+    runtime.tool,
     runtime.hostTool,
     runtime.agentSurface,
     model,
@@ -69,14 +55,6 @@ export function saveMemory(sql, resolvedAgentId, text, tags, handle, runtimeOrTo
   return { ok: true, id };
 }
 
-/**
- * Search memories by text query and/or tags. Returns most recently updated first.
- * @param {any} sql - DO SQL handle
- * @param {string | null} query - Text to search for (LIKE match)
- * @param {string[] | null} tags - Filter by any of these tags
- * @param {number} [limit=20] - Max results (capped at 50)
- * @returns {{ memories: import('../../types.js').Memory[] }}
- */
 export function searchMemories(sql, query, tags, limit = 20) {
   const cappedLimit = Math.min(Math.max(1, limit), 50);
   const conditions = [];
@@ -94,32 +72,29 @@ export function searchMemories(sql, query, tags, limit = 20) {
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const sqlStr = `SELECT id, text, tags, handle, host_tool, agent_surface, agent_model, created_at, updated_at
+  const sqlStr = `SELECT id, text, tags, source_handle, source_tool, source_host_tool, source_agent_surface, source_model, created_at, updated_at
                FROM memories ${where}
                ORDER BY updated_at DESC, created_at DESC LIMIT ?`;
   params.push(cappedLimit);
 
   const rows = sql.exec(sqlStr, ...params).toArray();
   return {
+    ok: true,
     memories: rows.map((m) => {
-      const tags = safeParseJSON(m.tags, [], 'memory.tags');
+      let tags = [];
+      try {
+        tags = JSON.parse(m.tags || '[]');
+      } catch {
+        /* malformed JSON in tags — default to empty array */
+      }
       return { ...m, tags };
     }),
   };
 }
 
-/**
- * Update an existing memory's text and/or tags. Any team member can update.
- * @param {any} sql - DO SQL handle
- * @param {string} resolvedAgentId
- * @param {string} memoryId
- * @param {string | undefined} text
- * @param {string[] | undefined} tags
- * @returns {DOResult}
- */
 export function updateMemory(sql, resolvedAgentId, memoryId, text, tags) {
   const existing = sql.exec('SELECT id FROM memories WHERE id = ?', memoryId).toArray();
-  if (existing.length === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
+  if (existing.length === 0) return { error: 'Memory not found' };
 
   // Any team member can update — memories are team knowledge
   const sets = [];
@@ -139,15 +114,10 @@ export function updateMemory(sql, resolvedAgentId, memoryId, text, tags) {
   return { ok: true };
 }
 
-/**
- * Delete a memory by ID. Any team member can delete.
- * @param {any} sql - DO SQL handle
- * @param {string} memoryId
- * @returns {DOResult}
- */
 export function deleteMemory(sql, memoryId) {
   // Any team member can delete — memories are team knowledge
   sql.exec('DELETE FROM memories WHERE id = ?', memoryId);
-  if (sqlChanges(sql) === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
+  const changed = sql.exec('SELECT changes() as c').toArray();
+  if (changed[0].c === 0) return { error: 'Memory not found' };
   return { ok: true };
 }

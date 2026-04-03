@@ -250,15 +250,6 @@ export class DatabaseDO extends DurableObject {
         user_agent TEXT,
         revoked INTEGER DEFAULT 0
       );
-
-      CREATE TABLE IF NOT EXISTS refresh_tokens (
-        token TEXT PRIMARY KEY,
-        user_id TEXT NOT NULL REFERENCES users(id),
-        created_at TEXT NOT NULL DEFAULT (datetime('now')),
-        revoked INTEGER DEFAULT 0,
-        revoked_at TEXT
-      );
-      CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
     `);
 
     // Migrate: add team_name column for tables created before this column existed
@@ -275,24 +266,15 @@ export class DatabaseDO extends DurableObject {
       'DatabaseDO',
     );
 
-    // Prune stale rate limit rows, expired sessions, and old refresh tokens
+    // Prune stale rate limit rows and expired sessions
     this.sql.exec("DELETE FROM account_limits WHERE date < date('now', '-7 days')");
     this.sql.exec("DELETE FROM web_sessions WHERE expires_at < datetime('now') OR revoked = 1");
-    // Revoked refresh tokens older than 7 days have no forensic value — KV entries
-    // already expired. Active tokens older than 180 days can't have valid KV entries.
-    this.sql.exec(
-      "DELETE FROM refresh_tokens WHERE (revoked = 1 AND revoked_at < datetime('now', '-7 days')) OR created_at < datetime('now', '-200 days')",
-    );
 
     this.#schemaReady = true;
   }
 
   // ── Users ──
 
-  /**
-   * Create a new user with a random handle, color, and auth token.
-   * @returns {Promise<import('../../types.js').NewUser | import('../../types.js').DOError>}
-   */
   async createUser() {
     this.#ensureSchema();
 
@@ -304,12 +286,12 @@ export class DatabaseDO extends DurableObject {
     let handle = this.#generateHandle();
     let attempts = 0;
     while (this.#handleExists(handle) && attempts < 10) {
-      handle = this.#generateHandle();
+      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
       attempts++;
     }
 
     if (this.#handleExists(handle)) {
-      return { error: 'Could not generate unique handle, please try again', code: 'CONFLICT' };
+      return { error: 'Could not generate unique handle, please try again' };
     }
 
     this.sql.exec(
@@ -323,14 +305,9 @@ export class DatabaseDO extends DurableObject {
       now,
     );
 
-    return { id, handle, color, token };
+    return { ok: true, id, handle, color, token };
   }
 
-  /**
-   * Get a user by ID. Updates last_active if stale (>5 min).
-   * @param {string} id
-   * @returns {Promise<import('../../types.js').User | null>}
-   */
   async getUser(id) {
     this.#ensureSchema();
     const rows = this.sql
@@ -346,14 +323,9 @@ export class DatabaseDO extends DurableObject {
         this.sql.exec("UPDATE users SET last_active = datetime('now') WHERE id = ?", id);
       }
     }
-    return user;
+    return user ? { ok: true, user } : { error: 'User not found' };
   }
 
-  /**
-   * Look up a user by their handle.
-   * @param {string} handle
-   * @returns {Promise<import('../../types.js').User | null>}
-   */
   async getUserByHandle(handle) {
     this.#ensureSchema();
     const rows = this.sql
@@ -362,59 +334,39 @@ export class DatabaseDO extends DurableObject {
         handle,
       )
       .toArray();
-    return rows[0] || null;
+    const user = rows[0] || null;
+    return user ? { ok: true, user } : { error: 'User not found' };
   }
 
-  /**
-   * Change a user's handle. Must be 3-20 chars, alphanumeric + underscores, and unique.
-   * @param {string} userId
-   * @param {string} newHandle
-   * @returns {Promise<{ ok: boolean, handle: string } | import('../../types.js').DOError>}
-   */
   async updateHandle(userId, newHandle) {
     this.#ensureSchema();
 
     if (!/^[a-zA-Z0-9_]{3,20}$/.test(newHandle)) {
-      return {
-        error: 'Handle must be 3-20 characters, alphanumeric + underscores only',
-        code: 'VALIDATION',
-      };
+      return { error: 'Handle must be 3-20 characters, alphanumeric + underscores only' };
     }
 
     const taken =
       this.sql.exec('SELECT 1 FROM users WHERE handle = ? AND id != ?', newHandle, userId).toArray()
         .length > 0;
     if (taken) {
-      return { error: 'Handle already taken', code: 'CONFLICT' };
+      return { error: 'Handle already taken' };
     }
 
     this.sql.exec('UPDATE users SET handle = ? WHERE id = ?', newHandle, userId);
     return { ok: true, handle: newHandle };
   }
 
-  /**
-   * Change a user's display color. Must be one of the 12 allowed colors.
-   * @param {string} userId
-   * @param {string} color
-   * @returns {Promise<{ ok: boolean, color: string } | import('../../types.js').DOError>}
-   */
   async updateColor(userId, color) {
     this.#ensureSchema();
 
     if (!COLORS.includes(color)) {
-      return { error: `Color must be one of: ${COLORS.join(', ')}`, code: 'VALIDATION' };
+      return { error: `Color must be one of: ${COLORS.join(', ')}` };
     }
 
     this.sql.exec('UPDATE users SET color = ? WHERE id = ?', color, userId);
     return { ok: true, color };
   }
 
-  /**
-   * Set or clear a user's status text.
-   * @param {string} userId
-   * @param {string | null} status
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async setStatus(userId, status) {
     this.#ensureSchema();
     this.sql.exec('UPDATE users SET status = ? WHERE id = ?', status, userId);
@@ -423,11 +375,6 @@ export class DatabaseDO extends DurableObject {
 
   // ── GitHub OAuth ──
 
-  /**
-   * Look up a user by their linked GitHub ID.
-   * @param {string | number} githubId
-   * @returns {Promise<import('../../types.js').User | null>}
-   */
   async getUserByGithubId(githubId) {
     this.#ensureSchema();
     const rows = this.sql
@@ -436,16 +383,10 @@ export class DatabaseDO extends DurableObject {
         String(githubId),
       )
       .toArray();
-    return rows[0] || null;
+    const user = rows[0] || null;
+    return user ? { ok: true, user } : { error: 'User not found' };
   }
 
-  /**
-   * Create a new user from GitHub OAuth data.
-   * @param {string | number} githubId
-   * @param {string} githubLogin
-   * @param {string | null} avatarUrl
-   * @returns {Promise<import('../../types.js').NewUser | import('../../types.js').DOError>}
-   */
   async createUserFromGithub(githubId, githubLogin, avatarUrl) {
     this.#ensureSchema();
 
@@ -458,11 +399,11 @@ export class DatabaseDO extends DurableObject {
     if (handle.length < 3) handle = this.#generateHandle();
     let attempts = 0;
     while (this.#handleExists(handle) && attempts < 10) {
-      handle = this.#generateHandle();
+      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
       attempts++;
     }
     if (this.#handleExists(handle)) {
-      return { error: 'Could not generate unique handle', code: 'CONFLICT' };
+      return { error: 'Could not generate unique handle' };
     }
 
     this.sql.exec(
@@ -479,17 +420,9 @@ export class DatabaseDO extends DurableObject {
       now,
     );
 
-    return { id, handle, color, token };
+    return { ok: true, id, handle, color, token };
   }
 
-  /**
-   * Link a GitHub account to an existing user.
-   * @param {string} userId
-   * @param {string | number} githubId
-   * @param {string} githubLogin
-   * @param {string | null} avatarUrl
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async linkGithub(userId, githubId, githubLogin, avatarUrl) {
     this.#ensureSchema();
 
@@ -497,7 +430,7 @@ export class DatabaseDO extends DurableObject {
       .exec('SELECT id FROM users WHERE github_id = ? AND id != ?', String(githubId), userId)
       .toArray();
     if (existing.length > 0) {
-      return { error: 'This GitHub account is already linked to another user', code: 'CONFLICT' };
+      return { error: 'This GitHub account is already linked to another user' };
     }
 
     this.sql.exec(
@@ -510,11 +443,6 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
-  /**
-   * Remove GitHub link from a user.
-   * @param {string} userId
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async unlinkGithub(userId) {
     this.#ensureSchema();
     this.sql.exec(
@@ -526,12 +454,6 @@ export class DatabaseDO extends DurableObject {
 
   // ── Web sessions ──
 
-  /**
-   * Create a web session token for browser-based auth.
-   * @param {string} userId
-   * @param {string | null} userAgent
-   * @returns {Promise<{ token: string, expires_at: string }>}
-   */
   async createWebSession(userId, userAgent) {
     this.#ensureSchema();
     const token = crypto.randomUUID();
@@ -544,14 +466,9 @@ export class DatabaseDO extends DurableObject {
       expiresAt,
       userAgent || null,
     );
-    return { token, expires_at: expiresAt };
+    return { ok: true, token, expires_at: expiresAt };
   }
 
-  /**
-   * Get and refresh a valid web session. Returns null if expired or revoked.
-   * @param {string} token
-   * @returns {Promise<import('../../types.js').WebSession | null>}
-   */
   async getWebSession(token) {
     this.#ensureSchema();
     const rows = this.sql
@@ -562,32 +479,22 @@ export class DatabaseDO extends DurableObject {
         token,
       )
       .toArray();
-    if (rows.length === 0) return null;
+    if (rows.length === 0) return { error: 'Session not found' };
 
     // Slide the window — refresh expiry and last_used on access
     this.sql.exec(`UPDATE web_sessions SET last_used = datetime('now') WHERE token = ?`, token);
-    return rows[0];
+    return { ok: true, session: rows[0] };
   }
 
-  /**
-   * Revoke a web session.
-   * @param {string} token
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async revokeWebSession(token) {
     this.#ensureSchema();
     this.sql.exec('UPDATE web_sessions SET revoked = 1 WHERE token = ?', token);
     return { ok: true };
   }
 
-  /**
-   * List active web sessions for a user (up to 20).
-   * @param {string} userId
-   * @returns {Promise<Array<{ token: string, created_at: string, expires_at: string, last_used: string, user_agent: string | null }>>}
-   */
   async getUserWebSessions(userId) {
     this.#ensureSchema();
-    return this.sql
+    const sessions = this.sql
       .exec(
         `SELECT token, created_at, expires_at, last_used, user_agent
        FROM web_sessions
@@ -596,16 +503,11 @@ export class DatabaseDO extends DurableObject {
         userId,
       )
       .toArray();
+    return { ok: true, sessions };
   }
 
   // ── Rate limiting ──
 
-  /**
-   * Check if a rate limit key has remaining capacity for today.
-   * @param {string} key - Rate limit key (e.g. "join:userId", "memory:userId")
-   * @param {number} [maxPerDay=3]
-   * @returns {Promise<import('../../types.js').RateLimitCheck>}
-   */
   async checkRateLimit(key, maxPerDay = 3) {
     this.#ensureSchema();
     const today = utcDate();
@@ -615,13 +517,9 @@ export class DatabaseDO extends DurableObject {
       .toArray();
 
     const count = rows[0]?.count || 0;
-    return { allowed: count < maxPerDay, count };
+    return { ok: true, allowed: count < maxPerDay, count };
   }
 
-  /**
-   * Increment the rate limit counter for today.
-   * @param {string} key
-   */
   async consumeRateLimit(key) {
     this.#ensureSchema();
     const today = utcDate();
@@ -632,6 +530,7 @@ export class DatabaseDO extends DurableObject {
       key,
       today,
     );
+    return { ok: true };
   }
 
   // ── Stats ──
@@ -639,7 +538,7 @@ export class DatabaseDO extends DurableObject {
   async getStats() {
     this.#ensureSchema();
     const users = this.sql.exec('SELECT COUNT(*) as count FROM users').toArray();
-    return { totalUsers: users[0]?.count || 0 };
+    return { ok: true, totalUsers: users[0]?.count || 0 };
   }
 
   // ── Tool evaluations (logic in evaluations.js) ──
@@ -686,13 +585,6 @@ export class DatabaseDO extends DurableObject {
 
   // ── User teams ──
 
-  /**
-   * Record that a user belongs to a team.
-   * @param {string} userId
-   * @param {string} teamId
-   * @param {string | null} [name=null] - Optional team display name
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async addUserTeam(userId, teamId, name = null) {
     this.#ensureSchema();
     this.sql.exec(
@@ -706,27 +598,17 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
-  /**
-   * Get all teams a user belongs to (up to 50).
-   * @param {string} userId
-   * @returns {Promise<import('../../types.js').UserTeam[]>}
-   */
   async getUserTeams(userId) {
     this.#ensureSchema();
-    return this.sql
+    const teams = this.sql
       .exec(
         'SELECT team_id, team_name, joined_at FROM user_teams WHERE user_id = ? ORDER BY joined_at DESC LIMIT 50',
         userId,
       )
       .toArray();
+    return { ok: true, teams };
   }
 
-  /**
-   * Remove a team membership record.
-   * @param {string} userId
-   * @param {string} teamId
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async removeUserTeam(userId, teamId) {
     this.#ensureSchema();
     this.sql.exec('DELETE FROM user_teams WHERE user_id = ? AND team_id = ?', userId, teamId);
@@ -735,16 +617,10 @@ export class DatabaseDO extends DurableObject {
 
   // ── Agent profiles ──
 
-  /**
-   * Upsert agent profile data (framework, languages, etc.).
-   * @param {string} userId
-   * @param {import('../../types.js').AgentProfile} profile
-   * @returns {Promise<import('../../types.js').DOResult>}
-   */
   async updateAgentProfile(userId, profile) {
     this.#ensureSchema();
     const user = this.sql.exec('SELECT id FROM users WHERE id = ?', userId).toArray();
-    if (user.length === 0) return { error: 'User not found', code: 'NOT_FOUND' };
+    if (user.length === 0) return { error: 'User not found' };
 
     this.sql.exec(
       `INSERT INTO agent_profiles (user_id, framework, languages, frameworks, tools, platforms, registered_at, last_active)
@@ -767,65 +643,12 @@ export class DatabaseDO extends DurableObject {
     return { ok: true };
   }
 
-  // ── Refresh tokens ──
-
-  async storeRefreshToken(userId, token) {
-    this.#ensureSchema();
-    this.sql.exec('INSERT INTO refresh_tokens (token, user_id) VALUES (?, ?)', token, userId);
-    return { ok: true };
-  }
-
-  async getRefreshToken(token) {
-    this.#ensureSchema();
-    const rows = this.sql
-      .exec('SELECT token, user_id, created_at, revoked FROM refresh_tokens WHERE token = ?', token)
-      .toArray();
-    return rows[0] || null;
-  }
-
-  async revokeRefreshToken(token) {
-    this.#ensureSchema();
-    this.sql.exec(
-      "UPDATE refresh_tokens SET revoked = 1, revoked_at = datetime('now') WHERE token = ?",
-      token,
-    );
-    return { ok: true };
-  }
-
-  async revokeAllRefreshTokens(userId) {
-    this.#ensureSchema();
-    this.sql.exec(
-      "UPDATE refresh_tokens SET revoked = 1, revoked_at = datetime('now') WHERE user_id = ? AND revoked = 0",
-      userId,
-    );
-    return { ok: true };
-  }
-
-  async getActiveRefreshTokens(userId) {
-    this.#ensureSchema();
-    return this.sql
-      .exec('SELECT token FROM refresh_tokens WHERE user_id = ? AND revoked = 0', userId)
-      .toArray();
-  }
-
-  async updateUserToken(userId, newToken) {
-    this.#ensureSchema();
-    this.sql.exec('UPDATE users SET token = ? WHERE id = ?', newToken, userId);
-    return { ok: true };
-  }
-
   // ── Private helpers ──
 
-  /**
-   * Generate a random adjective+noun+3-digit-suffix handle.
-   * 64 adjectives x 64 nouns x 1000 suffixes = ~4 million combinations.
-   * Callers retry up to 10 times on collision as a safety net.
-   */
   #generateHandle() {
     const adj = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
     const noun = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-    const suffix = String(Math.floor(Math.random() * 1000)).padStart(3, '0');
-    return adj + noun + suffix;
+    return adj + noun;
   }
 
   #handleExists(handle) {

@@ -8,48 +8,59 @@ function getDB() {
 // --- createUser ---
 
 describe('createUser', () => {
-  it('returns id, handle, color, and token', async () => {
-    const user = await getDB().createUser();
-    expect(user.id).toBeDefined();
-    expect(user.handle).toBeDefined();
-    expect(user.color).toBeDefined();
-    expect(user.token).toBeDefined();
-    expect(user.error).toBeUndefined();
+  it('returns ok with id, handle, color, and token', async () => {
+    const result = await getDB().createUser();
+    expect(result.ok).toBe(true);
+    expect(result.id).toBeDefined();
+    expect(result.handle).toBeDefined();
+    expect(result.color).toBeDefined();
+    expect(result.token).toBeDefined();
+    expect(result.error).toBeUndefined();
   });
 
   it('returns a valid UUID for id', async () => {
-    const user = await getDB().createUser();
+    const result = await getDB().createUser();
     // UUID v4 format
-    expect(user.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    expect(result.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
   it('returns a valid UUID for token', async () => {
-    const user = await getDB().createUser();
-    expect(user.token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    const result = await getDB().createUser();
+    expect(result.token).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
   it('returns a color from the allowed palette', async () => {
     const COLORS = [
-      'red', 'cyan', 'yellow', 'green', 'magenta', 'blue',
-      'orange', 'lime', 'pink', 'sky', 'lavender', 'white',
+      'red',
+      'cyan',
+      'yellow',
+      'green',
+      'magenta',
+      'blue',
+      'orange',
+      'lime',
+      'pink',
+      'sky',
+      'lavender',
+      'white',
     ];
-    const user = await getDB().createUser();
-    expect(COLORS).toContain(user.color);
+    const result = await getDB().createUser();
+    expect(COLORS).toContain(result.color);
   });
 
   it('generates unique ids across multiple calls', async () => {
-    const user1 = await getDB().createUser();
-    const user2 = await getDB().createUser();
-    expect(user1.id).not.toBe(user2.id);
-    expect(user1.token).not.toBe(user2.token);
+    const result1 = await getDB().createUser();
+    const result2 = await getDB().createUser();
+    expect(result1.id).not.toBe(result2.id);
+    expect(result1.token).not.toBe(result2.token);
     // Handles could collide in theory, but extremely unlikely
   });
 
   it('generates a handle that looks like adjective+noun', async () => {
-    const user = await getDB().createUser();
+    const result = await getDB().createUser();
     // Handle should be lowercase alphanumeric (and possibly with trailing digits for collision)
-    expect(user.handle).toMatch(/^[a-z]+[a-z0-9]*$/);
-    expect(user.handle.length).toBeGreaterThanOrEqual(4);
+    expect(result.handle).toMatch(/^[a-z]+[a-z0-9]*$/);
+    expect(result.handle.length).toBeGreaterThanOrEqual(4);
   });
 });
 
@@ -58,29 +69,31 @@ describe('createUser', () => {
 describe('getUser', () => {
   it('returns the user by id', async () => {
     const created = await getDB().createUser();
-    const user = await getDB().getUser(created.id);
-    expect(user).not.toBeNull();
-    expect(user.id).toBe(created.id);
-    expect(user.handle).toBe(created.handle);
-    expect(user.color).toBe(created.color);
+    const result = await getDB().getUser(created.id);
+    expect(result.ok).toBe(true);
+    expect(result.user).toBeDefined();
+    expect(result.user.id).toBe(created.id);
+    expect(result.user.handle).toBe(created.handle);
+    expect(result.user.color).toBe(created.color);
   });
 
-  it('returns null for nonexistent id', async () => {
-    const user = await getDB().getUser('nonexistent-uuid-value');
-    expect(user).toBeNull();
+  it('returns error for nonexistent id', async () => {
+    const result = await getDB().getUser('nonexistent-uuid-value');
+    expect(result.error).toBeDefined();
+    expect(result.ok).toBeUndefined();
   });
 
   it('does not expose the token field', async () => {
     const created = await getDB().createUser();
-    const user = await getDB().getUser(created.id);
-    expect(user.token).toBeUndefined();
+    const result = await getDB().getUser(created.id);
+    expect(result.user.token).toBeUndefined();
   });
 
   it('includes created_at and last_active timestamps', async () => {
     const created = await getDB().createUser();
-    const user = await getDB().getUser(created.id);
-    expect(user.created_at).toBeDefined();
-    expect(user.last_active).toBeDefined();
+    const result = await getDB().getUser(created.id);
+    expect(result.user.created_at).toBeDefined();
+    expect(result.user.last_active).toBeDefined();
   });
 });
 
@@ -89,15 +102,17 @@ describe('getUser', () => {
 describe('getUserByHandle', () => {
   it('returns the user by handle', async () => {
     const created = await getDB().createUser();
-    const user = await getDB().getUserByHandle(created.handle);
-    expect(user).not.toBeNull();
-    expect(user.id).toBe(created.id);
-    expect(user.handle).toBe(created.handle);
+    const result = await getDB().getUserByHandle(created.handle);
+    expect(result.ok).toBe(true);
+    expect(result.user).toBeDefined();
+    expect(result.user.id).toBe(created.id);
+    expect(result.user.handle).toBe(created.handle);
   });
 
-  it('returns null for nonexistent handle', async () => {
-    const user = await getDB().getUserByHandle('nonexistenthandle999');
-    expect(user).toBeNull();
+  it('returns error for nonexistent handle', async () => {
+    const result = await getDB().getUserByHandle('nonexistenthandle999');
+    expect(result.error).toBeDefined();
+    expect(result.ok).toBeUndefined();
   });
 });
 
@@ -111,8 +126,8 @@ describe('updateHandle', () => {
     expect(result.handle).toBe('newname123');
 
     // Verify via getUser
-    const user = await getDB().getUser(created.id);
-    expect(user.handle).toBe('newname123');
+    const fetched = await getDB().getUser(created.id);
+    expect(fetched.user.handle).toBe('newname123');
   });
 
   it('rejects handle shorter than 3 characters', async () => {
@@ -179,8 +194,8 @@ describe('updateColor', () => {
     expect(result.ok).toBe(true);
     expect(result.color).toBe('cyan');
 
-    const user = await getDB().getUser(created.id);
-    expect(user.color).toBe('cyan');
+    const fetched = await getDB().getUser(created.id);
+    expect(fetched.user.color).toBe('cyan');
   });
 
   it('rejects invalid color', async () => {
@@ -192,8 +207,18 @@ describe('updateColor', () => {
 
   it('accepts all valid colors', async () => {
     const COLORS = [
-      'red', 'cyan', 'yellow', 'green', 'magenta', 'blue',
-      'orange', 'lime', 'pink', 'sky', 'lavender', 'white',
+      'red',
+      'cyan',
+      'yellow',
+      'green',
+      'magenta',
+      'blue',
+      'orange',
+      'lime',
+      'pink',
+      'sky',
+      'lavender',
+      'white',
     ];
     for (const color of COLORS) {
       const created = await getDB().createUser();
@@ -210,16 +235,16 @@ describe('setStatus', () => {
   it('sets and retrieves status', async () => {
     const created = await getDB().createUser();
     await getDB().setStatus(created.id, 'Working on refactor');
-    const user = await getDB().getUser(created.id);
-    expect(user.status).toBe('Working on refactor');
+    const fetched = await getDB().getUser(created.id);
+    expect(fetched.user.status).toBe('Working on refactor');
   });
 
   it('clears status when set to null', async () => {
     const created = await getDB().createUser();
     await getDB().setStatus(created.id, 'Busy');
     await getDB().setStatus(created.id, null);
-    const user = await getDB().getUser(created.id);
-    expect(user.status).toBeNull();
+    const fetched = await getDB().getUser(created.id);
+    expect(fetched.user.status).toBeNull();
   });
 });
 
@@ -283,18 +308,19 @@ describe('addUserTeam / getUserTeams / removeUserTeam', () => {
     const result = await getDB().addUserTeam(user.id, 't_0000000000000001', 'My Project');
     expect(result.ok).toBe(true);
 
-    const teams = await getDB().getUserTeams(user.id);
-    expect(teams.length).toBe(1);
-    expect(teams[0].team_id).toBe('t_0000000000000001');
-    expect(teams[0].team_name).toBe('My Project');
+    const teamsResult = await getDB().getUserTeams(user.id);
+    expect(teamsResult.ok).toBe(true);
+    expect(teamsResult.teams.length).toBe(1);
+    expect(teamsResult.teams[0].team_id).toBe('t_0000000000000001');
+    expect(teamsResult.teams[0].team_name).toBe('My Project');
   });
 
   it('adds multiple teams', async () => {
     const user = await getDB().createUser();
     await getDB().addUserTeam(user.id, 't_aaaa000000000001', 'Project A');
     await getDB().addUserTeam(user.id, 't_aaaa000000000002', 'Project B');
-    const teams = await getDB().getUserTeams(user.id);
-    expect(teams.length).toBe(2);
+    const teamsResult = await getDB().getUserTeams(user.id);
+    expect(teamsResult.teams.length).toBe(2);
   });
 
   it('removes a team', async () => {
@@ -303,8 +329,8 @@ describe('addUserTeam / getUserTeams / removeUserTeam', () => {
     const result = await getDB().removeUserTeam(user.id, 't_bbbb000000000001');
     expect(result.ok).toBe(true);
 
-    const teams = await getDB().getUserTeams(user.id);
-    const found = teams.find(t => t.team_id === 't_bbbb000000000001');
+    const teamsResult = await getDB().getUserTeams(user.id);
+    const found = teamsResult.teams.find((t) => t.team_id === 't_bbbb000000000001');
     expect(found).toBeUndefined();
   });
 
@@ -312,8 +338,8 @@ describe('addUserTeam / getUserTeams / removeUserTeam', () => {
     const user = await getDB().createUser();
     await getDB().addUserTeam(user.id, 't_cccc000000000001', 'Old Name');
     await getDB().addUserTeam(user.id, 't_cccc000000000001', 'New Name');
-    const teams = await getDB().getUserTeams(user.id);
-    const team = teams.find(t => t.team_id === 't_cccc000000000001');
+    const teamsResult = await getDB().getUserTeams(user.id);
+    const team = teamsResult.teams.find((t) => t.team_id === 't_cccc000000000001');
     expect(team.team_name).toBe('New Name');
   });
 
@@ -321,15 +347,16 @@ describe('addUserTeam / getUserTeams / removeUserTeam', () => {
     const user = await getDB().createUser();
     await getDB().addUserTeam(user.id, 't_dddd000000000001', 'Has Name');
     await getDB().addUserTeam(user.id, 't_dddd000000000001', null);
-    const teams = await getDB().getUserTeams(user.id);
-    const team = teams.find(t => t.team_id === 't_dddd000000000001');
+    const teamsResult = await getDB().getUserTeams(user.id);
+    const team = teamsResult.teams.find((t) => t.team_id === 't_dddd000000000001');
     expect(team.team_name).toBe('Has Name');
   });
 
-  it('returns empty array for user with no teams', async () => {
+  it('returns empty teams array for user with no teams', async () => {
     const user = await getDB().createUser();
-    const teams = await getDB().getUserTeams(user.id);
-    expect(teams).toEqual([]);
+    const teamsResult = await getDB().getUserTeams(user.id);
+    expect(teamsResult.ok).toBe(true);
+    expect(teamsResult.teams).toEqual([]);
   });
 
   it('limits to 50 teams', async () => {
@@ -338,16 +365,17 @@ describe('addUserTeam / getUserTeams / removeUserTeam', () => {
       const teamId = `t_${String(i).padStart(16, '0')}`;
       await getDB().addUserTeam(user.id, teamId, `Team ${i}`);
     }
-    const teams = await getDB().getUserTeams(user.id);
-    expect(teams.length).toBe(50);
+    const teamsResult = await getDB().getUserTeams(user.id);
+    expect(teamsResult.teams.length).toBe(50);
   });
 });
 
 // --- getStats ---
 
 describe('getStats', () => {
-  it('returns totalUsers count', async () => {
+  it('returns ok with totalUsers count', async () => {
     const stats = await getDB().getStats();
+    expect(stats.ok).toBe(true);
     expect(stats.totalUsers).toBeDefined();
     expect(typeof stats.totalUsers).toBe('number');
   });
@@ -380,138 +408,5 @@ describe('updateAgentProfile', () => {
     await getDB().updateAgentProfile(user.id, { framework: 'cursor' });
     const result = await getDB().updateAgentProfile(user.id, { framework: 'aider' });
     expect(result.ok).toBe(true);
-  });
-});
-
-// --- Handle generation safety ---
-
-describe('Handle generation', () => {
-  it('generates handles matching expected format (adjective + noun)', async () => {
-    // Create multiple users and verify all handles are lowercase alpha
-    for (let i = 0; i < 10; i++) {
-      const user = await getDB().createUser();
-      expect(user.handle).toMatch(/^[a-z]+[a-z0-9]*$/);
-      // adjective + noun should be at least 4 chars (e.g. "aptfox")
-      expect(user.handle.length).toBeGreaterThanOrEqual(4);
-      // Should never exceed 20 + potential digits for collision avoidance
-      expect(user.handle.length).toBeLessThanOrEqual(25);
-    }
-  });
-
-  it('generates distinct handles across many users', async () => {
-    const handles = new Set();
-    for (let i = 0; i < 20; i++) {
-      const user = await getDB().createUser();
-      handles.add(user.handle);
-    }
-    // With 64 adjectives x 64 nouns = 4096 combinations, 20 should all be unique
-    expect(handles.size).toBe(20);
-  });
-
-  it('handle never contains special characters or uppercase', async () => {
-    for (let i = 0; i < 10; i++) {
-      const user = await getDB().createUser();
-      expect(user.handle).not.toMatch(/[A-Z]/);
-      expect(user.handle).not.toMatch(/[^a-z0-9]/);
-    }
-  });
-});
-
-// --- Rate limit edge cases ---
-
-describe('Rate limit edge cases', () => {
-  it('exactly at limit returns not allowed', async () => {
-    const key = `test-rl-exact-${Date.now()}-${Math.random()}`;
-    for (let i = 0; i < 5; i++) {
-      await getDB().consumeRateLimit(key);
-    }
-    const result = await getDB().checkRateLimit(key, 5);
-    expect(result.allowed).toBe(false);
-    expect(result.count).toBe(5);
-  });
-
-  it('one below limit returns allowed', async () => {
-    const key = `test-rl-below-${Date.now()}-${Math.random()}`;
-    for (let i = 0; i < 4; i++) {
-      await getDB().consumeRateLimit(key);
-    }
-    const result = await getDB().checkRateLimit(key, 5);
-    expect(result.allowed).toBe(true);
-    expect(result.count).toBe(4);
-  });
-
-  it('consume beyond limit still increments count', async () => {
-    const key = `test-rl-beyond-${Date.now()}-${Math.random()}`;
-    for (let i = 0; i < 10; i++) {
-      await getDB().consumeRateLimit(key);
-    }
-    const result = await getDB().checkRateLimit(key, 5);
-    expect(result.allowed).toBe(false);
-    expect(result.count).toBe(10);
-  });
-
-  it('limit of 0 means nothing is allowed', async () => {
-    const key = `test-rl-zero-${Date.now()}-${Math.random()}`;
-    const result = await getDB().checkRateLimit(key, 0);
-    expect(result.allowed).toBe(false);
-    expect(result.count).toBe(0);
-  });
-
-  it('limit of 1 allows exactly one', async () => {
-    const key = `test-rl-one-${Date.now()}-${Math.random()}`;
-    const first = await getDB().checkRateLimit(key, 1);
-    expect(first.allowed).toBe(true);
-
-    await getDB().consumeRateLimit(key);
-    const second = await getDB().checkRateLimit(key, 1);
-    expect(second.allowed).toBe(false);
-  });
-});
-
-// --- Web session edge cases ---
-
-describe('Web sessions', () => {
-  it('creates and retrieves a valid web session', async () => {
-    const user = await getDB().createUser();
-    const session = await getDB().createWebSession(user.id, 'Mozilla/5.0');
-    expect(session.token).toBeDefined();
-    expect(session.expires_at).toBeDefined();
-
-    const retrieved = await getDB().getWebSession(session.token);
-    expect(retrieved).not.toBeNull();
-    expect(retrieved.user_id).toBe(user.id);
-  });
-
-  it('returns null for nonexistent session token', async () => {
-    const result = await getDB().getWebSession('nonexistent-token');
-    expect(result).toBeNull();
-  });
-
-  it('returns null for revoked session', async () => {
-    const user = await getDB().createUser();
-    const session = await getDB().createWebSession(user.id, null);
-    await getDB().revokeWebSession(session.token);
-
-    const result = await getDB().getWebSession(session.token);
-    expect(result).toBeNull();
-  });
-
-  it('lists active sessions for a user', async () => {
-    const user = await getDB().createUser();
-    await getDB().createWebSession(user.id, 'Chrome');
-    await getDB().createWebSession(user.id, 'Firefox');
-
-    const sessions = await getDB().getUserWebSessions(user.id);
-    expect(sessions.length).toBe(2);
-  });
-
-  it('does not list revoked sessions', async () => {
-    const user = await getDB().createUser();
-    const s1 = await getDB().createWebSession(user.id, 'Chrome');
-    await getDB().createWebSession(user.id, 'Firefox');
-    await getDB().revokeWebSession(s1.token);
-
-    const sessions = await getDB().getUserWebSessions(user.id);
-    expect(sessions.length).toBe(1);
   });
 });

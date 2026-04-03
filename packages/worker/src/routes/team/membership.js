@@ -1,18 +1,21 @@
 // Team membership routes — join, leave, heartbeat, context.
 
-import { isBlocked } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
-import { json, parseBody } from '../../lib/http.js';
+import { json } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import { sanitizeString, withRateLimit } from '../../lib/validation.js';
+import { withRateLimit } from '../../lib/validation.js';
+import { auditLog } from '../../lib/audit.js';
 import { RATE_LIMIT_JOINS, MAX_NAME_LENGTH } from '../../lib/constants.js';
 
 export async function handleTeamJoin(request, user, env, teamId) {
-  // Body is optional for join — only extract name if valid JSON was provided
-  const body = await parseBody(request);
-  const name = body._parseError ? null : sanitizeString(body.name, MAX_NAME_LENGTH);
-  // Moderation: team names are user-visible and persistent
-  if (name && isBlocked(name)) return json({ error: 'Content blocked' }, 400);
+  let name = null;
+  try {
+    const body = await request.json();
+    name =
+      typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
+  } catch {
+    /* body may be empty or non-JSON — name stays null */
+  }
 
   const db = getDB(env);
   const runtime = getAgentRuntime(request, user);
@@ -26,17 +29,37 @@ export async function handleTeamJoin(request, user, env, teamId) {
     'Team join limit reached (100/day). Try again tomorrow.',
     async () => {
       const result = await team.join(agentId, user.id, user.handle, runtime);
-      if (result.error) return json({ error: result.error }, teamErrorStatus(result));
-
-      let warning;
-      try {
-        await db.addUserTeam(user.id, teamId, name);
-      } catch (err) {
-        console.error(`[chinwag] Failed to sync joined team ${teamId} for user ${user.id}:`, err);
-        warning = 'Team joined successfully, but team list sync failed';
+      if (result.error) {
+        auditLog('team.join', {
+          actor: user.handle,
+          outcome: 'failure',
+          meta: { team_id: teamId, reason: result.error },
+        });
+        return json({ error: result.error }, 400);
       }
 
-      return json(warning ? { ...result, warning } : result);
+      const dbResult = await db.addUserTeam(user.id, teamId, name);
+      if (dbResult.error) {
+        console.error(
+          `[chinwag] Failed to sync joined team ${teamId} for user ${user.id}:`,
+          dbResult.error,
+        );
+        // Roll back: leave the team since the DB record failed
+        await team.leave(agentId, user.id).catch(() => {});
+        auditLog('team.join', {
+          actor: user.handle,
+          outcome: 'failure',
+          meta: { team_id: teamId, reason: 'db_sync_failed' },
+        });
+        return json({ error: 'Failed to record team membership' }, 500);
+      }
+
+      auditLog('team.join', {
+        actor: user.handle,
+        outcome: 'success',
+        meta: { team_id: teamId, agent_id: agentId },
+      });
+      return json(result);
     },
   );
 }
@@ -45,13 +68,26 @@ export async function handleTeamLeave(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.leave(agentId, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) {
+    auditLog('team.leave', {
+      actor: user.handle,
+      outcome: 'failure',
+      meta: { team_id: teamId, reason: result.error },
+    });
+    return json({ error: result.error }, 400);
+  }
+  auditLog('team.leave', {
+    actor: user.handle,
+    outcome: 'success',
+    meta: { team_id: teamId, agent_id: agentId },
+  });
 
   const db = getDB(env);
-  try {
-    await db.removeUserTeam(user.id, teamId);
-  } catch (err) {
-    console.error(`[chinwag] Failed to remove team ${teamId} for user ${user.id}:`, err);
+  const dbResult = await db.removeUserTeam(user.id, teamId);
+  if (dbResult.error) {
+    console.error(`[chinwag] Failed to remove team ${teamId} for user ${user.id}:`, dbResult.error);
+    // The agent already left the team DO -- the DB record is stale but not critical.
+    // Return success but log the inconsistency.
   }
 
   return json(result);
@@ -61,13 +97,16 @@ export async function handleTeamContext(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getContext(agentId, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) return json({ error: result.error }, 403);
 
   const db = getDB(env);
-  try {
-    await db.addUserTeam(user.id, teamId);
-  } catch (err) {
-    console.error(`[chinwag] Failed to backfill team ${teamId} for user ${user.id}:`, err);
+  const dbResult = await db.addUserTeam(user.id, teamId);
+  if (dbResult.error) {
+    console.error(
+      `[chinwag] Failed to backfill team ${teamId} for user ${user.id}:`,
+      dbResult.error,
+    );
+    // Backfill failure is non-blocking — context was already retrieved successfully
   }
 
   return json(result);
@@ -77,7 +116,7 @@ export async function handleTeamHeartbeat(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.heartbeat(agentId, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
   return json(result);
 }
 

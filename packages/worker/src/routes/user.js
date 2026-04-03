@@ -1,33 +1,19 @@
-import { isBlocked, checkContent } from '../moderation.js';
+import { checkContent } from '../moderation.js';
 import { getDB, getLobby, getTeam } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
-import { getAgentRuntime, sanitizeTags, teamErrorStatus } from '../lib/request-utils.js';
-import {
-  isUUID,
-  requireJson,
-  requireString,
-  sanitizeString,
-  withRateLimit,
-} from '../lib/validation.js';
+import { getAgentRuntime, sanitizeTags } from '../lib/request-utils.js';
+import { requireJson, withRateLimit } from '../lib/validation.js';
+import { auditLog } from '../lib/audit.js';
 import {
   MAX_STATUS_LENGTH,
   MAX_FRAMEWORK_LENGTH,
   RATE_LIMIT_TEAMS,
   RATE_LIMIT_WS_TICKETS,
-  RATE_LIMIT_TOKEN_REFRESH,
   CHAT_COOLDOWN_MS,
   MAX_DASHBOARD_TEAMS,
   MAX_NAME_LENGTH,
-  ACCESS_TOKEN_TTL_S,
-  REFRESH_TOKEN_TTL_S,
 } from '../lib/constants.js';
 
-/**
- * Authenticate a request via Bearer token or WebSocket ticket.
- * @param {Request} request
- * @param {import('../types.js').Env} env
- * @returns {Promise<import('../types.js').User | null>}
- */
 export async function authenticate(request, env) {
   const auth = request.headers.get('Authorization');
   let token;
@@ -43,11 +29,12 @@ export async function authenticate(request, env) {
       if (!userId) return null;
       await env.AUTH_KV.delete(kvKey);
       const db = getDB(env);
-      if (!isUUID(userId)) {
-        const user = await db.getUserByHandle(userId);
-        return user || null;
+      if (!userId.includes('-')) {
+        const result = await db.getUserByHandle(userId);
+        return result.ok ? result.user : null;
       }
-      return db.getUser(userId);
+      const result = await db.getUser(userId);
+      return result.ok ? result.user : null;
     }
     // Fallback: raw token in URL (backwards compat for old clients)
     token = url.searchParams.get('token');
@@ -58,98 +45,31 @@ export async function authenticate(request, env) {
   if (!userId) return null;
 
   const db = getDB(env);
-  if (!isUUID(userId)) {
-    const user = await db.getUserByHandle(userId);
-    if (!user) return null;
+  if (!userId.includes('-')) {
+    const result = await db.getUserByHandle(userId);
+    if (!result.ok) return null;
+    const user = result.user;
     // Verify the looked-up user's handle still matches the KV entry.
     // Prevents auth bypass when a handle is reassigned to a different user:
     // stale KV entry "token:X -> oldHandle" would resolve to the new owner.
     if (user.handle !== userId) return null;
-    // Migrate handle→UUID and slide TTL forward
-    await env.AUTH_KV.put(`token:${token}`, user.id, { expirationTtl: ACCESS_TOKEN_TTL_S });
+    await env.AUTH_KV.put(`token:${token}`, user.id);
     return user;
   }
 
-  // Sliding window: re-PUT with fresh TTL on every successful auth.
-  // KV writes are cheap and eventually-consistent — the slight delay is
-  // fine because the worst case is the token lives slightly shorter than
-  // 90 days, never longer. This keeps active tokens alive indefinitely.
-  env.AUTH_KV.put(`token:${token}`, userId, { expirationTtl: ACCESS_TOKEN_TTL_S });
-  return db.getUser(userId);
+  const result = await db.getUser(userId);
+  if (result.ok) {
+    auditLog('auth.success', {
+      actor: result.user.handle,
+      outcome: 'success',
+      meta: { method: 'token' },
+    });
+    return result.user;
+  }
+  auditLog('auth.failure', { outcome: 'failure', meta: { reason: 'user_not_found' } });
+  return null;
 }
 
-// --- Token refresh ---
-// Accepts a refresh token, issues a new access token + new refresh token,
-// and revokes the old refresh token (rotation). If the old refresh token
-// was already revoked, the entire token family is invalidated (theft detection).
-export async function handleRefreshToken(request, env) {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const { refresh_token } = body;
-  if (!refresh_token || typeof refresh_token !== 'string') {
-    return json({ error: 'refresh_token is required' }, 400);
-  }
-  if (!refresh_token.startsWith('rt_')) {
-    return json({ error: 'Invalid refresh token format' }, 400);
-  }
-
-  // Look up the refresh token in KV
-  const userId = await env.AUTH_KV.get(`refresh:${refresh_token}`);
-  if (!userId) {
-    // Could be expired or already rotated. Check DB for theft detection:
-    // if this token exists in DB but is revoked, someone reused a rotated token.
-    const db = getDB(env);
-    const tokenRecord = await db.getRefreshToken(refresh_token);
-    if (tokenRecord && tokenRecord.revoked) {
-      // Potential token theft — revoke all refresh tokens for this user
-      await db.revokeAllRefreshTokens(tokenRecord.user_id);
-      // Also delete any KV entries for active refresh tokens
-      const activeTokens = await db.getActiveRefreshTokens(tokenRecord.user_id);
-      await Promise.all(activeTokens.map((t) => env.AUTH_KV.delete(`refresh:${t.token}`)));
-    }
-    return json({ error: 'Invalid or expired refresh token' }, 401);
-  }
-
-  const db = getDB(env);
-
-  // Rate limit refresh attempts
-  const limit = await db.checkRateLimit(`refresh:${userId}`, RATE_LIMIT_TOKEN_REFRESH);
-  if (!limit.allowed) {
-    return json({ error: 'Too many refresh attempts. Try again tomorrow.' }, 429);
-  }
-
-  // Revoke the old refresh token (rotation)
-  await Promise.all([
-    env.AUTH_KV.delete(`refresh:${refresh_token}`),
-    db.revokeRefreshToken(refresh_token),
-  ]);
-
-  // Issue new access token
-  const newAccessToken = crypto.randomUUID();
-  await env.AUTH_KV.put(`token:${newAccessToken}`, userId, { expirationTtl: ACCESS_TOKEN_TTL_S });
-
-  // Issue new refresh token
-  const newRefreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
-  await Promise.all([
-    env.AUTH_KV.put(`refresh:${newRefreshToken}`, userId, { expirationTtl: REFRESH_TOKEN_TTL_S }),
-    db.storeRefreshToken(userId, newRefreshToken),
-  ]);
-
-  // Update the user's primary token in the DB
-  await db.updateUserToken(userId, newAccessToken);
-
-  await db.consumeRateLimit(`refresh:${userId}`);
-
-  return json({ token: newAccessToken, refresh_token: newRefreshToken });
-}
-
-/**
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleGetWsTicket(user, env) {
   const db = getDB(env);
   return withRateLimit(
@@ -165,73 +85,59 @@ export async function handleGetWsTicket(user, env) {
   );
 }
 
-/**
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleUnlinkGithub(user, env) {
   const result = await getDB(env).unlinkGithub(user.id);
   return json(result);
 }
 
-/**
- * @param {Request} request
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleUpdateHandle(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const handle = requireString(body, 'handle');
-  if (!handle) return json({ error: 'Handle is required' }, 400);
-  // Moderation: handles are globally visible and persistent — sync blocklist check.
-  // Handles are alphanumeric+underscores only (validated in DB), but slurs can fit
-  // that format (e.g. "n1gger", "f4ggot" won't match, but "retard" will).
-  if (isBlocked(handle)) return json({ error: 'Content blocked' }, 400);
+  const { handle } = body;
+  if (!handle || typeof handle !== 'string') {
+    return json({ error: 'Handle is required' }, 400);
+  }
 
   const result = await getDB(env).updateHandle(user.id, handle);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) {
+    return json({ error: result.error }, 400);
+  }
 
   return json(result);
 }
 
-/**
- * @param {Request} request
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleUpdateColor(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const color = requireString(body, 'color');
-  if (!color) return json({ error: 'Color is required' }, 400);
+  const { color } = body;
+  if (!color || typeof color !== 'string') {
+    return json({ error: 'Color is required' }, 400);
+  }
 
   const result = await getDB(env).updateColor(user.id, color);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) {
+    return json({ error: result.error }, 400);
+  }
 
   return json(result);
 }
 
-/**
- * @param {Request} request
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleSetStatus(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const status = requireString(body, 'status', MAX_STATUS_LENGTH);
-  if (!status) return json({ error: `Status is required (max ${MAX_STATUS_LENGTH} chars)` }, 400);
+  const { status } = body;
+  if (!status || typeof status !== 'string') {
+    return json({ error: 'Status is required' }, 400);
+  }
+  if (status.length > MAX_STATUS_LENGTH) {
+    return json({ error: `Status must be ${MAX_STATUS_LENGTH} characters or less` }, 400);
+  }
 
   const modResult = await checkContent(status, env);
   if (modResult.blocked) {
@@ -242,39 +148,24 @@ export async function handleSetStatus(request, user, env) {
   return json({ ok: true });
 }
 
-/**
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleClearStatus(user, env) {
   await getDB(env).setStatus(user.id, null);
   return json({ ok: true });
 }
 
-/**
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleHeartbeat(user, env) {
   await getLobby(env).heartbeat(user.handle);
   return json({ ok: true });
 }
 
-/**
- * @param {Request} request
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleUpdateAgentProfile(request, user, env) {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
   const profile = {
-    framework: sanitizeString(body.framework, MAX_FRAMEWORK_LENGTH),
+    framework:
+      typeof body.framework === 'string' ? body.framework.slice(0, MAX_FRAMEWORK_LENGTH) : null,
     languages: sanitizeTags(body.languages),
     frameworks: sanitizeTags(body.frameworks),
     tools: sanitizeTags(body.tools),
@@ -282,28 +173,21 @@ export async function handleUpdateAgentProfile(request, user, env) {
   };
 
   const result = await getDB(env).updateAgentProfile(user.id, profile);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) return json({ error: result.error }, 400);
   return json(result);
 }
 
-/**
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleGetUserTeams(user, env) {
-  const teams = await getDB(env).getUserTeams(user.id);
-  return json({ teams });
+  const result = await getDB(env).getUserTeams(user.id);
+  if (result.error) return json({ error: result.error }, 500);
+  return json({ ok: true, teams: result.teams });
 }
 
-/**
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleDashboardSummary(user, env) {
   const db = getDB(env);
-  const teams = await db.getUserTeams(user.id);
+  const teamsResult = await db.getUserTeams(user.id);
+  if (teamsResult.error) return json({ error: teamsResult.error }, 500);
+  const teams = teamsResult.teams;
 
   if (teams.length === 0) {
     return json({
@@ -332,12 +216,13 @@ export async function handleDashboardSummary(user, env) {
             team_name: teamEntry.team_name,
           };
         }
+        const { ok: _ok, ...summaryData } = summary;
         return {
           ok: true,
           team: {
             team_id: teamEntry.team_id,
             team_name: teamEntry.team_name,
-            ...summary,
+            ...summaryData,
           },
         };
       } catch (err) {
@@ -385,12 +270,6 @@ export async function handleDashboardSummary(user, env) {
   return json(response);
 }
 
-/**
- * @param {Request} request
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleChatUpgrade(request, user, env) {
   const accountAge = Date.now() - new Date(user.created_at).getTime();
   if (accountAge < CHAT_COOLDOWN_MS) {
@@ -414,34 +293,27 @@ export async function handleChatUpgrade(request, user, env) {
 
   return roomStub.fetch(
     new Request(roomUrl.toString(), {
-      headers: /** @type {HeadersInit} */ ({
+      headers: {
         'X-Chinwag-Verified': '1',
         Upgrade: request.headers.get('Upgrade'),
         Connection: request.headers.get('Connection'),
         'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
         'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
         'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
-      }),
+      },
     }),
   );
 }
 
-/**
- * @param {Request} request
- * @param {import('../types.js').User} user
- * @param {import('../types.js').Env} env
- * @returns {Promise<Response>}
- */
 export async function handleCreateTeam(request, user, env) {
   let name = null;
   try {
     const body = await request.json();
-    name = sanitizeString(body.name, MAX_NAME_LENGTH);
+    name =
+      typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
   } catch {
-    /* body is optional */
+    /* body may be empty or non-JSON — name stays null */
   }
-  // Moderation: team names are user-visible and persistent
-  if (name && isBlocked(name)) return json({ error: 'Content blocked' }, 400);
 
   const db = getDB(env);
 
@@ -455,18 +327,27 @@ export async function handleCreateTeam(request, user, env) {
       const agentId = runtime.agentId;
       const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
       const team = getTeam(env, teamId);
-      await team.join(agentId, user.id, user.handle, runtime);
+      const joinResult = await team.join(agentId, user.id, user.handle, runtime);
+      if (joinResult.error) return json({ error: joinResult.error }, 500);
 
-      try {
-        await db.addUserTeam(user.id, teamId, name);
-      } catch (err) {
+      const dbResult = await db.addUserTeam(user.id, teamId, name);
+      if (dbResult.error) {
         console.error(
           `[chinwag] Failed to record created team ${teamId} for user ${user.id}:`,
-          err,
+          dbResult.error,
         );
+        await team.leave(agentId, user.id).catch(() => {
+          /* best-effort cleanup — team creation already failed */
+        });
+        return json({ error: 'Failed to record team membership' }, 500);
       }
 
-      return json({ team_id: teamId }, 201);
+      auditLog('team.create', {
+        actor: user.handle,
+        outcome: 'success',
+        meta: { team_id: teamId },
+      });
+      return json({ ok: true, team_id: teamId }, 201);
     },
   );
 }

@@ -84,13 +84,10 @@ export class LobbyDO extends DurableObject {
     if (!bestRoom) {
       bestRoom = `room-${crypto.randomUUID().slice(0, 8)}`;
       this.rooms.set(bestRoom, { count: 0, lastUpdate: Date.now() });
-      this.sql.exec(
-        'INSERT INTO rooms (room_id, count) VALUES (?, 0)',
-        bestRoom,
-      );
+      this.sql.exec('INSERT INTO rooms (room_id, count) VALUES (?, 0)', bestRoom);
     }
 
-    return { roomId: bestRoom };
+    return { ok: true, roomId: bestRoom };
   }
 
   async updateRoomCount(roomId, count) {
@@ -101,7 +98,7 @@ export class LobbyDO extends DurableObject {
     } else {
       this.rooms.set(roomId, { count, lastUpdate: Date.now() });
       this.sql.exec(
-        'INSERT INTO rooms (room_id, count, last_updated) VALUES (?, ?, datetime(\'now\')) ON CONFLICT(room_id) DO UPDATE SET count = excluded.count, last_updated = excluded.last_updated',
+        "INSERT INTO rooms (room_id, count, last_updated) VALUES (?, ?, datetime('now')) ON CONFLICT(room_id) DO UPDATE SET count = excluded.count, last_updated = excluded.last_updated",
         roomId,
         count,
       );
@@ -132,10 +129,7 @@ export class LobbyDO extends DurableObject {
     // Batch-delete stale presence from SQLite
     if (staleHandles.length > 0) {
       const placeholders = staleHandles.map(() => '?').join(', ');
-      this.sql.exec(
-        `DELETE FROM presence WHERE handle IN (${placeholders})`,
-        ...staleHandles,
-      );
+      this.sql.exec(`DELETE FROM presence WHERE handle IN (${placeholders})`, ...staleHandles);
     }
 
     let chatUsers = 0;
@@ -145,6 +139,6 @@ export class LobbyDO extends DurableObject {
       activeRooms++;
     }
 
-    return { online: this.presence.size, chatUsers, activeRooms };
+    return { ok: true, online: this.presence.size, chatUsers, activeRooms };
   }
 }
