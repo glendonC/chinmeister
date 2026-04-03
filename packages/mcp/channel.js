@@ -2,8 +2,13 @@
 
 // chinwag channel — pushes real-time team state changes into Claude Code sessions.
 // This is a separate MCP server process that declares the claude/channel capability.
-// It polls the backend for team context, diffs against previous state, and emits
-// notifications for meaningful changes (new agents, file edits, conflicts, memories).
+//
+// Architecture: WebSocket-first with HTTP reconciliation fallback.
+// - Connects to TeamDO as a watcher via WebSocket
+// - Receives delta events in real-time, maintains local TeamContext via applyDelta
+// - Diffs state snapshots to detect joins, conflicts, stuckness, locks, messages
+// - Falls back to 10s HTTP polling when WebSocket is disconnected
+// - Reconciles via full HTTP fetch every 60s to catch any drift
 //
 // Unlike the main MCP server, the channel server has no tools — it only pushes.
 // CRITICAL: Never console.log — stdio transport. Use console.error for logging.
@@ -12,28 +17,16 @@ import { readFileSync } from 'fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { loadConfig, configExists } from './dist/config.js';
-import { api } from './dist/api.js';
+import { api, getApiUrl } from './dist/api.js';
 import { findTeamFile, teamHandlers } from './dist/team.js';
 import { detectRuntimeIdentity } from './dist/identity.js';
 import { resolveAgentIdentity } from './dist/lifecycle.js';
 import { diffState } from './dist/diff-state.js';
 import { isProcessAlive, pingAgentTerminal } from '@chinwag/shared/session-registry.js';
+import { createChannelWebSocket } from './lib/channel-ws.js';
+import { createReconciler } from './lib/channel-reconcile.js';
 
-// --- Constants ---
-const POLL_INTERVAL_MS = 10_000;
-const HEARTBEAT_INTERVAL_MS = 30_000;
 const PARENT_WATCH_INTERVAL_MS = 5_000;
-/** @type {number} Max consecutive poll failures before backoff caps */
-const MAX_POLL_BACKOFF_MULTIPLIER = 6;
-/** @type {number} Max consecutive heartbeat failures before backoff caps */
-const MAX_HEARTBEAT_BACKOFF_MULTIPLIER = 6;
-
-/**
- * HTTP status code indicating the agent is not a team member.
- * Used instead of string-matching error messages.
- * @type {number}
- */
-const NOT_A_MEMBER_STATUS = 403;
 
 let PKG = { version: '0.0.0' };
 try {
@@ -90,101 +83,63 @@ async function main() {
   await server.connect(transport);
   console.error('[chinwag-channel] Channel server running');
 
-  // MCP server handles joining. Channel only reads context + heartbeats.
+  // MCP server (index.js) handles joining and agent presence.
+  // Channel only observes via watcher WebSocket + reconciliation.
 
-  // State diffing + stuckness tracking
+  // State diffing infrastructure
   let prevState = null;
-  const stucknessAlerted = new Map(); // handle -> updated_at when alert was sent
+  const stucknessAlerted = new Map();
 
-  // Poll backoff state — backs off on consecutive failures, resets on success
-  let pollFailures = 0;
-
-  const poll = async () => {
-    try {
-      const ctx = await team.getTeamContext(teamId);
-      if (pollFailures > 0) {
-        console.error(`[chinwag-channel] Poll recovered after ${pollFailures} failure(s)`);
-        pollFailures = 0;
-      }
-      if (prevState) {
-        const events = diffState(prevState, ctx, stucknessAlerted);
-        for (const event of events) {
-          await pushEvent(server, agentId, event);
-        }
-      }
-      prevState = ctx;
-    } catch (err) {
-      pollFailures++;
-      const backoffMultiplier = Math.min(pollFailures, MAX_POLL_BACKOFF_MULTIPLIER);
-      const nextRetryMs = POLL_INTERVAL_MS * backoffMultiplier;
-      console.error(
-        `[chinwag-channel] Poll failed (attempt ${pollFailures}, next retry in ${nextRetryMs / 1000}s): ${err.message}`,
-      );
-    }
+  const logger = {
+    info: (msg) => console.error(`[chinwag-channel] ${msg}`),
+    warn: (msg) => console.error(`[chinwag-channel] ${msg}`),
+    error: (msg) => console.error(`[chinwag-channel] ${msg}`),
   };
 
-  // Initial fetch (don't emit events on first poll)
-  try {
-    prevState = await team.getTeamContext(teamId);
-  } catch (err) {
-    console.error('[chinwag-channel]', err?.message || 'initial fetch failed, will retry');
-  }
-
-  // Adaptive polling: interval self-adjusts based on consecutive failure count
-  let pollTimer = null;
-  function schedulePoll() {
-    const backoffMultiplier = Math.min(pollFailures + 1, MAX_POLL_BACKOFF_MULTIPLIER);
-    const delay = POLL_INTERVAL_MS * backoffMultiplier;
-    pollTimer = setTimeout(async () => {
-      await poll();
-      schedulePoll();
-    }, delay);
-    pollTimer.unref?.();
-  }
-  schedulePoll();
-
-  // Heartbeat with backoff — rejoin if evicted (detected by status code, not string matching)
-  let heartbeatFailures = 0;
-  let heartbeatTimer = null;
-
-  function scheduleHeartbeat() {
-    const backoffMultiplier = Math.min(heartbeatFailures + 1, MAX_HEARTBEAT_BACKOFF_MULTIPLIER);
-    const delay = HEARTBEAT_INTERVAL_MS * backoffMultiplier;
-    heartbeatTimer = setTimeout(async () => {
-      try {
-        await team.heartbeat(teamId);
-        if (heartbeatFailures > 0) {
-          console.error(
-            `[chinwag-channel] Heartbeat recovered after ${heartbeatFailures} failure(s)`,
-          );
-          heartbeatFailures = 0;
-        }
-      } catch (err) {
-        heartbeatFailures++;
-        if (err.status === NOT_A_MEMBER_STATUS) {
-          try {
-            await team.joinTeam(teamId);
-            heartbeatFailures = 0;
-            console.error('[chinwag-channel] Rejoined team after eviction');
-          } catch (rejoinErr) {
-            const msg = rejoinErr instanceof Error ? rejoinErr.message : String(rejoinErr);
-            console.error(`[chinwag-channel] Rejoin failed (attempt ${heartbeatFailures}): ${msg}`);
-          }
-        } else {
-          const nextRetryMs =
-            HEARTBEAT_INTERVAL_MS *
-            Math.min(heartbeatFailures + 1, MAX_HEARTBEAT_BACKOFF_MULTIPLIER);
-          console.error(
-            `[chinwag-channel] Heartbeat failed (attempt ${heartbeatFailures}, next in ${nextRetryMs / 1000}s): ${err?.message || 'unknown'}`,
-          );
-        }
+  // WebSocket: real-time delta events from TeamDO
+  const channelWs = createChannelWebSocket({
+    client,
+    getApiUrl,
+    teamId,
+    agentId,
+    onContextUpdate: (prev, curr) => {
+      if (prev === null) {
+        // Initial context on connect — store, don't diff
+        prevState = curr;
+        return;
       }
-      scheduleHeartbeat();
-    }, delay);
-    heartbeatTimer.unref?.();
-  }
-  scheduleHeartbeat();
+      const events = diffState(prev, curr, stucknessAlerted);
+      for (const event of events) {
+        pushEvent(server, agentId, event);
+      }
+      prevState = curr;
+    },
+    logger,
+  });
 
+  // Reconciler: periodic HTTP fetch as safety net (60s) or fallback (10s)
+  const reconciler = createReconciler({
+    team,
+    teamId,
+    getLocalContext: () => channelWs.getContext(),
+    replaceContext: (ctx) => {
+      channelWs.setContext(ctx);
+      prevState = ctx;
+    },
+    onEvents: (events) => {
+      for (const event of events) {
+        pushEvent(server, agentId, event);
+      }
+    },
+    stucknessAlerted,
+    isWsConnected: () => channelWs.isConnected(),
+    logger,
+  });
+
+  channelWs.connect();
+  reconciler.start();
+
+  // Watch parent process — exit if parent dies
   const parentPid = process.ppid;
   const parentWatch = setInterval(() => {
     if (parentPid > 1 && !isProcessAlive(parentPid)) {
@@ -194,14 +149,8 @@ async function main() {
   parentWatch.unref?.();
 
   const cleanup = () => {
-    if (pollTimer) {
-      clearTimeout(pollTimer);
-      pollTimer = null;
-    }
-    if (heartbeatTimer) {
-      clearTimeout(heartbeatTimer);
-      heartbeatTimer = null;
-    }
+    channelWs.disconnect();
+    reconciler.stop();
     clearInterval(parentWatch);
     process.exit(0);
   };

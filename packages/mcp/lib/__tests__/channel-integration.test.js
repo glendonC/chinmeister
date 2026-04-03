@@ -25,7 +25,11 @@ vi.mock('../../dist/config.js', () => ({
 }));
 
 vi.mock('../../dist/api.js', () => ({
-  api: vi.fn().mockReturnValue({}),
+  api: vi.fn().mockReturnValue({
+    post: vi.fn().mockResolvedValue({ ticket: 'tk_test' }),
+    get: vi.fn().mockResolvedValue({}),
+  }),
+  getApiUrl: vi.fn().mockReturnValue('https://api.test.com'),
 }));
 
 vi.mock('../../dist/team.js', () => ({
@@ -66,10 +70,30 @@ vi.mock('@chinwag/shared/session-registry.js', () => ({
   pingAgentTerminal: vi.fn(),
 }));
 
+vi.mock('../channel-ws.js', () => ({
+  createChannelWebSocket: vi.fn().mockReturnValue({
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+    getContext: vi.fn().mockReturnValue(null),
+    setContext: vi.fn(),
+    isConnected: vi.fn().mockReturnValue(false),
+  }),
+}));
+
+vi.mock('../channel-reconcile.js', () => ({
+  createReconciler: vi.fn().mockReturnValue({
+    start: vi.fn(),
+    stop: vi.fn(),
+    reconcile: vi.fn(),
+  }),
+}));
+
 import { configExists, loadConfig } from '../../dist/config.js';
 import { findTeamFile, teamHandlers } from '../../dist/team.js';
 import { detectRuntimeIdentity } from '../../dist/identity.js';
 import { isProcessAlive, pingAgentTerminal } from '@chinwag/shared/session-registry.js';
+import { createChannelWebSocket } from '../channel-ws.js';
+import { createReconciler } from '../channel-reconcile.js';
 
 describe('channel.js entry point coverage', () => {
   let exitSpy;
@@ -181,31 +205,8 @@ describe('channel.js entry point coverage', () => {
 
     // Should have logged the running message
     expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Channel server running'));
-    // Should have fetched initial context
-    const team = teamHandlers();
-    expect(team.getTeamContext).toHaveBeenCalled();
-  });
-
-  it('handles initial context fetch failure', async () => {
-    configExists.mockReturnValue(true);
-    loadConfig.mockReturnValue({ token: 'tok_test' });
-    findTeamFile.mockReturnValue('t_abc');
-    detectRuntimeIdentity.mockReturnValue({
-      hostTool: 'claude-code',
-      transport: 'channel',
-      capabilities: ['channel'],
-    });
-    const team = teamHandlers();
-    team.getTeamContext.mockRejectedValue(new Error('Network error'));
-
-    vi.resetModules();
-    await import('../../channel.js');
-    await new Promise((r) => setTimeout(r, 100));
-
-    expect(consoleSpy).toHaveBeenCalledWith(
-      expect.stringContaining('[chinwag-channel]'),
-      expect.anything(),
-    );
+    // Should not have exited
+    expect(exitSpy).not.toHaveBeenCalled();
   });
 });
 

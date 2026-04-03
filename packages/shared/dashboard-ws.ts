@@ -172,7 +172,11 @@ function applyActivity(ctx: TeamContext, event: ActivityEvent): TeamContext {
       ...member,
       status: 'active',
       seconds_since_update: 0,
-      activity: { files: event.files || [], summary: event.summary || null },
+      activity: {
+        files: event.files || [],
+        summary: event.summary || null,
+        updated_at: new Date().toISOString(),
+      },
     };
   });
   return { ...ctx, members };

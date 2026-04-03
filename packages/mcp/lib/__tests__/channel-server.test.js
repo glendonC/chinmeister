@@ -219,68 +219,8 @@ describe('polling logic', () => {
   });
 });
 
-// --- Heartbeat logic ---
-
-describe('heartbeat logic', () => {
-  it('calls team.heartbeat on interval', async () => {
-    const team = {
-      heartbeat: vi.fn().mockResolvedValue({ ok: true }),
-    };
-
-    await team.heartbeat('t_abc');
-    expect(team.heartbeat).toHaveBeenCalledWith('t_abc');
-  });
-
-  it('rejoins team when heartbeat returns 403 (not a member)', async () => {
-    const err403 = new Error('Not a member');
-    err403.status = 403;
-    const team = {
-      heartbeat: vi.fn().mockRejectedValue(err403),
-      joinTeam: vi.fn().mockResolvedValue({ ok: true }),
-    };
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    try {
-      await team.heartbeat('t_abc');
-    } catch (err) {
-      if (err.status === 403) {
-        try {
-          await team.joinTeam('t_abc');
-        } catch (rejoinErr) {
-          consoleSpy(`[chinwag-channel] ${rejoinErr.message}`);
-        }
-      }
-    }
-
-    expect(team.joinTeam).toHaveBeenCalledWith('t_abc');
-    consoleSpy.mockRestore();
-  });
-
-  it('handles rejoin failure gracefully', async () => {
-    const err403 = new Error('Not a member');
-    err403.status = 403;
-    const team = {
-      heartbeat: vi.fn().mockRejectedValue(err403),
-      joinTeam: vi.fn().mockRejectedValue(new Error('Team deleted')),
-    };
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
-
-    try {
-      await team.heartbeat('t_abc');
-    } catch (err) {
-      if (err.status === 403) {
-        try {
-          await team.joinTeam('t_abc');
-        } catch (rejoinErr) {
-          consoleSpy(`[chinwag-channel] ${rejoinErr.message}`);
-        }
-      }
-    }
-
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('Team deleted'));
-    consoleSpy.mockRestore();
-  });
-});
+// Heartbeat logic removed — index.js (MCP server) owns agent presence.
+// Channel connects as role:watcher and does not send heartbeats.
 
 // --- Stuckness tracking integration ---
 
@@ -314,18 +254,17 @@ describe('stuckness tracking with channel', () => {
 // --- Cleanup logic ---
 
 describe('cleanup', () => {
-  it('clears all intervals on cleanup', () => {
-    const intervals = {
-      poll: setInterval(() => {}, 10_000),
-      heartbeat: setInterval(() => {}, 30_000),
-      parentWatch: setInterval(() => {}, 5_000),
-    };
+  it('disconnects WebSocket, stops reconciler, and clears parent watch', () => {
+    const channelWs = { disconnect: vi.fn() };
+    const reconciler = { stop: vi.fn() };
+    const parentWatch = setInterval(() => {}, 5_000);
 
-    clearInterval(intervals.poll);
-    clearInterval(intervals.heartbeat);
-    clearInterval(intervals.parentWatch);
+    // Simulate cleanup
+    channelWs.disconnect();
+    reconciler.stop();
+    clearInterval(parentWatch);
 
-    // No assertion needed — just verifying no errors
-    expect(true).toBe(true);
+    expect(channelWs.disconnect).toHaveBeenCalled();
+    expect(reconciler.stop).toHaveBeenCalled();
   });
 });
