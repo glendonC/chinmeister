@@ -1,5 +1,16 @@
 import styles from './StatusState.module.css';
 
+interface Props {
+  eyebrow?: string;
+  title: string;
+  hint?: string;
+  detail?: string | null;
+  meta?: string;
+  tone?: 'neutral' | 'danger' | 'loading';
+  actionLabel?: string;
+  onAction?: (() => void) | null;
+}
+
 export default function StatusState({
   eyebrow,
   title,
@@ -9,8 +20,9 @@ export default function StatusState({
   tone = 'neutral',
   actionLabel = '',
   onAction = null,
-}) {
-  const toneClass = tone === 'danger' ? styles.danger : tone === 'loading' ? styles.loading : styles.neutral;
+}: Props) {
+  const toneClass =
+    tone === 'danger' ? styles.danger : tone === 'loading' ? styles.loading : styles.neutral;
 
   return (
     <section className={`${styles.state} ${toneClass}`.trim()} role="status" aria-live="polite">
@@ -22,7 +34,7 @@ export default function StatusState({
       <h2 className={styles.title}>{title}</h2>
       {hint ? <p className={styles.hint}>{hint}</p> : null}
 
-      {(detail || (actionLabel && onAction)) ? (
+      {detail || (actionLabel && onAction) ? (
         <div className={styles.footer}>
           {detail ? <p className={styles.detail}>{detail}</p> : <span />}
           {actionLabel && onAction ? (

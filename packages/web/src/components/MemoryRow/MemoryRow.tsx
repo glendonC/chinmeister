@@ -1,32 +1,24 @@
 import { useState, useCallback } from 'react';
+import type { Memory } from '../../lib/apiSchemas.js';
 import { formatRelativeTime } from '../../lib/relativeTime.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { validateTags } from '../../lib/validateTags.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './MemoryRow.module.css';
 
-/**
- * Mode state machine for MemoryRow.
- *
- * States: 'view' | 'editing' | 'confirming-delete' | 'saving'
- *
- * Transitions:
- *   view → editing           (startEdit)
- *   view → confirming-delete (requestDelete)
- *   editing → view           (cancelEdit)
- *   editing → saving         (save)
- *   confirming-delete → view (cancelDelete / blur)
- *   confirming-delete → saving (confirmDelete)
- *   saving → view            (save success / delete success)
- *   saving → editing         (save failure)
- *   saving → view            (delete failure, resets to view)
- */
+type Mode = 'view' | 'editing' | 'confirming-delete' | 'saving';
 
-export default function MemoryRow({ memory, onUpdate, onDelete }) {
-  const [mode, setMode] = useState('view');
+interface Props {
+  memory: Memory;
+  onUpdate?: (id: string, text?: string, tags?: string[]) => Promise<void>;
+  onDelete?: (id: string) => Promise<void>;
+}
+
+export default function MemoryRow({ memory, onUpdate, onDelete }: Props) {
+  const [mode, setMode] = useState<Mode>('view');
   const [editText, setEditText] = useState(memory.text);
   const [editTags, setEditTags] = useState((memory.tags || []).join(', '));
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const saving = mode === 'saving';
   const isEditing = mode === 'editing' || mode === 'saving';
@@ -84,14 +76,14 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
     setMode('saving');
     setError(null);
     try {
-      await onUpdate(
+      await onUpdate?.(
         memory.id,
         textChanged ? editText.trim() : undefined,
         tagsChanged ? newTags : undefined,
       );
       setMode('view');
     } catch (err) {
-      setError(err.message || 'Update failed');
+      setError((err as Error).message || 'Update failed');
       setMode('editing');
     }
   }, [mode, editText, editTags, memory.id, memory.text, memory.tags, onUpdate]);
@@ -101,10 +93,10 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
     setMode('saving');
     setError(null);
     try {
-      await onDelete(memory.id);
+      await onDelete?.(memory.id);
       // Component will unmount on success — no state update needed
     } catch (err) {
-      setError(err.message || 'Delete failed');
+      setError((err as Error).message || 'Delete failed');
       setMode('view');
     }
   }, [mode, memory.id, onDelete]);
@@ -117,7 +109,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
     }
   }
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Escape') cancelEdit();
     if (e.key === 'Enter' && e.metaKey) save();
   }
@@ -177,7 +169,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }) {
           <div className={styles.source}>
             {toolMeta && (
               <>
-                <ToolIcon tool={rawTool} size={14} />
+                <ToolIcon tool={rawTool!} size={14} />
                 <span className={styles.toolLabel}>{toolMeta.label}</span>
               </>
             )}

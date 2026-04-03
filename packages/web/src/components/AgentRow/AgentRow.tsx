@@ -1,8 +1,13 @@
+import type { Member } from '../../lib/apiSchemas.js';
 import { formatDuration } from '../../lib/utils.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './AgentRow.module.css';
 
-export default function AgentRow({ agent }) {
+interface Props {
+  agent: Member & { session_minutes?: number | null };
+}
+
+export default function AgentRow({ agent }: Props) {
   const isActive = agent.status === 'active';
   const tool = agent.host_tool && agent.host_tool !== 'unknown' ? agent.host_tool : null;
   const files = agent.activity?.files || [];

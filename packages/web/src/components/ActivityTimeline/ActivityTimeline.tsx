@@ -1,26 +1,44 @@
 import { useMemo, useState, useCallback } from 'react';
 import styles from './ActivityTimeline.module.css';
-import { BIN_COUNT, buildTimelineBins } from './timelineBins.js';
+import { BIN_COUNT, buildTimelineBins, type TimelineBin } from './timelineBins.js';
 
-const RANGES = [
+interface Range {
+  id: string;
+  label: string;
+  days: number;
+}
+
+const RANGES: Range[] = [
   { id: '24h', label: '24h', days: 1 },
   { id: '7d', label: '7d', days: 7 },
   { id: '30d', label: '30d', days: 30 },
 ];
 
-export default function ActivityTimeline({ sessions = [], liveCount = 0 }) {
-  const [rangeId, setRangeId] = useState('24h');
-  const [hoveredBin, setHoveredBin] = useState(null);
+interface SessionInput {
+  started_at?: string | null;
+  ended_at?: string | null;
+  edit_count?: number;
+  conflicts_hit?: number;
+}
 
-  const range = RANGES.find((r) => r.id === rangeId);
-  const bins = useMemo(
+interface Props {
+  sessions?: SessionInput[];
+  liveCount?: number;
+}
+
+export default function ActivityTimeline({ sessions = [], liveCount = 0 }: Props) {
+  const [rangeId, setRangeId] = useState<string>('24h');
+  const [hoveredBin, setHoveredBin] = useState<number | null>(null);
+
+  const range = RANGES.find((r) => r.id === rangeId)!;
+  const bins = useMemo<TimelineBin[]>(
     () => buildTimelineBins(sessions, liveCount, range.days),
     [sessions, liveCount, range.days],
   );
   const max = Math.max(...bins.map((b) => b.value), 1);
   const hasActivity = bins.some((b) => b.value > 0);
 
-  const selectRange = useCallback((id) => setRangeId(id), []);
+  const selectRange = useCallback((id: string) => setRangeId(id), []);
 
   if (!hasActivity) {
     return (

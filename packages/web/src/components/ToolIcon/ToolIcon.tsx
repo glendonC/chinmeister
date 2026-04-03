@@ -1,7 +1,7 @@
 import { getToolMeta } from '../../lib/toolMeta.js';
 import styles from './ToolIcon.module.css';
 
-function faviconUrl(website) {
+function faviconUrl(website: string | undefined): string | null {
   if (!website) return null;
   try {
     const { hostname } = new URL(website);
@@ -11,6 +11,15 @@ function faviconUrl(website) {
   }
 }
 
+interface Props {
+  tool: string;
+  website?: string;
+  size?: number;
+  monochrome?: boolean;
+  className?: string;
+  ariaHidden?: boolean;
+}
+
 export default function ToolIcon({
   tool,
   website,
@@ -18,13 +27,11 @@ export default function ToolIcon({
   monochrome = false,
   className = '',
   ariaHidden = true,
-}) {
+}: Props) {
   const meta = getToolMeta(tool);
-  const classes = [
-    styles.icon,
-    monochrome ? styles.monochrome : '',
-    className,
-  ].filter(Boolean).join(' ');
+  const classes = [styles.icon, monochrome ? styles.monochrome : '', className]
+    .filter(Boolean)
+    .join(' ');
 
   // 1. Local SVG (highest quality — hand-curated)
   if (meta.icon) {
@@ -40,7 +47,8 @@ export default function ToolIcon({
       <span
         className={classes}
         style={{
-          width: size, height: size,
+          width: size,
+          height: size,
           backgroundColor: meta.color,
           WebkitMaskImage: `url(${meta.icon})`,
           maskImage: `url(${meta.icon})`,

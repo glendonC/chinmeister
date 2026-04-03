@@ -1,33 +1,36 @@
-import { Component } from 'react';
+import { Component, type ErrorInfo, type ReactNode } from 'react';
 import styles from './RenderErrorBoundary.module.css';
 
-/**
- * Consolidated error boundary used across the app.
- *
- * Props:
- *   label    - Log label (e.g. "Sidebar", "App shell")
- *   resetKey - Auto-reset when this key changes
- *   fallback - Optional render prop: ({ reset }) => JSX. Uses default UI if omitted.
- */
-export default class RenderErrorBoundary extends Component {
-  state = { hasError: false };
+interface Props {
+  children: ReactNode;
+  label?: string;
+  resetKey?: string | number;
+  fallback?: (opts: { reset: () => void }) => ReactNode;
+}
 
-  static getDerivedStateFromError() {
+interface State {
+  hasError: boolean;
+}
+
+export default class RenderErrorBoundary extends Component<Props, State> {
+  state: State = { hasError: false };
+
+  static getDerivedStateFromError(): State {
     return { hasError: true };
   }
 
-  componentDidCatch(error, info) {
+  componentDidCatch(error: Error, info: ErrorInfo): void {
     const label = this.props.label || 'Render';
     console.error(`[chinwag] ${label} error:`, error, info.componentStack);
   }
 
-  componentDidUpdate(prevProps) {
+  componentDidUpdate(prevProps: Props): void {
     if (this.state.hasError && this.props.resetKey !== prevProps.resetKey) {
       this.setState({ hasError: false });
     }
   }
 
-  render() {
+  render(): ReactNode {
     if (this.state.hasError) {
       const reset = () => this.setState({ hasError: false });
       if (this.props.fallback) return this.props.fallback({ reset });

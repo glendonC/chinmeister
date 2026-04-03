@@ -1,11 +1,23 @@
 import styles from './ConflictBanner.module.css';
 
-export default function ConflictBanner({ conflicts }) {
-  const items = conflicts.map((entry) => (
+interface ConflictEntry {
+  file: string;
+  owners?: string[];
+  agents?: string[];
+}
+
+type ConflictInput = ConflictEntry | [string, string[]];
+
+interface Props {
+  conflicts: ConflictInput[];
+}
+
+export default function ConflictBanner({ conflicts }: Props) {
+  const items = conflicts.map((entry) =>
     Array.isArray(entry)
       ? { file: entry[0], owners: entry[1] }
-      : { file: entry.file, owners: entry.owners || entry.agents || [] }
-  ));
+      : { file: entry.file, owners: entry.owners || entry.agents || [] },
+  );
 
   return (
     <section className={styles.conflictsBanner}>

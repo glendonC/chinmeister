@@ -1,34 +1,38 @@
 import { useState } from 'react';
 import { useTeamStore } from '../../lib/stores/teams.js';
-import { navigate } from '../../lib/router.js';
+import { navigate, type Route } from '../../lib/router.js';
 import { projectGradient } from '../../lib/projectGradient.js';
 import styles from './Sidebar.module.css';
 
-export default function Sidebar({ activeView }) {
+interface Props {
+  activeView: Route['view'];
+}
+
+export default function Sidebar({ activeView }: Props) {
   const teams = useTeamStore((s) => s.teams);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const overviewActive = activeView === 'overview';
   const toolsActive = activeView === 'tools';
   const settingsActive = activeView === 'settings';
 
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState<boolean>(false);
 
-  function goOverview() {
+  function goOverview(): void {
     navigate('overview');
     setMobileOpen(false);
   }
 
-  function goTeam(teamId) {
+  function goTeam(teamId: string): void {
     navigate('project', teamId);
     setMobileOpen(false);
   }
 
-  function goSettings() {
+  function goSettings(): void {
     navigate('settings');
     setMobileOpen(false);
   }
 
-  function goTools() {
+  function goTools(): void {
     navigate('tools');
     setMobileOpen(false);
   }

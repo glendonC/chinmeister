@@ -1,17 +1,28 @@
+import type { ReactNode } from 'react';
 import styles from './Banner.module.css';
 
-/**
- * Squircle notification banner — centered, faint gradient background.
- * Use for errors, announcements, and status messages.
- *
- * @param {'error' | 'info' | 'success'} variant — color palette
- * @param {string} eyebrow — uppercase label (e.g. "Live sync paused")
- * @param {React.ReactNode} children — main message content
- * @param {string} [meta] — secondary muted text
- * @param {{ label: string, onClick: () => void }[]} [actions] — action buttons
- * @param {() => void} [onDismiss] — show close button when provided
- */
-export default function Banner({ variant = 'info', eyebrow, children, meta, actions, onDismiss }) {
+interface BannerAction {
+  label: string;
+  onClick: () => void;
+}
+
+interface Props {
+  variant?: 'error' | 'info' | 'success';
+  eyebrow?: string;
+  children: ReactNode;
+  meta?: string;
+  actions?: BannerAction[];
+  onDismiss?: () => void;
+}
+
+export default function Banner({
+  variant = 'info',
+  eyebrow,
+  children,
+  meta,
+  actions,
+  onDismiss,
+}: Props) {
   return (
     <div className={`${styles.banner} ${styles[variant]}`} role="status" aria-live="polite">
       <div className={styles.body}>

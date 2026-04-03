@@ -1,8 +1,13 @@
+import type { Lock } from '../../lib/apiSchemas.js';
 import { formatDuration } from '../../lib/utils.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './LockRow.module.css';
 
-export default function LockRow({ lock }) {
+interface Props {
+  lock: Lock;
+}
+
+export default function LockRow({ lock }: Props) {
   const owner = lock.handle;
   const duration = lock.minutes_held != null ? formatDuration(lock.minutes_held) : '';
 

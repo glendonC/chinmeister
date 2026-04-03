@@ -1,6 +1,11 @@
 import styles from './ViewHeader.module.css';
 
-export default function ViewHeader({ eyebrow, title }) {
+interface Props {
+  eyebrow?: string;
+  title: string;
+}
+
+export default function ViewHeader({ eyebrow, title }: Props) {
   return (
     <header className={styles.header}>
       <div className={styles.copy}>

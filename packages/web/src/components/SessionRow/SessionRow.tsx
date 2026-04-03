@@ -1,8 +1,13 @@
+import type { Session } from '../../lib/apiSchemas.js';
 import { formatDuration } from '../../lib/utils.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './SessionRow.module.css';
 
-export default function SessionRow({ session }) {
+interface Props {
+  session: Session;
+}
+
+export default function SessionRow({ session }: Props) {
   const duration = formatDuration(session.duration_minutes);
   const isLive = !session.ended_at;
   const editCount = session.edit_count || 0;

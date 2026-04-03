@@ -2,9 +2,15 @@ import { useState } from 'react';
 import styles from './KeyboardHint.module.css';
 
 const STORAGE_KEY = 'chinwag:hint:arrow-nav-v2';
-const alreadySeen = () => !!localStorage.getItem(STORAGE_KEY);
+const alreadySeen = (): boolean => !!localStorage.getItem(STORAGE_KEY);
 
-export default function KeyboardHint({ open, onOpen, onDismiss }) {
+interface Props {
+  open: boolean;
+  onOpen: () => void;
+  onDismiss: () => void;
+}
+
+export default function KeyboardHint({ open, onOpen, onDismiss }: Props) {
   if (alreadySeen()) return null;
 
   return (
@@ -13,7 +19,10 @@ export default function KeyboardHint({ open, onOpen, onDismiss }) {
         <button
           type="button"
           className={styles.trigger}
-          onClick={(e) => { e.stopPropagation(); onOpen(); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen();
+          }}
           aria-label="Keyboard shortcut hint"
         >
           ?
@@ -25,7 +34,14 @@ export default function KeyboardHint({ open, onOpen, onDismiss }) {
             <kbd className={styles.key}>&rarr;</kbd>
           </span>
           <span className={styles.text}>to navigate</span>
-          <button type="button" className={styles.dismiss} onClick={(e) => { e.stopPropagation(); onDismiss(); }}>
+          <button
+            type="button"
+            className={styles.dismiss}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDismiss();
+            }}
+          >
             Got it
           </button>
         </span>
@@ -34,7 +50,13 @@ export default function KeyboardHint({ open, onOpen, onDismiss }) {
   );
 }
 
-export function useKeyboardHint() {
+interface KeyboardHintState {
+  open: boolean;
+  onOpen: () => void;
+  onDismiss: () => void;
+}
+
+export function useKeyboardHint(): KeyboardHintState {
   const [open, setOpen] = useState(false);
   return {
     open,
