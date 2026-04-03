@@ -12,6 +12,12 @@ export default defineConfig({
       exclude: ['lib/__tests__/**'],
       reporter: ['text', 'json-summary'],
       reportsDirectory: './coverage',
+      thresholds: {
+        statements: 74,
+        branches: 71,
+        functions: 72,
+        lines: 74,
+      },
     },
   },
 });

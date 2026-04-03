@@ -28,13 +28,13 @@ export default defineConfig({
       reporter: ['text', 'json-summary'],
       reportsDirectory: './coverage',
       // Thresholds enforce current coverage floor (~5% margin below actual).
-      // Actuals as of 2026-04-03: stmts 44.4, branches 30.7, funcs 43.3, lines 44.9.
+      // Actuals as of 2026-04-03: stmts 49.2, branches 32.5, funcs 42, lines 50.8.
       // Raise these as more view-level and component tests are added.
       thresholds: {
-        statements: 39,
-        branches: 25,
+        statements: 45,
+        branches: 28,
         functions: 38,
-        lines: 39,
+        lines: 46,
       },
     },
   },
