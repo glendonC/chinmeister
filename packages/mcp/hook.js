@@ -9,13 +9,13 @@
 // Exit code 0 = allow, non-zero = block (for PreToolUse).
 
 import { basename } from 'path';
-import { loadConfig, configExists } from './lib/config.js';
-import { api } from './lib/api.js';
-import { findTeamFile, teamHandlers } from './lib/team.js';
-import { detectRuntimeIdentity } from './lib/identity.js';
-import { resolveAgentIdentity } from './lib/lifecycle.js';
-import { formatWho } from './lib/utils/formatting.js';
-import { formatTeamContextDisplay } from './lib/utils/display.js';
+import { loadConfig, configExists } from './dist/config.js';
+import { api } from './dist/api.js';
+import { findTeamFile, teamHandlers } from './dist/team.js';
+import { detectRuntimeIdentity } from './dist/identity.js';
+import { resolveAgentIdentity } from './dist/lifecycle.js';
+import { formatWho } from './dist/utils/formatting.js';
+import { formatTeamContextDisplay } from './dist/utils/display.js';
 
 // --- Constants ---
 const STDIN_TIMEOUT_MS = 3000;

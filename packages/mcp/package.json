@@ -9,6 +9,7 @@
     "chinwag-channel": "./channel.js"
   },
   "scripts": {
+    "clean": "rm -rf dist",
     "build": "node build.mjs",
     "start": "node index.js",
     "test": "vitest run",

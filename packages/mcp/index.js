@@ -8,19 +8,19 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { readFileSync } from 'fs';
 import { basename } from 'path';
-import { loadConfig, configExists } from './lib/config.js';
-import { api, getApiUrl } from './lib/api.js';
-import { scanEnvironment } from './lib/profile.js';
-import { findTeamFile, teamHandlers } from './lib/team.js';
+import { loadConfig, configExists } from './dist/config.js';
+import { api, getApiUrl } from './dist/api.js';
+import { scanEnvironment } from './dist/profile.js';
+import { findTeamFile, teamHandlers } from './dist/team.js';
 import {
   detectRuntimeIdentity,
   generateSessionAgentId,
   getConfiguredAgentId,
-} from './lib/identity.js';
-import { registerProcessSession, setupShutdownHandlers } from './lib/lifecycle.js';
+} from './dist/identity.js';
+import { registerProcessSession, setupShutdownHandlers } from './dist/lifecycle.js';
 import { validateConfig, registerProfile } from './lib/auth.js';
 import { createWebSocketManager } from './lib/websocket.js';
-import { registerTools, registerResources } from './lib/tools/index.js';
+import { registerTools, registerResources } from './dist/tools/index.js';
 import { createAgentState } from './lib/state.js';
 import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import {

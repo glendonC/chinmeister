@@ -1,9 +1,10 @@
-// Build script: compile .ts files to .js next to source.
-// This enables Node.js to resolve `import from './lib/team.js'` at runtime
-// when the actual source is team.ts.
+// Build script: compile .ts files from lib/ to dist/.
+// Entry points (index.js, hook.js, channel.js) import from ./dist/ at runtime.
+// Hand-written .js files in lib/ (auth.js, state.js, websocket.js, paths.js)
+// are imported directly and not compiled.
 
 import { readdirSync, statSync } from 'fs';
-import { join, relative } from 'path';
+import { join } from 'path';
 import { build } from 'esbuild';
 
 const ROOT = new URL('.', import.meta.url).pathname;
@@ -31,15 +32,12 @@ if (tsFiles.length === 0) {
 
 await build({
   entryPoints: tsFiles,
-  outdir: ROOT,
-  outbase: ROOT,
+  outdir: join(ROOT, 'dist'),
+  outbase: join(ROOT, 'lib'),
   format: 'esm',
   platform: 'node',
   target: 'node22',
-  // Keep .js imports as-is (they resolve to .ts via esbuild, output as .js)
   bundle: false,
-  // Write .js next to .ts
-  allowOverwrite: true,
 });
 
-console.error(`[build] Compiled ${tsFiles.length} TypeScript files`);
+console.error(`[build] Compiled ${tsFiles.length} TypeScript files to dist/`);

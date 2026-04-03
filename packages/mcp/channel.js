@@ -11,12 +11,12 @@
 import { readFileSync } from 'fs';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { loadConfig, configExists } from './lib/config.js';
-import { api } from './lib/api.js';
-import { findTeamFile, teamHandlers } from './lib/team.js';
-import { detectRuntimeIdentity } from './lib/identity.js';
-import { resolveAgentIdentity } from './lib/lifecycle.js';
-import { diffState } from './lib/diff-state.js';
+import { loadConfig, configExists } from './dist/config.js';
+import { api } from './dist/api.js';
+import { findTeamFile, teamHandlers } from './dist/team.js';
+import { detectRuntimeIdentity } from './dist/identity.js';
+import { resolveAgentIdentity } from './dist/lifecycle.js';
+import { diffState } from './dist/diff-state.js';
 import { isProcessAlive, pingAgentTerminal } from '@chinwag/shared/session-registry.js';
 
 // --- Constants ---
