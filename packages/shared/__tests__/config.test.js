@@ -47,10 +47,12 @@ describe('config', () => {
 
     it('returns parsed config when file exists and is valid JSON', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockReturnValue(JSON.stringify({
-        token: 'test-token',
-        handle: 'alice',
-      }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({
+          token: 'test-token',
+          handle: 'alice',
+        }),
+      );
       const config = loadConfig();
       expect(config).toEqual({ token: 'test-token', handle: 'alice' });
     });
@@ -61,7 +63,7 @@ describe('config', () => {
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       const config = loadConfig();
       expect(config).toBeNull();
-      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('corrupted'));
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('invalid JSON'));
       consoleSpy.mockRestore();
     });
 
@@ -71,17 +73,32 @@ describe('config', () => {
       expect(loadConfig()).toEqual({});
     });
 
-    it('returns array when file contains valid JSON array', () => {
+    it('returns null when file contains a non-object JSON value', () => {
       existsSync.mockReturnValue(true);
       readFileSync.mockReturnValue('[1,2,3]');
-      expect(loadConfig()).toEqual([1, 2, 3]);
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(loadConfig()).toBeNull();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('invalid shape'));
+      consoleSpy.mockRestore();
+    });
+
+    it('returns null when a known field has the wrong type', () => {
+      existsSync.mockReturnValue(true);
+      readFileSync.mockReturnValue(JSON.stringify({ token: 123 }));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      expect(loadConfig()).toBeNull();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('"token" must be a string'));
+      consoleSpy.mockRestore();
     });
 
     it('handles readFileSync throwing an error', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockImplementation(() => { throw new Error('EACCES'); });
+      readFileSync.mockImplementation(() => {
+        throw new Error('EACCES');
+      });
       const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
       expect(loadConfig()).toBeNull();
+      expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('EACCES'));
       consoleSpy.mockRestore();
     });
   });

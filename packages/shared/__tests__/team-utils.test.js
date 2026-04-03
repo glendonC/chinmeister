@@ -11,12 +11,24 @@ import { existsSync, readFileSync } from 'fs';
 
 describe('team-utils', () => {
   describe('TEAM_ID_PATTERN', () => {
-    it('matches alphanumeric strings', () => {
-      expect(TEAM_ID_PATTERN.test('abc123')).toBe(true);
+    it('matches valid team IDs (t_ + 16 hex chars)', () => {
+      expect(TEAM_ID_PATTERN.test('t_abcdef0123456789')).toBe(true);
+      expect(TEAM_ID_PATTERN.test('t_0000000000000000')).toBe(true);
+      expect(TEAM_ID_PATTERN.test('t_ffffffffffffffff')).toBe(true);
     });
 
-    it('matches strings with hyphens and underscores', () => {
-      expect(TEAM_ID_PATTERN.test('my-team_1')).toBe(true);
+    it('rejects IDs without t_ prefix', () => {
+      expect(TEAM_ID_PATTERN.test('abcdef0123456789')).toBe(false);
+      expect(TEAM_ID_PATTERN.test('x_abcdef0123456789')).toBe(false);
+    });
+
+    it('rejects IDs with wrong hex length', () => {
+      expect(TEAM_ID_PATTERN.test('t_abc123')).toBe(false);
+      expect(TEAM_ID_PATTERN.test('t_abcdef01234567890')).toBe(false);
+    });
+
+    it('rejects IDs with uppercase hex', () => {
+      expect(TEAM_ID_PATTERN.test('t_ABCDEF0123456789')).toBe(false);
     });
 
     it('rejects strings with spaces', () => {
@@ -35,23 +47,25 @@ describe('team-utils', () => {
   });
 
   describe('isValidTeamId', () => {
-    it('accepts valid alphanumeric IDs', () => {
-      expect(isValidTeamId('myteam')).toBe(true);
-      expect(isValidTeamId('team123')).toBe(true);
-      expect(isValidTeamId('my-team')).toBe(true);
-      expect(isValidTeamId('my_team')).toBe(true);
+    it('accepts valid team IDs', () => {
+      expect(isValidTeamId('t_abcdef0123456789')).toBe(true);
+      expect(isValidTeamId('t_0000000000000000')).toBe(true);
+      expect(isValidTeamId('t_a7b3c9d2e1f04856')).toBe(true);
     });
 
-    it('accepts single character ID', () => {
-      expect(isValidTeamId('a')).toBe(true);
+    it('rejects freeform strings', () => {
+      expect(isValidTeamId('myteam')).toBe(false);
+      expect(isValidTeamId('team123')).toBe(false);
+      expect(isValidTeamId('my-team')).toBe(false);
+      expect(isValidTeamId('my_team')).toBe(false);
     });
 
-    it('accepts ID at max length (30 chars)', () => {
-      expect(isValidTeamId('a'.repeat(30))).toBe(true);
+    it('rejects too-short hex after prefix', () => {
+      expect(isValidTeamId('t_abc')).toBe(false);
     });
 
-    it('rejects ID exceeding max length', () => {
-      expect(isValidTeamId('a'.repeat(31))).toBe(false);
+    it('rejects too-long hex after prefix', () => {
+      expect(isValidTeamId('t_abcdef01234567890')).toBe(false);
     });
 
     it('rejects empty string', () => {
@@ -83,41 +97,43 @@ describe('team-utils', () => {
 
     it('returns team info when .chinwag file is found in startDir', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockReturnValue(JSON.stringify({ team: 'my-team', name: 'My Project' }));
+      readFileSync.mockReturnValue(
+        JSON.stringify({ team: 't_abcdef0123456789', name: 'My Project' }),
+      );
 
       const result = findTeamFile('/home/user/project');
       expect(result).toEqual({
         filePath: '/home/user/project/.chinwag',
         root: '/home/user/project',
-        teamId: 'my-team',
+        teamId: 't_abcdef0123456789',
         teamName: 'My Project',
       });
     });
 
     it('uses directory basename when name is missing from file', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockReturnValue(JSON.stringify({ team: 'my-team' }));
+      readFileSync.mockReturnValue(JSON.stringify({ team: 't_abcdef0123456789' }));
 
       const result = findTeamFile('/home/user/project');
       expect(result).toEqual({
         filePath: '/home/user/project/.chinwag',
         root: '/home/user/project',
-        teamId: 'my-team',
+        teamId: 't_abcdef0123456789',
         teamName: 'project',
       });
     });
 
     it('walks up directories to find .chinwag file', () => {
       existsSync
-        .mockReturnValueOnce(false)   // /home/user/project/sub/.chinwag
-        .mockReturnValueOnce(true);    // /home/user/project/.chinwag
-      readFileSync.mockReturnValue(JSON.stringify({ team: 'parent-team' }));
+        .mockReturnValueOnce(false) // /home/user/project/sub/.chinwag
+        .mockReturnValueOnce(true); // /home/user/project/.chinwag
+      readFileSync.mockReturnValue(JSON.stringify({ team: 't_0000000000000001' }));
 
       const result = findTeamFile('/home/user/project/sub');
       expect(result).toEqual({
         filePath: '/home/user/project/.chinwag',
         root: '/home/user/project',
-        teamId: 'parent-team',
+        teamId: 't_0000000000000001',
         teamName: 'project',
       });
     });
@@ -145,7 +161,7 @@ describe('team-utils', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null when team ID is invalid', () => {
+    it('returns null when team ID is invalid format', () => {
       existsSync.mockReturnValue(true);
       readFileSync.mockReturnValue(JSON.stringify({ team: 'invalid team!!' }));
 
@@ -153,9 +169,9 @@ describe('team-utils', () => {
       expect(result).toBeNull();
     });
 
-    it('returns null when team ID exceeds max length', () => {
+    it('returns null when team ID is freeform (not t_ prefixed)', () => {
       existsSync.mockReturnValue(true);
-      readFileSync.mockReturnValue(JSON.stringify({ team: 'a'.repeat(31) }));
+      readFileSync.mockReturnValue(JSON.stringify({ team: 'my-team' }));
 
       const result = findTeamFile('/home/user/project');
       expect(result).toBeNull();

@@ -41,6 +41,10 @@
       "types": "./dist/integration-model.d.ts",
       "import": "./dist/integration-model.js"
     },
+    "./process-utils.js": {
+      "types": "./dist/process-utils.d.ts",
+      "import": "./dist/process-utils.js"
+    },
     "./session-registry.js": {
       "types": "./dist/session-registry.d.ts",
       "import": "./dist/session-registry.js"

@@ -7,9 +7,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
-import { execFileSync } from 'node:child_process';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
+import { getProcessTtyPath, getProcessCommandString } from './process-utils.js';
 
 export interface SessionRecord {
   agentId: string;
@@ -30,8 +30,6 @@ export interface ResolveSessionOptions {
   recordAlive?: (record: SessionRecord) => boolean;
 }
 
-const EXEC_TIMEOUT_MS = 5000;
-
 export const SESSION_COMMAND_MARKER = 'chinwag-mcp';
 
 export function getSessionsDir(homeDir = homedir()): string {
@@ -47,29 +45,7 @@ export function getSessionFilePath(agentId: string, homeDir = homedir()): string
 }
 
 export function getCurrentTtyPath(pid = process.ppid): string | null {
-  try {
-    const ttyName = execFileSync('ps', ['-o', 'tty=', '-p', String(pid)], {
-      encoding: 'utf-8',
-      timeout: EXEC_TIMEOUT_MS,
-    }).trim();
-    if (ttyName && ttyName !== '??' && ttyName !== '?') {
-      return `/dev/${ttyName}`;
-    }
-  } catch {
-    // ignore ps failures
-  }
-  return null;
-}
-
-function getProcessCommand(pid: number): string | null {
-  try {
-    return execFileSync('ps', ['-o', 'command=', '-p', String(pid)], {
-      encoding: 'utf-8',
-      timeout: EXEC_TIMEOUT_MS,
-    }).trim();
-  } catch {
-    return null;
-  }
+  return getProcessTtyPath(pid);
 }
 
 export function isProcessAlive(pid: number): boolean {
@@ -85,7 +61,7 @@ export function isSessionRecordAlive(
   record: SessionRecord | null | undefined,
   {
     processAlive = isProcessAlive,
-    processCommand = getProcessCommand,
+    processCommand = getProcessCommandString,
   }: {
     processAlive?: (pid: number) => boolean;
     processCommand?: (pid: number) => string | null;

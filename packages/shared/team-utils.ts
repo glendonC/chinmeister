@@ -8,10 +8,14 @@ export interface TeamFileInfo {
   teamName: string;
 }
 
-export const TEAM_ID_PATTERN = /^[a-zA-Z0-9_-]+$/;
+/**
+ * Team IDs use the format `t_` followed by exactly 16 lowercase hex characters,
+ * matching the worker route constraint: `t_[a-f0-9]{16}`.
+ */
+export const TEAM_ID_PATTERN = /^t_[a-f0-9]{16}$/;
 
 export function isValidTeamId(id: unknown): id is string {
-  return typeof id === 'string' && id.length > 0 && id.length <= 30 && TEAM_ID_PATTERN.test(id);
+  return typeof id === 'string' && TEAM_ID_PATTERN.test(id);
 }
 
 export function findTeamFile(startDir = process.cwd()): TeamFileInfo | null {

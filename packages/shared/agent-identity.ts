@@ -1,7 +1,7 @@
-import { execFileSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
 import { basename } from 'node:path';
 import { HOST_INTEGRATIONS, getHostIntegrationById } from './integration-model.js';
+import { readProcessInfo } from './process-utils.js';
 import type { RuntimeIdentityContract } from './contracts.js';
 
 export interface RuntimeIdentity extends RuntimeIdentityContract {}
@@ -19,28 +19,8 @@ export interface RuntimeIdentityLike {
   tool?: string;
 }
 
-const EXEC_TIMEOUT_MS = 5000;
-
-function defaultReadProcessInfo(pid: number): { ppid: number; command: string } | null {
-  if (!pid || pid <= 0 || process.platform === 'win32') return null;
-
-  try {
-    const line = execFileSync('ps', ['-o', 'ppid=,command=', '-p', String(pid)], {
-      encoding: 'utf-8',
-      timeout: EXEC_TIMEOUT_MS,
-    }).trim();
-
-    if (!line) return null;
-    const match = line.match(/^\s*(\d+)\s+(.*)$/s);
-    if (!match) return null;
-    return {
-      ppid: Number(match[1]),
-      command: match[2],
-    };
-  } catch {
-    return null;
-  }
-}
+/** @deprecated Use the `readProcessInfoFn` option to override. */
+const defaultReadProcessInfo = readProcessInfo;
 
 function extractExecutableName(command = ''): string {
   const match = String(command)
