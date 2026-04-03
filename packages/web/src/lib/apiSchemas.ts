@@ -169,7 +169,7 @@ const toolDirectoryEvaluationSchema = z
     tagline: z.string().optional(),
     integration_tier: z.string().optional(),
     mcp_support: z.union([z.boolean(), z.string()]).optional(),
-    metadata: z.record(z.any()).optional(),
+    metadata: z.record(z.unknown()).optional(),
   })
   .passthrough();
 

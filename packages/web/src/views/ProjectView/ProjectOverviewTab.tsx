@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import { getToolMeta } from '../../lib/toolMeta.js';
+import type { Lock } from '../../lib/apiSchemas.js';
+import type { FileConflict, UsageSummaryEntry } from './projectViewState.js';
 import SummaryStat from './SummaryStat.jsx';
 import styles from './ProjectView.module.css';
 
@@ -16,23 +18,6 @@ interface ActiveAgent {
   [key: string]: unknown;
 }
 
-interface LockEntry {
-  minutes_held?: number;
-  [key: string]: unknown;
-}
-
-interface FileConflict {
-  file: string;
-  owners: string[];
-}
-
-interface ToolSummary {
-  tool: string;
-  live: number;
-  joins: number;
-  share: number;
-}
-
 interface RosterEntry {
   handle: string;
   online: boolean;
@@ -43,11 +28,11 @@ interface ProjectOverviewTabProps {
   members: MemberEntry[];
   activeAgents: ActiveAgent[];
   conflicts: FileConflict[];
-  locks: LockEntry[];
+  locks: Lock[];
   sessionEditCount: number;
   liveSessionCount: number;
   filesTouchedCount: number;
-  toolSummaries: ToolSummary[];
+  toolSummaries: UsageSummaryEntry[];
 }
 
 export default function ProjectOverviewTab({
@@ -181,17 +166,20 @@ export default function ProjectOverviewTab({
               <h2 className={styles.blockTitle}>Active tools</h2>
             </div>
             <div className={styles.distributionList}>
-              {activeTools.map((tool) => (
-                <div key={tool.tool} className={styles.distributionRow}>
-                  <div className={styles.distributionCopy}>
-                    <span className={styles.distributionLabel}>
-                      <ToolIcon tool={tool.tool} size={16} />
-                      <span>{getToolMeta(tool.tool).label}</span>
-                    </span>
-                    <span className={styles.distributionMeta}>{tool.live} live</span>
+              {activeTools.map((tool) => {
+                const toolName = tool.tool as string;
+                return (
+                  <div key={toolName} className={styles.distributionRow}>
+                    <div className={styles.distributionCopy}>
+                      <span className={styles.distributionLabel}>
+                        <ToolIcon tool={toolName} size={16} />
+                        <span>{getToolMeta(toolName).label}</span>
+                      </span>
+                      <span className={styles.distributionMeta}>{tool.live} live</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </section>
         )}

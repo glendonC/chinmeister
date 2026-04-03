@@ -15,7 +15,6 @@ import {
   SkeletonRows,
 } from '../../components/Skeleton/Skeleton.jsx';
 import { summarizeList } from '../../lib/summarize.js';
-import type { DashboardSummary } from '../../lib/apiSchemas.js';
 import { useOverviewData } from './useOverviewData.js';
 import ProjectsPanel from './ProjectsPanel.jsx';
 import AgentsPanel from './AgentsPanel.jsx';

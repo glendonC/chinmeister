@@ -1,8 +1,7 @@
 import { useMemo } from 'react';
 import { usePollingStore } from '../../lib/stores/polling.js';
 import { buildLiveToolMix, type ToolMixEntry } from '../../lib/toolAnalytics.js';
-
-type Member = any;
+import type { Member } from '../../lib/apiSchemas.js';
 
 interface UseProjectMembersReturn {
   members: Member[];

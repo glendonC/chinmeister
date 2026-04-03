@@ -1,22 +1,19 @@
 import { useMemo } from 'react';
 import { usePollingStore } from '../../lib/stores/polling.js';
+import type { Member, Lock, HostMetric, Conflict } from '../../lib/apiSchemas.js';
 import {
   buildFilesInPlay,
   buildProjectConflicts,
   buildProjectToolSummaries,
+  type FileConflict,
+  type UsageSummaryEntry,
 } from './projectViewState.js';
-
-type Member = any;
-type Lock = any;
-type ToolConfigured = any;
-type Conflict = any;
-type ToolSummary = any;
 
 interface UseProjectAnalyticsReturn {
   locks: Lock[];
-  conflicts: Conflict[];
+  conflicts: FileConflict[];
   filesInPlay: string[];
-  toolSummaries: ToolSummary[];
+  toolSummaries: UsageSummaryEntry[];
 }
 
 export default function useProjectAnalytics(): UseProjectAnalyticsReturn {
@@ -27,8 +24,8 @@ export default function useProjectAnalytics(): UseProjectAnalyticsReturn {
     [contextData?.members],
   );
   const locks = useMemo<Lock[]>(() => (contextData?.locks as Lock[]) ?? [], [contextData?.locks]);
-  const toolsConfigured = useMemo<ToolConfigured[]>(
-    () => (contextData?.tools_configured as ToolConfigured[]) ?? [],
+  const toolsConfigured = useMemo<HostMetric[]>(
+    () => (contextData?.tools_configured as HostMetric[]) ?? [],
     [contextData?.tools_configured],
   );
 
@@ -44,7 +41,7 @@ export default function useProjectAnalytics(): UseProjectAnalyticsReturn {
     () => buildFilesInPlay(activeAgents, locks),
     [activeAgents, locks],
   );
-  const toolSummaries: ToolSummary[] = useMemo(
+  const toolSummaries: UsageSummaryEntry[] = useMemo(
     () => buildProjectToolSummaries(members, toolsConfigured),
     [members, toolsConfigured],
   );

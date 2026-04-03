@@ -6,8 +6,7 @@ import {
   selectRecentSessions,
   sumSessionEdits,
 } from './projectViewState.js';
-
-type Session = any;
+import type { Session } from '../../lib/apiSchemas.js';
 
 interface UseProjectSessionsReturn {
   allSessions: Session[];

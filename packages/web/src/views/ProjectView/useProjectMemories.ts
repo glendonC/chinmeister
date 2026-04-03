@@ -3,8 +3,7 @@ import { usePollingStore } from '../../lib/stores/polling.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { teamActions } from '../../lib/stores/teams.js';
 import { buildMemoryBreakdown } from './projectViewState.js';
-
-type Memory = any;
+import type { Memory } from '../../lib/apiSchemas.js';
 
 interface UseProjectMemoriesReturn {
   memories: Memory[];
