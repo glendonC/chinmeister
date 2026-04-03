@@ -7,6 +7,24 @@ import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import styles from './SettingsView.module.css';
 
 const HANDLE_PATTERN = /^[A-Za-z0-9_]{3,20}$/;
+const GITHUB_REDIRECT_HOSTS = new Set(['github.com', 'www.github.com']);
+
+function isValidRedirectUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'https:' && GITHUB_REDIRECT_HOSTS.has(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isSafeImageUrl(url) {
+  try {
+    return new URL(url).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 function validateHandleInput(value) {
   if (!value) return 'Handle is required.';
@@ -85,7 +103,7 @@ export default function SettingsView() {
     setLinkError(null);
     try {
       const result = await api('POST', '/auth/github/link', null, token);
-      if (typeof result?.url !== 'string' || !/^https?:\/\//.test(result.url)) {
+      if (typeof result?.url !== 'string' || !isValidRedirectUrl(result.url)) {
         throw new Error('Received an invalid GitHub link response');
       }
       window.location.href = result.url;
@@ -205,8 +223,12 @@ export default function SettingsView() {
         {user?.github_login ? (
           <div className={styles.githubConnected}>
             <div className={styles.githubIdentity}>
-              {user.avatar_url && (
-                <img src={user.avatar_url} alt="" className={styles.githubAvatar} />
+              {user.avatar_url && isSafeImageUrl(user.avatar_url) && (
+                <img
+                  src={user.avatar_url}
+                  alt={`${user.github_login}'s avatar`}
+                  className={styles.githubAvatar}
+                />
               )}
               <span className={styles.githubLogin}>{user.github_login}</span>
               <span className={styles.githubBadge}>Connected</span>
