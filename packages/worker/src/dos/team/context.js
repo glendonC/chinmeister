@@ -3,14 +3,11 @@
 // and getSummary (lightweight counts for cross-project overview).
 
 import { HEARTBEAT_ACTIVE_WINDOW_S } from '../../lib/constants.js';
+import { getErrorMessage } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { inferHostToolFromAgentId } from './runtime.js';
 
 const log = createLogger('TeamDO.context');
-
-function getErrorMessage(error) {
-  return error instanceof Error ? error.message : String(error);
-}
 
 /** Read all telemetry metrics in one scan, then partition by prefix in JS. */
 export function getTelemetryBreakdown(sql) {
