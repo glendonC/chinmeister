@@ -81,11 +81,12 @@ function parseClaudeCodeAvailability(output: string): AvailabilityCheckResult {
 }
 
 function parseCodexAvailability(output: string): AvailabilityCheckResult {
-  if (/logged in/i.test(output)) {
-    return { state: 'ready', detail: 'Ready to start', recoveryCommand: CODEX_LOGIN };
-  }
+  // Check negative cases first — "Not logged in" contains "logged in"
   if (/not logged in|login required|sign in/i.test(output)) {
     return { state: 'needs_auth', detail: 'Sign in to Codex', recoveryCommand: CODEX_LOGIN };
+  }
+  if (/logged in/i.test(output)) {
+    return { state: 'ready', detail: 'Ready to start', recoveryCommand: CODEX_LOGIN };
   }
   return { state: 'unavailable', detail: 'Could not verify Codex', recoveryCommand: CODEX_LOGIN };
 }

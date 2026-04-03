@@ -12,6 +12,7 @@
 // resolution, caching, and the thin RPC wrappers that tie it all together.
 
 import { DurableObject } from 'cloudflare:workers';
+import { getErrorMessage, isDOError } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { toSQLDateTime } from '../../lib/text-utils.js';
 
@@ -43,6 +44,7 @@ import {
   enrichSessionModel as enrichSessionModelFn,
 } from './sessions.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
+import { normalizeRuntimeMetadata } from './runtime.js';
 import {
   HEARTBEAT_STALE_WINDOW_S,
   SESSION_RETENTION_DAYS,
@@ -56,6 +58,8 @@ export class TeamDO extends DurableObject {
   #schemaReady = false;
   #lastCleanup = 0;
   #lastHeartbeatBroadcast = new Map();
+
+  /** @type {(import('../../types.js').TeamContext & { ok: true }) | null} */
   #contextCache = null;
   #contextCacheExpire = 0;
 
@@ -122,7 +126,7 @@ export class TeamDO extends DurableObject {
       const ctx = await this.getContext(resolved);
       server.send(JSON.stringify({ type: 'context', data: ctx }));
     } catch (err) {
-      log.error('failed to send initial context', { error: err?.message || String(err) });
+      log.error('failed to send initial context', { error: getErrorMessage(err) });
       try {
         server.send(JSON.stringify({ type: 'error', message: 'Failed to load initial context' }));
       } catch {
@@ -139,7 +143,7 @@ export class TeamDO extends DurableObject {
     try {
       tags = this.ctx.getTags(ws);
     } catch (err) {
-      log.error('webSocketMessage: failed to read tags', { error: err?.message || String(err) });
+      log.error('webSocketMessage: failed to read tags', { error: getErrorMessage(err) });
       return;
     }
     const agentId = tags.find((t) => !t.startsWith('role:'));
@@ -190,7 +194,7 @@ export class TeamDO extends DurableObject {
           data.summary || '',
           this.#transact,
         );
-        if (!result.error) {
+        if (!isDOError(result)) {
           this.#broadcastToWatchers({
             type: 'activity',
             agent_id: agentId,
@@ -201,7 +205,7 @@ export class TeamDO extends DurableObject {
       } else if (data.type === 'file' && isAgent) {
         this.#ensureSchema();
         const result = reportFileFn(this.sql, agentId, data.file, this.#transact);
-        if (!result.error) {
+        if (!isDOError(result)) {
           this.#broadcastToWatchers({ type: 'file', agent_id: agentId, file: data.file });
         }
       }
@@ -210,7 +214,7 @@ export class TeamDO extends DurableObject {
         event: 'ws_message_error',
         agentId,
         messagePreview: String(rawMessage).slice(0, 200),
-        error: err?.message || String(err),
+        error: getErrorMessage(err),
       });
       try {
         ws.send(JSON.stringify({ type: 'error', message: 'Message processing failed' }));
@@ -226,7 +230,7 @@ export class TeamDO extends DurableObject {
       tags = this.ctx.getTags(ws);
     } catch (err) {
       log.error('webSocketClose: failed to read tags on closing socket', {
-        error: err?.message || String(err),
+        error: getErrorMessage(err),
       });
       // Tags lost — cannot identify agent. This is rare (DO restart mid-close).
       // Stale locks/members will be cleaned up by #maybeCleanup's heartbeat eviction.
@@ -245,7 +249,7 @@ export class TeamDO extends DurableObject {
         locksReleased = false;
         log.error('webSocketClose: lock release failed', {
           agentId,
-          error: err?.message || String(err),
+          error: getErrorMessage(err),
         });
       }
       // Always broadcast status_change (agent is offline regardless)
@@ -268,7 +272,7 @@ export class TeamDO extends DurableObject {
       const tags = this.ctx.getTags(ws);
       agentId = tags.find((t) => !t.startsWith('role:')) || 'unknown';
     } catch (err) {
-      log.error('webSocketError: failed to read tags', { error: err?.message || String(err) });
+      log.error('webSocketError: failed to read tags', { error: getErrorMessage(err) });
     }
     log.warn('WebSocket error', { event: 'ws_error', agentId });
   }
@@ -290,8 +294,8 @@ export class TeamDO extends DurableObject {
     this.#contextCacheExpire = 0;
   }
 
-  #broadcastToWatchers(event) {
-    this.#invalidateContextCache();
+  #broadcastToWatchers(event, { invalidateCache = true } = {}) {
+    if (invalidateCache) this.#invalidateContextCache();
     const sockets = this.ctx.getWebSockets();
     if (!sockets.length) return;
     const data = JSON.stringify(event);
@@ -326,7 +330,7 @@ export class TeamDO extends DurableObject {
           "UPDATE members SET last_heartbeat = datetime('now') WHERE last_heartbeat > datetime('now')",
         );
       } catch (err) {
-        log.error('cleanup: clamp future heartbeats failed', { error: err?.message });
+        log.error('cleanup: clamp future heartbeats failed', { error: getErrorMessage(err) });
       }
 
       try {
@@ -340,7 +344,7 @@ export class TeamDO extends DurableObject {
           ...ws.params,
         );
       } catch (err) {
-        log.error('cleanup: delete stale activities failed', { error: err?.message });
+        log.error('cleanup: delete stale activities failed', { error: getErrorMessage(err) });
       }
 
       try {
@@ -352,7 +356,7 @@ export class TeamDO extends DurableObject {
           ...ws.params,
         );
       } catch (err) {
-        log.error('cleanup: delete stale members failed', { error: err?.message });
+        log.error('cleanup: delete stale members failed', { error: getErrorMessage(err) });
       }
 
       try {
@@ -361,13 +365,13 @@ export class TeamDO extends DurableObject {
           SESSION_RETENTION_DAYS,
         );
       } catch (err) {
-        log.error('cleanup: delete old sessions failed', { error: err?.message });
+        log.error('cleanup: delete old sessions failed', { error: getErrorMessage(err) });
       }
 
       try {
         this.sql.exec("DELETE FROM messages WHERE created_at < datetime('now', '-1 hour')");
       } catch (err) {
-        log.error('cleanup: delete old messages failed', { error: err?.message });
+        log.error('cleanup: delete old messages failed', { error: getErrorMessage(err) });
       }
 
       try {
@@ -381,7 +385,7 @@ export class TeamDO extends DurableObject {
           ...ws.params,
         );
       } catch (err) {
-        log.error('cleanup: delete orphaned locks failed', { error: err?.message });
+        log.error('cleanup: delete orphaned locks failed', { error: getErrorMessage(err) });
       }
 
       try {
@@ -397,13 +401,13 @@ export class TeamDO extends DurableObject {
           ...ws.params,
         );
       } catch (err) {
-        log.error('cleanup: close orphaned sessions failed', { error: err?.message });
+        log.error('cleanup: close orphaned sessions failed', { error: getErrorMessage(err) });
       }
 
       try {
         this.sql.exec("DELETE FROM telemetry WHERE last_at < datetime('now', '-30 days')");
       } catch (err) {
-        log.error('cleanup: delete old telemetry failed', { error: err?.message });
+        log.error('cleanup: delete old telemetry failed', { error: getErrorMessage(err) });
       }
     });
   }
@@ -480,8 +484,8 @@ export class TeamDO extends DurableObject {
       runtimeOrTool,
       this.#boundRecordMetric,
     );
-    if (!result.error) {
-      const tool = typeof runtimeOrTool === 'object' ? runtimeOrTool?.host_tool : runtimeOrTool;
+    if (!isDOError(result)) {
+      const tool = normalizeRuntimeMetadata(runtimeOrTool, agentId).hostTool;
       this.#broadcastToWatchers({
         type: 'member_joined',
         agent_id: agentId,
@@ -495,7 +499,7 @@ export class TeamDO extends DurableObject {
   async leave(agentId, ownerId = null) {
     this.#ensureSchema();
     const result = leave(this.sql, agentId, ownerId, this.#transact);
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({ type: 'member_left', agent_id: agentId });
     }
     return result;
@@ -506,12 +510,17 @@ export class TeamDO extends DurableObject {
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = heartbeatFn(this.sql, resolved);
-    if (!result.error) {
+    if (!isDOError(result)) {
       const now = Date.now();
       const last = this.#lastHeartbeatBroadcast.get(resolved) || 0;
       if (now - last >= HEARTBEAT_BROADCAST_DEBOUNCE_MS) {
         this.#lastHeartbeatBroadcast.set(resolved, now);
-        this.#broadcastToWatchers({ type: 'heartbeat', agent_id: resolved, ts: now });
+        // Heartbeats don't change context data (members/locks/memory) — skip cache invalidation.
+        // The 5s cache TTL handles natural staleness.
+        this.#broadcastToWatchers(
+          { type: 'heartbeat', agent_id: resolved, ts: now },
+          { invalidateCache: false },
+        );
       }
     }
     return result;
@@ -524,7 +533,7 @@ export class TeamDO extends DurableObject {
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = updateActivityFn(this.sql, resolved, files, summary, this.#transact);
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({ type: 'activity', agent_id: resolved, files, summary });
     }
     return result;
@@ -548,7 +557,7 @@ export class TeamDO extends DurableObject {
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = reportFileFn(this.sql, resolved, filePath, this.#transact);
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({ type: 'file', agent_id: resolved, file: filePath });
     }
     return result;
@@ -655,7 +664,7 @@ export class TeamDO extends DurableObject {
       this.#boundRecordMetric,
       this.#transact,
     );
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({ type: 'memory', text, tags });
     }
     return result;
@@ -689,7 +698,7 @@ export class TeamDO extends DurableObject {
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool);
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({
         type: 'lock_change',
         action: 'claim',
@@ -705,7 +714,7 @@ export class TeamDO extends DurableObject {
     const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
     if (!resolved) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
     const result = releaseFilesFn(this.sql, resolved, files);
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({
         type: 'lock_change',
         action: 'release',
@@ -738,7 +747,7 @@ export class TeamDO extends DurableObject {
       targetAgent,
       this.#boundRecordMetric,
     );
-    if (!result.error) {
+    if (!isDOError(result)) {
       this.#broadcastToWatchers({ type: 'message', from_handle: handle, text });
     }
     return result;

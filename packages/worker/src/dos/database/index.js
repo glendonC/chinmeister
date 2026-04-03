@@ -203,14 +203,8 @@ export class DatabaseDO extends DurableObject {
     const color = COLORS[Math.floor(Math.random() * COLORS.length)];
     const now = toSQLDateTime();
 
-    let handle = this.#generateHandle();
-    let attempts = 0;
-    while (this.#handleExists(handle) && attempts < 10) {
-      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
-      attempts++;
-    }
-
-    if (this.#handleExists(handle)) {
+    const handle = this.#resolveUniqueHandle(this.#generateHandle());
+    if (!handle) {
       return { error: 'Could not generate unique handle, please try again', code: 'INTERNAL' };
     }
 
@@ -318,14 +312,10 @@ export class DatabaseDO extends DurableObject {
     const color = COLORS[Math.floor(Math.random() * COLORS.length)];
     const now = toSQLDateTime();
 
-    let handle = githubLogin.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
-    if (handle.length < 3) handle = this.#generateHandle();
-    let attempts = 0;
-    while (this.#handleExists(handle) && attempts < 10) {
-      handle = this.#generateHandle() + Math.floor(Math.random() * 100);
-      attempts++;
-    }
-    if (this.#handleExists(handle)) {
+    let preferred = githubLogin.replace(/[^a-zA-Z0-9_]/g, '_').slice(0, 20);
+    if (preferred.length < 3) preferred = this.#generateHandle();
+    const handle = this.#resolveUniqueHandle(preferred);
+    if (!handle) {
       return { error: 'Could not generate unique handle', code: 'INTERNAL' };
     }
 
@@ -618,6 +608,18 @@ export class DatabaseDO extends DurableObject {
 
   #handleExists(handle) {
     return this.sql.exec('SELECT 1 FROM users WHERE handle = ?', handle).toArray().length > 0;
+  }
+
+  /** Resolve a unique handle, appending random hex on collision. */
+  #resolveUniqueHandle(preferred) {
+    if (!this.#handleExists(preferred)) return preferred;
+    // First collision: append 4 hex chars (e.g. "swiftfox" → "swiftfoxa7f2")
+    const attempt2 = this.#generateHandle() + crypto.randomUUID().slice(0, 4);
+    if (!this.#handleExists(attempt2)) return attempt2;
+    // Second collision: append 8 hex chars for near-guaranteed uniqueness
+    const attempt3 = this.#generateHandle() + crypto.randomUUID().slice(0, 8);
+    if (!this.#handleExists(attempt3)) return attempt3;
+    return null;
   }
 }
 

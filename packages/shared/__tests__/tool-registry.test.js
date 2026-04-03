@@ -33,12 +33,12 @@ describe('tool-registry', () => {
     });
 
     it('all tool IDs are unique', () => {
-      const ids = MCP_TOOLS.map(t => t.id);
+      const ids = MCP_TOOLS.map((t) => t.id);
       expect(new Set(ids).size).toBe(ids.length);
     });
 
     it('all tool names are unique', () => {
-      const names = MCP_TOOLS.map(t => t.name);
+      const names = MCP_TOOLS.map((t) => t.name);
       expect(new Set(names).size).toBe(names.length);
     });
 
@@ -55,26 +55,26 @@ describe('tool-registry', () => {
 
     for (const toolId of expectedTools) {
       it(`includes tool: ${toolId}`, () => {
-        const tool = MCP_TOOLS.find(t => t.id === toolId);
+        const tool = MCP_TOOLS.find((t) => t.id === toolId);
         expect(tool).toBeDefined();
       });
     }
 
     it('claude-code has hooks, channel, and spawn capabilities', () => {
-      const cc = MCP_TOOLS.find(t => t.id === 'claude-code');
+      const cc = MCP_TOOLS.find((t) => t.id === 'claude-code');
       expect(cc.hooks).toBe(true);
       expect(cc.channel).toBe(true);
       expect(cc.spawn).toBeDefined();
     });
 
     it('claude-code has an availability check with parse function', () => {
-      const cc = MCP_TOOLS.find(t => t.id === 'claude-code');
+      const cc = MCP_TOOLS.find((t) => t.id === 'claude-code');
       expect(cc.availabilityCheck).toBeDefined();
       expect(typeof cc.availabilityCheck.parse).toBe('function');
     });
 
     it('cursor does not have hooks or channel', () => {
-      const cursor = MCP_TOOLS.find(t => t.id === 'cursor');
+      const cursor = MCP_TOOLS.find((t) => t.id === 'cursor');
       expect(cursor.hooks).toBeUndefined();
       expect(cursor.channel).toBeUndefined();
     });
@@ -113,7 +113,7 @@ describe('tool-registry', () => {
   });
 
   describe('claude-code availability check parser', () => {
-    const cc = MCP_TOOLS.find(t => t.id === 'claude-code');
+    const cc = MCP_TOOLS.find((t) => t.id === 'claude-code');
     const parse = cc.availabilityCheck.parse;
 
     it('returns ready when loggedIn is true', () => {
@@ -133,7 +133,7 @@ describe('tool-registry', () => {
   });
 
   describe('codex availability check parser', () => {
-    const codex = MCP_TOOLS.find(t => t.id === 'codex');
+    const codex = MCP_TOOLS.find((t) => t.id === 'codex');
     const parse = codex.availabilityCheck.parse;
 
     it('returns ready when output contains "logged in"', () => {
@@ -146,12 +146,9 @@ describe('tool-registry', () => {
       expect(result.state).toBe('needs_auth');
     });
 
-    it('note: "Not logged in" matches "logged in" regex first (parser order issue)', () => {
-      // The current parser checks /logged in/ before /not logged in/, so
-      // "Not logged in" is classified as 'ready'. This documents the
-      // actual behavior for awareness.
+    it('returns needs_auth when output says "Not logged in"', () => {
       const result = parse('Not logged in. Please sign in first.');
-      expect(result.state).toBe('ready');
+      expect(result.state).toBe('needs_auth');
     });
 
     it('returns unavailable for unrecognized output', () => {
