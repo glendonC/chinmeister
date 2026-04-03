@@ -44,12 +44,14 @@ export function registerContextTool(
         state.teamId
       ) {
         state.modelReportInflight = model;
-        void (async () => {
+        const modelToReport = model; // capture narrowed string for named function
+
+        async function reportModelAsync(): Promise<void> {
           const teamId = state.teamId!;
           for (let attempt = 0; attempt < 2; attempt++) {
             try {
-              await team.reportModel(teamId, model);
-              state.modelReported = model;
+              await team.reportModel(teamId, modelToReport);
+              state.modelReported = modelToReport;
               state.modelReportInflight = null;
               return;
             } catch (err: unknown) {
@@ -60,7 +62,9 @@ export function registerContextTool(
           // All retries exhausted — clear so next tool call retries
           state.modelReported = null;
           state.modelReportInflight = null;
-        })();
+        }
+
+        void reportModelAsync();
       }
       const ctx = await refreshContext(team, state.teamId);
       if (!ctx) {

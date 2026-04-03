@@ -4,7 +4,7 @@ import { basename } from 'path';
 import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
-import { errorResult, getHttpStatus, getErrorMessage } from '../utils/responses.js';
+import { errorResult, getHttpStatus, getErrorMessage, safeString } from '../utils/responses.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
@@ -39,46 +39,50 @@ export function registerTeamTool(
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
         let consecutiveFailures = 0;
         const MAX_HEARTBEAT_FAILURES = 20;
-        state.heartbeatInterval = setInterval(() => {
-          void (async () => {
-            // Guard: if teamId was cleared (e.g. shutdown), skip
-            if (!state.teamId) return;
-            try {
-              await team.heartbeat(state.teamId);
-              consecutiveFailures = 0;
-            } catch (err: unknown) {
-              consecutiveFailures++;
-              if (getHttpStatus(err) === 403) {
-                try {
-                  await team.joinTeam(state.teamId!, basename(process.cwd()));
-                  log.info('Rejoined team after eviction');
-                  consecutiveFailures = 0;
-                } catch (joinErr: unknown) {
-                  log.error('Rejoin failed: ' + getErrorMessage(joinErr));
-                }
-              } else if (consecutiveFailures <= 3 || consecutiveFailures % 10 === 0) {
-                // Log first few failures, then throttle to every 10th to avoid spam
-                log.warn(
-                  `Heartbeat failed (attempt ${consecutiveFailures}): ${getErrorMessage(err)}`,
-                  {
-                    attempt: consecutiveFailures,
-                  },
-                );
+
+        async function runHeartbeat(): Promise<void> {
+          // Guard: if teamId was cleared (e.g. shutdown), skip
+          if (!state.teamId) return;
+          try {
+            await team.heartbeat(state.teamId);
+            consecutiveFailures = 0;
+          } catch (err: unknown) {
+            consecutiveFailures++;
+            if (getHttpStatus(err) === 403) {
+              try {
+                await team.joinTeam(state.teamId!, basename(process.cwd()));
+                log.info('Rejoined team after eviction');
+                consecutiveFailures = 0;
+              } catch (joinErr: unknown) {
+                log.error('Rejoin failed: ' + getErrorMessage(joinErr));
               }
-              if (consecutiveFailures >= MAX_HEARTBEAT_FAILURES && state.heartbeatInterval) {
-                clearInterval(state.heartbeatInterval);
-                state.heartbeatInterval = null;
-                log.error(`Heartbeat stopped after ${MAX_HEARTBEAT_FAILURES} consecutive failures`);
-              }
+            } else if (consecutiveFailures <= 3 || consecutiveFailures % 10 === 0) {
+              // Log first few failures, then throttle to every 10th to avoid spam
+              log.warn(
+                `Heartbeat failed (attempt ${consecutiveFailures}): ${getErrorMessage(err)}`,
+                {
+                  attempt: consecutiveFailures,
+                },
+              );
             }
-          })();
+            if (consecutiveFailures >= MAX_HEARTBEAT_FAILURES && state.heartbeatInterval) {
+              clearInterval(state.heartbeatInterval);
+              state.heartbeatInterval = null;
+              log.error(`Heartbeat stopped after ${MAX_HEARTBEAT_FAILURES} consecutive failures`);
+            }
+          }
+        }
+
+        state.heartbeatInterval = setInterval(() => {
+          void runHeartbeat();
         }, 30_000);
 
         let sessionStarted = false;
         try {
           const session = await team.startSession(state.teamId, profile.framework);
-          if (session?.session_id) {
-            state.sessionId = session.session_id;
+          const sessionId = safeString(session, 'session_id');
+          if (sessionId) {
+            state.sessionId = sessionId;
             sessionStarted = true;
           }
         } catch (err: unknown) {

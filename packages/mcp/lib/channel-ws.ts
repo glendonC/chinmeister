@@ -110,8 +110,11 @@ export function createChannelWebSocket({
           scheduleReconnect();
         };
 
-        socket.onerror = () => {
-          logger.error('WebSocket error: unknown');
+        socket.onerror = (event: Event) => {
+          logger.error(
+            'WebSocket error: ' +
+              ((event as { message?: string })?.message || event?.type || 'unknown'),
+          );
         };
       })
       .catch((err: unknown) => {
