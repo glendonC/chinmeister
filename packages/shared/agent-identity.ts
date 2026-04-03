@@ -19,6 +19,9 @@ export interface RuntimeIdentityLike {
   tool?: string;
 }
 
+/** Maximum parent process hops when detecting host tool via process tree. */
+const DEFAULT_MAX_PARENT_HOPS = 5;
+
 /** @deprecated Use the `readProcessInfoFn` option to override. */
 const defaultReadProcessInfo = readProcessInfo;
 
@@ -112,7 +115,7 @@ export function detectRuntimeIdentity(
   const explicitTool = getArgValue('--tool', argv) || process.env.CHINWAG_TOOL || null;
   const explicitSurface = getArgValue('--surface', argv) || process.env.CHINWAG_SURFACE || null;
   const readProcessInfo = options.readProcessInfoFn || defaultReadProcessInfo;
-  const maxParentHops = options.maxParentHops ?? 5;
+  const maxParentHops = options.maxParentHops ?? DEFAULT_MAX_PARENT_HOPS;
 
   let hostTool = explicitTool;
   let detectionSource: RuntimeIdentity['detectionSource'] = explicitTool ? 'explicit' : 'fallback';

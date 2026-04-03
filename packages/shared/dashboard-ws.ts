@@ -16,6 +16,11 @@ import type {
   TeamMember,
 } from './contracts.js';
 
+/** Maximum number of messages retained in local dashboard context. */
+const MAX_DASHBOARD_MESSAGES = 50;
+/** Maximum number of memories retained in local dashboard context. */
+const MAX_DASHBOARD_MEMORIES = 100;
+
 type UnknownRecord = Record<string, unknown>;
 
 function asObject(value: unknown): UnknownRecord | null {
@@ -263,7 +268,7 @@ function applyMessage(ctx: TeamContext, event: MessageEvent): TeamContext {
     text: event.text,
     created_at: event.created_at || new Date().toISOString(),
   };
-  const messages = [...(ctx.messages || []), newMessage].slice(-50);
+  const messages = [...(ctx.messages || []), newMessage].slice(-MAX_DASHBOARD_MESSAGES);
   return { ...ctx, messages };
 }
 
@@ -276,6 +281,6 @@ function applyMemory(ctx: TeamContext, event: MemoryDeltaEvent): TeamContext {
     host_tool: event.host_tool,
     created_at: event.created_at || new Date().toISOString(),
   };
-  const memories = [newMemory, ...(ctx.memories || [])].slice(0, 100);
+  const memories = [newMemory, ...(ctx.memories || [])].slice(0, MAX_DASHBOARD_MEMORIES);
   return { ...ctx, memories };
 }
