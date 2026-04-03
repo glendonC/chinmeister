@@ -1,10 +1,4 @@
-/**
- * Deterministic mesh gradient for project squircle icons.
- * Produces soft pastel mesh gradients (2 radial blobs + linear base)
- * that look like the organic gradient cards in the reference images.
- */
-
-function hashCode(str) {
+function hashCode(str: string): number {
   let hash = 5381;
   for (let i = 0; i < str.length; i++) {
     hash = ((hash << 5) + hash + str.charCodeAt(i)) | 0;
@@ -12,7 +6,7 @@ function hashCode(str) {
   return Math.abs(hash);
 }
 
-export function projectGradient(teamId) {
+export function projectGradient(teamId: string): string {
   const h = hashCode(teamId || '');
   const baseHue = h % 360;
   const hue2 = (baseHue + 25 + ((h >> 8) % 25)) % 360;

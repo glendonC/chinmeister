@@ -3,50 +3,59 @@ export const BIN_COUNT = 18;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
-function clamp(value, min, max) {
+function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-function toTimestamp(value) {
+function toTimestamp(value: string | null | undefined): number | null {
   if (!value) return null;
   const stamp = new Date(value).getTime();
   return Number.isFinite(stamp) ? stamp : null;
 }
 
-/**
- * Format a bin's time window as a human-readable label.
- */
-function formatBinLabel(binStart, binEnd, days) {
-  const now = new Date();
+function formatBinLabel(binStart: number, binEnd: number, days: number): string {
   const start = new Date(binStart);
   const end = new Date(binEnd);
 
   if (days <= 1) {
-    const fmt = (d) => d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    const fmt = (d: Date) =>
+      d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
     return `${fmt(start)}\u2009\u2013\u2009${fmt(end)}`;
   }
   if (days <= 7) {
-    const fmt = (d) => d.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric' });
+    const fmt = (d: Date) => d.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric' });
     return `${fmt(start)}\u2009\u2013\u2009${fmt(end)}`;
   }
-  const fmt = (d) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const fmt = (d: Date) => d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return `${fmt(start)}\u2009\u2013\u2009${fmt(end)}`;
 }
 
-/**
- * Build timeline bins with enriched data for tooltips.
- * @param {Array} sessions
- * @param {number} liveCount
- * @param {number} days - Range in days (1, 7, 30)
- * @returns {Array<{value: number, sessions: number, edits: number, conflicts: number, label: string}>}
- */
-export function buildTimelineBins(sessions = [], liveCount = 0, days = 1) {
+export interface TimelineBin {
+  value: number;
+  sessions: number;
+  edits: number;
+  conflicts: number;
+  label: string;
+}
+
+interface SessionInput {
+  started_at?: string | null;
+  ended_at?: string | null;
+  edit_count?: number;
+  conflicts_hit?: number;
+}
+
+export function buildTimelineBins(
+  sessions: SessionInput[] = [],
+  liveCount = 0,
+  days = 1,
+): TimelineBin[] {
   const now = Date.now();
   const rangeMs = days * DAY_MS;
   const start = now - rangeMs;
   const binSize = rangeMs / BIN_COUNT;
 
-  const bins = Array.from({ length: BIN_COUNT }, (_, i) => ({
+  const bins: TimelineBin[] = Array.from({ length: BIN_COUNT }, (_, i) => ({
     value: 0,
     sessions: 0,
     edits: 0,
