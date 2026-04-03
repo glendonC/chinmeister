@@ -6,7 +6,7 @@ import { createLogger } from '../../lib/logger.js';
 import { safeParse } from '../../lib/safe-parse.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
 import { HEARTBEAT_STALE_WINDOW_S, ACTIVITY_MAX_FILES } from '../../lib/constants.js';
-import { withTransaction } from '../../lib/validation.js';
+import { sqlChanges, withTransaction } from '../../lib/validation.js';
 
 const log = createLogger('TeamDO.sessions');
 
@@ -72,8 +72,7 @@ export function endSession(sql, resolvedAgentId, sessionId) {
     sessionId,
     resolvedAgentId,
   );
-  const changed = sql.exec('SELECT changes() as c').toArray();
-  if (changed[0].c === 0)
+  if (sqlChanges(sql) === 0)
     return { error: 'Session not found or not owned by this agent', code: 'NOT_FOUND' };
   return { ok: true };
 }

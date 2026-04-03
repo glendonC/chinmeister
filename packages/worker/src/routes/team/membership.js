@@ -116,7 +116,10 @@ export async function handleTeamContext(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getContext(agentId, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) {
+    log.warn(`getContext failed: ${result.error}`);
+    return json({ error: result.error }, 403);
+  }
 
   const db = getDB(env);
   const dbResult = await db.addUserTeam(user.id, teamId);
@@ -132,7 +135,10 @@ export async function handleTeamHeartbeat(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.heartbeat(agentId, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) {
+    log.warn(`heartbeat failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result.error));
+  }
   return json(result);
 }
 

@@ -2,9 +2,12 @@
 
 import { getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
+import { createLogger } from '../../lib/logger.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
 import { requireJson, validateFileArray, withTeamRateLimit } from '../../lib/validation.js';
 import { LOCK_CLAIM_MAX_FILES, RATE_LIMIT_LOCKS } from '../../lib/constants.js';
+
+const log = createLogger('routes.locks');
 
 export async function handleTeamClaimFiles(request, user, env, teamId) {
   const body = await parseBody(request);
@@ -40,7 +43,10 @@ export async function handleTeamReleaseFiles(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.releaseFiles(agentId, files, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) {
+    log.warn(`releaseFiles failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result));
+  }
   return json(result);
 }
 
@@ -48,6 +54,9 @@ export async function handleTeamGetLocks(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getLockedFiles(agentId, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) {
+    log.warn(`getLockedFiles failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result));
+  }
   return json(result);
 }

@@ -5,7 +5,7 @@ import { createLogger } from '../../lib/logger.js';
 import { safeParse } from '../../lib/safe-parse.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
 import { MEMORY_MAX_COUNT } from '../../lib/constants.js';
-import { withTransaction } from '../../lib/validation.js';
+import { sqlChanges, withTransaction } from '../../lib/validation.js';
 
 const log = createLogger('TeamDO.memory');
 
@@ -62,7 +62,7 @@ export function saveMemory(
       )`,
       MEMORY_MAX_COUNT,
     );
-    evicted = sql.exec('SELECT changes() as c').toArray()[0].c;
+    evicted = sqlChanges(sql);
 
     // Record in active session
     sql.exec(
@@ -140,7 +140,6 @@ export function updateMemory(sql, resolvedAgentId, memoryId, text, tags) {
 export function deleteMemory(sql, memoryId) {
   // Any team member can delete — memories are team knowledge
   sql.exec('DELETE FROM memories WHERE id = ?', memoryId);
-  const changed = sql.exec('SELECT changes() as c').toArray();
-  if (changed[0].c === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
+  if (sqlChanges(sql) === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
   return { ok: true };
 }

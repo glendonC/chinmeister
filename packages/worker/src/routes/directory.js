@@ -1,9 +1,12 @@
 import { getDB } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
+import { createLogger } from '../lib/logger.js';
 import { requireJson, withRateLimit, withIpRateLimit } from '../lib/validation.js';
 import { evaluateTool } from '../lib/evaluate.js';
 import { CATEGORY_NAMES } from '../catalog.js';
 import { RATE_LIMIT_EVALUATIONS, RATE_LIMIT_BATCH_EVALUATE_PER_IP } from '../lib/constants.js';
+
+const log = createLogger('routes.directory');
 
 // Constant-time string comparison to prevent timing attacks on admin key checks.
 function timingSafeEqual(a, b) {
@@ -55,7 +58,10 @@ export async function handleListDirectory(request, env) {
       offset,
     });
   }
-  if (result.error) return json({ error: result.error }, 500);
+  if (result.error) {
+    log.warn(`listDirectory failed: ${result.error}`);
+    return json({ error: result.error }, 500);
+  }
 
   return json(
     { evaluations: result.evaluations || [], categories: CATEGORY_NAMES },
@@ -67,7 +73,10 @@ export async function handleListDirectory(request, env) {
 export async function handleGetDirectoryEntry(request, env, toolId) {
   const db = getDB(env);
   const result = await db.getEvaluation(toolId);
-  if (result.error) return json({ error: result.error }, 500);
+  if (result.error) {
+    log.warn(`getDirectoryEntry failed: ${result.error}`);
+    return json({ error: result.error }, 500);
+  }
   if (!result.evaluation) return json({ error: 'Tool not found' }, 404);
   return json({ evaluation: result.evaluation }, 200, CACHE_HEADERS);
 }
@@ -183,10 +192,16 @@ export async function handleTriggerEvaluation(request, user, env) {
       }
 
       const result = await evaluateTool(nameOrUrl, env);
-      if (result.error) return json({ error: result.error }, 500);
+      if (result.error) {
+        log.warn(`triggerEvaluation failed: ${result.error}`);
+        return json({ error: result.error }, 500);
+      }
 
       const saveResult = await db.saveEvaluation(result.evaluation);
-      if (saveResult.error) return json({ error: saveResult.error }, 500);
+      if (saveResult.error) {
+        log.warn(`triggerEvaluation save failed: ${saveResult.error}`);
+        return json({ error: saveResult.error }, 500);
+      }
 
       return json({ evaluation: result.evaluation }, 201);
     },

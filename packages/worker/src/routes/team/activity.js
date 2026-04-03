@@ -5,6 +5,7 @@ import { getDB, getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
 import { requireJson, validateFileArray, withRateLimit } from '../../lib/validation.js';
+import { createLogger } from '../../lib/logger.js';
 import { auditLog } from '../../lib/audit.js';
 import {
   ACTIVITY_MAX_FILES,
@@ -18,6 +19,8 @@ import {
   HISTORY_DEFAULT_DAYS,
   HISTORY_MAX_DAYS,
 } from '../../lib/constants.js';
+
+const log = createLogger('routes.activity');
 
 export async function handleTeamActivity(request, user, env, teamId) {
   const body = await parseBody(request);
@@ -36,7 +39,10 @@ export async function handleTeamActivity(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.updateActivity(agentId, files, summary, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) {
+    log.warn(`updateActivity failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result.error));
+  }
   return json(result);
 }
 
@@ -52,7 +58,10 @@ export async function handleTeamConflicts(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.checkConflicts(agentId, files, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) {
+    log.warn(`checkConflicts failed: ${result.error}`);
+    return json({ error: result.error }, 403);
+  }
   return json(result);
 }
 
@@ -80,7 +89,10 @@ export async function handleTeamFile(request, user, env, teamId) {
     'File report limit reached (500/day). Try again tomorrow.',
     async () => {
       const result = await team.reportFile(agentId, file, user.id);
-      if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+      if (result.error) {
+        log.warn(`reportFile failed: ${result.error}`);
+        return json({ error: result.error }, teamErrorStatus(result.error));
+      }
       return json(result);
     },
   );
@@ -106,7 +118,10 @@ export async function handleTeamStartSession(request, user, env, teamId) {
     'Session limit reached. Try again tomorrow.',
     async () => {
       const result = await team.startSession(agentId, user.handle, framework, runtime, user.id);
-      if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+      if (result.error) {
+        log.warn(`startSession failed: ${result.error}`);
+        return json({ error: result.error }, teamErrorStatus(result.error));
+      }
       auditLog('session.start', {
         actor: user.handle,
         outcome: 'success',
@@ -130,7 +145,10 @@ export async function handleTeamEndSession(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.endSession(agentId, session_id, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) {
+    log.warn(`endSession failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result.error));
+  }
   auditLog('session.end', {
     actor: user.handle,
     outcome: 'success',
@@ -161,7 +179,10 @@ export async function handleTeamSessionEdit(request, user, env, teamId) {
     'Edit recording limit reached. Try again tomorrow.',
     async () => {
       const result = await team.recordEdit(agentId, file, user.id);
-      if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+      if (result.error) {
+        log.warn(`recordEdit failed: ${result.error}`);
+        return json({ error: result.error }, teamErrorStatus(result.error));
+      }
       return json(result);
     },
   );
@@ -178,7 +199,10 @@ export async function handleTeamHistory(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.getHistory(agentId, days, user.id);
-  if (result.error) return json({ error: result.error }, 403);
+  if (result.error) {
+    log.warn(`getHistory failed: ${result.error}`);
+    return json({ error: result.error }, 403);
+  }
   return json(result);
 }
 
@@ -198,6 +222,9 @@ export async function handleTeamEnrichModel(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.enrichModel(agentId, model.trim(), user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result.error));
+  if (result.error) {
+    log.warn(`enrichModel failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result.error));
+  }
   return json(result);
 }

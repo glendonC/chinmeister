@@ -158,6 +158,7 @@ export async function handleUpdateHandle(request, user, env) {
 
   const result = await getDB(env).updateHandle(user.id, handle);
   if (result.error) {
+    log.warn(`updateHandle failed: ${result.error}`);
     return json({ error: result.error }, 400);
   }
 
@@ -194,6 +195,7 @@ export async function handleUpdateColor(request, user, env) {
 
   const result = await getDB(env).updateColor(user.id, color);
   if (result.error) {
+    log.warn(`updateColor failed: ${result.error}`);
     return json({ error: result.error }, 400);
   }
 
@@ -250,13 +252,19 @@ export async function handleUpdateAgentProfile(request, user, env) {
   };
 
   const result = await getDB(env).updateAgentProfile(user.id, profile);
-  if (result.error) return json({ error: result.error }, 400);
+  if (result.error) {
+    log.warn(`updateAgentProfile failed: ${result.error}`);
+    return json({ error: result.error }, 400);
+  }
   return json(result);
 }
 
 export async function handleGetUserTeams(user, env) {
   const result = await getDB(env).getUserTeams(user.id);
-  if (result.error) return json({ error: result.error }, 500);
+  if (result.error) {
+    log.warn(`getUserTeams failed: ${result.error}`);
+    return json({ error: result.error }, 500);
+  }
   return json({ ok: true, teams: result.teams });
 }
 

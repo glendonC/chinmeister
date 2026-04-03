@@ -3,6 +3,7 @@
 import { isBlocked } from '../../moderation.js';
 import { getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
+import { createLogger } from '../../lib/logger.js';
 import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
 import {
   requireJson,
@@ -20,6 +21,8 @@ import {
   MEMORY_SEARCH_MAX_LIMIT,
   MEMORY_SEARCH_MAX_TAGS,
 } from '../../lib/constants.js';
+
+const log = createLogger('routes.memory');
 
 export async function handleTeamSaveMemory(request, user, env, teamId) {
   const body = await parseBody(request);
@@ -79,7 +82,10 @@ export async function handleTeamSearchMemory(request, user, env, teamId) {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
   const result = await team.searchMemories(agentId, query, tags, limit, user.id);
-  if (result.error) return json({ error: result.error }, teamErrorStatus(result));
+  if (result.error) {
+    log.warn(`searchMemories failed: ${result.error}`);
+    return json({ error: result.error }, teamErrorStatus(result));
+  }
   return json(result);
 }
 

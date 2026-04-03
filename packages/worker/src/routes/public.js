@@ -1,6 +1,7 @@
 import { TOOL_CATALOG, CATEGORY_NAMES } from '../catalog.js';
 import { getDB, getLobby } from '../lib/env.js';
 import { json } from '../lib/http.js';
+import { createLogger } from '../lib/logger.js';
 import { auditLog } from '../lib/audit.js';
 import { safeParse } from '../lib/safe-parse.js';
 import { hashIp, withIpRateLimit } from '../lib/validation.js';
@@ -9,6 +10,8 @@ import {
   RATE_LIMIT_STATS_PER_IP,
   RATE_LIMIT_CATALOG_PER_IP,
 } from '../lib/constants.js';
+
+const log = createLogger('routes.public');
 
 const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
@@ -49,6 +52,7 @@ export async function handleInit(request, env) {
 
   const result = await db.createUser();
   if (result.error) {
+    log.warn(`createUser failed: ${result.error}`);
     return json({ error: result.error }, 400);
   }
   await env.AUTH_KV.put(`token:${result.token}`, result.id);
