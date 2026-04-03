@@ -3,8 +3,9 @@
 import * as z from 'zod/v4';
 import { refreshContext, offlinePrefix } from '../context.js';
 import { createLogger } from '../utils/logger.js';
-import { noTeam, getErrorMessage } from '../utils/responses.js';
-import { formatToolTag, formatWho } from '../utils/formatting.js';
+import { noTeam, getErrorMessage, safeArray } from '../utils/responses.js';
+import { formatToolTag, formatWho, type TeamMember } from '../utils/formatting.js';
+import type { LockContextInfo, MessageInfo, MemoryInfo } from '../utils/display.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('tools');
@@ -77,11 +78,16 @@ export function registerContextTool(
       const lines: string[] = [];
       if (offlinePrefix()) lines.push('[offline \u2014 showing cached data]');
 
-      if (!ctx.members || ctx.members.length === 0) {
+      const members = safeArray<TeamMember>(ctx, 'members');
+      const locks = safeArray<LockContextInfo>(ctx, 'locks');
+      const messages = safeArray<MessageInfo>(ctx, 'messages');
+      const memories = safeArray<MemoryInfo>(ctx, 'memories');
+
+      if (members.length === 0) {
         lines.push('No other agents connected.');
       } else {
         lines.push('Agents:');
-        for (const m of ctx.members) {
+        for (const m of members) {
           const toolInfo = formatToolTag(m.tool) ? `, ${m.tool}` : '';
           const activity = m.activity
             ? `working on ${m.activity.files.join(', ')}${m.activity.summary ? ` \u2014 "${m.activity.summary}"` : ''}`
@@ -90,28 +96,28 @@ export function registerContextTool(
         }
       }
 
-      if (ctx.locks && ctx.locks.length > 0) {
+      if (locks.length > 0) {
         lines.push('');
         lines.push('Locked files:');
-        for (const l of ctx.locks) {
+        for (const l of locks) {
           const who = formatWho(l.owner_handle, l.tool);
           lines.push(`  ${l.file_path} \u2014 ${who} (${Math.round(l.minutes_held)}m)`);
         }
       }
 
-      if (ctx.messages && ctx.messages.length > 0) {
+      if (messages.length > 0) {
         lines.push('');
         lines.push('Messages:');
-        for (const msg of ctx.messages) {
+        for (const msg of messages) {
           const from = formatWho(msg.from_handle, msg.from_tool);
           lines.push(`  ${from}: ${msg.text}`);
         }
       }
 
-      if (ctx.memories && ctx.memories.length > 0) {
+      if (memories.length > 0) {
         lines.push('');
         lines.push('Project knowledge:');
-        for (const mem of ctx.memories) {
+        for (const mem of memories) {
           const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
           lines.push(`  ${mem.text}${tagStr}`);
         }

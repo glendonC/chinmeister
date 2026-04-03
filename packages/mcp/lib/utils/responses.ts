@@ -54,3 +54,27 @@ export function errorResult(err: unknown): McpToolResult {
 export function textResult(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
 }
+
+// --- API response validation helpers ---
+// Lightweight type guards for degrading gracefully on malformed API responses.
+// Avoids adding Zod to the MCP package while preventing unhandled TypeErrors
+// when the API returns unexpected shapes.
+
+/** Safely check that a value is a non-null object. */
+export function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+/** Safely extract an array field from an API response, defaulting to empty. */
+export function safeArray<T = unknown>(obj: unknown, key: string): T[] {
+  if (!isObject(obj)) return [];
+  const val = (obj as Record<string, unknown>)[key];
+  return Array.isArray(val) ? (val as T[]) : [];
+}
+
+/** Safely extract a string field from an API response. */
+export function safeString(obj: unknown, key: string, fallback = ''): string {
+  if (!isObject(obj)) return fallback;
+  const val = (obj as Record<string, unknown>)[key];
+  return typeof val === 'string' ? val : fallback;
+}

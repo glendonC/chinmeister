@@ -2,8 +2,8 @@
 
 import * as z from 'zod/v4';
 import { teamPreamble, getCachedContext } from '../context.js';
-import { noTeam, errorResult, getHttpStatus } from '../utils/responses.js';
-import { formatConflictsList } from '../utils/display.js';
+import { noTeam, errorResult, getHttpStatus, safeArray } from '../utils/responses.js';
+import { formatConflictsList, type ConflictInfo, type LockedFileInfo } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
 import { normalizePath } from '../utils/paths.js';
 import type { AddToolFn, ToolDeps } from './types.js';
@@ -26,7 +26,9 @@ export function registerConflictsTool(
       try {
         const result = await team.checkConflicts(state.teamId, files);
         const preamble = await teamPreamble(team, state.teamId);
-        const lines = formatConflictsList(result.conflicts, result.locked);
+        const conflicts = safeArray<ConflictInfo>(result, 'conflicts');
+        const locked = safeArray<LockedFileInfo>(result, 'locked');
+        const lines = formatConflictsList(conflicts, locked);
         if (lines.length === 0) {
           return {
             content: [{ type: 'text' as const, text: `${preamble}No conflicts. Safe to proceed.` }],

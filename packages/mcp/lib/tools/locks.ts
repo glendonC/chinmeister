@@ -2,7 +2,7 @@
 
 import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
-import { noTeam, errorResult } from '../utils/responses.js';
+import { noTeam, errorResult, safeArray } from '../utils/responses.js';
 import { formatWho } from '../utils/formatting.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
@@ -25,9 +25,14 @@ export function registerLockTools(
         const result = await team.claimFiles(state.teamId, files);
         const preamble = await teamPreamble(team, state.teamId);
         const lines: string[] = [];
-        if (result.claimed?.length > 0) lines.push(`Claimed: ${result.claimed.join(', ')}`);
-        if (result.blocked?.length > 0) {
-          for (const b of result.blocked) {
+        const claimed = safeArray<string>(result, 'claimed');
+        const blocked = safeArray<{ file: string; held_by: string; tool?: string }>(
+          result,
+          'blocked',
+        );
+        if (claimed.length > 0) lines.push(`Claimed: ${claimed.join(', ')}`);
+        if (blocked.length > 0) {
+          for (const b of blocked) {
             const who = formatWho(b.held_by, b.tool);
             lines.push(`Blocked: ${b.file} \u2014 held by ${who}`);
           }

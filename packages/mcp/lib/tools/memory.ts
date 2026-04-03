@@ -3,7 +3,8 @@
 
 import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
-import { noTeam, errorResult } from '../utils/responses.js';
+import { noTeam, errorResult, safeArray } from '../utils/responses.js';
+import type { MemoryInfo } from '../utils/display.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 export function registerMemoryTools(
@@ -115,10 +116,11 @@ export function registerMemoryTools(
       if (!state.teamId) return noTeam();
       try {
         const result = await team.searchMemories(state.teamId, query, tags, limit);
-        if (!result.memories || result.memories.length === 0) {
+        const memories = safeArray<MemoryInfo>(result, 'memories');
+        if (memories.length === 0) {
           return { content: [{ type: 'text' as const, text: 'No memories found.' }] };
         }
-        const lines = result.memories.map((m) => {
+        const lines = memories.map((m) => {
           const tagStr = m.tags?.length ? ` [${m.tags.join(', ')}]` : '';
           return `${m.text}${tagStr} (id: ${m.id}, by ${m.handle})`;
         });
