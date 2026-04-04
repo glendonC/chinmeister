@@ -284,6 +284,7 @@ export default {
         path,
         status: 500,
         error: getErrorMessage(err),
+        stack: err instanceof Error ? err.stack : undefined,
       });
       return json({ error: `Internal server error (ref: ${ref})` }, 500, corsHeaders);
     }

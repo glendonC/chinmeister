@@ -11,7 +11,7 @@
 //   const handler = authedJsonRoute(async ({ request, env, user, body }) => {
 //     const text = requireString(body, 'text');
 //     if (!text) return json({ error: 'text is required' }, 400);
-//     const result = await doResult((db as any).saveItem(text), 'saveItem');
+//     const result = await doResult(db.saveItem(text), 'saveItem');
 //     return result;
 //   });
 
@@ -156,28 +156,35 @@ export function teamJsonRoute(
 
 // ── DO result mapper ──
 
+/** DO method error shape returned on failure. */
+interface DOMethodError {
+  error: string;
+  code?: string;
+}
+
 /**
  * Call a DO method and map the result to an HTTP response.
  * On success, returns the result as JSON. On error (result contains `.error`),
  * maps the error code to the appropriate HTTP status using teamErrorStatus.
  *
- * @param promise - The DO method call (e.g. `(team as any).getContext(...)`)
+ * Accepts `PromiseLike<object>` so Cloudflare RPC's union-of-promises return
+ * types (e.g. `Promise<A & Disposable> | Promise<B & Disposable>`) are
+ * assignable without requiring an index signature or explicit cast.
+ *
+ * @param promise - The DO method call (e.g. `team.getContext(...)`)
  * @param label - A human-readable label for logging on error
  * @param successStatus - HTTP status for success responses (default 200)
  */
 export async function doResult(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  promise: Promise<any>,
+  promise: PromiseLike<object>,
   label: string,
   successStatus = 200,
 ): Promise<Response> {
   const result = await promise;
-  if (result.error) {
-    log.warn(`${label} failed: ${result.error}`);
-    return json(
-      { error: result.error },
-      teamErrorStatus(result as { error: string; code?: string }),
-    );
+  if ('error' in result && typeof (result as Record<string, unknown>).error === 'string') {
+    const err = result as unknown as DOMethodError;
+    log.warn(`${label} failed: ${err.error}`);
+    return json({ error: err.error }, teamErrorStatus(err));
   }
   return json(result, successStatus);
 }

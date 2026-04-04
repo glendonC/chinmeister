@@ -69,11 +69,21 @@ export const handleInit = publicRoute(async ({ request, env }) => {
     log.warn(`createUser failed: ${result.error}`);
     return json({ error: result.error }, 400);
   }
-  await env.AUTH_KV.put(`token:${result.token}`, result.id);
 
-  // Issue a refresh token alongside the access token
+  // Store auth and refresh tokens in KV — if this fails the user would
+  // receive tokens that cannot authenticate, so we treat it as fatal.
   const refreshToken = `rt_${crypto.randomUUID().replace(/-/g, '')}`;
-  await env.AUTH_KV.put(`refresh:${refreshToken}`, result.id, { expirationTtl: 30 * 24 * 60 * 60 });
+  try {
+    await env.AUTH_KV.put(`token:${result.token}`, result.id);
+    await env.AUTH_KV.put(`refresh:${refreshToken}`, result.id, {
+      expirationTtl: 30 * 24 * 60 * 60,
+    });
+  } catch (err) {
+    log.error('KV put failed during init', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json({ error: 'Account created but token storage failed. Please retry.' }, 503);
+  }
 
   auditLog('auth.account_created', {
     actor: result.handle,
@@ -130,7 +140,14 @@ export const handleGithubAuth = publicRoute(async ({ request, env }) => {
   if (!clientId) return json({ error: 'GitHub OAuth not configured' }, 500);
 
   const state = crypto.randomUUID();
-  await env.AUTH_KV.put(`oauth_state:${state}`, '1', { expirationTtl: 600 });
+  try {
+    await env.AUTH_KV.put(`oauth_state:${state}`, '1', { expirationTtl: 600 });
+  } catch (err) {
+    log.error('KV put failed for OAuth state', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json({ error: 'Failed to initiate OAuth flow. Please retry.' }, 503);
+  }
 
   const params = new URLSearchParams({
     client_id: clientId,
@@ -221,7 +238,14 @@ export const handleGithubCallback = publicRoute(async ({ request, env }) => {
       return Response.redirect(`${getDashboardUrl(env)}#error=account_failed`, 302);
     }
     // Store the CLI token in KV (so the user could use it from CLI later)
-    await env.AUTH_KV.put(`token:${created.token}`, created.id);
+    try {
+      await env.AUTH_KV.put(`token:${created.token}`, created.id);
+    } catch (err) {
+      log.error('KV put failed for GitHub CLI token', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+      return Response.redirect(`${getDashboardUrl(env)}#error=account_failed`, 302);
+    }
     userId = created.id;
     auditLog('auth.account_created', {
       actor: githubLogin,
@@ -238,9 +262,16 @@ export const handleGithubCallback = publicRoute(async ({ request, env }) => {
   const session = rpc(await db.createWebSession(userId, userAgent));
 
   // Store session token in KV with 30-day TTL
-  await env.AUTH_KV.put(`token:${session.token}`, userId, {
-    expirationTtl: 30 * 24 * 60 * 60,
-  });
+  try {
+    await env.AUTH_KV.put(`token:${session.token}`, userId, {
+      expirationTtl: 30 * 24 * 60 * 60,
+    });
+  } catch (err) {
+    log.error('KV put failed for web session token', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return Response.redirect(`${getDashboardUrl(env)}#error=account_failed`, 302);
+  }
 
   return Response.redirect(`${getDashboardUrl(env)}#token=${session.token}`, 302);
 });
@@ -251,7 +282,14 @@ export const handleGithubLink = authedRoute(async ({ request, user, env }) => {
   if (!clientId) return json({ error: 'GitHub OAuth not configured' }, 500);
 
   const state = `link:${user.id}:${crypto.randomUUID()}`;
-  await env.AUTH_KV.put(`oauth_state:${state}`, user.id, { expirationTtl: 600 });
+  try {
+    await env.AUTH_KV.put(`oauth_state:${state}`, user.id, { expirationTtl: 600 });
+  } catch (err) {
+    log.error('KV put failed for GitHub link state', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return json({ error: 'Failed to initiate GitHub link flow. Please retry.' }, 503);
+  }
 
   const params = new URLSearchParams({
     client_id: clientId,

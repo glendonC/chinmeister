@@ -14,12 +14,20 @@ import type { TeamDO } from '../dos/team/index.js';
  * `DOResult<T>` unions (e.g. checking `.error`) because both branches carry
  * `& Disposable`. This is a zero-cost identity function at runtime.
  *
+ * Cloudflare's RPC wraps return types through complex mapped/conditional types
+ * (Rpc.Result<T>, Rpc.Stub<T>). Some patterns — notably `ReturnType<typeof fn>`
+ * in DO method signatures — resolve to `never` through the RPC type pipeline.
+ * The `[T] extends [never]` guard handles those cases. For all other types, T
+ * passes through unchanged; the `& Disposable` only adds symbol keys and a
+ * `dispose()` method, neither of which interferes with property access or
+ * `'error' in result` narrowing.
+ *
  * Usage: `const result = rpc(await db.getUser(id));`
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function rpc<T>(value: T): [T] extends [never] ? any : T {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return value as any;
+type RpcResult<T> = [T] extends [never] ? any : T;
+export function rpc<T>(value: T): RpcResult<T> {
+  return value as RpcResult<T>;
 }
 
 /** Get the singleton DatabaseDO stub. */
