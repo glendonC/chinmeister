@@ -11,6 +11,9 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getProcessTtyPath, getProcessCommandString } from './process-utils.js';
 import { formatError } from './error-utils.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('session-registry');
 
 export interface SessionRecord {
   agentId: string;
@@ -97,11 +100,7 @@ export function readSessionRecord(
   try {
     return JSON.parse(readFileSync(filePath, 'utf-8')) as SessionRecord;
   } catch (err: unknown) {
-    console.error(
-      'session-registry: failed to parse session file',
-      filePath + ':',
-      formatError(err),
-    );
+    log.error(`failed to parse session file ${filePath}: ${formatError(err)}`);
     return null;
   }
 }
@@ -117,7 +116,7 @@ export function deleteSessionRecord(
     if (
       !(err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT')
     )
-      console.error('session-registry: failed to delete session record:', formatError(err));
+      log.error(`failed to delete session record: ${formatError(err)}`);
     return false;
   }
 }
@@ -140,11 +139,7 @@ export function resolveSessionAgentId({
         try {
           return JSON.parse(readFileSync(join(dir, name), 'utf-8')) as SessionRecord;
         } catch (err: unknown) {
-          console.error(
-            'session-registry: failed to parse session file',
-            join(dir, name) + ':',
-            formatError(err),
-          );
+          log.error(`failed to parse session file ${join(dir, name)}: ${formatError(err)}`);
           return null;
         }
       })
@@ -165,7 +160,7 @@ export function resolveSessionAgentId({
     if (
       !(err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT')
     )
-      console.error('session-registry: failed to resolve session agent ID:', formatError(err));
+      log.error(`failed to resolve session agent ID: ${formatError(err)}`);
     return fallbackAgentId;
   }
 }

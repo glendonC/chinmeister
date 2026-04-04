@@ -1,6 +1,10 @@
 // Standard MCP tool response builders and error extraction helpers.
 // Centralizes the response shape so tool handlers stay focused on logic.
 
+import { formatError, getHttpStatus } from '@chinwag/shared/error-utils.js';
+
+export { getHttpStatus };
+
 export interface McpToolContent {
   type: 'text';
   text: string;
@@ -12,18 +16,9 @@ export interface McpToolResult {
   isError?: boolean;
 }
 
-interface HttpError extends Error {
-  status?: number;
-}
-
-/** Extract HTTP status from an unknown error (e.g. from fetch). */
-export function getHttpStatus(err: unknown): number | undefined {
-  return err instanceof Error && 'status' in err ? (err as HttpError).status : undefined;
-}
-
 /** Extract a message string from an unknown error. */
 export function getErrorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  return formatError(err);
 }
 
 /**

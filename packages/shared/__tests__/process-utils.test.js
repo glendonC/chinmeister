@@ -126,7 +126,7 @@ describe('process-utils', () => {
       readProcessInfo(42);
 
       expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining('[chinwag:process-utils] readProcessInfo(42) failed: ps failed'),
+        expect.stringContaining('readProcessInfo(42) failed: ps failed'),
       );
       spy.mockRestore();
     });
@@ -212,9 +212,7 @@ describe('process-utils', () => {
       getProcessTtyPath(99);
 
       expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[chinwag:process-utils] getProcessTtyPath(99) failed: tty lookup failed',
-        ),
+        expect.stringContaining('getProcessTtyPath(99) failed: tty lookup failed'),
       );
       spy.mockRestore();
     });
@@ -280,9 +278,7 @@ describe('process-utils', () => {
       getProcessCommandString(77);
 
       expect(spy).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '[chinwag:process-utils] getProcessCommandString(77) failed: command lookup failed',
-        ),
+        expect.stringContaining('getProcessCommandString(77) failed: command lookup failed'),
       );
       spy.mockRestore();
     });
@@ -304,7 +300,7 @@ describe('process-utils', () => {
       process.env.CHINWAG_DEBUG = '1';
       const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
       execFileSync.mockImplementation(() => {
-        throw 'string error';  
+        throw 'string error';
       });
 
       getProcessCommandString(5);

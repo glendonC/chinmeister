@@ -56,6 +56,14 @@
     "./tool-registry.js": {
       "types": "./dist/tool-registry.d.ts",
       "import": "./dist/tool-registry.js"
+    },
+    "./logger.js": {
+      "types": "./dist/logger.d.ts",
+      "import": "./dist/logger.js"
+    },
+    "./error-utils.js": {
+      "types": "./dist/error-utils.d.ts",
+      "import": "./dist/error-utils.js"
     }
   },
   "scripts": {

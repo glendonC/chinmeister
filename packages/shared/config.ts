@@ -2,6 +2,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { homedir } from 'node:os';
 import { formatError } from './error-utils.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('config');
 
 export interface ChinwagConfig {
   token?: string;
@@ -49,7 +52,7 @@ export function loadConfig(): ChinwagConfig | null {
   try {
     raw = readFileSync(CONFIG_FILE, 'utf-8');
   } catch (err: unknown) {
-    console.error(`[chinwag] Failed to read config file ${CONFIG_FILE}: ${formatError(err)}`);
+    log.error(`Failed to read config file ${CONFIG_FILE}: ${formatError(err)}`);
     return null;
   }
 
@@ -58,8 +61,8 @@ export function loadConfig(): ChinwagConfig | null {
     parsed = JSON.parse(raw);
   } catch (err: unknown) {
     const preview = raw.length > 120 ? raw.slice(0, 120) + '...' : raw;
-    console.error(
-      `[chinwag] Config file ${CONFIG_FILE} contains invalid JSON: ${formatError(err)}` +
+    log.error(
+      `Config file ${CONFIG_FILE} contains invalid JSON: ${formatError(err)}` +
         `\n  Content preview: ${JSON.stringify(preview)}`,
     );
     return null;
@@ -67,7 +70,7 @@ export function loadConfig(): ChinwagConfig | null {
 
   const validationError = validateConfigShape(parsed);
   if (validationError) {
-    console.error(`[chinwag] Config file ${CONFIG_FILE} has invalid shape: ${validationError}`);
+    log.error(`Config file ${CONFIG_FILE} has invalid shape: ${validationError}`);
     return null;
   }
 

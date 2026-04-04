@@ -29,7 +29,10 @@ export {
 } from './config.js';
 
 // error-utils
-export { formatError } from './error-utils.js';
+export { formatError, formatErrorChain, getHttpStatus, getErrorCode } from './error-utils.js';
+
+// logger
+export { createLogger, type Logger } from './logger.js';
 
 // contracts
 export type {
