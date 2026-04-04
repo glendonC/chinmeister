@@ -1,5 +1,6 @@
 // Team lock routes — claim, release, get locks.
 
+import type { Env, User } from '../../types.js';
 import { getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
@@ -9,12 +10,18 @@ import { LOCK_CLAIM_MAX_FILES, RATE_LIMIT_LOCKS } from '../../lib/constants.js';
 
 const log = createLogger('routes.locks');
 
-export async function handleTeamClaimFiles(request, user, env, teamId) {
+export async function handleTeamClaimFiles(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { files } = body;
+  const b = body as Record<string, unknown>;
+  const { files } = b;
   const fileErr = validateFileArray(files, LOCK_CLAIM_MAX_FILES);
   if (fileErr) return json({ error: fileErr }, 400);
 
@@ -27,22 +34,28 @@ export async function handleTeamClaimFiles(request, user, env, teamId) {
     rateLimitMax: RATE_LIMIT_LOCKS,
     rateLimitMsg: 'Lock claim limit reached (100/day). Try again tomorrow.',
     action: (team, agentId, runtime) =>
-      team.claimFiles(agentId, files, user.handle, runtime, user.id),
+      (team as any).claimFiles(agentId, files, user.handle, runtime, user.id),
   });
 }
 
-export async function handleTeamReleaseFiles(request, user, env, teamId) {
+export async function handleTeamReleaseFiles(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const files = body.files || null;
+  const b = body as Record<string, unknown>;
+  const files = b.files || null;
   const fileErr = validateFileArray(files, LOCK_CLAIM_MAX_FILES, { nullable: true });
   if (fileErr) return json({ error: fileErr }, 400);
 
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.releaseFiles(agentId, files, user.id);
+  const result = await (team as any).releaseFiles(agentId, files, user.id);
   if (result.error) {
     log.warn(`releaseFiles failed: ${result.error}`);
     return json({ error: result.error }, teamErrorStatus(result));
@@ -50,10 +63,15 @@ export async function handleTeamReleaseFiles(request, user, env, teamId) {
   return json(result);
 }
 
-export async function handleTeamGetLocks(request, user, env, teamId) {
+export async function handleTeamGetLocks(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.getLockedFiles(agentId, user.id);
+  const result = await (team as any).getLockedFiles(agentId, user.id);
   if (result.error) {
     log.warn(`getLockedFiles failed: ${result.error}`);
     return json({ error: result.error }, teamErrorStatus(result));

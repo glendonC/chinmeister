@@ -1,3 +1,4 @@
+import type { Env, User } from '../types.js';
 import { getDB } from '../lib/env.js';
 import { json, parseBody } from '../lib/http.js';
 import { createLogger } from '../lib/logger.js';
@@ -9,7 +10,7 @@ import { RATE_LIMIT_EVALUATIONS, RATE_LIMIT_BATCH_EVALUATE_PER_IP } from '../lib
 const log = createLogger('routes.directory');
 
 // Constant-time string comparison to prevent timing attacks on admin key checks.
-function timingSafeEqual(a, b) {
+function timingSafeEqual(a: unknown, b: unknown): boolean {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
   if (a.length !== b.length) return false;
   const encoder = new TextEncoder();
@@ -26,7 +27,7 @@ const CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
 };
 
-export async function handleListDirectory(request, env) {
+export async function handleListDirectory(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const q = url.searchParams.get('q') || null;
   const verdict = url.searchParams.get('verdict') || null;
@@ -45,11 +46,11 @@ export async function handleListDirectory(request, env) {
 
   const db = getDB(env);
 
-  let result;
+  let result: Record<string, unknown>;
   if (q) {
-    result = await db.searchEvaluations(q, limit);
+    result = await (db as any).searchEvaluations(q, limit);
   } else {
-    result = await db.listEvaluations({
+    result = await (db as any).listEvaluations({
       verdict,
       category,
       mcp_support,
@@ -64,15 +65,19 @@ export async function handleListDirectory(request, env) {
   }
 
   return json(
-    { evaluations: result.evaluations || [], categories: CATEGORY_NAMES },
+    { evaluations: (result.evaluations as unknown[]) || [], categories: CATEGORY_NAMES },
     200,
     CACHE_HEADERS,
   );
 }
 
-export async function handleGetDirectoryEntry(request, env, toolId) {
+export async function handleGetDirectoryEntry(
+  request: Request,
+  env: Env,
+  toolId: string,
+): Promise<Response> {
   const db = getDB(env);
-  const result = await db.getEvaluation(toolId);
+  const result = await (db as any).getEvaluation(toolId);
   if (result.error) {
     log.warn(`getDirectoryEntry failed: ${result.error}`);
     return json({ error: result.error }, 500);
@@ -82,20 +87,21 @@ export async function handleGetDirectoryEntry(request, env, toolId) {
 }
 
 // Admin-only delete — remove duplicate/stale evaluations.
-export async function handleAdminDelete(request, env) {
+export async function handleAdminDelete(request: Request, env: Env): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { ids, admin_key } = body;
+  const b = body as Record<string, unknown>;
+  const { ids, admin_key } = b;
   if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY))
     return json({ error: 'Forbidden' }, 403);
   if (!Array.isArray(ids) || ids.length === 0) return json({ error: 'ids array required' }, 400);
 
   const db = getDB(env);
-  const results = [];
+  const results: Array<{ id: unknown; deleted: unknown }> = [];
   for (const id of ids) {
-    const r = await db.deleteEvaluation(id);
+    const r = await (db as any).deleteEvaluation(id);
     results.push({ id, deleted: r.deleted });
   }
   return json({ results }, 200);
@@ -104,13 +110,14 @@ export async function handleAdminDelete(request, env) {
 // Admin-only batch evaluation — no auth, secured by secret key in body.
 // Used for seed scans and monthly re-evaluations.
 // IP rate limited to prevent brute-force key guessing.
-export async function handleBatchEvaluate(request, env) {
+export async function handleBatchEvaluate(request: Request, env: Env): Promise<Response> {
   return withIpRateLimit(request, env, 'batch-eval', RATE_LIMIT_BATCH_EVALUATE_PER_IP, async () => {
     const body = await parseBody(request);
     const parseErr = requireJson(body);
     if (parseErr) return parseErr;
 
-    const { tools, admin_key } = body;
+    const b = body as Record<string, unknown>;
+    const { tools, admin_key } = b;
     if (!env.EXA_API_KEY || !timingSafeEqual(admin_key, env.EXA_API_KEY))
       return json({ error: 'Forbidden' }, 403);
     if (!Array.isArray(tools) || tools.length === 0)
@@ -118,17 +125,17 @@ export async function handleBatchEvaluate(request, env) {
     if (tools.length > 50) return json({ error: 'max 50 tools per batch' }, 400);
 
     const db = getDB(env);
-    const results = [];
+    const results: Array<Record<string, unknown>> = [];
     for (const toolName of tools) {
       if (typeof toolName !== 'string' || !toolName.trim()) {
         results.push({ name: toolName, error: 'invalid name' });
         continue;
       }
       const result = await evaluateTool(toolName.trim(), env);
-      if (result.error || !result.evaluation) {
-        results.push({ name: toolName, error: result.error || 'No evaluation returned' });
+      if ('error' in result) {
+        results.push({ name: toolName, error: result.error });
       } else {
-        await db.saveEvaluation(result.evaluation);
+        await (db as any).saveEvaluation(result.evaluation);
         results.push({
           name: result.evaluation.name,
           verdict: result.evaluation.verdict,
@@ -147,27 +154,32 @@ export async function handleBatchEvaluate(request, env) {
   });
 }
 
-export async function handleTriggerEvaluation(request, user, env) {
+export async function handleTriggerEvaluation(
+  request: Request,
+  user: User,
+  env: Env,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { name, url } = body;
+  const b = body as Record<string, unknown>;
+  const { name, url } = b;
   const hasName = typeof name === 'string' && name.trim().length > 0;
   const hasUrl = typeof url === 'string' && url.trim().length > 0;
 
   if (!hasName && !hasUrl) {
     return json({ error: 'name or url is required' }, 400);
   }
-  if (hasName && name.length > 200) {
+  if (hasName && (name as string).length > 200) {
     return json({ error: 'name must be 200 characters or less' }, 400);
   }
-  if (hasUrl && url.length > 2000) {
+  if (hasUrl && (url as string).length > 2000) {
     return json({ error: 'url must be 2000 characters or less' }, 400);
   }
 
   const db = getDB(env);
-  const nameOrUrl = hasName ? name.trim() : url.trim();
+  const nameOrUrl = hasName ? (name as string).trim() : (url as string).trim();
   const slugified = nameOrUrl
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -180,7 +192,7 @@ export async function handleTriggerEvaluation(request, user, env) {
     'Evaluation limit reached (5/day). Try again tomorrow.',
     async () => {
       // Check if evaluation already exists and is recent
-      const existing = await db.getEvaluation(slugified);
+      const existing = await (db as any).getEvaluation(slugified);
       if (existing.evaluation) {
         const evaluatedAt = new Date(
           existing.evaluation.evaluated_at || existing.evaluation.created_at,
@@ -192,12 +204,12 @@ export async function handleTriggerEvaluation(request, user, env) {
       }
 
       const result = await evaluateTool(nameOrUrl, env);
-      if (result.error) {
+      if ('error' in result) {
         log.warn(`triggerEvaluation failed: ${result.error}`);
         return json({ error: result.error }, 500);
       }
 
-      const saveResult = await db.saveEvaluation(result.evaluation);
+      const saveResult = await (db as any).saveEvaluation(result.evaluation);
       if (saveResult.error) {
         log.warn(`triggerEvaluation save failed: ${saveResult.error}`);
         return json({ error: saveResult.error }, 500);

@@ -1,3 +1,4 @@
+import type { Env, User } from '../types.js';
 import { TOOL_CATALOG, CATEGORY_NAMES } from '../catalog.js';
 import { getDB, getLobby } from '../lib/env.js';
 import { json } from '../lib/http.js';
@@ -17,40 +18,52 @@ const GITHUB_AUTHORIZE_URL = 'https://github.com/login/oauth/authorize';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const GITHUB_USER_URL = 'https://api.github.com/user';
 
-function getDashboardUrl(env) {
+function getDashboardUrl(env: Env): string {
   return (env.DASHBOARD_URL || 'https://chinwag.dev') + '/dashboard';
 }
 
-function evaluationToCatalogEntry(e) {
+interface CatalogEntry {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  website: string | null;
+  installCmd: string | null;
+  mcpCompatible: boolean;
+  featured: boolean;
+}
+
+function evaluationToCatalogEntry(e: Record<string, unknown>): CatalogEntry {
   let metadata = e.metadata || {};
   if (typeof metadata === 'string') {
     metadata = safeParse(metadata, `evaluationToCatalogEntry tool=${e.tool_id} metadata`, {});
   }
+  const meta = metadata as Record<string, unknown>;
   return {
-    id: e.tool_id,
-    name: e.name,
-    description: e.tagline || '',
-    category: e.category || 'uncategorized',
-    website: metadata.website || null,
-    installCmd: metadata.installCmd || null,
+    id: e.tool_id as string,
+    name: e.name as string,
+    description: (e.tagline as string) || '',
+    category: (e.category as string) || 'uncategorized',
+    website: (meta.website as string) || null,
+    installCmd: (meta.installCmd as string) || null,
     mcpCompatible: !!e.mcp_support,
-    featured: !!metadata.featured,
+    featured: !!meta.featured,
   };
 }
 
-export async function handleInit(request, env) {
+export async function handleInit(request: Request, env: Env): Promise<Response> {
   const ip = request.headers.get('CF-Connecting-IP');
   if (!ip) return json({ error: 'Unable to identify client' }, 400);
   const hashedIp = await hashIp(ip);
   const db = getDB(env);
 
   // Atomic check-and-consume eliminates the race window between check and consume
-  const limit = await db.checkAndConsume(hashedIp, RATE_LIMIT_ACCOUNTS_PER_IP);
+  const limit = await (db as any).checkAndConsume(hashedIp, RATE_LIMIT_ACCOUNTS_PER_IP);
   if (!limit.allowed) {
     return json({ error: 'Too many accounts created recently. Try again later.' }, 429);
   }
 
-  const result = await db.createUser();
+  const result = await (db as any).createUser();
   if (result.error) {
     log.warn(`createUser failed: ${result.error}`);
     return json({ error: result.error }, 400);
@@ -78,11 +91,11 @@ export async function handleInit(request, env) {
   );
 }
 
-export async function handleStats(request, env) {
+export async function handleStats(request: Request, env: Env): Promise<Response> {
   return withIpRateLimit(request, env, 'stats', RATE_LIMIT_STATS_PER_IP, async () => {
     const [lobbyStats, dbStats] = await Promise.all([
-      getLobby(env).getStats(),
-      getDB(env).getStats(),
+      (getLobby(env) as any).getStats(),
+      (getDB(env) as any).getStats(),
     ]);
     const { ok: _ok1, ...lobby } = lobbyStats;
     const { ok: _ok2, ...dbData } = dbStats;
@@ -90,9 +103,9 @@ export async function handleStats(request, env) {
   });
 }
 
-export async function handleToolCatalog(request, env) {
+export async function handleToolCatalog(request: Request, env: Env): Promise<Response> {
   return withIpRateLimit(request, env, 'catalog', RATE_LIMIT_CATALOG_PER_IP, async () => {
-    const result = await getDB(env).listEvaluations({});
+    const result = await (getDB(env) as any).listEvaluations({});
 
     let tools;
     if (result.evaluations && result.evaluations.length > 0) {
@@ -109,7 +122,7 @@ export async function handleToolCatalog(request, env) {
 
 // --- GitHub OAuth ---
 
-export async function handleGithubAuth(request, env) {
+export async function handleGithubAuth(request: Request, env: Env): Promise<Response> {
   const clientId = env.GITHUB_CLIENT_ID;
   if (!clientId) return json({ error: 'GitHub OAuth not configured' }, 500);
 
@@ -126,7 +139,7 @@ export async function handleGithubAuth(request, env) {
   return Response.redirect(`${GITHUB_AUTHORIZE_URL}?${params}`, 302);
 }
 
-export async function handleGithubCallback(request, env) {
+export async function handleGithubCallback(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
@@ -161,7 +174,7 @@ export async function handleGithubCallback(request, env) {
     }),
   });
 
-  const tokenData = await tokenRes.json();
+  const tokenData: Record<string, unknown> = await tokenRes.json();
   if (tokenData.error || !tokenData.access_token) {
     return Response.redirect(`${getDashboardUrl(env)}#error=github_token_failed`, 302);
   }
@@ -179,28 +192,28 @@ export async function handleGithubCallback(request, env) {
     return Response.redirect(`${getDashboardUrl(env)}#error=github_profile_failed`, 302);
   }
 
-  const ghUser = await userRes.json();
+  const ghUser: Record<string, unknown> = await userRes.json();
   const githubId = String(ghUser.id);
-  const githubLogin = ghUser.login || '';
-  const avatarUrl = ghUser.avatar_url || null;
+  const githubLogin = (ghUser.login as string) || '';
+  const avatarUrl = (ghUser.avatar_url as string) || null;
 
   const db = getDB(env);
 
   // Look up existing account by GitHub ID, or create new one
-  const ghLookup = await db.getUserByGithubId(githubId);
-  let userId;
+  const ghLookup = await (db as any).getUserByGithubId(githubId);
+  let userId: string;
   if (!ghLookup.ok) {
     const ip = request.headers.get('CF-Connecting-IP');
     if (!ip) {
       return Response.redirect(`${getDashboardUrl(env)}#error=rate_limited`, 302);
     }
     const hashedCallbackIp = await hashIp(ip);
-    const limit = await db.checkAndConsume(hashedCallbackIp, RATE_LIMIT_ACCOUNTS_PER_IP);
+    const limit = await (db as any).checkAndConsume(hashedCallbackIp, RATE_LIMIT_ACCOUNTS_PER_IP);
     if (!limit.allowed) {
       return Response.redirect(`${getDashboardUrl(env)}#error=rate_limited`, 302);
     }
 
-    const created = await db.createUserFromGithub(githubId, githubLogin, avatarUrl);
+    const created = await (db as any).createUserFromGithub(githubId, githubLogin, avatarUrl);
     if (created.error) {
       return Response.redirect(`${getDashboardUrl(env)}#error=account_failed`, 302);
     }
@@ -219,7 +232,7 @@ export async function handleGithubCallback(request, env) {
 
   // Create a web session token
   const userAgent = request.headers.get('User-Agent') || null;
-  const session = await db.createWebSession(userId, userAgent);
+  const session = await (db as any).createWebSession(userId, userAgent);
 
   if (session.error) {
     return Response.redirect(`${getDashboardUrl(env)}#error=session_failed`, 302);
@@ -233,7 +246,7 @@ export async function handleGithubCallback(request, env) {
   return Response.redirect(`${getDashboardUrl(env)}#token=${session.token}`, 302);
 }
 
-export async function handleGithubLink(request, user, env) {
+export async function handleGithubLink(request: Request, user: User, env: Env): Promise<Response> {
   // This initiates the link flow — redirects to GitHub with user ID in state
   const clientId = env.GITHUB_CLIENT_ID;
   if (!clientId) return json({ error: 'GitHub OAuth not configured' }, 500);
@@ -251,7 +264,7 @@ export async function handleGithubLink(request, user, env) {
   return json({ url: `${GITHUB_AUTHORIZE_URL}?${params}` });
 }
 
-export async function handleGithubLinkCallback(request, env) {
+export async function handleGithubLinkCallback(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
@@ -282,7 +295,7 @@ export async function handleGithubLinkCallback(request, env) {
     }),
   });
 
-  const tokenData = await tokenRes.json();
+  const tokenData: Record<string, unknown> = await tokenRes.json();
   if (tokenData.error || !tokenData.access_token) {
     return Response.redirect(`${getDashboardUrl(env)}#error=github_token_failed`, 302);
   }
@@ -300,10 +313,10 @@ export async function handleGithubLinkCallback(request, env) {
     return Response.redirect(`${getDashboardUrl(env)}#error=github_profile_failed`, 302);
   }
 
-  const ghUser = await userRes.json();
+  const ghUser: Record<string, unknown> = await userRes.json();
   const db = getDB(env);
 
-  const result = await db.linkGithub(
+  const result = await (db as any).linkGithub(
     storedUserId,
     String(ghUser.id),
     ghUser.login,

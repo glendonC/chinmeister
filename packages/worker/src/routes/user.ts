@@ -1,3 +1,4 @@
+import type { Env, User } from '../types.js';
 import { checkContent } from '../moderation.js';
 import { getDB, getLobby, getTeam } from '../lib/env.js';
 import { getErrorMessage } from '../lib/errors.js';
@@ -22,19 +23,19 @@ const log = createLogger('routes.user');
 
 const DO_CALL_TIMEOUT_MS = 5000;
 
-function withTimeout(promise, ms) {
-  let timer;
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
   return Promise.race([
     promise,
-    new Promise((_, reject) => {
+    new Promise<never>((_resolve, reject) => {
       timer = setTimeout(() => reject(new Error('DO call timed out')), ms);
     }),
   ]).finally(() => clearTimeout(timer));
 }
 
-export async function authenticate(request, env) {
+export async function authenticate(request: Request, env: Env): Promise<User | null> {
   const auth = request.headers.get('Authorization');
-  let token;
+  let token: string | undefined;
   if (auth?.startsWith('Bearer ')) {
     token = auth.slice(7);
   } else if (request.headers.get('Upgrade') === 'websocket') {
@@ -53,10 +54,10 @@ export async function authenticate(request, env) {
       await env.AUTH_KV.delete(kvKey);
       const db = getDB(env);
       if (!userId.includes('-')) {
-        const result = await db.getUserByHandle(userId);
+        const result = await (db as any).getUserByHandle(userId);
         return result.ok ? result.user : null;
       }
-      const result = await db.getUser(userId);
+      const result = await (db as any).getUser(userId);
       return result.ok ? result.user : null;
     }
   }
@@ -67,9 +68,9 @@ export async function authenticate(request, env) {
 
   const db = getDB(env);
   if (!userId.includes('-')) {
-    const result = await db.getUserByHandle(userId);
+    const result = await (db as any).getUserByHandle(userId);
     if (!result.ok) return null;
-    const user = result.user;
+    const user: User = result.user;
     // Verify the looked-up user's handle still matches the KV entry.
     // Prevents auth bypass when a handle is reassigned to a different user:
     // stale KV entry "token:X -> oldHandle" would resolve to the new owner.
@@ -78,7 +79,7 @@ export async function authenticate(request, env) {
     return user;
   }
 
-  const result = await db.getUser(userId);
+  const result = await (db as any).getUser(userId);
   if (result.ok) {
     auditLog('auth.success', {
       actor: result.user.handle,
@@ -91,12 +92,12 @@ export async function authenticate(request, env) {
   return null;
 }
 
-export async function handleRefreshToken(request, env) {
+export async function handleRefreshToken(request: Request, env: Env): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const refreshToken = body?.refresh_token;
+  const refreshToken = (body as Record<string, unknown>)?.refresh_token;
   if (!refreshToken || typeof refreshToken !== 'string') {
     return json({ error: 'refresh_token is required' }, 400);
   }
@@ -136,7 +137,7 @@ export async function handleRefreshToken(request, env) {
   );
 }
 
-export async function handleGetWsTicket(user, env) {
+export async function handleGetWsTicket(user: User, env: Env): Promise<Response> {
   const db = getDB(env);
   return withRateLimit(
     db,
@@ -151,17 +152,21 @@ export async function handleGetWsTicket(user, env) {
   );
 }
 
-export async function handleUnlinkGithub(user, env) {
-  const result = await getDB(env).unlinkGithub(user.id);
+export async function handleUnlinkGithub(user: User, env: Env): Promise<Response> {
+  const result = await (getDB(env) as any).unlinkGithub(user.id);
   return json(result);
 }
 
-export async function handleUpdateHandle(request, user, env) {
+export async function handleUpdateHandle(
+  request: Request,
+  user: User,
+  env: Env,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { handle } = body;
+  const { handle } = body as Record<string, unknown>;
   if (!handle || typeof handle !== 'string') {
     return json({ error: 'Handle is required' }, 400);
   }
@@ -178,7 +183,7 @@ export async function handleUpdateHandle(request, user, env) {
     return json({ error: 'Content blocked' }, 400);
   }
 
-  const result = await getDB(env).updateHandle(user.id, handle);
+  const result = await (getDB(env) as any).updateHandle(user.id, handle);
   if (result.error) {
     log.warn(`updateHandle failed: ${result.error}`);
     return json({ error: result.error }, 400);
@@ -187,12 +192,12 @@ export async function handleUpdateHandle(request, user, env) {
   return json(result);
 }
 
-export async function handleUpdateColor(request, user, env) {
+export async function handleUpdateColor(request: Request, user: User, env: Env): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { color } = body;
+  const { color } = body as Record<string, unknown>;
   if (!color || typeof color !== 'string') {
     return json({ error: 'Color is required' }, 400);
   }
@@ -203,7 +208,7 @@ export async function handleUpdateColor(request, user, env) {
     );
   }
 
-  const result = await getDB(env).updateColor(user.id, color);
+  const result = await (getDB(env) as any).updateColor(user.id, color);
   if (result.error) {
     log.warn(`updateColor failed: ${result.error}`);
     return json({ error: result.error }, 400);
@@ -212,12 +217,12 @@ export async function handleUpdateColor(request, user, env) {
   return json(result);
 }
 
-export async function handleSetStatus(request, user, env) {
+export async function handleSetStatus(request: Request, user: User, env: Env): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const { status } = body;
+  const { status } = body as Record<string, unknown>;
   if (!status || typeof status !== 'string') {
     return json({ error: 'Status is required' }, 400);
   }
@@ -237,35 +242,39 @@ export async function handleSetStatus(request, user, env) {
     return json({ error: 'Status blocked by content filter. Please revise.' }, 400);
   }
 
-  await getDB(env).setStatus(user.id, status);
+  await (getDB(env) as any).setStatus(user.id, status);
   return json({ ok: true });
 }
 
-export async function handleClearStatus(user, env) {
-  await getDB(env).setStatus(user.id, null);
+export async function handleClearStatus(user: User, env: Env): Promise<Response> {
+  await (getDB(env) as any).setStatus(user.id, null);
   return json({ ok: true });
 }
 
-export async function handleHeartbeat(user, env) {
-  await getLobby(env).heartbeat(user.handle);
+export async function handleHeartbeat(user: User, env: Env): Promise<Response> {
+  await (getLobby(env) as any).heartbeat(user.handle);
   return json({ ok: true });
 }
 
-export async function handleUpdateAgentProfile(request, user, env) {
+export async function handleUpdateAgentProfile(
+  request: Request,
+  user: User,
+  env: Env,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
+  const b = body as Record<string, unknown>;
   const profile = {
-    framework:
-      typeof body.framework === 'string' ? body.framework.slice(0, MAX_FRAMEWORK_LENGTH) : null,
-    languages: sanitizeTags(body.languages),
-    frameworks: sanitizeTags(body.frameworks),
-    tools: sanitizeTags(body.tools),
-    platforms: sanitizeTags(body.platforms),
+    framework: typeof b.framework === 'string' ? b.framework.slice(0, MAX_FRAMEWORK_LENGTH) : null,
+    languages: sanitizeTags(b.languages),
+    frameworks: sanitizeTags(b.frameworks),
+    tools: sanitizeTags(b.tools),
+    platforms: sanitizeTags(b.platforms),
   };
 
-  const result = await getDB(env).updateAgentProfile(user.id, profile);
+  const result = await (getDB(env) as any).updateAgentProfile(user.id, profile);
   if (result.error) {
     log.warn(`updateAgentProfile failed: ${result.error}`);
     return json({ error: result.error }, 400);
@@ -273,8 +282,8 @@ export async function handleUpdateAgentProfile(request, user, env) {
   return json(result);
 }
 
-export async function handleGetUserTeams(user, env) {
-  const result = await getDB(env).getUserTeams(user.id);
+export async function handleGetUserTeams(user: User, env: Env): Promise<Response> {
+  const result = await (getDB(env) as any).getUserTeams(user.id);
   if (result.error) {
     log.warn(`getUserTeams failed: ${result.error}`);
     return json({ error: result.error }, 500);
@@ -282,11 +291,11 @@ export async function handleGetUserTeams(user, env) {
   return json({ ok: true, teams: result.teams });
 }
 
-export async function handleDashboardSummary(user, env) {
+export async function handleDashboardSummary(user: User, env: Env): Promise<Response> {
   const db = getDB(env);
-  const teamsResult = await db.getUserTeams(user.id);
+  const teamsResult = await (db as any).getUserTeams(user.id);
   if (teamsResult.error) return json({ error: teamsResult.error }, 500);
-  const teams = teamsResult.teams;
+  const teams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
 
   if (teams.length === 0) {
     return json({
@@ -302,10 +311,13 @@ export async function handleDashboardSummary(user, env) {
     capped.map(async (teamEntry) => {
       const team = getTeam(env, teamEntry.team_id);
       try {
-        const summary = await withTimeout(team.getSummary(user.id), DO_CALL_TIMEOUT_MS);
+        const summary: Record<string, unknown> = await withTimeout(
+          (team as any).getSummary(user.id),
+          DO_CALL_TIMEOUT_MS,
+        );
         if (summary.error) {
           try {
-            await db.removeUserTeam(user.id, teamEntry.team_id);
+            await (db as any).removeUserTeam(user.id, teamEntry.team_id);
           } catch (err) {
             log.error('failed to reconcile stale team', {
               teamId: teamEntry.team_id,
@@ -313,14 +325,14 @@ export async function handleDashboardSummary(user, env) {
             });
           }
           return {
-            ok: false,
+            ok: false as const,
             team_id: teamEntry.team_id,
             team_name: teamEntry.team_name,
           };
         }
         const { ok: _ok, ...summaryData } = summary;
         return {
-          ok: true,
+          ok: true as const,
           team: {
             team_id: teamEntry.team_id,
             team_name: teamEntry.team_name,
@@ -333,7 +345,7 @@ export async function handleDashboardSummary(user, env) {
           error: getErrorMessage(err),
         });
         return {
-          ok: false,
+          ok: false as const,
           team_id: teamEntry.team_id,
           team_name: teamEntry.team_name,
         };
@@ -341,16 +353,16 @@ export async function handleDashboardSummary(user, env) {
     }),
   );
 
-  const loadedTeams = [];
-  const failedTeams = [];
+  const loadedTeams: Record<string, unknown>[] = [];
+  const failedTeams: Array<{ team_id: string; team_name: string | null }> = [];
 
-  for (const result of results) {
-    if (result.status !== 'fulfilled') continue;
-    if (result.value?.ok) loadedTeams.push(result.value.team);
-    else if (result.value)
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    if (r.value?.ok && 'team' in r.value) loadedTeams.push(r.value.team);
+    else if (r.value && 'team_id' in r.value)
       failedTeams.push({
-        team_id: result.value.team_id,
-        team_name: result.value.team_name,
+        team_id: r.value.team_id,
+        team_name: r.value.team_name,
       });
   }
 
@@ -372,7 +384,7 @@ export async function handleDashboardSummary(user, env) {
   return json(response);
 }
 
-export async function handleChatUpgrade(request, user, env) {
+export async function handleChatUpgrade(request: Request, user: User, env: Env): Promise<Response> {
   const accountAge = Date.now() - new Date(user.created_at).getTime();
   if (accountAge < CHAT_COOLDOWN_MS) {
     const secsLeft = Math.ceil((CHAT_COOLDOWN_MS - accountAge) / 1000);
@@ -384,7 +396,7 @@ export async function handleChatUpgrade(request, user, env) {
 
   const lobby = getLobby(env);
   const shuffle = new URL(request.url).searchParams.get('shuffle') === '1';
-  const { roomId } = await lobby.assignRoom(user.handle, shuffle);
+  const { roomId } = await (lobby as any).assignRoom(user.handle, shuffle);
 
   const roomStub = env.ROOM.get(env.ROOM.idFromName(roomId));
   const roomUrl = new URL(request.url);
@@ -397,20 +409,20 @@ export async function handleChatUpgrade(request, user, env) {
     new Request(roomUrl.toString(), {
       headers: {
         'X-Chinwag-Verified': '1',
-        Upgrade: request.headers.get('Upgrade'),
-        Connection: request.headers.get('Connection'),
-        'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
-        'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
-        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
+        Upgrade: request.headers.get('Upgrade') || '',
+        Connection: request.headers.get('Connection') || '',
+        'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key') || '',
+        'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol') || '',
+        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version') || '',
       },
     }),
   );
 }
 
-export async function handleCreateTeam(request, user, env) {
-  let name = null;
+export async function handleCreateTeam(request: Request, user: User, env: Env): Promise<Response> {
+  let name: string | null = null;
   try {
-    const body = await request.json();
+    const body: Record<string, unknown> = await request.json();
     name =
       typeof body.name === 'string' ? body.name.slice(0, MAX_NAME_LENGTH).trim() || null : null;
   } catch {
@@ -443,17 +455,17 @@ export async function handleCreateTeam(request, user, env) {
       const agentId = runtime.agentId;
       const teamId = 't_' + crypto.randomUUID().replace(/-/g, '').slice(0, 16);
       const team = getTeam(env, teamId);
-      const joinResult = await team.join(agentId, user.id, user.handle, runtime);
+      const joinResult = await (team as any).join(agentId, user.id, user.handle, runtime);
       if (joinResult.error) return json({ error: joinResult.error }, 500);
 
-      const dbResult = await db.addUserTeam(user.id, teamId, name);
+      const dbResult = await (db as any).addUserTeam(user.id, teamId, name);
       if (dbResult.error) {
         log.error('failed to record created team', {
           teamId,
           userId: user.id,
           error: dbResult.error,
         });
-        await team.leave(agentId, user.id).catch(() => {
+        await (team as any).leave(agentId, user.id).catch(() => {
           /* best-effort cleanup — team creation already failed */
         });
         return json({ error: 'Failed to record team membership' }, 500);

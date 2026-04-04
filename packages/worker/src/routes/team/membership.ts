@@ -1,5 +1,6 @@
 // Team membership routes — join, leave, heartbeat, context.
 
+import type { Env, User } from '../../types.js';
 import { checkContent } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
 import { getErrorMessage } from '../../lib/errors.js';
@@ -12,10 +13,15 @@ import { RATE_LIMIT_JOINS, MAX_NAME_LENGTH } from '../../lib/constants.js';
 
 const log = createLogger('routes.membership');
 
-export async function handleTeamJoin(request, user, env, teamId) {
-  let name = null;
+export async function handleTeamJoin(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
+  let name: string | null = null;
   try {
-    const body = await request.json();
+    const body: Record<string, unknown> = await request.json();
     if (typeof body.name === 'string') {
       const trimmed = body.name.trim();
       if (trimmed.length > MAX_NAME_LENGTH) {
@@ -52,7 +58,7 @@ export async function handleTeamJoin(request, user, env, teamId) {
     RATE_LIMIT_JOINS,
     'Team join limit reached (100/day). Try again tomorrow.',
     async () => {
-      const result = await team.join(agentId, user.id, user.handle, runtime);
+      const result = await (team as any).join(agentId, user.id, user.handle, runtime);
       if (result.error) {
         auditLog('team.join', {
           actor: user.handle,
@@ -62,11 +68,11 @@ export async function handleTeamJoin(request, user, env, teamId) {
         return json({ error: result.error }, 400);
       }
 
-      const dbResult = await db.addUserTeam(user.id, teamId, name);
+      const dbResult = await (db as any).addUserTeam(user.id, teamId, name);
       if (dbResult.error) {
         log.error('failed to sync joined team', { teamId, userId: user.id, error: dbResult.error });
         // Roll back: leave the team since the DB record failed
-        await team.leave(agentId, user.id).catch((err) => {
+        await (team as any).leave(agentId, user.id).catch((err: unknown) => {
           log.error('rollback leave failed', { teamId, agentId, error: getErrorMessage(err) });
         });
         auditLog('team.join', {
@@ -87,10 +93,15 @@ export async function handleTeamJoin(request, user, env, teamId) {
   );
 }
 
-export async function handleTeamLeave(request, user, env, teamId) {
+export async function handleTeamLeave(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.leave(agentId, user.id);
+  const result = await (team as any).leave(agentId, user.id);
   if (result.error) {
     auditLog('team.leave', {
       actor: user.handle,
@@ -106,7 +117,7 @@ export async function handleTeamLeave(request, user, env, teamId) {
   });
 
   const db = getDB(env);
-  const dbResult = await db.removeUserTeam(user.id, teamId);
+  const dbResult = await (db as any).removeUserTeam(user.id, teamId);
   if (dbResult.error) {
     log.error('failed to remove team', { teamId, userId: user.id, error: dbResult.error });
     // The agent already left the team DO -- the DB record is stale but not critical.
@@ -116,17 +127,22 @@ export async function handleTeamLeave(request, user, env, teamId) {
   return json(result);
 }
 
-export async function handleTeamContext(request, user, env, teamId) {
+export async function handleTeamContext(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.getContext(agentId, user.id);
+  const result = await (team as any).getContext(agentId, user.id);
   if (result.error) {
     log.warn(`getContext failed: ${result.error}`);
     return json({ error: result.error }, 403);
   }
 
   const db = getDB(env);
-  const dbResult = await db.addUserTeam(user.id, teamId);
+  const dbResult = await (db as any).addUserTeam(user.id, teamId);
   if (dbResult.error) {
     log.warn('failed to backfill team', { teamId, userId: user.id, error: dbResult.error });
     // Backfill failure is non-blocking — context was already retrieved successfully
@@ -135,10 +151,15 @@ export async function handleTeamContext(request, user, env, teamId) {
   return json(result);
 }
 
-export async function handleTeamHeartbeat(request, user, env, teamId) {
+export async function handleTeamHeartbeat(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.heartbeat(agentId, user.id);
+  const result = await (team as any).heartbeat(agentId, user.id);
   if (result.error) {
     log.warn(`heartbeat failed: ${result.error}`);
     return json({ error: result.error }, teamErrorStatus(result));
@@ -146,7 +167,12 @@ export async function handleTeamHeartbeat(request, user, env, teamId) {
   return json(result);
 }
 
-export async function handleTeamWebSocket(request, user, env, teamId) {
+export async function handleTeamWebSocket(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
 
@@ -157,15 +183,15 @@ export async function handleTeamWebSocket(request, user, env, teamId) {
   wsUrl.searchParams.set('agentId', agentId);
   wsUrl.searchParams.set('ownerId', user.id);
 
-  return team.fetch(
+  return (team as any).fetch(
     new Request(wsUrl.toString(), {
       headers: {
         'X-Chinwag-Verified': '1',
-        Upgrade: request.headers.get('Upgrade'),
-        Connection: request.headers.get('Connection'),
-        'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key'),
-        'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol'),
-        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version'),
+        Upgrade: request.headers.get('Upgrade') || '',
+        Connection: request.headers.get('Connection') || '',
+        'Sec-WebSocket-Key': request.headers.get('Sec-WebSocket-Key') || '',
+        'Sec-WebSocket-Protocol': request.headers.get('Sec-WebSocket-Protocol') || '',
+        'Sec-WebSocket-Version': request.headers.get('Sec-WebSocket-Version') || '',
       },
     }),
   );

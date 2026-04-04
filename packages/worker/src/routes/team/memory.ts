@@ -1,5 +1,6 @@
 // Team memory routes — save, search, update, delete memory.
 
+import type { Env, User } from '../../types.js';
 import { isBlocked } from '../../moderation.js';
 import { getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
@@ -24,20 +25,26 @@ import {
 
 const log = createLogger('routes.memory');
 
-export async function handleTeamSaveMemory(request, user, env, teamId) {
+export async function handleTeamSaveMemory(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const text = requireString(body, 'text');
+  const b = body as Record<string, unknown>;
+  const text = requireString(b, 'text');
   if (!text) return json({ error: 'text is required' }, 400);
   if (text.length > MAX_MEMORY_TEXT_LENGTH)
     return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
   if (isBlocked(text)) return json({ error: 'Content blocked' }, 400);
 
-  const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
+  const tagsResult = validateTagsArray(b.tags, MAX_TAGS_PER_MEMORY);
   if (tagsResult.error) return json({ error: tagsResult.error }, 400);
-  const tags = /** @type {string[]} */ (tagsResult.tags);
+  const tags = tagsResult.tags!;
   // Moderation: check tag content (tags are user-visible, persistent)
   if (tags.some((t) => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
 
@@ -51,11 +58,16 @@ export async function handleTeamSaveMemory(request, user, env, teamId) {
     rateLimitMsg: 'Memory save limit reached (20/day). Try again tomorrow.',
     successStatus: 201,
     action: (team, agentId, runtime) =>
-      team.saveMemory(agentId, text, tags, user.handle, runtime, user.id),
+      (team as any).saveMemory(agentId, text, tags, user.handle, runtime, user.id),
   });
 }
 
-export async function handleTeamSearchMemory(request, user, env, teamId) {
+export async function handleTeamSearchMemory(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const url = new URL(request.url);
   const query = url.searchParams.get('q') || null;
   const parsedLimit = parseInt(
@@ -81,7 +93,7 @@ export async function handleTeamSearchMemory(request, user, env, teamId) {
 
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.searchMemories(agentId, query, tags, limit, user.id);
+  const result = await (team as any).searchMemories(agentId, query, tags, limit, user.id);
   if (result.error) {
     log.warn(`searchMemories failed: ${result.error}`);
     return json({ error: result.error }, teamErrorStatus(result));
@@ -89,29 +101,36 @@ export async function handleTeamSearchMemory(request, user, env, teamId) {
   return json(result);
 }
 
-export async function handleTeamUpdateMemory(request, user, env, teamId) {
+export async function handleTeamUpdateMemory(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const id = requireString(body, 'id');
+  const b = body as Record<string, unknown>;
+  const id = requireString(b, 'id');
   if (!id) return json({ error: 'id is required' }, 400);
 
-  let text;
-  if (body.text !== undefined) {
-    text = requireString(body, 'text');
-    if (!text) return json({ error: 'text must be a non-empty string' }, 400);
-    if (text.length > MAX_MEMORY_TEXT_LENGTH)
+  let text: string | undefined;
+  if (b.text !== undefined) {
+    const parsed = requireString(b, 'text');
+    if (!parsed) return json({ error: 'text must be a non-empty string' }, 400);
+    if (parsed.length > MAX_MEMORY_TEXT_LENGTH)
       return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
+    text = parsed;
   }
   // Moderation: sync blocklist on updated text (same pattern as save)
   if (text !== undefined && isBlocked(text)) return json({ error: 'Content blocked' }, 400);
 
-  let tags = body.tags;
-  if (tags !== undefined) {
-    const tagsResult = validateTagsArray(tags, MAX_TAGS_PER_MEMORY);
+  let tags: string[] | undefined;
+  if (b.tags !== undefined) {
+    const tagsResult = validateTagsArray(b.tags, MAX_TAGS_PER_MEMORY);
     if (tagsResult.error) return json({ error: tagsResult.error }, 400);
-    tags = tagsResult.tags;
+    tags = tagsResult.tags!;
     // Moderation: check updated tag content
     if (tags.some((t) => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
   }
@@ -128,16 +147,22 @@ export async function handleTeamUpdateMemory(request, user, env, teamId) {
     rateLimitKey: 'memory_update',
     rateLimitMax: RATE_LIMIT_MEMORY_UPDATES,
     rateLimitMsg: 'Memory update limit reached (50/day). Try again tomorrow.',
-    action: (team, agentId) => team.updateMemory(agentId, id, text, tags, user.id),
+    action: (team, agentId) => (team as any).updateMemory(agentId, id, text, tags, user.id),
   });
 }
 
-export async function handleTeamDeleteMemory(request, user, env, teamId) {
+export async function handleTeamDeleteMemory(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const id = requireString(body, 'id');
+  const b = body as Record<string, unknown>;
+  const id = requireString(b, 'id');
   if (!id) return json({ error: 'id is required' }, 400);
 
   return withTeamRateLimit({
@@ -148,6 +173,6 @@ export async function handleTeamDeleteMemory(request, user, env, teamId) {
     rateLimitKey: 'memory_delete',
     rateLimitMax: RATE_LIMIT_MEMORY_DELETES,
     rateLimitMsg: 'Memory delete limit reached (50/day). Try again tomorrow.',
-    action: (team, agentId) => team.deleteMemory(agentId, id, user.id),
+    action: (team, agentId) => (team as any).deleteMemory(agentId, id, user.id),
   });
 }

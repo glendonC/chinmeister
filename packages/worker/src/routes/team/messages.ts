@@ -1,5 +1,6 @@
 // Team message routes — send and get messages.
 
+import type { Env, User } from '../../types.js';
 import { isBlocked } from '../../moderation.js';
 import { getDB, getTeam } from '../../lib/env.js';
 import { json, parseBody } from '../../lib/http.js';
@@ -10,15 +11,21 @@ import { MAX_MESSAGE_LENGTH, RATE_LIMIT_MESSAGES } from '../../lib/constants.js'
 
 const log = createLogger('routes.messages');
 
-export async function handleTeamSendMessage(request, user, env, teamId) {
+export async function handleTeamSendMessage(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
 
-  const text = requireString(body, 'text', MAX_MESSAGE_LENGTH);
+  const b = body as Record<string, unknown>;
+  const text = requireString(b, 'text', MAX_MESSAGE_LENGTH);
   if (!text) return json({ error: 'text is required' }, 400);
   if (isBlocked(text)) return json({ error: 'Content blocked' }, 400);
-  const { target } = body;
+  const { target } = b;
   if (target !== undefined && typeof target !== 'string')
     return json({ error: 'target must be a string' }, 400);
 
@@ -33,12 +40,12 @@ export async function handleTeamSendMessage(request, user, env, teamId) {
     RATE_LIMIT_MESSAGES,
     'Message limit reached (200/day). Try again tomorrow.',
     async () => {
-      const result = await team.sendMessage(
+      const result = await (team as any).sendMessage(
         agentId,
         user.handle,
         runtime,
         text,
-        target || null,
+        (target as string) || null,
         user.id,
       );
       if (result.error) {
@@ -50,13 +57,18 @@ export async function handleTeamSendMessage(request, user, env, teamId) {
   );
 }
 
-export async function handleTeamGetMessages(request, user, env, teamId) {
+export async function handleTeamGetMessages(
+  request: Request,
+  user: User,
+  env: Env,
+  teamId: string,
+): Promise<Response> {
   const url = new URL(request.url);
   const since = url.searchParams.get('since') || null;
 
   const { agentId } = getAgentRuntime(request, user);
   const team = getTeam(env, teamId);
-  const result = await team.getMessages(agentId, since, user.id);
+  const result = await (team as any).getMessages(agentId, since, user.id);
   if (result.error) {
     log.warn(`getMessages failed: ${result.error}`);
     return json({ error: result.error }, teamErrorStatus(result));

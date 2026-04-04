@@ -2,6 +2,8 @@
 // Uses DO RPC for all Durable Object communication.
 // Auth flow: Bearer token → KV lookup → user_id → DO.getUser(id)
 
+import type { Env, User } from './types.js';
+import type { RouteDefinition } from './lib/router.js';
 import { json } from './lib/http.js';
 import { buildRoutes, matchRoute } from './lib/router.js';
 import { createLogger, setLogLevel } from './lib/logger.js';
@@ -84,7 +86,7 @@ const DEV_ORIGINS = new Set([
   'http://127.0.0.1:8788',
 ]);
 
-function isLoopbackOrigin(origin) {
+function isLoopbackOrigin(origin: string): boolean {
   try {
     const { protocol, hostname } = new URL(origin);
     const isLoopbackHost =
@@ -98,7 +100,7 @@ function isLoopbackOrigin(origin) {
   }
 }
 
-function getAllowedOrigin(origin, environment) {
+function getAllowedOrigin(origin: string, environment: string): string {
   if (!origin) return 'https://chinwag.dev';
   if (PROD_ORIGINS.has(origin)) return origin;
   if (environment !== 'production' && DEV_ORIGINS.has(origin)) return origin;
@@ -113,7 +115,7 @@ function getAllowedOrigin(origin, environment) {
  * to same-origin policy. We reject only when Origin IS present but
  * does not match our allowlist, which blocks cross-site WS hijacking.
  */
-function isWebSocketOriginAllowed(origin, environment) {
+function isWebSocketOriginAllowed(origin: string, environment: string): boolean {
   if (!origin) return true; // non-browser client — no Origin header
   return getAllowedOrigin(origin, environment) !== '';
 }
@@ -130,7 +132,7 @@ function isWebSocketOriginAllowed(origin, environment) {
 // from reaching handlers (they get a 404 instead).
 const TID = ':tid(t_[a-f0-9]{16})';
 
-const routes = buildRoutes([
+const routeDefinitions: RouteDefinition[] = [
   // Public
   { method: 'POST', path: '/auth/init', handler: (req, env) => handleInit(req, env), auth: false },
   {
@@ -194,202 +196,220 @@ const routes = buildRoutes([
     method: 'GET',
     path: '/me',
     handler: (_req, _env, user) => {
-      const { id: _id, ...profile } = user;
+      const { id: _id, ...profile } = user as User;
       return json(profile);
     },
   },
-  { method: 'GET', path: '/me/teams', handler: (_req, env, user) => handleGetUserTeams(user, env) },
+  {
+    method: 'GET',
+    path: '/me/teams',
+    handler: (_req, env, user) => handleGetUserTeams(user as User, env),
+  },
   {
     method: 'GET',
     path: '/me/dashboard',
-    handler: (_req, env, user) => handleDashboardSummary(user, env),
+    handler: (_req, env, user) => handleDashboardSummary(user as User, env),
   },
   {
     method: 'PUT',
     path: '/me/handle',
-    handler: (req, env, user) => handleUpdateHandle(req, user, env),
+    handler: (req, env, user) => handleUpdateHandle(req, user as User, env),
   },
   {
     method: 'PUT',
     path: '/me/color',
-    handler: (req, env, user) => handleUpdateColor(req, user, env),
+    handler: (req, env, user) => handleUpdateColor(req, user as User, env),
   },
   {
     method: 'PUT',
     path: '/me/github',
-    handler: (_req, env, user) => handleUnlinkGithub(user, env),
+    handler: (_req, env, user) => handleUnlinkGithub(user as User, env),
   },
-  { method: 'PUT', path: '/status', handler: (req, env, user) => handleSetStatus(req, user, env) },
-  { method: 'DELETE', path: '/status', handler: (_req, env, user) => handleClearStatus(user, env) },
+  {
+    method: 'PUT',
+    path: '/status',
+    handler: (req, env, user) => handleSetStatus(req, user as User, env),
+  },
+  {
+    method: 'DELETE',
+    path: '/status',
+    handler: (_req, env, user) => handleClearStatus(user as User, env),
+  },
   {
     method: 'POST',
     path: '/presence/heartbeat',
-    handler: (_req, env, user) => handleHeartbeat(user, env),
+    handler: (_req, env, user) => handleHeartbeat(user as User, env),
   },
   {
     method: 'PUT',
     path: '/agent/profile',
-    handler: (req, env, user) => handleUpdateAgentProfile(req, user, env),
+    handler: (req, env, user) => handleUpdateAgentProfile(req, user as User, env),
   },
   {
     method: 'POST',
     path: '/tools/evaluate',
-    handler: (req, env, user) => handleTriggerEvaluation(req, user, env),
+    handler: (req, env, user) => handleTriggerEvaluation(req, user as User, env),
   },
   {
     method: 'POST',
     path: '/auth/ws-ticket',
-    handler: (_req, env, user) => handleGetWsTicket(user, env),
+    handler: (_req, env, user) => handleGetWsTicket(user as User, env),
   },
   {
     method: 'POST',
     path: '/auth/github/link',
-    handler: (req, env, user) => handleGithubLink(req, user, env),
+    handler: (req, env, user) => handleGithubLink(req, user as User, env),
   },
-  { method: 'POST', path: '/teams', handler: (req, env, user) => handleCreateTeam(req, user, env) },
+  {
+    method: 'POST',
+    path: '/teams',
+    handler: (req, env, user) => handleCreateTeam(req, user as User, env),
+  },
 
   // Authenticated — WebSocket upgrades (return directly, skip CORS headers)
   {
     method: 'GET',
     path: '/ws/chat',
-    handler: (req, env, user) => handleChatUpgrade(req, user, env),
+    handler: (req, env, user) => handleChatUpgrade(req, user as User, env),
   },
   {
     method: 'GET',
     path: `/teams/${TID}/ws`,
-    handler: (req, env, user, tid) => handleTeamWebSocket(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamWebSocket(req, user as User, env, tid),
   },
 
   // Authenticated — team routes
   {
     method: 'POST',
     path: `/teams/${TID}/join`,
-    handler: (req, env, user, tid) => handleTeamJoin(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamJoin(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/leave`,
-    handler: (req, env, user, tid) => handleTeamLeave(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamLeave(req, user as User, env, tid),
   },
   {
     method: 'GET',
     path: `/teams/${TID}/context`,
-    handler: (req, env, user, tid) => handleTeamContext(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamContext(req, user as User, env, tid),
   },
   {
     method: 'PUT',
     path: `/teams/${TID}/activity`,
-    handler: (req, env, user, tid) => handleTeamActivity(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamActivity(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/conflicts`,
-    handler: (req, env, user, tid) => handleTeamConflicts(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamConflicts(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/heartbeat`,
-    handler: (req, env, user, tid) => handleTeamHeartbeat(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamHeartbeat(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/file`,
-    handler: (req, env, user, tid) => handleTeamFile(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamFile(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamSaveMemory(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamSaveMemory(req, user as User, env, tid),
   },
   {
     method: 'GET',
     path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamSearchMemory(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamSearchMemory(req, user as User, env, tid),
   },
   {
     method: 'PUT',
     path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamUpdateMemory(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamUpdateMemory(req, user as User, env, tid),
   },
   {
     method: 'DELETE',
     path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamDeleteMemory(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamDeleteMemory(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/locks`,
-    handler: (req, env, user, tid) => handleTeamClaimFiles(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamClaimFiles(req, user as User, env, tid),
   },
   {
     method: 'DELETE',
     path: `/teams/${TID}/locks`,
-    handler: (req, env, user, tid) => handleTeamReleaseFiles(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamReleaseFiles(req, user as User, env, tid),
   },
   {
     method: 'GET',
     path: `/teams/${TID}/locks`,
-    handler: (req, env, user, tid) => handleTeamGetLocks(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamGetLocks(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/messages`,
-    handler: (req, env, user, tid) => handleTeamSendMessage(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamSendMessage(req, user as User, env, tid),
   },
   {
     method: 'GET',
     path: `/teams/${TID}/messages`,
-    handler: (req, env, user, tid) => handleTeamGetMessages(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamGetMessages(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/sessions`,
-    handler: (req, env, user, tid) => handleTeamStartSession(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamStartSession(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/sessionend`,
-    handler: (req, env, user, tid) => handleTeamEndSession(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamEndSession(req, user as User, env, tid),
   },
   {
     method: 'PUT',
     path: `/teams/${TID}/sessionmodel`,
-    handler: (req, env, user, tid) => handleTeamEnrichModel(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamEnrichModel(req, user as User, env, tid),
   },
   {
     method: 'POST',
     path: `/teams/${TID}/sessionedit`,
-    handler: (req, env, user, tid) => handleTeamSessionEdit(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamSessionEdit(req, user as User, env, tid),
   },
   {
     method: 'GET',
     path: `/teams/${TID}/history`,
-    handler: (req, env, user, tid) => handleTeamHistory(req, user, env, tid),
+    handler: (req, env, user, tid) => handleTeamHistory(req, user as User, env, tid),
   },
-]);
+];
+
+const routes = buildRoutes(routeDefinitions);
 
 // WebSocket upgrade paths skip CORS header injection (the Response is a
 // WebSocket handshake, not a regular HTTP response).
 const WS_PATHS = new Set(['/ws/chat']);
 const WS_PATTERN = /^\/teams\/[^/]+\/ws$/;
 
-function isWebSocketRoute(path) {
+function isWebSocketRoute(path: string): boolean {
   return WS_PATHS.has(path) || WS_PATTERN.test(path);
 }
 
 export default {
-  async fetch(request, env) {
+  async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
     const method = request.method;
     const path = url.pathname;
     const ref = crypto.randomUUID().slice(0, 8);
 
     // Configure log level from environment
-    setLogLevel(env.LOG_LEVEL);
+    setLogLevel((env as Env & { LOG_LEVEL?: string }).LOG_LEVEL || '');
     const log = createLogger('router');
 
     const origin = request.headers.get('Origin') || '';
-    const corsHeaders = {
+    const corsHeaders: Record<string, string> = {
       'Access-Control-Allow-Origin': getAllowedOrigin(origin, env.ENVIRONMENT),
       'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
       'Access-Control-Allow-Headers':
@@ -410,7 +430,7 @@ export default {
       const { route, params } = matched;
 
       // Authenticate if required
-      let user = null;
+      let user: User | null = null;
       if (route.auth) {
         user = await authenticate(request, env);
         if (!user) {
@@ -437,7 +457,7 @@ export default {
         headers.set(key, value);
       }
       return new Response(response.body, { status: response.status, headers });
-    } catch (/** @type {any} */ err) {
+    } catch (err: unknown) {
       log.error('request failed', {
         ref,
         method,
@@ -448,4 +468,4 @@ export default {
       return json({ error: `Internal server error (ref: ${ref})` }, 500, corsHeaders);
     }
   },
-};
+} satisfies ExportedHandler<Env>;
