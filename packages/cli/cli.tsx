@@ -14,7 +14,9 @@ import { Discover } from './lib/discover.jsx';
 import { ControlShell } from './lib/shell.jsx';
 import type { ModeItem, ShellDimensions } from './lib/shell.jsx';
 import { useTerminalControl } from './lib/terminal-control.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('cli');
 
 // Node 22+ required for native WebSocket
 if (parseInt(process.version.slice(1)) < 22) {
@@ -27,7 +29,7 @@ try {
   const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
   _PKG_VERSION = pkg.version || _PKG_VERSION;
 } catch (err: unknown) {
-  console.error('[chinwag]', formatError(err));
+  log.error(formatError(err));
 }
 
 // Hand off to an MCP/hook/channel runtime module in the same process.
@@ -216,7 +218,7 @@ function App(): React.ReactNode {
           setUser(me);
           setScreen('dashboard');
         } catch (err: unknown) {
-          console.error('[chinwag]', formatError(err));
+          log.error(formatError(err));
           setScreen('welcome');
         }
       } else {
@@ -246,7 +248,7 @@ function App(): React.ReactNode {
       const me = (await api(config).get('/me')) as UserInfo;
       setUser(me);
     } catch (err: unknown) {
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
     }
   };
 

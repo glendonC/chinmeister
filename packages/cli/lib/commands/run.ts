@@ -20,7 +20,9 @@ import {
   saveLauncherPreference,
 } from '../launcher-preferences.js';
 import { getProjectContext } from '../project.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('run');
 
 function printUsage(): void {
   process.stderr.write('Usage: chinwag run [--tool <tool-id>] "task description"\n');
@@ -88,7 +90,7 @@ function bridgeStdin(terminal: AttachTerminalResult): () => void {
       try {
         cleanup();
       } catch (err: unknown) {
-        console.error('[chinwag]', formatError(err));
+        log.error(formatError(err));
       }
     }
   };

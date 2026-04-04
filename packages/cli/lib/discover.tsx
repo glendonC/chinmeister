@@ -14,7 +14,9 @@ import type {
   ToolDirectoryResponse,
   ToolCatalogResponse,
 } from '@chinwag/shared/contracts.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('discover');
 
 const LOADING_TIMEOUT_MS = 15000;
 
@@ -49,7 +51,7 @@ export function Discover({ config, navigate }: DiscoverProps): React.ReactNode {
         setCatalog((result.evaluations || []).map(evalToTool));
         setCategories(result.categories || {});
       } catch (err: unknown) {
-        console.error('[chinwag]', formatError(err));
+        log.error(formatError(err));
         // Fallback to old catalog endpoint if directory isn't deployed yet
         try {
           const fallback = await api(config).get<ToolCatalogResponse>('/tools/catalog');
@@ -57,7 +59,7 @@ export function Discover({ config, navigate }: DiscoverProps): React.ReactNode {
           setCatalog(fallback.tools || []);
           setCategories(fallback.categories || {});
         } catch (err2: unknown) {
-          console.error('[chinwag] Fallback catalog fetch failed:', formatError(err2));
+          log.error('Fallback catalog fetch failed: ' + formatError(err2));
           if (cancelled) return;
           setMessage(`Could not fetch tool catalog: ${formatError(err2)}`);
         }

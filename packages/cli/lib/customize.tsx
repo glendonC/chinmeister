@@ -23,14 +23,16 @@ import type {
   ToolCatalogResponse,
 } from '@chinwag/shared/contracts.js';
 import type { HandleUpdateResponse } from './types/api.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('customize');
 
 let PKG_VERSION = '0.1.0';
 try {
   const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf-8'));
   PKG_VERSION = pkg.version;
 } catch (err: unknown) {
-  console.error('[chinwag]', formatError(err));
+  log.error(formatError(err));
 }
 
 let VSCODE_EXTENSION = { publisher: 'chinwag', name: 'chinwag', version: PKG_VERSION };
@@ -44,7 +46,7 @@ try {
     version: pkg.version || PKG_VERSION,
   };
 } catch (err: unknown) {
-  console.error('[chinwag]', formatError(err));
+  log.error(formatError(err));
 }
 
 const IDE_COMMAND_SHORTCUT = process.platform === 'darwin' ? 'Cmd+Shift+P' : 'Ctrl+Shift+P';
@@ -305,12 +307,12 @@ export function Customize({
         const result = await api(config).get<ToolDirectoryResponse>('/tools/directory?limit=200');
         setTools((prev) => ({ ...prev, catalog: (result.evaluations || []).map(evalToTool) }));
       } catch (err: unknown) {
-        console.error('[chinwag]', formatError(err));
+        log.error(formatError(err));
         try {
           const fallback = await api(config).get<ToolCatalogResponse>('/tools/catalog');
           setTools((prev) => ({ ...prev, catalog: fallback.tools || [] }));
         } catch (err2: unknown) {
-          console.error('[chinwag] Fallback catalog fetch failed:', formatError(err2));
+          log.error('Fallback catalog fetch failed: ' + formatError(err2));
           showFlash(`Could not fetch tool catalog: ${formatError(err2)}`, 'error');
         }
       }
@@ -332,7 +334,7 @@ export function Customize({
       try {
         cpSync(join(IDE_EXTENSION_DIR, 'logo-mark.svg'), join(target, 'logo-mark.svg'));
       } catch (err: unknown) {
-        console.error('[chinwag]', formatError(err));
+        log.error(formatError(err));
       }
       showFlash(
         wasInstalled
@@ -340,7 +342,7 @@ export function Customize({
           : `Installed — restart IDE, then ${IDE_COMMAND_SHORTCUT} → "chinwag: Open Dashboard"`,
       );
     } catch (err: unknown) {
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
       if (wasInstalled) {
         showFlash(`${IDE_COMMAND_SHORTCUT} → "chinwag: Open Dashboard"`);
       } else {

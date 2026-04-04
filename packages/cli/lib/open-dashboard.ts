@@ -3,6 +3,9 @@
 
 import { execFileSync } from 'child_process';
 import { configExists, loadConfig } from './config.js';
+import { createLogger } from '@chinwag/shared';
+
+const log = createLogger('open-dashboard');
 
 const EXEC_TIMEOUT_MS = 10000;
 const DASHBOARD_URL: string = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
@@ -40,7 +43,7 @@ export async function openDashboard(): Promise<void> {
     }
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[chinwag]', message);
+    log.error(message);
     console.log(`  Could not open browser. Open this URL manually:`);
     console.log(`  ${url}`);
   }

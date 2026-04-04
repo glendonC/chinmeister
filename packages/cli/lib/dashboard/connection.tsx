@@ -10,7 +10,9 @@ import type { ChinwagConfig } from '../config.js';
 import type { TeamContext } from './view.js';
 import type { HostIntegration } from '@chinwag/shared/integration-model.js';
 import type { WebSocketTicketResponse } from '@chinwag/shared/contracts.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('dashboard-connection');
 
 // ── Constants ───────────────────────────────────────
 const SPINNER_INTERVAL_MS = 80;
@@ -284,7 +286,7 @@ export function useDashboardConnection({
         const ticketData = await client.post<WebSocketTicketResponse>('/auth/ws-ticket');
         wsTicket = ticketData.ticket;
       } catch (err: unknown) {
-        console.error('[chinwag]', formatError(err));
+        log.error(formatError(err));
         startPolling();
         return;
       }
@@ -321,7 +323,7 @@ export function useDashboardConnection({
             try {
               await fetchContextOnce();
             } catch (err: unknown) {
-              console.error('[chinwag]', formatError(err));
+              log.error(formatError(err));
             }
           }, RECONCILE_INTERVAL_MS);
         };
@@ -336,7 +338,7 @@ export function useDashboardConnection({
               setContext((prev) => (prev ? (applyDelta(prev, event) as TeamContext) : prev));
             }
           } catch (err: unknown) {
-            console.error('[chinwag]', formatError(err));
+            log.error(formatError(err));
           }
         };
 
@@ -356,7 +358,7 @@ export function useDashboardConnection({
 
         wsRef.current = ws;
       } catch (err: unknown) {
-        console.error('[chinwag]', formatError(err));
+        log.error(formatError(err));
         startPolling();
       }
     }
@@ -374,7 +376,7 @@ export function useDashboardConnection({
         try {
           wsRef.current.close();
         } catch (err: unknown) {
-          console.error('[chinwag]', formatError(err));
+          log.error(formatError(err));
         }
         wsRef.current = null;
       }

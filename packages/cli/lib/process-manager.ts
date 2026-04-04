@@ -9,7 +9,9 @@ import { createRequire } from 'module';
 import type { IPty } from 'node-pty';
 import { shellQuote } from './utils/shell.js';
 import { stripAnsi } from './utils/ansi.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('process-manager');
 
 const require = createRequire(import.meta.url);
 
@@ -168,7 +170,7 @@ function notifyUpdate(): void {
       cb(agents);
     } catch (err: unknown) {
       // Swallow callback errors — never let a listener break the manager
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
     }
   }
 }
@@ -237,7 +239,7 @@ export function spawnAgent(launch: SpawnAgentLaunch): SpawnAgentResult {
           if (proc.pty) proc.pty.kill('SIGTERM');
           else if (proc.pid) process.kill(proc.pid, 'SIGTERM');
         } catch (err: unknown) {
-          console.error('[chinwag]', formatError(err));
+          log.error(formatError(err));
         }
       }
     };
@@ -358,7 +360,7 @@ export function killAgent(id: number): boolean {
     try {
       proc.pty.kill('SIGTERM');
     } catch (err: unknown) {
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
       return false;
     }
     if (!proc._killTimer) {
@@ -367,7 +369,7 @@ export function killAgent(id: number): boolean {
           try {
             proc.pty.kill('SIGKILL');
           } catch (err: unknown) {
-            console.error('[chinwag]', formatError(err));
+            log.error(formatError(err));
           }
         }
         proc._killTimer = null;
@@ -381,7 +383,7 @@ export function killAgent(id: number): boolean {
     try {
       process.kill(proc.pid, 'SIGTERM');
     } catch (err: unknown) {
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
       // Process already gone — mark as exited
       proc.status = 'exited';
       proc.exitCode = null;
@@ -394,7 +396,7 @@ export function killAgent(id: number): boolean {
           try {
             process.kill(proc.pid!, 'SIGKILL');
           } catch (err: unknown) {
-            console.error('[chinwag]', formatError(err));
+            log.error(formatError(err));
           }
         }
         proc._killTimer = null;
@@ -479,7 +481,7 @@ export function resizePty(id: number, cols: number, rows: number): void {
   try {
     proc.pty.resize(cols, rows);
   } catch (err: unknown) {
-    console.error('[chinwag]', formatError(err));
+    log.error(formatError(err));
   }
 }
 
@@ -599,7 +601,7 @@ export function checkExternalAgentLiveness(): boolean {
     try {
       process.kill(proc.pid, 0);
     } catch (err: unknown) {
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
       proc.status = 'exited';
       proc.exitCode = null;
       changed = true;

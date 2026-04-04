@@ -4,7 +4,9 @@ import { api } from '../api.js';
 import type { ChinwagConfig } from '../config.js';
 import type { MemoryEntry } from './view.js';
 import type { NoticeTone } from './reducer.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('dashboard-memory');
 
 // ── Constants ───────────────────────────────────────
 const DELETE_FEEDBACK_MS = 2000;
@@ -64,7 +66,7 @@ export function useMemoryManager({
         flash('Saved to shared memory', { tone: 'success' });
         bumpRefreshKey();
       } catch (err: unknown) {
-        console.error('[chinwag] Could not save memory:', formatError(err));
+        log.error('Could not save memory: ' + formatError(err));
         flash('Could not save \u2014 check connection and try again', {
           tone: 'error',
           autoClearMs: 5000,
@@ -91,7 +93,7 @@ export function useMemoryManager({
         setTimeout(() => setDeleteMsg(null), DELETE_FEEDBACK_MS);
       })
       .catch((err: unknown) => {
-        console.error('[chinwag] Could not delete memory:', formatError(err));
+        log.error('Could not delete memory: ' + formatError(err));
         flash('Could not delete \u2014 check connection and try again', {
           tone: 'error',
           autoClearMs: 5000,

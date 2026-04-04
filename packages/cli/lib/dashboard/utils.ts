@@ -9,6 +9,9 @@ export function truncateText(
 
 import { execFileSync } from 'child_process';
 import { homedir } from 'os';
+import { createLogger } from '@chinwag/shared';
+
+const log = createLogger('dashboard-utils');
 
 const EXEC_TIMEOUT_MS = 10000;
 export const DASHBOARD_URL = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
@@ -49,7 +52,7 @@ export function openWebDashboard(token?: string | null): OpenResult {
     return { ok: false, error: 'Unsupported platform' };
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[chinwag]', message);
+    log.error(message);
     return { ok: false, error: 'Could not open browser' };
   }
 }

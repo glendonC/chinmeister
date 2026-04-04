@@ -9,7 +9,9 @@ import { api } from '../api.js';
 import { evalToTool } from '../utils/tool-catalog.js';
 import type { CatalogToolLike } from '../utils/tool-catalog.js';
 import type { ToolDirectoryResponse, ToolCatalogResponse } from '@chinwag/shared/contracts.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('add');
 
 interface CatalogResult {
   tools: CatalogToolLike[];
@@ -85,13 +87,13 @@ async function fetchCatalog(): Promise<CatalogResult | null> {
       categories: result.categories || {},
     };
   } catch (err: unknown) {
-    console.error('[chinwag]', formatError(err));
+    log.error(formatError(err));
     // Fallback to old catalog endpoint if directory isn't deployed yet
     try {
       const fallback = await api(config).get<ToolCatalogResponse>('/tools/catalog');
       return { tools: fallback.tools || [], categories: fallback.categories || {} };
     } catch (err2: unknown) {
-      console.error('[chinwag] Fallback catalog fetch failed:', formatError(err2));
+      log.error('Fallback catalog fetch failed: ' + formatError(err2));
       console.log('  Could not load tool catalog.');
       return null;
     }

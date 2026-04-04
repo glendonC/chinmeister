@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { createLogger } from '@chinwag/shared';
+
+const log = createLogger('terminal-control');
 
 const ENTER_ALT_SCREEN = '\x1b[?1049h';
 const EXIT_ALT_SCREEN = '\x1b[?1049l';
@@ -26,7 +29,7 @@ export function getTerminalUiCapabilities(): TerminalUiCapabilities {
     colorDepth = process.stdout?.getColorDepth?.() || 1;
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[chinwag]', message);
+    log.error(message);
   }
 
   const hasNamedTerminal = Boolean(term && term !== 'dumb' && term !== 'unknown');

@@ -3,7 +3,9 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { getInkColor } from './colors.js';
 import type { ChinwagConfig } from './config.js';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('chat');
 
 const WS_URL = process.env.CHINWAG_WS_URL || 'wss://chinwag-api.glendonchin.workers.dev/ws/chat';
 
@@ -158,7 +160,7 @@ export function Chat({ config, user, navigate }: ChatProps): React.ReactNode {
         try {
           data = JSON.parse(event.data as string);
         } catch (err: unknown) {
-          console.error('[chinwag]', formatError(err));
+          log.error(formatError(err));
           return;
         }
 

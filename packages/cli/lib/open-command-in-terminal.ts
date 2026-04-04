@@ -5,7 +5,9 @@ import { shellQuote, escapeAppleScriptString } from './utils/shell.js';
 import { mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { formatError } from '@chinwag/shared';
+import { formatError, createLogger } from '@chinwag/shared';
+
+const log = createLogger('open-command');
 
 const EXEC_TIMEOUT_MS = 10000;
 
@@ -27,7 +29,7 @@ export function openCommandInTerminal(command: string, cwd: string = process.cwd
       );
       return { ok: true };
     } catch (err: unknown) {
-      console.error('[chinwag]', formatError(err));
+      log.error(formatError(err));
       // fall through to platform spawners
     }
   }
@@ -62,7 +64,7 @@ export function openCommandInTerminal(command: string, cwd: string = process.cwd
           execFileSync(cmd, args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
           return { ok: true };
         } catch (err: unknown) {
-          console.error('[chinwag]', formatError(err));
+          log.error(formatError(err));
         }
       }
 
