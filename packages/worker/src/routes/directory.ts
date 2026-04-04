@@ -5,6 +5,7 @@ import { createLogger } from '../lib/logger.js';
 import { requireJson, withRateLimit, withIpRateLimit } from '../lib/validation.js';
 import { evaluateTool } from '../lib/evaluate.js';
 import { CATEGORY_NAMES } from '../catalog.js';
+import { publicRoute, authedJsonRoute } from '../lib/middleware.js';
 import { RATE_LIMIT_EVALUATIONS, RATE_LIMIT_BATCH_EVALUATE_PER_IP } from '../lib/constants.js';
 
 const log = createLogger('routes.directory');
@@ -27,7 +28,7 @@ const CACHE_HEADERS = {
   'Cache-Control': 'public, max-age=300, stale-while-revalidate=3600',
 };
 
-export async function handleListDirectory(request: Request, env: Env): Promise<Response> {
+export const handleListDirectory = publicRoute(async ({ request, env }) => {
   const url = new URL(request.url);
   const q = url.searchParams.get('q') || null;
   const verdict = url.searchParams.get('verdict') || null;
@@ -64,21 +65,18 @@ export async function handleListDirectory(request: Request, env: Env): Promise<R
     200,
     CACHE_HEADERS,
   );
-}
+});
 
-export async function handleGetDirectoryEntry(
-  request: Request,
-  env: Env,
-  toolId: string,
-): Promise<Response> {
+export const handleGetDirectoryEntry = publicRoute(async ({ env, params }) => {
+  const toolId = params[0];
   const db = getDB(env);
   const result = rpc(await db.getEvaluation(toolId));
   if (!result.evaluation) return json({ error: 'Tool not found' }, 404);
   return json({ evaluation: result.evaluation }, 200, CACHE_HEADERS);
-}
+});
 
 // Admin-only delete — remove duplicate/stale evaluations.
-export async function handleAdminDelete(request: Request, env: Env): Promise<Response> {
+export const handleAdminDelete = publicRoute(async ({ request, env }) => {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
@@ -96,12 +94,12 @@ export async function handleAdminDelete(request: Request, env: Env): Promise<Res
     results.push({ id, deleted: r.deleted });
   }
   return json({ results }, 200);
-}
+});
 
 // Admin-only batch evaluation — no auth, secured by secret key in body.
 // Used for seed scans and monthly re-evaluations.
 // IP rate limited to prevent brute-force key guessing.
-export async function handleBatchEvaluate(request: Request, env: Env): Promise<Response> {
+export const handleBatchEvaluate = publicRoute(async ({ request, env }) => {
   return withIpRateLimit(request, env, 'batch-eval', RATE_LIMIT_BATCH_EVALUATE_PER_IP, async () => {
     const body = await parseBody(request);
     const parseErr = requireJson(body);
@@ -143,19 +141,10 @@ export async function handleBatchEvaluate(request: Request, env: Env): Promise<R
       200,
     );
   });
-}
+});
 
-export async function handleTriggerEvaluation(
-  request: Request,
-  user: User,
-  env: Env,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { name, url } = b;
+export const handleTriggerEvaluation = authedJsonRoute(async ({ user, env, body }) => {
+  const { name, url } = body;
   const hasName = typeof name === 'string' && name.trim().length > 0;
   const hasUrl = typeof url === 'string' && url.trim().length > 0;
 
@@ -205,4 +194,4 @@ export async function handleTriggerEvaluation(
       return json({ evaluation: result.evaluation }, 201);
     },
   );
-}
+});

@@ -166,7 +166,8 @@ export function teamJsonRoute(
  * @param successStatus - HTTP status for success responses (default 200)
  */
 export async function doResult(
-  promise: Promise<Record<string, unknown>>,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  promise: Promise<any>,
   label: string,
   successStatus = 200,
 ): Promise<Response> {

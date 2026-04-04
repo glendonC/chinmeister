@@ -134,60 +134,20 @@ const TID = ':tid(t_[a-f0-9]{16})';
 
 const routeDefinitions: RouteDefinition[] = [
   // Public
-  { method: 'POST', path: '/auth/init', handler: (req, env) => handleInit(req, env), auth: false },
-  {
-    method: 'POST',
-    path: '/auth/refresh',
-    handler: (req, env) => handleRefreshToken(req, env),
-    auth: false,
-  },
-  { method: 'GET', path: '/stats', handler: (req, env) => handleStats(req, env), auth: false },
-  {
-    method: 'GET',
-    path: '/tools/catalog',
-    handler: (req, env) => handleToolCatalog(req, env),
-    auth: false,
-  },
-  {
-    method: 'GET',
-    path: '/tools/directory',
-    handler: (req, env) => handleListDirectory(req, env),
-    auth: false,
-  },
-  {
-    method: 'POST',
-    path: '/tools/batch-evaluate',
-    handler: (req, env) => handleBatchEvaluate(req, env),
-    auth: false,
-  },
-  {
-    method: 'POST',
-    path: '/tools/admin-delete',
-    handler: (req, env) => handleAdminDelete(req, env),
-    auth: false,
-  },
-  {
-    method: 'GET',
-    path: '/tools/directory/:id',
-    handler: (req, env, _u, id) => handleGetDirectoryEntry(req, env, id),
-    auth: false,
-  },
-  {
-    method: 'GET',
-    path: '/auth/github',
-    handler: (req, env) => handleGithubAuth(req, env),
-    auth: false,
-  },
-  {
-    method: 'GET',
-    path: '/auth/github/callback',
-    handler: (req, env) => handleGithubCallback(req, env),
-    auth: false,
-  },
+  { method: 'POST', path: '/auth/init', handler: handleInit, auth: false },
+  { method: 'POST', path: '/auth/refresh', handler: handleRefreshToken, auth: false },
+  { method: 'GET', path: '/stats', handler: handleStats, auth: false },
+  { method: 'GET', path: '/tools/catalog', handler: handleToolCatalog, auth: false },
+  { method: 'GET', path: '/tools/directory', handler: handleListDirectory, auth: false },
+  { method: 'POST', path: '/tools/batch-evaluate', handler: handleBatchEvaluate, auth: false },
+  { method: 'POST', path: '/tools/admin-delete', handler: handleAdminDelete, auth: false },
+  { method: 'GET', path: '/tools/directory/:id', handler: handleGetDirectoryEntry, auth: false },
+  { method: 'GET', path: '/auth/github', handler: handleGithubAuth, auth: false },
+  { method: 'GET', path: '/auth/github/callback', handler: handleGithubCallback, auth: false },
   {
     method: 'GET',
     path: '/auth/github/callback/link',
-    handler: (req, env) => handleGithubLinkCallback(req, env),
+    handler: handleGithubLinkCallback,
     auth: false,
   },
 
@@ -200,190 +160,50 @@ const routeDefinitions: RouteDefinition[] = [
       return json(profile);
     },
   },
-  {
-    method: 'GET',
-    path: '/me/teams',
-    handler: (_req, env, user) => handleGetUserTeams(user as User, env),
-  },
-  {
-    method: 'GET',
-    path: '/me/dashboard',
-    handler: (_req, env, user) => handleDashboardSummary(user as User, env),
-  },
-  {
-    method: 'PUT',
-    path: '/me/handle',
-    handler: (req, env, user) => handleUpdateHandle(req, user as User, env),
-  },
-  {
-    method: 'PUT',
-    path: '/me/color',
-    handler: (req, env, user) => handleUpdateColor(req, user as User, env),
-  },
-  {
-    method: 'PUT',
-    path: '/me/github',
-    handler: (_req, env, user) => handleUnlinkGithub(user as User, env),
-  },
-  {
-    method: 'PUT',
-    path: '/status',
-    handler: (req, env, user) => handleSetStatus(req, user as User, env),
-  },
-  {
-    method: 'DELETE',
-    path: '/status',
-    handler: (_req, env, user) => handleClearStatus(user as User, env),
-  },
-  {
-    method: 'POST',
-    path: '/presence/heartbeat',
-    handler: (_req, env, user) => handleHeartbeat(user as User, env),
-  },
-  {
-    method: 'PUT',
-    path: '/agent/profile',
-    handler: (req, env, user) => handleUpdateAgentProfile(req, user as User, env),
-  },
-  {
-    method: 'POST',
-    path: '/tools/evaluate',
-    handler: (req, env, user) => handleTriggerEvaluation(req, user as User, env),
-  },
-  {
-    method: 'POST',
-    path: '/auth/ws-ticket',
-    handler: (_req, env, user) => handleGetWsTicket(user as User, env),
-  },
-  {
-    method: 'POST',
-    path: '/auth/github/link',
-    handler: (req, env, user) => handleGithubLink(req, user as User, env),
-  },
-  {
-    method: 'POST',
-    path: '/teams',
-    handler: (req, env, user) => handleCreateTeam(req, user as User, env),
-  },
+  { method: 'GET', path: '/me/teams', handler: handleGetUserTeams },
+  { method: 'GET', path: '/me/dashboard', handler: handleDashboardSummary },
+  { method: 'PUT', path: '/me/handle', handler: handleUpdateHandle },
+  { method: 'PUT', path: '/me/color', handler: handleUpdateColor },
+  { method: 'PUT', path: '/me/github', handler: handleUnlinkGithub },
+  { method: 'PUT', path: '/status', handler: handleSetStatus },
+  { method: 'DELETE', path: '/status', handler: handleClearStatus },
+  { method: 'POST', path: '/presence/heartbeat', handler: handleHeartbeat },
+  { method: 'PUT', path: '/agent/profile', handler: handleUpdateAgentProfile },
+  { method: 'POST', path: '/tools/evaluate', handler: handleTriggerEvaluation },
+  { method: 'POST', path: '/auth/ws-ticket', handler: handleGetWsTicket },
+  { method: 'POST', path: '/auth/github/link', handler: handleGithubLink },
+  { method: 'POST', path: '/teams', handler: handleCreateTeam },
 
   // Authenticated — WebSocket upgrades (return directly, skip CORS headers)
-  {
-    method: 'GET',
-    path: '/ws/chat',
-    handler: (req, env, user) => handleChatUpgrade(req, user as User, env),
-  },
+  { method: 'GET', path: '/ws/chat', handler: handleChatUpgrade },
   {
     method: 'GET',
     path: `/teams/${TID}/ws`,
-    handler: (req, env, user, tid) => handleTeamWebSocket(req, user as User, env, tid),
+    handler: handleTeamWebSocket,
   },
 
   // Authenticated — team routes
-  {
-    method: 'POST',
-    path: `/teams/${TID}/join`,
-    handler: (req, env, user, tid) => handleTeamJoin(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/leave`,
-    handler: (req, env, user, tid) => handleTeamLeave(req, user as User, env, tid),
-  },
-  {
-    method: 'GET',
-    path: `/teams/${TID}/context`,
-    handler: (req, env, user, tid) => handleTeamContext(req, user as User, env, tid),
-  },
-  {
-    method: 'PUT',
-    path: `/teams/${TID}/activity`,
-    handler: (req, env, user, tid) => handleTeamActivity(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/conflicts`,
-    handler: (req, env, user, tid) => handleTeamConflicts(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/heartbeat`,
-    handler: (req, env, user, tid) => handleTeamHeartbeat(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/file`,
-    handler: (req, env, user, tid) => handleTeamFile(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamSaveMemory(req, user as User, env, tid),
-  },
-  {
-    method: 'GET',
-    path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamSearchMemory(req, user as User, env, tid),
-  },
-  {
-    method: 'PUT',
-    path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamUpdateMemory(req, user as User, env, tid),
-  },
-  {
-    method: 'DELETE',
-    path: `/teams/${TID}/memory`,
-    handler: (req, env, user, tid) => handleTeamDeleteMemory(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/locks`,
-    handler: (req, env, user, tid) => handleTeamClaimFiles(req, user as User, env, tid),
-  },
-  {
-    method: 'DELETE',
-    path: `/teams/${TID}/locks`,
-    handler: (req, env, user, tid) => handleTeamReleaseFiles(req, user as User, env, tid),
-  },
-  {
-    method: 'GET',
-    path: `/teams/${TID}/locks`,
-    handler: (req, env, user, tid) => handleTeamGetLocks(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/messages`,
-    handler: (req, env, user, tid) => handleTeamSendMessage(req, user as User, env, tid),
-  },
-  {
-    method: 'GET',
-    path: `/teams/${TID}/messages`,
-    handler: (req, env, user, tid) => handleTeamGetMessages(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/sessions`,
-    handler: (req, env, user, tid) => handleTeamStartSession(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/sessionend`,
-    handler: (req, env, user, tid) => handleTeamEndSession(req, user as User, env, tid),
-  },
-  {
-    method: 'PUT',
-    path: `/teams/${TID}/sessionmodel`,
-    handler: (req, env, user, tid) => handleTeamEnrichModel(req, user as User, env, tid),
-  },
-  {
-    method: 'POST',
-    path: `/teams/${TID}/sessionedit`,
-    handler: (req, env, user, tid) => handleTeamSessionEdit(req, user as User, env, tid),
-  },
-  {
-    method: 'GET',
-    path: `/teams/${TID}/history`,
-    handler: (req, env, user, tid) => handleTeamHistory(req, user as User, env, tid),
-  },
+  { method: 'POST', path: `/teams/${TID}/join`, handler: handleTeamJoin },
+  { method: 'POST', path: `/teams/${TID}/leave`, handler: handleTeamLeave },
+  { method: 'GET', path: `/teams/${TID}/context`, handler: handleTeamContext },
+  { method: 'PUT', path: `/teams/${TID}/activity`, handler: handleTeamActivity },
+  { method: 'POST', path: `/teams/${TID}/conflicts`, handler: handleTeamConflicts },
+  { method: 'POST', path: `/teams/${TID}/heartbeat`, handler: handleTeamHeartbeat },
+  { method: 'POST', path: `/teams/${TID}/file`, handler: handleTeamFile },
+  { method: 'POST', path: `/teams/${TID}/memory`, handler: handleTeamSaveMemory },
+  { method: 'GET', path: `/teams/${TID}/memory`, handler: handleTeamSearchMemory },
+  { method: 'PUT', path: `/teams/${TID}/memory`, handler: handleTeamUpdateMemory },
+  { method: 'DELETE', path: `/teams/${TID}/memory`, handler: handleTeamDeleteMemory },
+  { method: 'POST', path: `/teams/${TID}/locks`, handler: handleTeamClaimFiles },
+  { method: 'DELETE', path: `/teams/${TID}/locks`, handler: handleTeamReleaseFiles },
+  { method: 'GET', path: `/teams/${TID}/locks`, handler: handleTeamGetLocks },
+  { method: 'POST', path: `/teams/${TID}/messages`, handler: handleTeamSendMessage },
+  { method: 'GET', path: `/teams/${TID}/messages`, handler: handleTeamGetMessages },
+  { method: 'POST', path: `/teams/${TID}/sessions`, handler: handleTeamStartSession },
+  { method: 'POST', path: `/teams/${TID}/sessionend`, handler: handleTeamEndSession },
+  { method: 'PUT', path: `/teams/${TID}/sessionmodel`, handler: handleTeamEnrichModel },
+  { method: 'POST', path: `/teams/${TID}/sessionedit`, handler: handleTeamSessionEdit },
+  { method: 'GET', path: `/teams/${TID}/history`, handler: handleTeamHistory },
 ];
 
 const routes = buildRoutes(routeDefinitions);

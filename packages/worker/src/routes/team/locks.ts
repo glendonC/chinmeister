@@ -1,27 +1,12 @@
 // Team lock routes — claim, release, get locks.
 
-import type { Env, User } from '../../types.js';
-import { getTeam, rpc } from '../../lib/env.js';
-import { json, parseBody } from '../../lib/http.js';
-import { createLogger } from '../../lib/logger.js';
-import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import { requireJson, validateFileArray, withTeamRateLimit } from '../../lib/validation.js';
+import { json } from '../../lib/http.js';
+import { teamJsonRoute, teamRoute, doResult } from '../../lib/middleware.js';
+import { validateFileArray, withTeamRateLimit } from '../../lib/validation.js';
 import { LOCK_CLAIM_MAX_FILES, RATE_LIMIT_LOCKS } from '../../lib/constants.js';
 
-const log = createLogger('routes.locks');
-
-export async function handleTeamClaimFiles(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { files } = b;
+export const handleTeamClaimFiles = teamJsonRoute(async ({ body, user, env, teamId, request }) => {
+  const { files } = body;
   const fileErr = validateFileArray(files, LOCK_CLAIM_MAX_FILES);
   if (fileErr) return json({ error: fileErr }, 400);
 
@@ -36,45 +21,16 @@ export async function handleTeamClaimFiles(
     action: (team, agentId, runtime) =>
       team.claimFiles(agentId, files as string[], user.handle, runtime, user.id),
   });
-}
+});
 
-export async function handleTeamReleaseFiles(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const files = (b.files || null) as string[] | null;
+export const handleTeamReleaseFiles = teamJsonRoute(async ({ body, agentId, team, user }) => {
+  const files = (body.files || null) as string[] | null;
   const fileErr = validateFileArray(files, LOCK_CLAIM_MAX_FILES, { nullable: true });
   if (fileErr) return json({ error: fileErr }, 400);
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.releaseFiles(agentId, files, user.id));
-  if ('error' in result) {
-    log.warn(`releaseFiles failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  return json(result);
-}
+  return doResult(team.releaseFiles(agentId, files, user.id), 'releaseFiles');
+});
 
-export async function handleTeamGetLocks(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.getLockedFiles(agentId, user.id));
-  if ('error' in result) {
-    log.warn(`getLockedFiles failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  return json(result);
-}
+export const handleTeamGetLocks = teamRoute(async ({ agentId, team, user }) => {
+  return doResult(team.getLockedFiles(agentId, user.id), 'getLockedFiles');
+});

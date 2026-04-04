@@ -6,6 +6,7 @@ import { createLogger } from '../lib/logger.js';
 import { auditLog } from '../lib/audit.js';
 import { safeParse } from '../lib/safe-parse.js';
 import { hashIp, withIpRateLimit } from '../lib/validation.js';
+import { publicRoute, authedRoute } from '../lib/middleware.js';
 import {
   RATE_LIMIT_ACCOUNTS_PER_IP,
   RATE_LIMIT_STATS_PER_IP,
@@ -51,7 +52,7 @@ function evaluationToCatalogEntry(e: Record<string, unknown>): CatalogEntry {
   };
 }
 
-export async function handleInit(request: Request, env: Env): Promise<Response> {
+export const handleInit = publicRoute(async ({ request, env }) => {
   const ip = request.headers.get('CF-Connecting-IP');
   if (!ip) return json({ error: 'Unable to identify client' }, 400);
   const hashedIp = await hashIp(ip);
@@ -89,9 +90,9 @@ export async function handleInit(request: Request, env: Env): Promise<Response> 
     },
     201,
   );
-}
+});
 
-export async function handleStats(request: Request, env: Env): Promise<Response> {
+export const handleStats = publicRoute(async ({ request, env }) => {
   return withIpRateLimit(request, env, 'stats', RATE_LIMIT_STATS_PER_IP, async () => {
     const [lobbyStats, dbStats] = await Promise.all([
       getLobby(env).getStats().then(rpc),
@@ -101,9 +102,9 @@ export async function handleStats(request: Request, env: Env): Promise<Response>
     const { ok: _ok2, ...dbData } = dbStats;
     return json({ ok: true, ...dbData, ...lobby });
   });
-}
+});
 
-export async function handleToolCatalog(request: Request, env: Env): Promise<Response> {
+export const handleToolCatalog = publicRoute(async ({ request, env }) => {
   return withIpRateLimit(request, env, 'catalog', RATE_LIMIT_CATALOG_PER_IP, async () => {
     const result = rpc(await getDB(env).listEvaluations({}));
 
@@ -120,11 +121,11 @@ export async function handleToolCatalog(request: Request, env: Env): Promise<Res
       'Cache-Control': 'public, max-age=3600, stale-while-revalidate=86400',
     });
   });
-}
+});
 
 // --- GitHub OAuth ---
 
-export async function handleGithubAuth(request: Request, env: Env): Promise<Response> {
+export const handleGithubAuth = publicRoute(async ({ request, env }) => {
   const clientId = env.GITHUB_CLIENT_ID;
   if (!clientId) return json({ error: 'GitHub OAuth not configured' }, 500);
 
@@ -139,9 +140,9 @@ export async function handleGithubAuth(request: Request, env: Env): Promise<Resp
   });
 
   return Response.redirect(`${GITHUB_AUTHORIZE_URL}?${params}`, 302);
-}
+});
 
-export async function handleGithubCallback(request: Request, env: Env): Promise<Response> {
+export const handleGithubCallback = publicRoute(async ({ request, env }) => {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
@@ -242,9 +243,9 @@ export async function handleGithubCallback(request: Request, env: Env): Promise<
   });
 
   return Response.redirect(`${getDashboardUrl(env)}#token=${session.token}`, 302);
-}
+});
 
-export async function handleGithubLink(request: Request, user: User, env: Env): Promise<Response> {
+export const handleGithubLink = authedRoute(async ({ request, user, env }) => {
   // This initiates the link flow — redirects to GitHub with user ID in state
   const clientId = env.GITHUB_CLIENT_ID;
   if (!clientId) return json({ error: 'GitHub OAuth not configured' }, 500);
@@ -260,9 +261,9 @@ export async function handleGithubLink(request: Request, user: User, env: Env): 
   });
 
   return json({ url: `${GITHUB_AUTHORIZE_URL}?${params}` });
-}
+});
 
-export async function handleGithubLinkCallback(request: Request, env: Env): Promise<Response> {
+export const handleGithubLinkCallback = publicRoute(async ({ request, env }) => {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
@@ -327,4 +328,4 @@ export async function handleGithubLinkCallback(request: Request, env: Env): Prom
   }
 
   return Response.redirect(`${getDashboardUrl(env)}#github_linked=1`, 302);
-}
+});

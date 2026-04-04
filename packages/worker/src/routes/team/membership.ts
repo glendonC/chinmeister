@@ -1,93 +1,78 @@
 // Team membership routes — join, leave, heartbeat, context.
 
-import type { Env, User } from '../../types.js';
 import { checkContent } from '../../moderation.js';
-import { getDB, getTeam, rpc } from '../../lib/env.js';
-import { getErrorMessage } from '../../lib/errors.js';
+import { rpc } from '../../lib/env.js';
 import { json } from '../../lib/http.js';
+import { teamRoute, doResult } from '../../lib/middleware.js';
 import { createLogger } from '../../lib/logger.js';
-import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
 import { withRateLimit } from '../../lib/validation.js';
 import { auditLog } from '../../lib/audit.js';
 import { RATE_LIMIT_JOINS, MAX_NAME_LENGTH } from '../../lib/constants.js';
 
 const log = createLogger('routes.membership');
 
-export async function handleTeamJoin(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  let name: string | null = null;
-  try {
-    const body: Record<string, unknown> = await request.json();
-    if (typeof body.name === 'string') {
-      const trimmed = body.name.trim();
-      if (trimmed.length > MAX_NAME_LENGTH) {
-        return json({ error: `Team name must be ${MAX_NAME_LENGTH} characters or less` }, 400);
+// handleTeamJoin uses custom body parsing (name is optional, body may be empty)
+// so it uses teamRoute instead of teamJsonRoute.
+export const handleTeamJoin = teamRoute(
+  async ({ request, user, env, teamId, db, agentId, runtime, team }) => {
+    let name: string | null = null;
+    try {
+      const body: Record<string, unknown> = await request.json();
+      if (typeof body.name === 'string') {
+        const trimmed = body.name.trim();
+        if (trimmed.length > MAX_NAME_LENGTH) {
+          return json({ error: `Team name must be ${MAX_NAME_LENGTH} characters or less` }, 400);
+        }
+        name = trimmed || null;
       }
-      name = trimmed || null;
+    } catch {
+      /* body may be empty or non-JSON — name stays null */
     }
-  } catch {
-    /* body may be empty or non-JSON — name stays null */
-  }
 
-  if (name) {
-    const modResult = await checkContent(name, env);
-    if (modResult.blocked) {
-      if (modResult.reason === 'moderation_unavailable') {
-        log.warn('content moderation unavailable: blocking content as fail-safe');
-        return json(
-          { error: 'Content moderation is temporarily unavailable. Please try again.' },
-          503,
-        );
+    if (name) {
+      const modResult = await checkContent(name, env);
+      if (modResult.blocked) {
+        if (modResult.reason === 'moderation_unavailable') {
+          log.warn('content moderation unavailable: blocking content as fail-safe');
+          return json(
+            { error: 'Content moderation is temporarily unavailable. Please try again.' },
+            503,
+          );
+        }
+        return json({ error: 'Content blocked' }, 400);
       }
-      return json({ error: 'Content blocked' }, 400);
     }
-  }
 
-  const db = getDB(env);
-  const runtime = getAgentRuntime(request, user);
-  const agentId = runtime.agentId;
-  const team = getTeam(env, teamId);
+    return withRateLimit(
+      db,
+      `join:${user.id}`,
+      RATE_LIMIT_JOINS,
+      'Team join limit reached (100/day). Try again tomorrow.',
+      async () => {
+        const result = rpc(await team.join(agentId, user.id, user.handle, runtime));
+        if ('error' in result) {
+          auditLog('team.join', {
+            actor: user.handle,
+            outcome: 'failure',
+            meta: { team_id: teamId, reason: result.error },
+          });
+          return json({ error: result.error }, 400);
+        }
 
-  return withRateLimit(
-    db,
-    `join:${user.id}`,
-    RATE_LIMIT_JOINS,
-    'Team join limit reached (100/day). Try again tomorrow.',
-    async () => {
-      const result = rpc(await team.join(agentId, user.id, user.handle, runtime));
-      if ('error' in result) {
+        await db.addUserTeam(user.id, teamId, name);
+
         auditLog('team.join', {
           actor: user.handle,
-          outcome: 'failure',
-          meta: { team_id: teamId, reason: result.error },
+          outcome: 'success',
+          meta: { team_id: teamId, agent_id: agentId },
         });
-        return json({ error: result.error }, 400);
-      }
+        return json(result);
+      },
+    );
+  },
+);
 
-      await db.addUserTeam(user.id, teamId, name);
-
-      auditLog('team.join', {
-        actor: user.handle,
-        outcome: 'success',
-        meta: { team_id: teamId, agent_id: agentId },
-      });
-      return json(result);
-    },
-  );
-}
-
-export async function handleTeamLeave(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
+export const handleTeamLeave = teamRoute(async ({ user, teamId, db, agentId, team }) => {
   const result = rpc(await team.leave(agentId, user.id));
   if ('error' in result) {
     auditLog('team.leave', {
@@ -103,57 +88,28 @@ export async function handleTeamLeave(
     meta: { team_id: teamId, agent_id: agentId },
   });
 
-  const db = getDB(env);
   await db.removeUserTeam(user.id, teamId);
 
   return json(result);
-}
+});
 
-export async function handleTeamContext(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
+export const handleTeamContext = teamRoute(async ({ user, teamId, db, agentId, team }) => {
   const result = rpc(await team.getContext(agentId, user.id));
   if ('error' in result) {
     log.warn(`getContext failed: ${result.error}`);
     return json({ error: result.error }, 403);
   }
 
-  const db = getDB(env);
   await db.addUserTeam(user.id, teamId);
 
   return json(result);
-}
+});
 
-export async function handleTeamHeartbeat(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.heartbeat(agentId, user.id));
-  if ('error' in result) {
-    log.warn(`heartbeat failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  return json(result);
-}
+export const handleTeamHeartbeat = teamRoute(async ({ agentId, team, user }) => {
+  return doResult(team.heartbeat(agentId, user.id), 'heartbeat');
+});
 
-export async function handleTeamWebSocket(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-
+export const handleTeamWebSocket = teamRoute(async ({ request, user, agentId, team }) => {
   const wsUrl = new URL(request.url);
   wsUrl.pathname = '/ws';
   wsUrl.searchParams.delete('token');
@@ -173,4 +129,4 @@ export async function handleTeamWebSocket(
       },
     }),
   );
-}
+});

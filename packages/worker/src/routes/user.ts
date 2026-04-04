@@ -6,6 +6,7 @@ import { json, parseBody } from '../lib/http.js';
 import { createLogger } from '../lib/logger.js';
 import { getAgentRuntime, sanitizeTags } from '../lib/request-utils.js';
 import { requireJson, withRateLimit } from '../lib/validation.js';
+import { authedRoute, authedJsonRoute, publicRoute } from '../lib/middleware.js';
 import { auditLog } from '../lib/audit.js';
 import {
   MAX_STATUS_LENGTH,
@@ -92,7 +93,7 @@ export async function authenticate(request: Request, env: Env): Promise<User | n
   return null;
 }
 
-export async function handleRefreshToken(request: Request, env: Env): Promise<Response> {
+export const handleRefreshToken = publicRoute(async ({ request, env }) => {
   const body = await parseBody(request);
   const parseErr = requireJson(body);
   if (parseErr) return parseErr;
@@ -135,9 +136,9 @@ export async function handleRefreshToken(request: Request, env: Env): Promise<Re
       return json({ ok: true, token: newToken, refresh_token: newRefreshToken });
     },
   );
-}
+});
 
-export async function handleGetWsTicket(user: User, env: Env): Promise<Response> {
+export const handleGetWsTicket = authedRoute(async ({ user, env }) => {
   const db = getDB(env);
   return withRateLimit(
     db,
@@ -150,23 +151,15 @@ export async function handleGetWsTicket(user: User, env: Env): Promise<Response>
       return json({ ticket });
     },
   );
-}
+});
 
-export async function handleUnlinkGithub(user: User, env: Env): Promise<Response> {
+export const handleUnlinkGithub = authedRoute(async ({ user, env }) => {
   const result = rpc(await getDB(env).unlinkGithub(user.id));
   return json(result);
-}
+});
 
-export async function handleUpdateHandle(
-  request: Request,
-  user: User,
-  env: Env,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const { handle } = body as Record<string, unknown>;
+export const handleUpdateHandle = authedJsonRoute(async ({ user, env, body }) => {
+  const { handle } = body;
   if (!handle || typeof handle !== 'string') {
     return json({ error: 'Handle is required' }, 400);
   }
@@ -190,14 +183,10 @@ export async function handleUpdateHandle(
   }
 
   return json(result);
-}
+});
 
-export async function handleUpdateColor(request: Request, user: User, env: Env): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const { color } = body as Record<string, unknown>;
+export const handleUpdateColor = authedJsonRoute(async ({ user, env, body }) => {
+  const { color } = body;
   if (!color || typeof color !== 'string') {
     return json({ error: 'Color is required' }, 400);
   }
@@ -215,14 +204,10 @@ export async function handleUpdateColor(request: Request, user: User, env: Env):
   }
 
   return json(result);
-}
+});
 
-export async function handleSetStatus(request: Request, user: User, env: Env): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const { status } = body as Record<string, unknown>;
+export const handleSetStatus = authedJsonRoute(async ({ user, env, body }) => {
+  const { status } = body;
   if (!status || typeof status !== 'string') {
     return json({ error: 'Status is required' }, 400);
   }
@@ -244,34 +229,26 @@ export async function handleSetStatus(request: Request, user: User, env: Env): P
 
   await getDB(env).setStatus(user.id, status);
   return json({ ok: true });
-}
+});
 
-export async function handleClearStatus(user: User, env: Env): Promise<Response> {
+export const handleClearStatus = authedRoute(async ({ user, env }) => {
   await getDB(env).setStatus(user.id, null);
   return json({ ok: true });
-}
+});
 
-export async function handleHeartbeat(user: User, env: Env): Promise<Response> {
+export const handleHeartbeat = authedRoute(async ({ user, env }) => {
   await getLobby(env).heartbeat(user.handle);
   return json({ ok: true });
-}
+});
 
-export async function handleUpdateAgentProfile(
-  request: Request,
-  user: User,
-  env: Env,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
+export const handleUpdateAgentProfile = authedJsonRoute(async ({ user, env, body }) => {
   const profile = {
-    framework: typeof b.framework === 'string' ? b.framework.slice(0, MAX_FRAMEWORK_LENGTH) : null,
-    languages: sanitizeTags(b.languages),
-    frameworks: sanitizeTags(b.frameworks),
-    tools: sanitizeTags(b.tools),
-    platforms: sanitizeTags(b.platforms),
+    framework:
+      typeof body.framework === 'string' ? body.framework.slice(0, MAX_FRAMEWORK_LENGTH) : null,
+    languages: sanitizeTags(body.languages),
+    frameworks: sanitizeTags(body.frameworks),
+    tools: sanitizeTags(body.tools),
+    platforms: sanitizeTags(body.platforms),
   };
 
   const result = rpc(await getDB(env).updateAgentProfile(user.id, profile));
@@ -280,14 +257,14 @@ export async function handleUpdateAgentProfile(
     return json({ error: result.error }, 400);
   }
   return json(result);
-}
+});
 
-export async function handleGetUserTeams(user: User, env: Env): Promise<Response> {
+export const handleGetUserTeams = authedRoute(async ({ user, env }) => {
   const result = rpc(await getDB(env).getUserTeams(user.id));
   return json({ ok: true, teams: result.teams });
-}
+});
 
-export async function handleDashboardSummary(user: User, env: Env): Promise<Response> {
+export const handleDashboardSummary = authedRoute(async ({ user, env }) => {
   const db = getDB(env);
   const teamsResult = rpc(await db.getUserTeams(user.id));
   const teams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
@@ -379,9 +356,9 @@ export async function handleDashboardSummary(user: User, env: Env): Promise<Resp
   }
 
   return json(response);
-}
+});
 
-export async function handleChatUpgrade(request: Request, user: User, env: Env): Promise<Response> {
+export const handleChatUpgrade = authedRoute(async ({ request, user, env }) => {
   const accountAge = Date.now() - new Date(user.created_at).getTime();
   if (accountAge < CHAT_COOLDOWN_MS) {
     const secsLeft = Math.ceil((CHAT_COOLDOWN_MS - accountAge) / 1000);
@@ -414,9 +391,9 @@ export async function handleChatUpgrade(request: Request, user: User, env: Env):
       },
     }),
   );
-}
+});
 
-export async function handleCreateTeam(request: Request, user: User, env: Env): Promise<Response> {
+export const handleCreateTeam = authedRoute(async ({ request, user, env }) => {
   let name: string | null = null;
   try {
     const body: Record<string, unknown> = await request.json();
@@ -465,4 +442,4 @@ export async function handleCreateTeam(request: Request, user: User, env: Env): 
       return json({ ok: true, team_id: teamId }, 201);
     },
   );
-}
+});

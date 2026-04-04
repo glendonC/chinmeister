@@ -1,17 +1,10 @@
 // Team memory routes — save, search, update, delete memory.
 
-import type { Env, User } from '../../types.js';
 import { checkContent, isBlocked } from '../../moderation.js';
-import { getTeam, rpc } from '../../lib/env.js';
-import { json, parseBody } from '../../lib/http.js';
+import { json } from '../../lib/http.js';
+import { teamJsonRoute, teamRoute, doResult } from '../../lib/middleware.js';
 import { createLogger } from '../../lib/logger.js';
-import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import {
-  requireJson,
-  requireString,
-  validateTagsArray,
-  withTeamRateLimit,
-} from '../../lib/validation.js';
+import { requireString, validateTagsArray, withTeamRateLimit } from '../../lib/validation.js';
 import {
   MAX_MEMORY_TEXT_LENGTH,
   MAX_TAGS_PER_MEMORY,
@@ -26,18 +19,8 @@ import {
 
 const log = createLogger('routes.memory');
 
-export async function handleTeamSaveMemory(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const text = requireString(b, 'text');
+export const handleTeamSaveMemory = teamJsonRoute(async ({ body, user, env, teamId, request }) => {
+  const text = requireString(body, 'text');
   if (!text) return json({ error: 'text is required' }, 400);
   if (text.length > MAX_MEMORY_TEXT_LENGTH)
     return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
@@ -54,7 +37,7 @@ export async function handleTeamSaveMemory(
     return json({ error: 'Content blocked' }, 400);
   }
 
-  const tagsResult = validateTagsArray(b.tags, MAX_TAGS_PER_MEMORY);
+  const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
   if (tagsResult.error) return json({ error: tagsResult.error }, 400);
   const tags = tagsResult.tags!;
   // Moderation: check tag content (tags are short, blocklist is sufficient)
@@ -72,14 +55,9 @@ export async function handleTeamSaveMemory(
     action: (team, agentId, runtime) =>
       team.saveMemory(agentId, text, tags, user.handle, runtime, user.id),
   });
-}
+});
 
-export async function handleTeamSearchMemory(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
+export const handleTeamSearchMemory = teamRoute(async ({ request, agentId, team, user }) => {
   const url = new URL(request.url);
   const rawQuery = url.searchParams.get('q') || null;
   if (rawQuery && rawQuery.length > MEMORY_SEARCH_MAX_QUERY_LENGTH) {
@@ -110,100 +88,77 @@ export async function handleTeamSearchMemory(
         .slice(0, MEMORY_SEARCH_MAX_TAGS)
     : null;
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.searchMemories(agentId, query, tags, limit, user.id));
-  if ('error' in result) {
-    log.warn(`searchMemories failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  return json(result);
-}
+  return doResult(team.searchMemories(agentId, query, tags, limit, user.id), 'searchMemories');
+});
 
-export async function handleTeamUpdateMemory(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
+export const handleTeamUpdateMemory = teamJsonRoute(
+  async ({ body, user, env, teamId, request }) => {
+    const id = requireString(body, 'id');
+    if (!id) return json({ error: 'id is required' }, 400);
 
-  const b = body as Record<string, unknown>;
-  const id = requireString(b, 'id');
-  if (!id) return json({ error: 'id is required' }, 400);
-
-  let text: string | undefined;
-  if (b.text !== undefined) {
-    const parsed = requireString(b, 'text');
-    if (!parsed) return json({ error: 'text must be a non-empty string' }, 400);
-    if (parsed.length > MAX_MEMORY_TEXT_LENGTH)
-      return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
-    text = parsed;
-  }
-  // Moderation: full AI check on updated text (same pattern as save)
-  if (text !== undefined) {
-    const modResult = await checkContent(text, env);
-    if (modResult.blocked) {
-      if (modResult.reason === 'moderation_unavailable') {
-        log.warn('content moderation unavailable: blocking memory update as fail-safe');
-        return json(
-          { error: 'Content moderation is temporarily unavailable. Please try again.' },
-          503,
-        );
-      }
-      return json({ error: 'Content blocked' }, 400);
+    let text: string | undefined;
+    if (body.text !== undefined) {
+      const parsed = requireString(body, 'text');
+      if (!parsed) return json({ error: 'text must be a non-empty string' }, 400);
+      if (parsed.length > MAX_MEMORY_TEXT_LENGTH)
+        return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
+      text = parsed;
     }
-  }
+    // Moderation: full AI check on updated text (same pattern as save)
+    if (text !== undefined) {
+      const modResult = await checkContent(text, env);
+      if (modResult.blocked) {
+        if (modResult.reason === 'moderation_unavailable') {
+          log.warn('content moderation unavailable: blocking memory update as fail-safe');
+          return json(
+            { error: 'Content moderation is temporarily unavailable. Please try again.' },
+            503,
+          );
+        }
+        return json({ error: 'Content blocked' }, 400);
+      }
+    }
 
-  let tags: string[] | undefined;
-  if (b.tags !== undefined) {
-    const tagsResult = validateTagsArray(b.tags, MAX_TAGS_PER_MEMORY);
-    if (tagsResult.error) return json({ error: tagsResult.error }, 400);
-    tags = tagsResult.tags!;
-    // Moderation: check updated tag content
-    if (tags.some((t) => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
-  }
+    let tags: string[] | undefined;
+    if (body.tags !== undefined) {
+      const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
+      if (tagsResult.error) return json({ error: tagsResult.error }, 400);
+      tags = tagsResult.tags!;
+      // Moderation: check updated tag content
+      if (tags.some((t) => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
+    }
 
-  if (text === undefined && tags === undefined) {
-    return json({ error: 'text or tags required' }, 400);
-  }
+    if (text === undefined && tags === undefined) {
+      return json({ error: 'text or tags required' }, 400);
+    }
 
-  return withTeamRateLimit({
-    request,
-    user,
-    env,
-    teamId,
-    rateLimitKey: 'memory_update',
-    rateLimitMax: RATE_LIMIT_MEMORY_UPDATES,
-    rateLimitMsg: 'Memory update limit reached (50/day). Try again tomorrow.',
-    action: (team, agentId) => team.updateMemory(agentId, id, text, tags, user.id),
-  });
-}
+    return withTeamRateLimit({
+      request,
+      user,
+      env,
+      teamId,
+      rateLimitKey: 'memory_update',
+      rateLimitMax: RATE_LIMIT_MEMORY_UPDATES,
+      rateLimitMsg: 'Memory update limit reached (50/day). Try again tomorrow.',
+      action: (team, agentId) => team.updateMemory(agentId, id, text, tags, user.id),
+    });
+  },
+);
 
-export async function handleTeamDeleteMemory(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
+export const handleTeamDeleteMemory = teamJsonRoute(
+  async ({ body, user, env, teamId, request }) => {
+    const id = requireString(body, 'id');
+    if (!id) return json({ error: 'id is required' }, 400);
 
-  const b = body as Record<string, unknown>;
-  const id = requireString(b, 'id');
-  if (!id) return json({ error: 'id is required' }, 400);
-
-  return withTeamRateLimit({
-    request,
-    user,
-    env,
-    teamId,
-    rateLimitKey: 'memory_delete',
-    rateLimitMax: RATE_LIMIT_MEMORY_DELETES,
-    rateLimitMsg: 'Memory delete limit reached (50/day). Try again tomorrow.',
-    action: (team, agentId) => team.deleteMemory(agentId, id, user.id),
-  });
-}
+    return withTeamRateLimit({
+      request,
+      user,
+      env,
+      teamId,
+      rateLimitKey: 'memory_delete',
+      rateLimitMax: RATE_LIMIT_MEMORY_DELETES,
+      rateLimitMsg: 'Memory delete limit reached (50/day). Try again tomorrow.',
+      action: (team, agentId) => team.deleteMemory(agentId, id, user.id),
+    });
+  },
+);

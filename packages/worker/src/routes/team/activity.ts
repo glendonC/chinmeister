@@ -1,11 +1,11 @@
 // Team activity routes — activity reporting, conflicts, file reporting, sessions, history.
 
-import type { Env, User } from '../../types.js';
 import { checkContent } from '../../moderation.js';
-import { getDB, getTeam, rpc } from '../../lib/env.js';
-import { json, parseBody } from '../../lib/http.js';
-import { getAgentRuntime, teamErrorStatus } from '../../lib/request-utils.js';
-import { requireJson, validateFileArray, withRateLimit } from '../../lib/validation.js';
+import { rpc } from '../../lib/env.js';
+import { json } from '../../lib/http.js';
+import { teamErrorStatus } from '../../lib/request-utils.js';
+import { teamJsonRoute, teamRoute, doResult } from '../../lib/middleware.js';
+import { validateFileArray, withRateLimit } from '../../lib/validation.js';
 import { createLogger } from '../../lib/logger.js';
 import { auditLog } from '../../lib/audit.js';
 import {
@@ -23,18 +23,8 @@ import {
 
 const log = createLogger('routes.activity');
 
-export async function handleTeamActivity(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { files, summary } = b;
+export const handleTeamActivity = teamJsonRoute(async ({ body, user, env, agentId, team }) => {
+  const { files, summary } = body;
   const fileErr = validateFileArray(files, ACTIVITY_MAX_FILES);
   if (fileErr) return json({ error: fileErr }, 400);
 
@@ -56,63 +46,33 @@ export async function handleTeamActivity(
     }
   }
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.updateActivity(agentId, files as string[], summary, user.id));
-  if ('error' in result) {
-    log.warn(`updateActivity failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  return json(result);
-}
+  return doResult(
+    team.updateActivity(agentId, files as string[], summary, user.id),
+    'updateActivity',
+  );
+});
 
-export async function handleTeamConflicts(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { files } = b;
+export const handleTeamConflicts = teamJsonRoute(async ({ body, agentId, team, user }) => {
+  const { files } = body;
   const fileErr = validateFileArray(files, ACTIVITY_MAX_FILES);
   if (fileErr) return json({ error: fileErr }, 400);
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
   const result = rpc(await team.checkConflicts(agentId, files as string[], user.id));
   if ('error' in result) {
     log.warn(`checkConflicts failed: ${result.error}`);
     return json({ error: result.error }, 403);
   }
   return json(result);
-}
+});
 
-export async function handleTeamFile(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { file } = b;
+export const handleTeamFile = teamJsonRoute(async ({ body, user, db, agentId, team }) => {
+  const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
     return json({ error: 'file must be a non-empty string' }, 400);
   }
   if (file.length > MAX_FILE_PATH_LENGTH) {
     return json({ error: 'file path too long' }, 400);
   }
-
-  const db = getDB(env);
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
 
   return withRateLimit(
     db,
@@ -128,69 +88,46 @@ export async function handleTeamFile(
       return json(result);
     },
   );
-}
+});
 
-export async function handleTeamStartSession(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
+export const handleTeamStartSession = teamJsonRoute(
+  async ({ body, user, db, agentId, runtime, team, teamId }) => {
+    const framework =
+      typeof body.framework === 'string'
+        ? body.framework.slice(0, MAX_FRAMEWORK_LENGTH)
+        : 'unknown';
 
-  const b = body as Record<string, unknown>;
-  const framework =
-    typeof b.framework === 'string' ? b.framework.slice(0, MAX_FRAMEWORK_LENGTH) : 'unknown';
+    return withRateLimit(
+      db,
+      `session:${user.id}`,
+      RATE_LIMIT_SESSIONS,
+      'Session limit reached. Try again tomorrow.',
+      async () => {
+        const result = rpc(
+          await team.startSession(agentId, user.handle, framework, runtime, user.id),
+        );
+        if ('error' in result) {
+          log.warn(`startSession failed: ${result.error}`);
+          return json({ error: result.error }, teamErrorStatus(result));
+        }
+        auditLog('session.start', {
+          actor: user.handle,
+          outcome: 'success',
+          meta: { team_id: teamId, session_id: result.session_id },
+        });
+        return json(result, 201);
+      },
+    );
+  },
+);
 
-  const db = getDB(env);
-  const runtime = getAgentRuntime(request, user);
-  const agentId = runtime.agentId;
-  const team = getTeam(env, teamId);
-
-  return withRateLimit(
-    db,
-    `session:${user.id}`,
-    RATE_LIMIT_SESSIONS,
-    'Session limit reached. Try again tomorrow.',
-    async () => {
-      const result = rpc(
-        await team.startSession(agentId, user.handle, framework, runtime, user.id),
-      );
-      if ('error' in result) {
-        log.warn(`startSession failed: ${result.error}`);
-        return json({ error: result.error }, teamErrorStatus(result));
-      }
-      auditLog('session.start', {
-        actor: user.handle,
-        outcome: 'success',
-        meta: { team_id: teamId, session_id: result.session_id },
-      });
-      return json(result, 201);
-    },
-  );
-}
-
-export async function handleTeamEndSession(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { session_id } = b;
+export const handleTeamEndSession = teamJsonRoute(async ({ body, user, agentId, team, teamId }) => {
+  const { session_id } = body;
   if (typeof session_id !== 'string') {
     return json({ error: 'session_id is required' }, 400);
   }
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.endSession(agentId, session_id, user.id));
+  const result = rpc(await team.endSession(agentId, session_id as string, user.id));
   if ('error' in result) {
     log.warn(`endSession failed: ${result.error}`);
     return json({ error: result.error }, teamErrorStatus(result));
@@ -198,31 +135,17 @@ export async function handleTeamEndSession(
   auditLog('session.end', {
     actor: user.handle,
     outcome: 'success',
-    meta: { team_id: teamId, session_id },
+    meta: { team_id: teamId, session_id: session_id as string },
   });
   return json(result);
-}
+});
 
-export async function handleTeamSessionEdit(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { file } = b;
+export const handleTeamSessionEdit = teamJsonRoute(async ({ body, user, db, agentId, team }) => {
+  const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
     return json({ error: 'file is required' }, 400);
   }
   if (file.length > MAX_FILE_PATH_LENGTH) return json({ error: 'file path too long' }, 400);
-
-  const db = getDB(env);
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
 
   return withRateLimit(
     db,
@@ -238,14 +161,9 @@ export async function handleTeamSessionEdit(
       return json(result);
     },
   );
-}
+});
 
-export async function handleTeamHistory(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
+export const handleTeamHistory = teamRoute(async ({ request, agentId, team, user }) => {
   const url = new URL(request.url);
   const parsed = parseInt(url.searchParams.get('days') || String(HISTORY_DEFAULT_DAYS), 10);
   const days = Math.max(
@@ -253,28 +171,16 @@ export async function handleTeamHistory(
     Math.min(isNaN(parsed) ? HISTORY_DEFAULT_DAYS : parsed, HISTORY_MAX_DAYS),
   );
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
   const result = rpc(await team.getHistory(agentId, days, user.id));
   if ('error' in result) {
     log.warn(`getHistory failed: ${result.error}`);
     return json({ error: result.error }, 403);
   }
   return json(result);
-}
+});
 
-export async function handleTeamEnrichModel(
-  request: Request,
-  user: User,
-  env: Env,
-  teamId: string,
-): Promise<Response> {
-  const body = await parseBody(request);
-  const parseErr = requireJson(body);
-  if (parseErr) return parseErr;
-
-  const b = body as Record<string, unknown>;
-  const { model } = b;
+export const handleTeamEnrichModel = teamJsonRoute(async ({ body, agentId, team, user }) => {
+  const { model } = body;
   if (typeof model !== 'string' || !model.trim()) {
     return json({ error: 'model is required' }, 400);
   }
@@ -282,12 +188,5 @@ export async function handleTeamEnrichModel(
     return json({ error: `model must be ${MAX_MODEL_LENGTH} characters or less` }, 400);
   }
 
-  const { agentId } = getAgentRuntime(request, user);
-  const team = getTeam(env, teamId);
-  const result = rpc(await team.enrichModel(agentId, model.trim(), user.id));
-  if ('error' in result) {
-    log.warn(`enrichModel failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  return json(result);
-}
+  return doResult(team.enrichModel(agentId, (model as string).trim(), user.id), 'enrichModel');
+});
