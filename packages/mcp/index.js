@@ -2,12 +2,13 @@
 
 // chinwag MCP server — connects AI agents to the chinwag network.
 // Runs locally via stdio transport. Reads ~/.chinwag/config.json for auth.
-// CRITICAL: Never use console.log — it corrupts stdio JSON-RPC. Use console.error.
+// CRITICAL: Never use console.log — it corrupts stdio JSON-RPC. Use the structured logger.
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { readFileSync } from 'fs';
 import { basename } from 'path';
+import { createLogger } from './dist/utils/logger.js';
 import { getApiUrl } from './dist/api.js';
 import { scanEnvironment } from './dist/profile.js';
 import { registerProcessSession, setupShutdownHandlers } from './dist/lifecycle.js';
@@ -22,11 +23,13 @@ import {
 } from '@chinwag/shared/integration-doctor.js';
 import { bootstrap } from './dist/bootstrap.js';
 
+const log = createLogger('mcp');
+
 let PKG = { version: '0.0.0' };
 try {
   PKG = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf-8'));
 } catch (err) {
-  console.error('[chinwag]', err?.message || 'failed to read package.json');
+  log.warn(err?.message || 'failed to read package.json');
 }
 
 async function main() {
@@ -43,20 +46,18 @@ async function main() {
   const runtimeLabel = runtime.agentSurface
     ? `${runtime.hostTool}/${runtime.agentSurface}`
     : runtime.hostTool;
-  console.error(
-    `[chinwag] Runtime: ${runtimeLabel} via ${runtime.transport}, Agent ID: ${agentId}`,
-  );
+  log.info(`Runtime: ${runtimeLabel} via ${runtime.transport}, Agent ID: ${agentId}`);
 
   // 2. Register session for terminal identification
   let parentTty = null;
   try {
     ({ tty: parentTty } = registerProcessSession(agentId, toolName));
     if (parentTty) {
-      console.error(`[chinwag] Terminal: ${parentTty}`);
+      log.info(`Terminal: ${parentTty}`);
       setTerminalTitle(parentTty, `chinwag · ${basename(process.cwd())}`);
     }
   } catch (err) {
-    console.error('[chinwag]', err?.message || 'session registration failed');
+    log.warn(err?.message || 'session registration failed');
   }
 
   // 3. Register environment profile
@@ -86,21 +87,19 @@ async function main() {
   if (state.teamId) {
     try {
       await team.joinTeam(state.teamId, projectName);
-      console.error(`[chinwag] Auto-joined team ${state.teamId}`);
+      log.info(`Auto-joined team ${state.teamId}`);
 
       try {
         const session = await team.startSession(state.teamId, profile.framework);
         const sessionId = session?.session_id;
         if (!sessionId) {
-          console.error(
-            '[chinwag] Session start returned invalid response — continuing without session',
-          );
+          log.warn('Session start returned invalid response — continuing without session');
         } else {
           state.sessionId = sessionId;
-          console.error(`[chinwag] Session started: ${state.sessionId}`);
+          log.info(`Session started: ${state.sessionId}`);
         }
       } catch (err) {
-        console.error('[chinwag] Failed to start session:', err.message);
+        log.warn(`Failed to start session: ${err.message}`);
       }
 
       wsManager = createWebSocketManager({
@@ -114,8 +113,8 @@ async function main() {
     } catch (err) {
       const failedTeamId = state.teamId;
       const reason = err?.message || 'unknown error';
-      console.error(
-        `[chinwag] WARNING: Failed to join team "${failedTeamId}": ${reason}. ` +
+      log.warn(
+        `Failed to join team "${failedTeamId}": ${reason}. ` +
           'Team features will be unavailable. Check your network connection and team ID.',
       );
       state.teamJoinError = `Join failed for team "${failedTeamId}": ${reason}`;
@@ -153,10 +152,10 @@ This coordination prevents merge conflicts across tools and builds shared projec
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[chinwag] MCP server running');
+  log.info('MCP server running');
 }
 
 main().catch((err) => {
-  console.error('[chinwag] Fatal error:', err?.stack || err);
+  log.error(`Fatal error: ${err?.stack || err}`);
   process.exit(1);
 });

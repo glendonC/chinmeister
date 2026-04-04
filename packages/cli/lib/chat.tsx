@@ -148,9 +148,9 @@ export function Chat({ config, user, navigate }: ChatProps): React.ReactNode {
       const url = new URL(getRuntimeTargets().chatWsUrl);
       if (shuffle) url.searchParams.set('shuffle', '1');
 
-      // Node.js WebSocket accepts an options object as second arg for headers,
-      // but the TS type definition only declares `string | string[]` for protocols.
-      // Double cast required because the types don't overlap at all.
+      // Node.js native WebSocket accepts { headers } as second arg (per WHATWG spec extension),
+      // but @types/node only types the second arg as `string | string[]` (protocol list).
+      // Cast is safe: Node ≥22 handles this at runtime; the type gap is a @types/node omission.
       const ws = new WebSocket(url.toString(), {
         headers: { Authorization: `Bearer ${config!.token}` },
       } as unknown as string);

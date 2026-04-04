@@ -12,10 +12,10 @@ import { basename } from 'path';
 import { formatWho } from './dist/utils/formatting.js';
 import { formatTeamContextDisplay } from './dist/utils/display.js';
 import { bootstrap } from './dist/bootstrap.js';
+import { createLogger } from './dist/utils/logger.js';
+import { STDIN_TIMEOUT_MS, STDIN_MAX_BYTES } from './dist/constants.js';
 
-// --- Constants ---
-const STDIN_TIMEOUT_MS = 3000;
-const STDIN_MAX_BYTES = 1_000_000;
+const log = createLogger('hook');
 
 const subcommand = process.argv[2];
 
@@ -47,7 +47,7 @@ async function main() {
       await sessionStart(team, teamId, hasExactSession);
       break;
     default:
-      console.error(`[chinwag] Unknown hook subcommand: ${subcommand}`);
+      log.error(`Unknown hook subcommand: ${subcommand}`);
       process.exit(1);
       return;
   }
@@ -86,7 +86,7 @@ async function checkConflict(team, teamId, input) {
     process.exit(0);
   } catch (err) {
     // Backend unreachable: allow the edit
-    console.error(`[chinwag] Conflict check failed: ${err.message}`);
+    log.warn(`Conflict check failed: ${err.message}`);
     process.exit(0);
   }
 }
@@ -99,7 +99,7 @@ async function reportEdit(team, teamId, input) {
     // Update current activity + record in session history (parallel)
     await Promise.all([team.reportFile(teamId, filePath), team.recordEdit(teamId, filePath)]);
   } catch (err) {
-    console.error(`[chinwag] Activity report failed: ${err.message}`);
+    log.warn(`Activity report failed: ${err.message}`);
   }
 
   process.exit(0);
@@ -124,7 +124,7 @@ async function sessionStart(team, teamId, hasExactSession) {
       process.stdout.write('===========================\n');
     }
   } catch (err) {
-    console.error(`[chinwag] Context fetch failed: ${err.message}`);
+    log.warn(`Context fetch failed: ${err.message}`);
   }
 
   process.exit(0);
@@ -166,8 +166,8 @@ function readStdin() {
       } catch (err) {
         // Log with context so parse failures are diagnosable — include truncated raw data
         const preview = data.length > 200 ? data.slice(0, 200) + '...' : data;
-        console.error(
-          `[chinwag] stdin parse failed (${data.length} bytes, subcommand=${subcommand}): ${err?.message || 'unknown error'} — data: ${preview}`,
+        log.warn(
+          `stdin parse failed (${data.length} bytes, subcommand=${subcommand}): ${err?.message || 'unknown error'} — data: ${preview}`,
         );
         done({});
       }
@@ -176,6 +176,6 @@ function readStdin() {
 }
 
 main().catch((err) => {
-  console.error(`[chinwag] Hook error: ${err.message}`);
+  log.error(`Hook error: ${err.message}`);
   process.exit(0); // Never block on unexpected errors
 });

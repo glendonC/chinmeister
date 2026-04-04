@@ -83,6 +83,7 @@ export function Discover({ config, navigate }: DiscoverProps): React.ReactNode {
       cancelled = true;
       if (loadingTimer.current) clearTimeout(loadingTimer.current);
     };
+    // Intentional: one-time fetch on mount — config/fetchCatalog are stable module-level refs
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function refreshIntegrations(): void {

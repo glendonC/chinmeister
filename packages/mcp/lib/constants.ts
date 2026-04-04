@@ -98,3 +98,9 @@ export const API_TIMEOUT_MS = 10_000;
 export const API_MAX_RETRY_ATTEMPTS = 2;
 /** Max retry attempts for timeout failures */
 export const API_MAX_TIMEOUT_RETRY_ATTEMPTS = 1;
+
+// --- Hook handler ---
+/** Timeout for reading hook input from stdin */
+export const STDIN_TIMEOUT_MS = 3_000;
+/** Max bytes accepted from stdin before discarding (prevents OOM on malformed input) */
+export const STDIN_MAX_BYTES = 1_000_000;
