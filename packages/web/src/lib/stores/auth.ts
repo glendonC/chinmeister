@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { type z } from 'zod';
 import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
 import { userProfileSchema, validateResponse } from '../apiSchemas.js';
@@ -6,6 +6,11 @@ import { userProfileSchema, validateResponse } from '../apiSchemas.js';
 const TOKEN_KEY = 'chinwag_token';
 
 type UserProfile = z.infer<typeof userProfileSchema>;
+
+// Inflight deduplication: if two concurrent authenticate() calls fire,
+// the second awaits the first's promise instead of starting a new one.
+// Same pattern as packages/mcp/lib/api.ts inflightRefresh.
+let inflightAuth: Promise<boolean> | null = null;
 
 interface AuthState {
   token: string | null;
@@ -34,20 +39,28 @@ const authStore = createStore<AuthState>((set) => ({
   },
 
   async authenticate(t: string) {
-    set({ token: t });
-    try {
-      const rawUser = await api('GET', '/me', null, t);
-      const userData = validateResponse(userProfileSchema, rawUser, 'me', {
-        throwOnError: true,
-      }) as UserProfile;
-      set({ user: userData });
-      localStorage.setItem(TOKEN_KEY, t);
-      return true;
-    } catch (err) {
-      set({ token: null, user: null });
-      localStorage.removeItem(TOKEN_KEY);
-      throw err;
-    }
+    if (inflightAuth) return inflightAuth;
+
+    inflightAuth = (async () => {
+      set({ token: t });
+      try {
+        const rawUser = await api('GET', '/me', null, t);
+        const userData = validateResponse(userProfileSchema, rawUser, 'me', {
+          throwOnError: true,
+        }) as UserProfile;
+        set({ user: userData });
+        localStorage.setItem(TOKEN_KEY, t);
+        return true;
+      } catch (err) {
+        set({ token: null, user: null });
+        localStorage.removeItem(TOKEN_KEY);
+        throw err;
+      }
+    })().finally(() => {
+      inflightAuth = null;
+    });
+
+    return inflightAuth;
   },
 
   logout() {

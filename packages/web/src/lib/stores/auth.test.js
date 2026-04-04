@@ -74,6 +74,20 @@ describe('auth store', () => {
     expect(localStorage.getItem('chinwag_token')).toBeNull();
   });
 
+  it('deduplicates concurrent authenticate() calls into one API request', async () => {
+    const apiMock = vi.fn().mockResolvedValue({ handle: 'alice', color: 'cyan' });
+    const { authActions } = await loadAuthModule({ apiMock });
+
+    const [r1, r2] = await Promise.all([
+      authActions.authenticate('tok_123'),
+      authActions.authenticate('tok_123'),
+    ]);
+
+    expect(apiMock).toHaveBeenCalledTimes(1);
+    expect(r1).toBe(true);
+    expect(r2).toBe(true);
+  });
+
   it('logs out by clearing user state and session storage', async () => {
     const apiMock = vi.fn().mockResolvedValue({ handle: 'alice', color: 'cyan' });
     const { authActions } = await loadAuthModule({ apiMock });
