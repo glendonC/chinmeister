@@ -1,3 +1,4 @@
+import type { Dispatch } from 'react';
 import { isAgentAddressable } from './agent-display.js';
 import { MIN_WIDTH } from './utils.js';
 import {
@@ -10,17 +11,69 @@ import {
   enterAgentFocus,
   exitAgentFocus,
 } from './reducer.js';
+import type { DashboardState, DashboardAction } from './reducer.js';
+import type { CombinedAgentRow, MemoryEntry, TeamContext } from './view.js';
+import type { UseAgentLifecycleReturn } from './agents.js';
+import type { UseIntegrationDoctorReturn } from './integrations.js';
+import type { UseComposerReturn } from './composer.js';
+import type { UseMemoryManagerReturn } from './memory.js';
+import type { ManagedTool } from '../managed-agents.js';
+import type { NoticeTone } from './reducer.js';
 
 // ── Constants ───────────────────────────────────────
 const COMMAND_SUGGESTION_LIMIT = 5;
+
+interface InkKey {
+  escape?: boolean;
+  return?: boolean;
+  upArrow?: boolean;
+  downArrow?: boolean;
+  leftArrow?: boolean;
+  rightArrow?: boolean;
+  tab?: boolean;
+  backspace?: boolean;
+  delete?: boolean;
+  meta?: boolean;
+  ctrl?: boolean;
+  shift?: boolean;
+}
+
+interface CommandSuggestion {
+  name: string;
+  description?: string;
+}
+
+interface InputHandlerContext {
+  state: DashboardState;
+  dispatch: Dispatch<DashboardAction>;
+  cols: number;
+  error: string | null;
+  context: TeamContext | null;
+  connectionRetry: () => void;
+  allVisibleAgents: CombinedAgentRow[];
+  liveAgents: CombinedAgentRow[];
+  visibleMemories: MemoryEntry[];
+  hasLiveAgents: boolean;
+  hasMemories: boolean;
+  mainSelectedAgent: CombinedAgentRow | null;
+  liveAgentNameCounts: Map<string, number>;
+  agents: UseAgentLifecycleReturn;
+  integrations: UseIntegrationDoctorReturn;
+  composer: UseComposerReturn;
+  memory: UseMemoryManagerReturn;
+  commandSuggestions: CommandSuggestion[];
+  handleCommandSubmit: (text: string) => void;
+  handleOpenWebDashboard: () => void;
+  navigate: (target: string) => void;
+}
 
 // ── Mode-specific input handlers ────────────────────
 
 /**
  * Handle input when in the agent-focus view.
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleAgentFocusInput(input, key, ctx) {
+function handleAgentFocusInput(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const { dispatch, agents, liveAgentNameCounts, composer } = ctx;
   const { focusedAgent } = ctx.state;
 
@@ -53,7 +106,7 @@ function handleAgentFocusInput(input, key, ctx) {
   }
   if (input === 'm' && isAgentAddressable(focusedAgent)) {
     dispatch(exitAgentFocus());
-    composer.beginTargetedMessage(focusedAgent);
+    composer.beginTargetedMessage(focusedAgent!);
     return true;
   }
   return true; // Consume all input when in agent-focus view
@@ -61,9 +114,9 @@ function handleAgentFocusInput(input, key, ctx) {
 
 /**
  * Handle input when compose mode is active (command, targeted message, memory-search, memory-add).
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleComposeModeInput(input, key, ctx) {
+function handleComposeModeInput(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const { composer, commandSuggestions } = ctx;
 
   if (key.escape) {
@@ -73,11 +126,11 @@ function handleComposeModeInput(input, key, ctx) {
   if (composer.composeMode === 'command') {
     const maxIdx = Math.min(commandSuggestions.length - 1, COMMAND_SUGGESTION_LIMIT);
     if (key.downArrow) {
-      composer.setCommandSelectedIdx((i) => Math.min(i + 1, maxIdx));
+      composer.setCommandSelectedIdx((i: number) => Math.min(i + 1, maxIdx));
       return true;
     }
     if (key.upArrow) {
-      composer.setCommandSelectedIdx((i) => Math.max(i - 1, 0));
+      composer.setCommandSelectedIdx((i: number) => Math.max(i - 1, 0));
       return true;
     }
   }
@@ -86,9 +139,9 @@ function handleComposeModeInput(input, key, ctx) {
 
 /**
  * Handle input when the tool picker overlay is open.
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleToolPickerInput(input, key, ctx) {
+function handleToolPickerInput(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const { agents } = ctx;
   const tools =
     agents.readyCliAgents.length > 0 ? agents.readyCliAgents : agents.installedCliAgents;
@@ -98,11 +151,11 @@ function handleToolPickerInput(input, key, ctx) {
     return true;
   }
   if (key.downArrow) {
-    agents.setToolPickerIdx((i) => Math.min(i + 1, tools.length - 1));
+    agents.setToolPickerIdx((i: number) => Math.min(i + 1, tools.length - 1));
     return true;
   }
   if (key.upArrow) {
-    agents.setToolPickerIdx((i) => Math.max(i - 1, 0));
+    agents.setToolPickerIdx((i: number) => Math.max(i - 1, 0));
     return true;
   }
   if (key.return) {
@@ -114,9 +167,9 @@ function handleToolPickerInput(input, key, ctx) {
 
 /**
  * Handle home-view-specific input (agent list navigation, spawn, message, kill).
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleHomeViewInput(input, key, ctx) {
+function handleHomeViewInput(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const {
     state,
     dispatch,
@@ -139,13 +192,13 @@ function handleHomeViewInput(input, key, ctx) {
       return true;
     }
     if (mainFocus === 'agents' && allVisibleAgents.length > 0) {
-      dispatch(setSelectedIdx((i) => Math.min(i + 1, allVisibleAgents.length - 1)));
+      dispatch(setSelectedIdx((i: number) => Math.min(i + 1, allVisibleAgents.length - 1)));
       return true;
     }
   }
   if (key.upArrow) {
     if (mainFocus === 'agents' && selectedIdx > 0) {
-      dispatch(setSelectedIdx((i) => Math.max(i - 1, 0)));
+      dispatch(setSelectedIdx((i: number) => Math.max(i - 1, 0)));
       return true;
     }
     if (mainFocus === 'agents') {
@@ -170,21 +223,21 @@ function handleHomeViewInput(input, key, ctx) {
 
 /**
  * Handle sessions-view-specific input (list navigation, inspect, kill, restart).
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleSessionsViewInput(input, key, ctx) {
+function handleSessionsViewInput(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const { state, dispatch, liveAgents, allVisibleAgents, liveAgentNameCounts, agents } = ctx;
   const { selectedIdx } = state;
 
   if (key.downArrow && liveAgents.length > 0) {
-    dispatch(setSelectedIdx((i) => Math.min(i + 1, liveAgents.length - 1)));
+    dispatch(setSelectedIdx((i: number) => Math.min(i + 1, liveAgents.length - 1)));
     return true;
   }
   if (key.upArrow) {
     if (selectedIdx <= 0) {
       dispatch(setSelectedIdx(-1));
     } else {
-      dispatch(setSelectedIdx((i) => Math.max(i - 1, 0)));
+      dispatch(setSelectedIdx((i: number) => Math.max(i - 1, 0)));
     }
     return true;
   }
@@ -221,17 +274,17 @@ function handleSessionsViewInput(input, key, ctx) {
 
 /**
  * Handle memory-view-specific input (list navigation, delete confirm/cancel).
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleMemoryViewInput(input, key, ctx) {
+function handleMemoryViewInput(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const { dispatch, visibleMemories, memory } = ctx;
 
   if (key.downArrow && visibleMemories.length > 0) {
-    memory.setMemorySelectedIdx((i) => Math.min(i + 1, visibleMemories.length - 1));
+    memory.setMemorySelectedIdx((i: number) => Math.min(i + 1, visibleMemories.length - 1));
     return true;
   }
   if (key.upArrow) {
-    memory.setMemorySelectedIdx((i) => Math.max(i - 1, 0));
+    memory.setMemorySelectedIdx((i: number) => Math.max(i - 1, 0));
     return true;
   }
   if (key.escape) {
@@ -247,9 +300,9 @@ function handleMemoryViewInput(input, key, ctx) {
 
 /**
  * Handle global shortcuts available across all non-modal views.
- * @returns {boolean} Whether the input was consumed.
+ * @returns Whether the input was consumed.
  */
-function handleGlobalShortcuts(input, key, ctx) {
+function handleGlobalShortcuts(input: string, key: InkKey, ctx: InputHandlerContext): boolean {
   const {
     state,
     dispatch,
@@ -292,7 +345,7 @@ function handleGlobalShortcuts(input, key, ctx) {
 
   if (input === 'f') {
     const fixableTool = agents.unavailableCliAgents.find(
-      (tool) => agents.getManagedToolState(tool.id).recoveryCommand,
+      (tool: ManagedTool) => agents.getManagedToolState(tool.id).recoveryCommand,
     );
     if (fixableTool) {
       agents.handleFixLauncher(fixableTool);
@@ -341,6 +394,30 @@ function handleGlobalShortcuts(input, key, ctx) {
 
 // ── Main dispatcher ─────────────────────────────────
 
+export interface CreateInputHandlerParams {
+  state: DashboardState;
+  dispatch: Dispatch<DashboardAction>;
+  cols: number;
+  error: string | null;
+  context: TeamContext | null;
+  connectionRetry: () => void;
+  allVisibleAgents: CombinedAgentRow[];
+  liveAgents: CombinedAgentRow[];
+  visibleMemories: MemoryEntry[];
+  hasLiveAgents: boolean;
+  hasMemories: boolean;
+  mainSelectedAgent: CombinedAgentRow | null;
+  liveAgentNameCounts: Map<string, number>;
+  agents: UseAgentLifecycleReturn;
+  integrations: UseIntegrationDoctorReturn;
+  composer: UseComposerReturn;
+  memory: UseMemoryManagerReturn;
+  commandSuggestions: CommandSuggestion[];
+  handleCommandSubmit: (text: string) => void;
+  handleOpenWebDashboard: () => void;
+  navigate: (target: string) => void;
+}
+
 /**
  * Creates the input handler for the dashboard.
  * Dispatches to mode-specific handlers based on current view/mode,
@@ -374,9 +451,9 @@ export function createInputHandler({
   handleOpenWebDashboard,
   // Navigation
   navigate,
-}) {
+}: CreateInputHandlerParams): (input: string, key: InkKey) => void {
   // Shared context object passed to all handlers
-  const ctx = {
+  const ctx: InputHandlerContext = {
     state,
     dispatch,
     cols,
@@ -400,7 +477,7 @@ export function createInputHandler({
     navigate,
   };
 
-  return function handleInput(input, key) {
+  return function handleInput(input: string, key: InkKey): void {
     // ── Narrow terminal guard ──────────────────
     if (cols < MIN_WIDTH) {
       if (input === 'q') navigate('quit');
@@ -443,6 +520,19 @@ export function createInputHandler({
   };
 }
 
+export interface CreateCommandHandlerParams {
+  agents: UseAgentLifecycleReturn;
+  integrations: UseIntegrationDoctorReturn;
+  composer: UseComposerReturn;
+  memory: UseMemoryManagerReturn;
+  flash: (text: string, options?: { tone?: NoticeTone }) => void;
+  dispatch: Dispatch<DashboardAction>;
+  handleOpenWebDashboard: () => void;
+  liveAgents: CombinedAgentRow[];
+  selectedAgent: CombinedAgentRow | null;
+  isAgentAddressable: (agent: CombinedAgentRow | null | undefined) => boolean;
+}
+
 /**
  * Creates the command submit handler.
  */
@@ -457,8 +547,8 @@ export function createCommandHandler({
   liveAgents,
   selectedAgent,
   isAgentAddressable: checkAddressable,
-}) {
-  return function handleCommandSubmit(rawText) {
+}: CreateCommandHandlerParams): (rawText: string) => void {
+  return function handleCommandSubmit(rawText: string): void {
     const text = rawText.trim().replace(/^\//, '').trim();
     if (!text) {
       composer.clearCompose();
@@ -483,7 +573,7 @@ export function createCommandHandler({
 
     if (verb === 'fix') {
       const hasLauncherFix = agents.unavailableCliAgents.some(
-        (tool) => agents.getManagedToolState(tool.id).recoveryCommand,
+        (tool: ManagedTool) => agents.getManagedToolState(tool.id).recoveryCommand,
       );
       if (hasLauncherFix) {
         agents.handleFixLauncher();

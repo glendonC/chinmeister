@@ -4,18 +4,35 @@ import {
   scanHostIntegrations,
   summarizeIntegrationScan,
 } from '@chinwag/shared/integration-doctor.js';
+import type { IntegrationScanResult } from '@chinwag/shared/integration-doctor.js';
+import type { NoticeTone } from './reducer.js';
 
-export function useIntegrationDoctor({ projectRoot, flash }) {
-  const [integrationStatuses, setIntegrationStatuses] = useState([]);
+interface UseIntegrationDoctorParams {
+  projectRoot: string | null;
+  flash: (text: string, options?: { tone?: NoticeTone }) => void;
+}
 
-  function refreshIntegrationStatuses({ showFlash = false } = {}) {
+export interface UseIntegrationDoctorReturn {
+  integrationStatuses: IntegrationScanResult[];
+  integrationIssues: IntegrationScanResult[];
+  refreshIntegrationStatuses: (options?: { showFlash?: boolean }) => IntegrationScanResult[];
+  repairIntegrations: (hostIds?: string[] | null) => boolean;
+}
+
+export function useIntegrationDoctor({
+  projectRoot,
+  flash,
+}: UseIntegrationDoctorParams): UseIntegrationDoctorReturn {
+  const [integrationStatuses, setIntegrationStatuses] = useState<IntegrationScanResult[]>([]);
+
+  function refreshIntegrationStatuses({ showFlash = false } = {}): IntegrationScanResult[] {
     if (!projectRoot) return [];
     try {
       const results = scanHostIntegrations(projectRoot);
       setIntegrationStatuses(results);
       if (showFlash) {
         const summary = summarizeIntegrationScan(results);
-        flash(summary.text, { tone: summary.tone });
+        flash(summary.text, { tone: summary.tone as NoticeTone });
       }
       return results;
     } catch {
@@ -37,7 +54,7 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
     [integrationStatuses],
   );
 
-  function repairIntegrations(hostIds = null) {
+  function repairIntegrations(hostIds: string[] | null = null): boolean {
     if (!projectRoot) {
       flash('No project found. Open a project directory first.', { tone: 'warning' });
       return false;
@@ -49,14 +66,14 @@ export function useIntegrationDoctor({ projectRoot, flash }) {
       return false;
     }
 
-    const repaired = [];
-    const failed = [];
+    const repaired: string[] = [];
+    const failed: Array<{ hostId: string; error: string }> = [];
     for (const hostId of targets) {
       const result = configureHostIntegration(projectRoot, hostId);
       if (result.error) {
         failed.push({ hostId, error: result.error });
       } else {
-        repaired.push(result.name);
+        repaired.push(result.name || hostId);
       }
     }
 

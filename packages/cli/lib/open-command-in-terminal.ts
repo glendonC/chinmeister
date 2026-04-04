@@ -1,4 +1,5 @@
 import { detectTerminalEnvironment } from './terminal-spawner.js';
+import type { SpawnResult } from './terminal-spawner.js';
 import { execFileSync } from 'child_process';
 import { shellQuote, escapeAppleScriptString } from './utils/shell.js';
 import { mkdirSync, writeFileSync } from 'fs';
@@ -7,7 +8,7 @@ import { homedir } from 'os';
 
 const EXEC_TIMEOUT_MS = 10000;
 
-export function openCommandInTerminal(command, cwd = process.cwd()) {
+export function openCommandInTerminal(command: string, cwd: string = process.cwd()): SpawnResult {
   const env = detectTerminalEnvironment();
 
   // IDE terminal — write to launch queue so the command runs in-IDE
@@ -15,14 +16,17 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
     try {
       const queuePath = join(homedir(), '.chinwag', 'launch-queue.json');
       mkdirSync(join(homedir(), '.chinwag'), { recursive: true });
-      writeFileSync(queuePath, JSON.stringify({
-        command,
-        name: 'fix',
-        cwd,
-      }));
+      writeFileSync(
+        queuePath,
+        JSON.stringify({
+          command,
+          name: 'fix',
+          cwd,
+        }),
+      );
       return { ok: true };
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch (err: unknown) {
+      console.error('[chinwag]', (err as Error)?.message || err);
       // fall through to platform spawners
     }
   }
@@ -30,18 +34,22 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
   try {
     if (process.platform === 'darwin') {
       const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
-      execFileSync('osascript', [
-        '-e',
-        'tell application "Terminal" to activate',
-        '-e',
-        `tell application "Terminal" to do script "${escapeAppleScriptString(shellCommand)}"`,
-      ], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
+      execFileSync(
+        'osascript',
+        [
+          '-e',
+          'tell application "Terminal" to activate',
+          '-e',
+          `tell application "Terminal" to do script "${escapeAppleScriptString(shellCommand)}"`,
+        ],
+        { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS },
+      );
       return { ok: true };
     }
 
     if (process.platform === 'linux') {
       const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
-      const attempts = [
+      const attempts: [string, string[]][] = [
         ['x-terminal-emulator', ['-e', 'sh', '-lc', shellCommand]],
         ['gnome-terminal', ['--', 'sh', '-lc', shellCommand]],
         ['konsole', ['-e', 'sh', '-lc', shellCommand]],
@@ -52,7 +60,9 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
         try {
           execFileSync(cmd, args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
           return { ok: true };
-        } catch (err) { console.error('[chinwag]', err?.message || err); }
+        } catch (err: unknown) {
+          console.error('[chinwag]', (err as Error)?.message || err);
+        }
       }
 
       return { ok: false, error: 'Could not open a terminal automatically' };
@@ -60,12 +70,15 @@ export function openCommandInTerminal(command, cwd = process.cwd()) {
 
     if (process.platform === 'win32') {
       const shellCommand = cwd ? `cd ${shellQuote(cwd)} && ${command}` : command;
-      execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
+      execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], {
+        stdio: 'ignore',
+        timeout: EXEC_TIMEOUT_MS,
+      });
       return { ok: true };
     }
 
     return { ok: false, error: 'Unsupported platform' };
-  } catch (err) {
-    return { ok: false, error: err.message || 'Could not open terminal' };
+  } catch (err: unknown) {
+    return { ok: false, error: (err as Error).message || 'Could not open terminal' };
   }
 }

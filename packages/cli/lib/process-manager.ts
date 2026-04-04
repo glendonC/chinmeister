@@ -6,23 +6,101 @@
  */
 
 import { createRequire } from 'module';
+import type { IPty } from 'node-pty';
 import { shellQuote } from './utils/shell.js';
 import { stripAnsi } from './utils/ansi.js';
 
 const require = createRequire(import.meta.url);
 
 // Lazy-load node-pty (native module, can't be bundled)
-let pty;
-function loadPty() {
+let pty: typeof import('node-pty') | undefined;
+function loadPty(): typeof import('node-pty') {
   if (!pty) pty = require('node-pty');
-  return pty;
+  return pty!;
 }
 
-/** @type {Map<number, ManagedProcess>} */
-const processes = new Map();
+export interface ManagedProcess {
+  id: number;
+  toolId: string;
+  toolName: string;
+  cmd: string;
+  args: string[];
+  taskArg: string;
+  task: string;
+  cwd: string;
+  agentId: string | null;
+  pty: IPty | null;
+  pid?: number | null;
+  spawnType?: string;
+  status: 'running' | 'exited' | 'failed';
+  outputBuffer: string[];
+  startedAt: number;
+  exitCode: number | null;
+  _lastNewline: boolean;
+  _killTimer: ReturnType<typeof setTimeout> | null;
+}
 
-/** @type {Array<(agents: ManagedProcess[]) => void>} */
-let updateCallbacks = [];
+export interface AgentInfo {
+  id: number;
+  toolId: string;
+  toolName: string;
+  cmd: string;
+  args: string[];
+  taskArg: string;
+  task: string;
+  cwd: string;
+  agentId: string | null;
+  status: string;
+  startedAt: number;
+  exitCode: number | null;
+  spawnType: string;
+  outputPreview: string | null;
+}
+
+export interface SpawnAgentResult {
+  id: number;
+  toolId: string;
+  toolName: string;
+  task: string;
+  status: string;
+  startedAt: number;
+  agentId: string | null;
+}
+
+export interface SpawnAgentLaunch {
+  toolId: string;
+  toolName?: string;
+  cmd: string;
+  args?: string[];
+  taskArg?: string;
+  task: string;
+  cwd: string;
+  agentId?: string | null;
+  env?: NodeJS.ProcessEnv;
+  cols?: number;
+  rows?: number;
+}
+
+export interface AttachTerminalResult {
+  dispose: () => void;
+  write: (data: string) => void;
+}
+
+export interface RegisterExternalAgentParams {
+  toolId: string;
+  toolName?: string;
+  cmd: string;
+  args?: string[];
+  taskArg?: string;
+  task: string;
+  cwd: string;
+  agentId?: string | null;
+  pid?: number | null;
+}
+
+const processes = new Map<number, ManagedProcess>();
+
+let updateCallbacks: Array<(agents: AgentInfo[]) => void> = [];
 
 let nextId = 1;
 let exitCleanupRegistered = false;
@@ -32,21 +110,22 @@ const DEFAULT_COLS = 120;
 const DEFAULT_ROWS = 30;
 const KILL_GRACE_MS = 5000;
 
-function looksLikeTerminalNoise(line) {
+function looksLikeTerminalNoise(line: string): boolean {
   return /^(\[[0-9;?<>A-Za-z]+)+$/.test(line);
 }
 
-function summarizeOutput(outputBuffer, task = '') {
+function summarizeOutput(outputBuffer: string[], task = ''): string | null {
   const taskText = task.trim();
   const lines = outputBuffer
-    .map(line => stripAnsi(line).trim())
+    .map((line) => stripAnsi(line).trim())
     .filter(Boolean)
-    .filter(line => line !== taskText);
+    .filter((line) => line !== taskText);
 
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     if (/^(Done in \d+ms|Live|Running|Completed|failed \(|exited \()/i.test(line)) continue;
-    if (/^(No files reported yet|No current work summary|No captured output yet)$/i.test(line)) continue;
+    if (/^(No files reported yet|No current work summary|No captured output yet)$/i.test(line))
+      continue;
     if (looksLikeTerminalNoise(line)) continue;
     return line.slice(0, 200);
   }
@@ -54,7 +133,19 @@ function summarizeOutput(outputBuffer, task = '') {
   return null;
 }
 
-function buildCommand({ cmd, args = [], taskArg = 'positional', task }) {
+interface BuildCommandParams {
+  cmd: string;
+  args?: string[];
+  taskArg?: string;
+  task: string;
+}
+
+function buildCommand({
+  cmd,
+  args = [],
+  taskArg = 'positional',
+  task,
+}: BuildCommandParams): string {
   const commandArgs = [cmd];
   if (args.length > 0) {
     commandArgs.push(...args);
@@ -68,32 +159,14 @@ function buildCommand({ cmd, args = [], taskArg = 'positional', task }) {
   return commandArgs.map(shellQuote).join(' ');
 }
 
-/**
- * @typedef {Object} ManagedProcess
- * @property {number} id
- * @property {string} toolId
- * @property {string} toolName
- * @property {string} cmd
- * @property {string[]} args
- * @property {'positional'|'--message'} taskArg
- * @property {string} task
- * @property {string} cwd
- * @property {string|null} agentId
- * @property {import('node-pty').IPty} pty
- * @property {'running'|'exited'|'failed'} status
- * @property {string[]} outputBuffer
- * @property {number} startedAt
- * @property {number|null} exitCode
- */
-
-function notifyUpdate() {
+function notifyUpdate(): void {
   const agents = getAgents();
   for (const cb of updateCallbacks) {
     try {
       cb(agents);
-    } catch (err) {
+    } catch (err: unknown) {
       // Swallow callback errors — never let a listener break the manager
-      console.error('[chinwag]', err?.message || err);
+      console.error('[chinwag]', (err as Error)?.message || err);
     }
   }
 }
@@ -101,7 +174,7 @@ function notifyUpdate() {
 /**
  * Append a line to the circular output buffer, maintaining the max size.
  */
-function appendOutput(proc, data) {
+function appendOutput(proc: ManagedProcess, data: string): void {
   // Split incoming data on newlines, merge with any partial last line
   const lines = data.split('\n');
 
@@ -130,23 +203,8 @@ function appendOutput(proc, data) {
  * Spawn a new agent process.
  *
  * Runs the configured CLI agent command in the given working directory.
- *
- * @param {{
- *   toolId: string,
- *   toolName?: string,
- *   cmd: string,
- *   args?: string[],
- *   taskArg?: 'positional'|'--message',
- *   task: string,
- *   cwd: string,
- *   agentId?: string|null,
- *   env?: NodeJS.ProcessEnv,
- *   cols?: number,
- *   rows?: number,
- * }} launch
- * @returns {{ id: number, toolId: string, toolName: string, task: string, status: string, startedAt: number, agentId: string|null }}
  */
-export function spawnAgent(launch) {
+export function spawnAgent(launch: SpawnAgentLaunch): SpawnAgentResult {
   const nodePty = loadPty();
 
   const {
@@ -176,19 +234,27 @@ export function spawnAgent(launch) {
         try {
           if (proc.pty) proc.pty.kill('SIGTERM');
           else if (proc.pid) process.kill(proc.pid, 'SIGTERM');
-        } catch (err) { console.error('[chinwag]', err?.message || err); }
+        } catch (err: unknown) {
+          console.error('[chinwag]', (err as Error)?.message || err);
+        }
       }
     };
     process.on('exit', cleanup);
-    process.on('SIGINT', () => { cleanup(); process.exit(130); });
-    process.on('SIGTERM', () => { cleanup(); process.exit(143); });
+    process.on('SIGINT', () => {
+      cleanup();
+      process.exit(130);
+    });
+    process.on('SIGTERM', () => {
+      cleanup();
+      process.exit(143);
+    });
   }
 
   const id = nextId++;
   const shell = process.env.SHELL || 'bash';
   const command = buildCommand({ cmd, args, taskArg, task });
 
-  let ptyProcess;
+  let ptyProcess: IPty;
   try {
     ptyProcess = nodePty.spawn(shell, ['-c', command], {
       name: 'xterm-256color',
@@ -197,9 +263,9 @@ export function spawnAgent(launch) {
       cwd,
       env,
     });
-  } catch (err) {
+  } catch (err: unknown) {
     // If pty spawn itself fails, record as failed immediately
-    const failedProc = {
+    const failedProc: ManagedProcess = {
       id,
       toolId,
       toolName,
@@ -211,7 +277,7 @@ export function spawnAgent(launch) {
       agentId,
       pty: null,
       status: 'failed',
-      outputBuffer: [err.message || 'Failed to spawn process'],
+      outputBuffer: [(err as Error).message || 'Failed to spawn process'],
       startedAt: Date.now(),
       exitCode: null,
       _lastNewline: true,
@@ -219,11 +285,18 @@ export function spawnAgent(launch) {
     };
     processes.set(id, failedProc);
     notifyUpdate();
-    return { id, toolId, toolName, task, status: 'failed', startedAt: failedProc.startedAt, agentId };
+    return {
+      id,
+      toolId,
+      toolName,
+      task,
+      status: 'failed',
+      startedAt: failedProc.startedAt,
+      agentId,
+    };
   }
 
-  /** @type {ManagedProcess} */
-  const proc = {
+  const proc: ManagedProcess = {
     id,
     toolId,
     toolName,
@@ -245,13 +318,13 @@ export function spawnAgent(launch) {
   processes.set(id, proc);
 
   // Collect output
-  ptyProcess.onData((data) => {
+  ptyProcess.onData((data: string) => {
     appendOutput(proc, data);
     notifyUpdate();
   });
 
   // Handle exit
-  ptyProcess.onExit(({ exitCode }) => {
+  ptyProcess.onExit(({ exitCode }: { exitCode: number }) => {
     proc.exitCode = exitCode;
     proc.status = exitCode === 0 ? 'exited' : 'failed';
     proc.pty = null;
@@ -272,11 +345,8 @@ export function spawnAgent(launch) {
 
 /**
  * Kill a managed agent process. Sends SIGTERM first, then SIGKILL after 5 seconds.
- *
- * @param {number} id - Process ID
- * @returns {boolean} Whether the process was found and a kill signal was sent
  */
-export function killAgent(id) {
+export function killAgent(id: number): boolean {
   const proc = processes.get(id);
   if (!proc) return false;
   if (proc.status !== 'running') return false;
@@ -285,14 +355,18 @@ export function killAgent(id) {
   if (proc.pty) {
     try {
       proc.pty.kill('SIGTERM');
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch (err: unknown) {
+      console.error('[chinwag]', (err as Error)?.message || err);
       return false;
     }
     if (!proc._killTimer) {
       proc._killTimer = setTimeout(() => {
         if (proc.status === 'running' && proc.pty) {
-          try { proc.pty.kill('SIGKILL'); } catch (err) { console.error('[chinwag]', err?.message || err); }
+          try {
+            proc.pty.kill('SIGKILL');
+          } catch (err: unknown) {
+            console.error('[chinwag]', (err as Error)?.message || err);
+          }
         }
         proc._killTimer = null;
       }, KILL_GRACE_MS);
@@ -304,8 +378,8 @@ export function killAgent(id) {
   if (proc.pid) {
     try {
       process.kill(proc.pid, 'SIGTERM');
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch (err: unknown) {
+      console.error('[chinwag]', (err as Error)?.message || err);
       // Process already gone — mark as exited
       proc.status = 'exited';
       proc.exitCode = null;
@@ -315,7 +389,11 @@ export function killAgent(id) {
     if (!proc._killTimer) {
       proc._killTimer = setTimeout(() => {
         if (proc.status === 'running') {
-          try { process.kill(proc.pid, 'SIGKILL'); } catch (err) { console.error('[chinwag]', err?.message || err); }
+          try {
+            process.kill(proc.pid!, 'SIGKILL');
+          } catch (err: unknown) {
+            console.error('[chinwag]', (err as Error)?.message || err);
+          }
         }
         proc._killTimer = null;
       }, KILL_GRACE_MS);
@@ -328,10 +406,8 @@ export function killAgent(id) {
 
 /**
  * Get all managed agents with their current status.
- *
- * @returns {Array<{ id: number, toolId: string, toolName: string, cmd: string, args: string[], taskArg: 'positional'|'--message', task: string, cwd: string, agentId: string|null, status: string, startedAt: number, exitCode: number|null, outputPreview: string|null }>}
  */
-export function getAgents() {
+export function getAgents(): AgentInfo[] {
   return Array.from(processes.values()).map((proc) => ({
     id: proc.id,
     toolId: proc.toolId,
@@ -352,12 +428,8 @@ export function getAgents() {
 
 /**
  * Get the last N lines of output for an agent.
- *
- * @param {number} id - Process ID
- * @param {number} [lines=20] - Number of lines to return
- * @returns {string[]} Array of output lines, or empty array if not found
  */
-export function getOutput(id, lines = 20) {
+export function getOutput(id: number, lines = 20): string[] {
   const proc = processes.get(id);
   if (!proc) return [];
 
@@ -368,11 +440,8 @@ export function getOutput(id, lines = 20) {
 
 /**
  * Register a callback that fires when agent state changes (output, exit, spawn).
- *
- * @param {(agents: Array<{ id: number, toolId: string, toolName: string, cmd: string, args: string[], taskArg: 'positional'|'--message', task: string, cwd: string, agentId: string|null, status: string, startedAt: number, exitCode: number|null, outputPreview: string|null }>) => void} callback
- * @returns {() => void} Unsubscribe function
  */
-export function onUpdate(callback) {
+export function onUpdate(callback: (agents: AgentInfo[]) => void): () => void {
   updateCallbacks.push(callback);
   return () => {
     updateCallbacks = updateCallbacks.filter((cb) => cb !== callback);
@@ -381,11 +450,8 @@ export function onUpdate(callback) {
 
 /**
  * Wait for a managed agent to exit.
- *
- * @param {number} id - Process ID
- * @returns {Promise<number|null>} Resolves with the exit code once the process stops
  */
-export function waitForExit(id) {
+export function waitForExit(id: number): Promise<number | null> {
   const existing = processes.get(id);
   if (!existing || existing.status !== 'running') {
     return Promise.resolve(existing?.exitCode ?? null);
@@ -404,29 +470,26 @@ export function waitForExit(id) {
 
 /**
  * Resize a managed agent's pty.
- *
- * @param {number} id - Process ID
- * @param {number} cols - New column count
- * @param {number} rows - New row count
  */
-export function resizePty(id, cols, rows) {
+export function resizePty(id: number, cols: number, rows: number): void {
   const proc = processes.get(id);
   if (!proc || !proc.pty) return;
   try {
     proc.pty.resize(cols, rows);
-  } catch (err) { console.error('[chinwag]', err?.message || err); }
+  } catch (err: unknown) {
+    console.error('[chinwag]', (err as Error)?.message || err);
+  }
 }
 
 /**
  * Attach raw terminal I/O to a managed agent's pty.
  * Pipes pty output directly to process.stdout and returns an interface for input.
  * This bypasses Ink entirely — the agent gets full terminal control.
- *
- * @param {number} id - Process ID
- * @param {{ replayBuffer?: boolean }} [options]
- * @returns {{ dispose: () => void, write: (data: string) => void } | null}
  */
-export function attachTerminal(id, options = {}) {
+export function attachTerminal(
+  id: number,
+  options: { replayBuffer?: boolean } = {},
+): AttachTerminalResult | null {
   const proc = processes.get(id);
   if (!proc || !proc.pty || proc.status !== 'running') return null;
 
@@ -437,13 +500,13 @@ export function attachTerminal(id, options = {}) {
   }
 
   // Raw output: pty → stdout (no stripping, terminal renders natively)
-  const disposable = proc.pty.onData((data) => {
+  const disposable = proc.pty.onData((data: string) => {
     process.stdout.write(data);
   });
 
   return {
     dispose: () => disposable.dispose(),
-    write: (data) => {
+    write: (data: string) => {
       if (proc.pty) proc.pty.write(data);
     },
   };
@@ -451,11 +514,8 @@ export function attachTerminal(id, options = {}) {
 
 /**
  * Remove a dead agent from the list. Only removes agents that are no longer running.
- *
- * @param {number} id - Process ID
- * @returns {boolean} Whether the agent was removed
  */
-export function removeAgent(id) {
+export function removeAgent(id: number): boolean {
   const proc = processes.get(id);
   if (!proc) return false;
 
@@ -481,18 +541,18 @@ export function registerExternalAgent({
   cwd,
   agentId = null,
   pid = null,
-}) {
+}: RegisterExternalAgentParams): SpawnAgentResult {
   const id = nextId++;
-  const proc = {
+  const proc: ManagedProcess = {
     id,
     toolId,
     toolName: toolName || toolId,
     cmd,
     args,
-    taskArg,
+    taskArg: taskArg || 'positional',
     task,
     cwd,
-    agentId,
+    agentId: agentId ?? null,
     pty: null,
     pid,
     spawnType: 'external',
@@ -500,17 +560,26 @@ export function registerExternalAgent({
     startedAt: Date.now(),
     exitCode: null,
     outputBuffer: [],
+    _lastNewline: true,
     _killTimer: null,
   };
   processes.set(id, proc);
   notifyUpdate();
-  return { id, toolId, toolName: proc.toolName, task, status: 'running', startedAt: proc.startedAt, agentId };
+  return {
+    id,
+    toolId,
+    toolName: proc.toolName,
+    task,
+    status: 'running',
+    startedAt: proc.startedAt,
+    agentId: proc.agentId,
+  };
 }
 
 /**
  * Update the PID of an external agent (resolved from pidfile after spawn).
  */
-export function setExternalAgentPid(id, pid) {
+export function setExternalAgentPid(id: number, pid: number): void {
   const proc = processes.get(id);
   if (!proc || proc.pty) return;
   proc.pid = pid;
@@ -520,15 +589,15 @@ export function setExternalAgentPid(id, pid) {
  * Check liveness of external agents. Mark dead ones as exited.
  * Returns true if any state changed.
  */
-export function checkExternalAgentLiveness() {
+export function checkExternalAgentLiveness(): boolean {
   let changed = false;
   for (const proc of processes.values()) {
     if (proc.spawnType !== 'external' || proc.status !== 'running') continue;
     if (!proc.pid) continue;
     try {
       process.kill(proc.pid, 0);
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch (err: unknown) {
+      console.error('[chinwag]', (err as Error)?.message || err);
       proc.status = 'exited';
       proc.exitCode = null;
       changed = true;

@@ -1,6 +1,49 @@
+import type { Dispatch, SetStateAction } from 'react';
 import { useState, useRef } from 'react';
 import { api } from '../api.js';
 import { isAgentAddressable, getAgentTargetLabel } from './agent-display.js';
+import type { ChinwagConfig } from '../config.js';
+import type { CombinedAgentRow } from './view.js';
+import type { NoticeTone } from './reducer.js';
+
+export type ComposeMode = 'command' | 'targeted' | 'memory-search' | 'memory-add' | null;
+
+interface CommandSuggestion {
+  name: string;
+  description?: string;
+}
+
+interface UseComposerParams {
+  config: ChinwagConfig | null;
+  teamId: string | null;
+  bumpRefreshKey: () => void;
+  flash: (text: string, options?: { tone?: NoticeTone; autoClearMs?: number }) => void;
+  clearMemorySearch: () => void;
+  clearMemoryInput: () => void;
+}
+
+export interface UseComposerReturn {
+  composeMode: ComposeMode;
+  setComposeMode: Dispatch<SetStateAction<ComposeMode>>;
+  composeText: string;
+  setComposeText: Dispatch<SetStateAction<string>>;
+  composeTarget: string | null;
+  composeTargetLabel: string | null;
+  commandSelectedIdx: number;
+  setCommandSelectedIdx: Dispatch<SetStateAction<number>>;
+  isComposing: boolean;
+  clearCompose: () => void;
+  beginTargetedMessage: (agent: CombinedAgentRow) => void;
+  beginCommandInput: (initialText?: string) => void;
+  beginMemorySearch: () => void;
+  beginMemoryAdd: () => void;
+  sendMessage: (text: string, target: string | null, targetLabel?: string | null) => Promise<void>;
+  isSending: boolean;
+  onComposeSubmit: (
+    commandSuggestions: CommandSuggestion[],
+    handleCommandSubmit: (text: string) => void,
+  ) => void;
+}
 
 /**
  * Custom hook for message composition and command palette.
@@ -13,19 +56,19 @@ export function useComposer({
   flash,
   clearMemorySearch,
   clearMemoryInput,
-}) {
+}: UseComposerParams): UseComposerReturn {
   // Composer: null | 'command' | 'targeted' | 'memory-search' | 'memory-add'
-  const [composeMode, setComposeMode] = useState(null);
+  const [composeMode, setComposeMode] = useState<ComposeMode>(null);
   const [composeText, setComposeText] = useState('');
-  const [composeTarget, setComposeTarget] = useState(null);
-  const [composeTargetLabel, setComposeTargetLabel] = useState(null);
+  const [composeTarget, setComposeTarget] = useState<string | null>(null);
+  const [composeTargetLabel, setComposeTargetLabel] = useState<string | null>(null);
   const [commandSelectedIdx, setCommandSelectedIdx] = useState(0);
   const [isSending, setIsSending] = useState(false);
-  const pendingSendRef = useRef(Promise.resolve());
+  const pendingSendRef = useRef<Promise<void>>(Promise.resolve());
 
   const isComposing = Boolean(composeMode);
 
-  function clearCompose() {
+  function clearCompose(): void {
     const previousMode = composeMode;
     setComposeMode(null);
     setComposeText('');
@@ -39,32 +82,36 @@ export function useComposer({
     }
   }
 
-  function beginTargetedMessage(agent) {
+  function beginTargetedMessage(agent: CombinedAgentRow): void {
     if (!isAgentAddressable(agent)) {
       flash('Select a running agent to message directly', { tone: 'warning' });
       return;
     }
-    setComposeTarget(agent.agent_id);
+    setComposeTarget(agent.agent_id || null);
     setComposeTargetLabel(getAgentTargetLabel(agent));
     setComposeMode('targeted');
     setComposeText('');
   }
 
-  function beginCommandInput(initialText = '') {
+  function beginCommandInput(initialText = ''): void {
     setComposeMode('command');
     setComposeText(initialText);
     setCommandSelectedIdx(0);
   }
 
-  function beginMemorySearch() {
+  function beginMemorySearch(): void {
     setComposeMode('memory-search');
   }
 
-  function beginMemoryAdd() {
+  function beginMemoryAdd(): void {
     setComposeMode('memory-add');
   }
 
-  function sendMessage(text, target, targetLabel = null) {
+  function sendMessage(
+    text: string,
+    target: string | null,
+    targetLabel: string | null = null,
+  ): Promise<void> {
     if (!config?.token) {
       flash('Not signed in.', { tone: 'error' });
       return Promise.reject();
@@ -80,8 +127,8 @@ export function useComposer({
         });
         flash(targetLabel ? `Sent to ${targetLabel}` : 'Sent to team', { tone: 'success' });
         bumpRefreshKey();
-      } catch (err) {
-        console.error('[chinwag] Could not send message:', err?.message || err);
+      } catch (err: unknown) {
+        console.error('[chinwag] Could not send message:', (err as Error)?.message || err);
         flash('Send failed \u2014 message preserved, try again', {
           tone: 'error',
           autoClearMs: 5000,
@@ -96,7 +143,10 @@ export function useComposer({
     return pendingSendRef.current;
   }
 
-  function onComposeSubmit(commandSuggestions, handleCommandSubmit) {
+  function onComposeSubmit(
+    commandSuggestions: CommandSuggestion[],
+    handleCommandSubmit: (text: string) => void,
+  ): void {
     if (composeMode === 'command') {
       const selected = commandSuggestions[commandSelectedIdx] || commandSuggestions[0];
       if (selected) {

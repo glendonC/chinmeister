@@ -12,10 +12,24 @@ const KILL_GRACE_MS = 5000;
 // ── Terminal environment detection ────────────────────
 // Detects terminal CAPABILITY, not brand. Grouped by how we spawn into them.
 
-export function detectTerminalEnvironment() {
+export type TerminalType =
+  | 'tmux'
+  | 'ide-terminal'
+  | 'iterm2'
+  | 'macos-terminal'
+  | 'linux'
+  | 'windows'
+  | 'fallback';
+
+export interface TerminalEnvironment {
+  type: TerminalType;
+  name: string;
+}
+
+export function detectTerminalEnvironment(): TerminalEnvironment {
   // 1. tmux — best experience: split pane in current session
   if (process.env.TMUX) {
-    return { type: 'tmux', name: 'tmux pane' };
+    return { type: 'tmux' as const, name: 'tmux pane' };
   }
 
   const termProgram = (process.env.TERM_PROGRAM || '').toLowerCase();
@@ -32,42 +46,61 @@ export function detectTerminalEnvironment() {
         : /Code/i.test(appPath)
           ? 'VS Code'
           : 'IDE';
-    return { type: 'ide-terminal', name: `${name} terminal` };
+    return { type: 'ide-terminal' as const, name: `${name} terminal` };
   }
 
   // 3. iTerm2 — macOS power terminal, AppleScript for new tab
   if (termProgram === 'iterm.app' || process.env.ITERM_SESSION_ID) {
-    return { type: 'iterm2', name: 'iTerm2 tab' };
+    return { type: 'iterm2' as const, name: 'iTerm2 tab' };
   }
 
   // 4. Standard macOS Terminal.app
   if (termProgram === 'apple_terminal' || (process.platform === 'darwin' && !termProgram)) {
-    return { type: 'macos-terminal', name: 'Terminal.app' };
+    return { type: 'macos-terminal' as const, name: 'Terminal.app' };
   }
 
   // 5. Linux — try common terminal emulators
   if (process.platform === 'linux') {
-    return { type: 'linux', name: 'terminal' };
+    return { type: 'linux' as const, name: 'terminal' };
   }
 
   // 6. Windows
   if (process.platform === 'win32') {
-    return { type: 'windows', name: 'terminal' };
+    return { type: 'windows' as const, name: 'terminal' };
   }
 
-  return { type: 'fallback', name: 'terminal' };
+  return { type: 'fallback' as const, name: 'terminal' };
 }
 
 // ── Shell command builder ─────────────────────────────
 
-function shellQuote(value) {
+function shellQuote(value: string): string {
   return "'" + String(value).replace(/'/g, "'\\''") + "'";
 }
 
 // Use escapeAppleScriptString from utils/shell.js (imported above)
 const escapeAppleScript = escapeAppleScriptString;
 
-export function buildTerminalCommand(launch) {
+export interface TerminalLaunch {
+  agentId: string;
+  toolId: string;
+  toolName?: string;
+  cwd?: string;
+  cmd: string;
+  args?: string[];
+  task?: string;
+  interactive?: boolean;
+  taskArg?: string;
+}
+
+export interface SpawnResult {
+  ok: boolean;
+  error?: string;
+  agentId?: string;
+  terminalType?: TerminalType;
+}
+
+export function buildTerminalCommand(launch: TerminalLaunch): string {
   const { agentId, toolId, cwd, cmd, args = [], task } = launch;
   const safe = safeAgentId(agentId);
 
@@ -90,19 +123,19 @@ export function buildTerminalCommand(launch) {
 
 // ── Spawners by capability ───────────────────────────
 
-function spawnInTmux(shellCommand, cwd) {
+function spawnInTmux(shellCommand: string, cwd?: string): SpawnResult {
   try {
     const args = ['split-window', '-h'];
     if (cwd) args.push('-c', cwd);
     args.push(shellCommand);
     execFileSync('tmux', args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  } catch (err: unknown) {
+    return { ok: false, error: (err as Error).message };
   }
 }
 
-function spawnInIdeTerminal(shellCommand, cwd, toolName) {
+function spawnInIdeTerminal(shellCommand: string, cwd?: string, toolName?: string): SpawnResult {
   // Write a launch request that the chinwag VS Code/Cursor extension picks up.
   // The extension watches ~/.chinwag/launch-queue.json and creates an integrated terminal.
   const launchQueuePath = join(homedir(), '.chinwag', 'launch-queue.json');
@@ -117,8 +150,8 @@ function spawnInIdeTerminal(shellCommand, cwd, toolName) {
       }),
     );
     return { ok: true };
-  } catch (err) {
-    console.error('[chinwag]', err?.message || err);
+  } catch (err: unknown) {
+    console.error('[chinwag]', (err as Error)?.message || err);
     // Fallback to platform terminal if file write fails
     if (process.platform === 'darwin') return spawnInMacosTerminal(shellCommand);
     if (process.platform === 'linux') return spawnOnLinux(shellCommand);
@@ -127,7 +160,7 @@ function spawnInIdeTerminal(shellCommand, cwd, toolName) {
   }
 }
 
-function spawnInIterm2(shellCommand) {
+function spawnInIterm2(shellCommand: string): SpawnResult {
   try {
     const script = `
       tell application "iTerm2"
@@ -141,12 +174,12 @@ function spawnInIterm2(shellCommand) {
     `;
     execFileSync('osascript', ['-e', script], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  } catch (err: unknown) {
+    return { ok: false, error: (err as Error).message };
   }
 }
 
-function spawnInMacosTerminal(shellCommand) {
+function spawnInMacosTerminal(shellCommand: string): SpawnResult {
   try {
     execFileSync(
       'osascript',
@@ -159,13 +192,13 @@ function spawnInMacosTerminal(shellCommand) {
       { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS },
     );
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  } catch (err: unknown) {
+    return { ok: false, error: (err as Error).message };
   }
 }
 
-function spawnOnLinux(shellCommand) {
-  const attempts = [
+function spawnOnLinux(shellCommand: string): SpawnResult {
+  const attempts: [string, string[]][] = [
     ['gnome-terminal', ['--', 'sh', '-lc', shellCommand]],
     ['konsole', ['-e', 'sh', '-lc', shellCommand]],
     ['x-terminal-emulator', ['-e', 'sh', '-lc', shellCommand]],
@@ -175,14 +208,14 @@ function spawnOnLinux(shellCommand) {
     try {
       execFileSync(cmd, args, { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
       return { ok: true };
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch (err: unknown) {
+      console.error('[chinwag]', (err as Error)?.message || err);
     }
   }
   return { ok: false, error: 'No terminal emulator found' };
 }
 
-function spawnOnWindows(shellCommand) {
+function spawnOnWindows(shellCommand: string): SpawnResult {
   try {
     try {
       execFileSync('wt', ['new-tab', 'cmd', '/k', shellCommand], {
@@ -190,26 +223,26 @@ function spawnOnWindows(shellCommand) {
         timeout: EXEC_TIMEOUT_MS,
       });
       return { ok: true };
-    } catch (err) {
-      console.error('[chinwag]', err?.message || err);
+    } catch (err: unknown) {
+      console.error('[chinwag]', (err as Error)?.message || err);
     }
     execFileSync('cmd', ['/c', 'start', '', 'cmd', '/k', shellCommand], {
       stdio: 'ignore',
       timeout: EXEC_TIMEOUT_MS,
     });
     return { ok: true };
-  } catch (err) {
-    return { ok: false, error: err.message };
+  } catch (err: unknown) {
+    return { ok: false, error: (err as Error).message };
   }
 }
 
 // ── Main spawn function ──────────────────────────────
 
-export function spawnInTerminal(launch) {
+export function spawnInTerminal(launch: TerminalLaunch): SpawnResult {
   const shellCommand = buildTerminalCommand(launch);
   const env = detectTerminalEnvironment();
 
-  const spawners = {
+  const spawners: Record<string, () => SpawnResult> = {
     tmux: () => spawnInTmux(shellCommand, launch.cwd),
     'ide-terminal': () => spawnInIdeTerminal(shellCommand, launch.cwd, launch.toolName),
     iterm2: () => spawnInIterm2(shellCommand),
@@ -230,7 +263,7 @@ export function spawnInTerminal(launch) {
 
 // ── PID file management ──────────────────────────────
 
-export function readPidFile(agentId) {
+export function readPidFile(agentId: string): number | null {
   try {
     const safe = safeAgentId(agentId);
     const pidPath = join(PIDS_DIR, `${safe}.pid`);
@@ -238,35 +271,35 @@ export function readPidFile(agentId) {
     const content = readFileSync(pidPath, 'utf-8').trim();
     const pid = parseInt(content, 10);
     return Number.isFinite(pid) && pid > 0 ? pid : null;
-  } catch (err) {
-    console.error('[chinwag]', err?.message || err);
+  } catch (err: unknown) {
+    console.error('[chinwag]', (err as Error)?.message || err);
     return null;
   }
 }
 
-export function cleanPidFile(agentId) {
+export function cleanPidFile(agentId: string): void {
   try {
     const safe = safeAgentId(agentId);
     const pidPath = join(PIDS_DIR, `${safe}.pid`);
     if (existsSync(pidPath)) unlinkSync(pidPath);
-  } catch (err) {
-    console.error('[chinwag]', err?.message || err);
+  } catch (err: unknown) {
+    console.error('[chinwag]', (err as Error)?.message || err);
   }
 }
 
-export function killByPid(pid) {
+export function killByPid(pid: number): boolean {
   try {
     process.kill(pid, 'SIGTERM');
     setTimeout(() => {
       try {
         process.kill(pid, 'SIGKILL');
-      } catch (err) {
-        console.error('[chinwag]', err?.message || err);
+      } catch (err: unknown) {
+        console.error('[chinwag]', (err as Error)?.message || err);
       }
     }, KILL_GRACE_MS);
     return true;
-  } catch (err) {
-    console.error('[chinwag]', err?.message || err);
+  } catch (err: unknown) {
+    console.error('[chinwag]', (err as Error)?.message || err);
     return false;
   }
 }

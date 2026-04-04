@@ -1,3 +1,4 @@
+import type { Dispatch, SetStateAction } from 'react';
 import { useState, useEffect, useRef } from 'react';
 import {
   spawnAgent,
@@ -10,6 +11,7 @@ import {
   setExternalAgentPid,
   checkExternalAgentLiveness,
 } from '../process-manager.js';
+import type { AgentInfo } from '../process-manager.js';
 import { spawnInTerminal, detectTerminalEnvironment, readPidFile } from '../terminal-spawner.js';
 import { openCommandInTerminal } from '../open-command-in-terminal.js';
 import {
@@ -19,12 +21,16 @@ import {
   createTerminalAgentLaunch,
   listManagedAgentTools,
 } from '../managed-agents.js';
+import type { ManagedTool, ManagedToolState } from '../managed-agents.js';
 import {
   getSavedLauncherPreference,
   resolvePreferredManagedTool,
   saveLauncherPreference,
 } from '../launcher-preferences.js';
 import { getAgentDisplayLabel } from './agent-display.js';
+import type { CombinedAgentRow } from './view.js';
+import type { ChinwagConfig } from '../config.js';
+import type { NoticeTone } from './reducer.js';
 
 // ── Constants ───────────────────────────────────────
 const DURATION_TICK_MS = 10_000;
@@ -32,16 +38,68 @@ const EXTERNAL_AGENT_POLL_MS = 3_000;
 const EARLY_EXIT_THRESHOLD_MS = 15_000;
 const FAILURE_OUTPUT_LINES = 200;
 
+interface UseAgentLifecycleParams {
+  config: ChinwagConfig | null;
+  teamId: string | null;
+  projectRoot: string;
+  stdout: { columns?: number; rows?: number } | null;
+  flash: (text: string, options?: { tone?: NoticeTone }) => void;
+}
+
+interface SpawnOptions {
+  flashSuccess?: boolean;
+}
+
+export interface UseAgentLifecycleReturn {
+  managedAgents: AgentInfo[];
+  managedToolStates: Record<string, ManagedToolState>;
+  installedCliAgents: ManagedTool[];
+  toolPickerOpen: boolean;
+  setToolPickerOpen: Dispatch<SetStateAction<boolean>>;
+  toolPickerIdx: number;
+  setToolPickerIdx: Dispatch<SetStateAction<number>>;
+  launchToolId: string | null;
+  readyCliAgents: ManagedTool[];
+  unavailableCliAgents: ManagedTool[];
+  checkingCliAgents: ManagedTool[];
+  selectedLaunchTool: ManagedTool | null;
+  canLaunchSelectedTool: boolean;
+  launcherChoices: ManagedTool[];
+  getManagedToolState: (toolId: string) => ManagedToolState;
+  handleSpawnAgent: (toolInfo: ManagedTool, task?: string, options?: SpawnOptions) => boolean;
+  launchManagedTask: (toolInfo: ManagedTool, task: string, options?: SpawnOptions) => boolean;
+  handleKillAgent: (agent: CombinedAgentRow, liveAgentNameCounts: Map<string, number>) => void;
+  handleRemoveAgent: (
+    agent: CombinedAgentRow,
+    liveAgentNameCounts: Map<string, number>,
+  ) => boolean | undefined;
+  handleRestartAgent: (agent: CombinedAgentRow) => boolean;
+  handleFixLauncher: (tool?: ManagedTool) => void;
+  refreshManagedToolStates: (options?: { clearRuntimeFailures?: boolean }) => void;
+  resolveReadyTool: (query: string) => ManagedTool | null;
+  rememberLaunchTool: (toolId: string) => void;
+  selectLaunchTool: (tool: ManagedTool) => void;
+  cycleToolForward: () => void;
+  handleToolPickerSelect: (idx: number) => void;
+  openToolPicker: () => void;
+}
+
 /**
  * Custom hook for agent lifecycle management.
  * Handles spawning, killing, restarting agents, tool availability checking,
  * and managed tool state tracking.
  */
-export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }) {
+export function useAgentLifecycle({
+  config,
+  teamId,
+  projectRoot,
+  stdout,
+  flash,
+}: UseAgentLifecycleParams): UseAgentLifecycleReturn {
   // Process manager state
-  const [managedAgents, setManagedAgents] = useState([]);
-  const previousManagedStatuses = useRef(new Map());
-  const [managedToolStates, setManagedToolStates] = useState({});
+  const [managedAgents, setManagedAgents] = useState<AgentInfo[]>([]);
+  const previousManagedStatuses = useRef<Map<number, string>>(new Map());
+  const [managedToolStates, setManagedToolStates] = useState<Record<string, ManagedToolState>>({});
   const [managedToolStatusTick, setManagedToolStatusTick] = useState(0);
 
   // CLI agents
@@ -52,8 +110,8 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
   const [toolPickerIdx, setToolPickerIdx] = useState(0);
 
   // Launch tool selection
-  const [launchToolId, setLaunchToolId] = useState(null);
-  const [preferredLaunchToolId, setPreferredLaunchToolId] = useState(null);
+  const [launchToolId, setLaunchToolId] = useState<string | null>(null);
+  const [preferredLaunchToolId, setPreferredLaunchToolId] = useState<string | null>(null);
 
   // ── Process manager sync + duration ticker ───────────
   const mountedRef = useRef(true);
@@ -165,16 +223,15 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
   }, [teamId]);
 
   // ── External agent lifecycle (pidfile polling + liveness) ──
-  const externalAgentPrevStatus = useRef(new Map());
+  const externalAgentPrevStatus = useRef<Map<number, string>>(new Map());
   useEffect(() => {
     const interval = setInterval(() => {
       const currentAgents = getAgents();
       for (const agent of currentAgents) {
         if (agent.spawnType !== 'external' || agent.status !== 'running') continue;
-        if (!agent.pid && agent.agentId) {
-          const pid = readPidFile(agent.agentId);
-          if (pid) setExternalAgentPid(agent.id, pid);
-        }
+        if (!agent.agentId) continue;
+        const pid = readPidFile(agent.agentId);
+        if (pid) setExternalAgentPid(agent.id, pid);
       }
       const prev = externalAgentPrevStatus.current;
       const changed = checkExternalAgentLiveness();
@@ -197,7 +254,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
       }
 
       // Update status tracking and prune entries for agents that no longer exist
-      const currentIds = new Set();
+      const currentIds = new Set<number>();
       for (const agent of getAgents()) {
         if (agent.spawnType === 'external') {
           prev.set(agent.id, agent.status);
@@ -213,7 +270,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
 
   // ── Derived state ────────────────────────────────────
 
-  function getManagedToolState(toolId) {
+  function getManagedToolState(toolId: string): ManagedToolState {
     return managedToolStates[toolId] || { toolId, state: 'checking', detail: 'Checking readiness' };
   }
 
@@ -227,8 +284,11 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
   const checkingCliAgents = installedCliAgents.filter(
     (tool) => getManagedToolState(tool.id).state === 'checking',
   );
-  const preferredLaunchTool = resolvePreferredManagedTool(readyCliAgents, preferredLaunchToolId);
-  const selectedLaunchTool =
+  const preferredLaunchTool = resolvePreferredManagedTool(
+    readyCliAgents,
+    preferredLaunchToolId,
+  ) as ManagedTool | null;
+  const selectedLaunchTool: ManagedTool | null =
     installedCliAgents.find((tool) => tool.id === launchToolId) ||
     preferredLaunchTool ||
     readyCliAgents[0] ||
@@ -252,26 +312,26 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
 
   // ── Actions ──────────────────────────────────────────
 
-  function rememberLaunchTool(toolId) {
+  function rememberLaunchTool(toolId: string): void {
     if (!teamId || !toolId) return;
     if (saveLauncherPreference(teamId, toolId)) {
       setPreferredLaunchToolId(toolId);
     }
   }
 
-  function selectLaunchTool(tool) {
+  function selectLaunchTool(tool: ManagedTool): void {
     if (!tool) return;
     setLaunchToolId(tool.id);
   }
 
-  function cycleToolForward() {
+  function cycleToolForward(): void {
     if (launcherChoices.length <= 1) return;
     const currentIdx = launcherChoices.findIndex((t) => t.id === launchToolId);
     const nextIdx = (currentIdx + 1) % launcherChoices.length;
     setLaunchToolId(launcherChoices[nextIdx].id);
   }
 
-  function resolveReadyTool(query) {
+  function resolveReadyTool(query: string): ManagedTool | null {
     if (!query) return null;
     const normalized = query.toLowerCase();
     return (
@@ -285,10 +345,10 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     );
   }
 
-  function refreshManagedToolStates({ clearRuntimeFailures = false } = {}) {
+  function refreshManagedToolStates({ clearRuntimeFailures = false } = {}): void {
     setManagedToolStates((prev) => {
       if (!clearRuntimeFailures) return prev;
-      const next = {};
+      const next: Record<string, ManagedToolState> = {};
       for (const [toolId, status] of Object.entries(prev)) {
         if (status?.source !== 'runtime') next[toolId] = status;
       }
@@ -298,7 +358,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     flash('Rechecking tools...', { tone: 'info' });
   }
 
-  function handleSpawnAgent(toolInfo, task = '', options = {}) {
+  function handleSpawnAgent(toolInfo: ManagedTool, task = '', options: SpawnOptions = {}): boolean {
     if (!toolInfo) return false;
     const { flashSuccess = true } = options;
     const toolState = getManagedToolState(toolInfo.id);
@@ -315,11 +375,15 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
         tool: toolInfo,
         task,
         cwd: projectRoot,
-        token: config?.token,
+        token: config?.token || '',
       });
       const termResult = spawnInTerminal(termLaunch);
       if (termResult.ok) {
-        registerExternalAgent(termLaunch);
+        registerExternalAgent({
+          ...termLaunch,
+          task: termLaunch.task || '',
+          cwd: termLaunch.cwd || projectRoot,
+        });
         if (flashSuccess) {
           const env = detectTerminalEnvironment();
           flash(`Opened ${toolInfo.name} in ${env.name}`, { tone: 'success' });
@@ -332,7 +396,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
         tool: toolInfo,
         task,
         cwd: projectRoot,
-        token: config?.token,
+        token: config?.token || '',
         cols: stdout?.columns,
         rows: stdout?.rows,
       });
@@ -351,7 +415,11 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     }
   }
 
-  function launchManagedTask(toolInfo, task, options = {}) {
+  function launchManagedTask(
+    toolInfo: ManagedTool,
+    task: string,
+    options: SpawnOptions = {},
+  ): boolean {
     const didStart = handleSpawnAgent(toolInfo, task, options);
     if (didStart) {
       rememberLaunchTool(toolInfo.id);
@@ -359,7 +427,10 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     return didStart;
   }
 
-  function handleKillAgent(agent, liveAgentNameCounts) {
+  function handleKillAgent(
+    agent: CombinedAgentRow,
+    liveAgentNameCounts: Map<string, number>,
+  ): void {
     if (!agent?._managed) return;
     const didKill = killAgent(agent.id);
     if (!didKill) {
@@ -369,7 +440,10 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     flash(`Stopping ${getAgentDisplayLabel(agent, liveAgentNameCounts)}`, { tone: 'info' });
   }
 
-  function handleRemoveAgent(agent, liveAgentNameCounts) {
+  function handleRemoveAgent(
+    agent: CombinedAgentRow,
+    liveAgentNameCounts: Map<string, number>,
+  ): boolean | undefined {
     if (!agent?._managed) return;
     const removed = removeAgent(agent.id);
     if (removed) {
@@ -380,7 +454,7 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     return removed;
   }
 
-  function handleRestartAgent(agent) {
+  function handleRestartAgent(agent: CombinedAgentRow): boolean {
     if (!agent?._managed || !agent._dead) return false;
     const removed = removeAgent(agent.id);
     if (!removed) {
@@ -389,18 +463,20 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     }
     launchManagedTask(
       {
-        id: agent.tool,
+        id: agent.tool || agent.toolId,
         name: agent.toolName || agent._display,
         cmd: agent.cmd,
         args: agent.args,
         taskArg: agent.taskArg,
+        availabilityCheck: null,
+        failurePatterns: [],
       },
       agent.task,
     );
     return true;
   }
 
-  function handleFixLauncher(tool) {
+  function handleFixLauncher(tool?: ManagedTool): void {
     const fixTool = tool || unavailableCliAgents[0];
     if (!fixTool) {
       flash('No fix available.', { tone: 'warning' });
@@ -421,14 +497,14 @@ export function useAgentLifecycle({ config, teamId, projectRoot, stdout, flash }
     }
   }
 
-  function handleToolPickerSelect(idx) {
+  function handleToolPickerSelect(idx: number): void {
     const tools = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
     const tool = tools[idx];
     if (tool) handleSpawnAgent(tool, '', { flashSuccess: true });
     setToolPickerOpen(false);
   }
 
-  function openToolPicker() {
+  function openToolPicker(): void {
     const tools = readyCliAgents.length > 0 ? readyCliAgents : installedCliAgents;
     if (tools.length === 0) {
       flash('No tools configured. Run chinwag add <tool>.', { tone: 'warning' });
