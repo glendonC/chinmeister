@@ -1,7 +1,6 @@
-import React, { Component, useEffect, useCallback, useMemo } from 'react';
+import React, { Component, useEffect } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
-import { HintRow } from './ui.jsx';
+import { Box, Text, useStdout } from 'ink';
 import { useDashboardConnection } from './connection.jsx';
 import type { UseDashboardConnectionReturn } from './connection.jsx';
 import { useMemoryManager } from './memory.js';
@@ -12,11 +11,12 @@ import { useComposer } from './composer.js';
 import type { UseComposerReturn } from './composer.js';
 import { useIntegrationDoctor } from './integrations.js';
 import type { UseIntegrationDoctorReturn } from './integrations.js';
-import { createInputHandler, createCommandHandler } from './input.js';
 import { MainPane, MemoryView, SessionsView } from './main-pane.jsx';
 import { AgentFocusView } from './agent-focus.jsx';
-import { MIN_WIDTH, SPINNER, openWebDashboard, formatProjectPath } from './utils.js';
-import { isAgentAddressable } from './agent-display.js';
+import { formatProjectPath } from './utils.js';
+import { useDashboardHandlers } from './useDashboardHandlers.js';
+import { useDashboardHints } from './useDashboardHints.js';
+import { DashboardGuards } from './DashboardGuards.jsx';
 import {
   ViewProvider,
   ConnectionProvider,
@@ -302,229 +302,44 @@ function DashboardViewComponent({
     setFooterHints,
   ]);
 
-  // ── Handlers ───────────────────────────────────────
-  const handleOpenWebDashboard = useCallback(() => {
-    const result = openWebDashboard(config?.token);
-    flash(
-      result.ok
-        ? 'Opened web dashboard'
-        : `Could not open browser${result.error ? `: ${result.error}` : ''}`,
-      result.ok ? { tone: 'success' } : { tone: 'error' },
-    );
-  }, [config?.token, flash]);
+  // ── Handlers (extracted hook) ──────────────────────
+  const { onComposeSubmit, onMemorySubmit } = useDashboardHandlers({
+    config,
+    state,
+    dispatch,
+    flash,
+    cols,
+    error,
+    context,
+    connectionRetry,
+    allVisibleAgents,
+    liveAgents,
+    visibleMemories,
+    hasLiveAgents,
+    hasMemories,
+    selectedAgent,
+    mainSelectedAgent,
+    liveAgentNameCounts,
+    agentsHook,
+    integrations,
+    composer,
+    memoryHook,
+    commandSuggestions,
+    navigate,
+  });
 
-  // Factory function patterns — React Compiler can't infer closure deps
-  // from createCommandHandler/createInputHandler factories.
-  const handleCommandSubmit = useMemo(
-    () =>
-      createCommandHandler({
-        agents: agentsHook,
-        integrations,
-        composer,
-        memory: memoryHook,
-        flash,
-        dispatch,
-        handleOpenWebDashboard,
-        liveAgents,
-        selectedAgent,
-        isAgentAddressable,
-      }),
-    [
-      agentsHook,
-      integrations,
-      composer,
-      memoryHook,
-      flash,
-      dispatch,
-      handleOpenWebDashboard,
-      liveAgents,
-      selectedAgent,
-    ],
-  );
-
-  const inputHandler = useMemo(
-    () =>
-      createInputHandler({
-        state,
-        dispatch,
-        cols,
-        error,
-        context,
-        connectionRetry,
-        allVisibleAgents,
-        liveAgents,
-        visibleMemories,
-        hasLiveAgents,
-        hasMemories,
-        mainSelectedAgent,
-        liveAgentNameCounts,
-        agents: agentsHook,
-        integrations,
-        composer,
-        memory: memoryHook,
-        commandSuggestions,
-        handleCommandSubmit,
-        handleOpenWebDashboard,
-        navigate,
-      }),
-    [
-      state,
-      dispatch,
-      cols,
-      error,
-      context,
-      connectionRetry,
-      allVisibleAgents,
-      liveAgents,
-      visibleMemories,
-      hasLiveAgents,
-      hasMemories,
-      mainSelectedAgent,
-      liveAgentNameCounts,
-      agentsHook,
-      integrations,
-      composer,
-      memoryHook,
-      commandSuggestions,
-      handleCommandSubmit,
-      handleOpenWebDashboard,
-      navigate,
-    ],
-  );
-
-  const onComposeSubmit = useCallback(() => {
-    composer.onComposeSubmit(commandSuggestions, handleCommandSubmit);
-  }, [composer, commandSuggestions, handleCommandSubmit]);
-
-  const onMemorySubmit = useCallback(() => {
-    memoryHook.onMemorySubmit();
-    composer.setComposeMode(null);
-  }, [memoryHook, composer]);
-
-  useInput(inputHandler);
-
-  // ── Nav hints ──────────────────────────────────────
-  const navItems = useMemo(() => {
-    if (isAgentFocusView) {
-      const items: FooterHint[] = [{ key: 'esc', label: 'back', color: 'cyan' }];
-      if (focusedAgent?._managed && !focusedAgent._dead)
-        items.push({ key: 'x', label: 'stop', color: 'red' });
-      if (focusedAgent?._managed && focusedAgent._dead) {
-        items.push({ key: 'r', label: 'restart', color: 'green' });
-        items.push({ key: 'x', label: 'remove', color: 'red' });
-      }
-      if (isAgentAddressable(focusedAgent))
-        items.push({ key: 'm', label: 'message', color: 'cyan' });
-      if (focusedAgent?._managed)
-        items.push({
-          key: 'l',
-          label: showDiagnostics ? 'hide diagnostics' : 'diagnostics',
-          color: 'yellow',
-        });
-      return items;
-    }
-    if (composer.isComposing) {
-      return [
-        {
-          key: 'enter',
-          label:
-            composer.composeMode === 'memory-add'
-              ? 'save'
-              : composer.composeMode === 'memory-search'
-                ? 'search'
-                : 'send',
-          color: 'green',
-        },
-        { key: 'esc', label: 'cancel', color: 'cyan' },
-      ];
-    }
-    return [{ key: 'q', label: 'quit', color: 'gray' }];
-  }, [isAgentFocusView, focusedAgent, showDiagnostics, composer.isComposing, composer.composeMode]);
-
-  // ── Contextual hints ───────────────────────────────
-  const contextHints = useMemo(() => {
-    const hints: Array<{ commandKey: string; label: string; color: string }> = [];
-    if (mainSelectedAgent) {
-      hints.push({ commandKey: 'enter', label: 'inspect', color: 'cyan' });
-      if (isAgentAddressable(mainSelectedAgent))
-        hints.push({ commandKey: 'm', label: 'message', color: 'cyan' });
-      if (mainSelectedAgent._managed && !mainSelectedAgent._dead)
-        hints.push({ commandKey: 'x', label: 'stop', color: 'red' });
-    }
-    return hints;
-  }, [mainSelectedAgent]);
+  // ── Hints (extracted hook) ─────────────────────────
+  const { navItems, contextHints } = useDashboardHints({
+    isAgentFocusView,
+    focusedAgent,
+    showDiagnostics,
+    composer,
+    mainSelectedAgent,
+  });
 
   // ── Guards ─────────────────────────────────────────
-  if (cols < MIN_WIDTH) {
-    return (
-      <Box flexDirection="column" padding={1}>
-        <Text dimColor>
-          Terminal too narrow ({cols} cols). Widen to at least {MIN_WIDTH}.
-        </Text>
-        <Text>{''}</Text>
-        <Text>
-          <Text color="cyan" bold>
-            [q]
-          </Text>
-          <Text dimColor> quit</Text>
-        </Text>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box flexDirection="column" paddingX={1} paddingTop={1}>
-        <Text color="red" bold>
-          {error}
-        </Text>
-        <Text>{''}</Text>
-        <Text dimColor>
-          {error.includes('chinwag init')
-            ? 'Set up this project first, then relaunch.'
-            : error.includes('expired')
-              ? 'Your auth token is no longer valid.'
-              : 'Check the issue above and try again.'}
-        </Text>
-        <HintRow
-          hints={[
-            ...(error.includes('expired') || error.includes('.chinwag')
-              ? []
-              : [{ commandKey: 'r', label: 'retry', color: 'cyan' }]),
-            { commandKey: 'q', label: 'quit', color: 'gray' },
-          ]}
-        />
-      </Box>
-    );
-  }
-
-  if (!context) {
-    const isAutoRetrying = connState === 'connecting' || connState === 'reconnecting';
-    const spin = SPINNER[spinnerFrame];
-    return (
-      <Box flexDirection="column" paddingX={1} paddingTop={1}>
-        {isAutoRetrying ? (
-          <Text>
-            <Text color="cyan">{spin} </Text>
-            <Text color="cyan">
-              {connState === 'connecting' ? 'Connecting to team' : connDetail || 'Reconnecting'}
-            </Text>
-          </Text>
-        ) : (
-          <Box flexDirection="column">
-            <Text color="red">{connDetail || 'Cannot reach server.'}</Text>
-            <Text>{''}</Text>
-            <HintRow
-              hints={[
-                { commandKey: 'r', label: 'retry now', color: 'cyan' },
-                { commandKey: 'q', label: 'quit', color: 'gray' },
-              ]}
-            />
-          </Box>
-        )}
-      </Box>
-    );
-  }
+  const guard = DashboardGuards({ cols, error, context, connState, connDetail, spinnerFrame });
+  if (guard !== null) return guard;
 
   // ── Agent focus view ───────────────────────────────
   if (isAgentFocusView && focusedAgent) {
