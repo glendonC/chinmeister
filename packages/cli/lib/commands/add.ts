@@ -6,47 +6,8 @@ import { MCP_TOOLS } from '../tools.js';
 import { configureTool } from '../mcp-config.js';
 import { configExists, loadConfig } from '../config.js';
 import { api } from '../api.js';
-
-interface CatalogToolLike {
-  id: string;
-  name: string;
-  description: string;
-  category?: string;
-  mcpCompatible?: boolean;
-  mcpConfigurable?: boolean;
-  website?: string;
-  installCmd?: string;
-  featured?: boolean;
-  verdict?: string;
-  confidence?: string;
-}
-
-interface EvalEntry {
-  id: string;
-  name: string;
-  tagline: string;
-  category?: string;
-  mcp_support?: boolean;
-  metadata?: { website?: string; install_command?: string; featured?: boolean };
-  verdict?: string;
-  confidence?: string;
-}
-
-function evalToTool(e: EvalEntry): CatalogToolLike {
-  const meta = e.metadata || {};
-  return {
-    id: e.id,
-    name: e.name,
-    description: e.tagline,
-    category: e.category,
-    mcpCompatible: !!e.mcp_support,
-    website: meta.website,
-    installCmd: meta.install_command,
-    featured: !!meta.featured,
-    verdict: e.verdict,
-    confidence: e.confidence,
-  };
-}
+import { evalToTool } from '../utils/tool-catalog.js';
+import type { CatalogToolLike, EvalEntry } from '../utils/tool-catalog.js';
 
 interface CatalogResult {
   tools: CatalogToolLike[];

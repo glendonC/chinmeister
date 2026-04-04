@@ -8,6 +8,7 @@
 import React from 'react';
 import { Box, Text } from 'ink';
 import type { IntegrationScanResult } from '@chinwag/shared/integration-doctor.js';
+import type { CatalogToolLike } from './utils/tool-catalog.js';
 
 interface IntegrationSummary {
   text: string;
@@ -84,15 +85,6 @@ export function DetectedToolsList({
       )}
     </>
   );
-}
-
-interface CatalogToolLike {
-  id: string;
-  name: string;
-  description: string;
-  mcpCompatible?: boolean;
-  verdict?: string;
-  confidence?: string;
 }
 
 interface RecommendationsListProps {

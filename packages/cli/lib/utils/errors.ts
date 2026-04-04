@@ -22,7 +22,11 @@ export interface InitErrorClassification {
 /**
  * Classify an HTTP/network error into a connection state and user-facing message.
  */
-export function classifyError(err: { message?: string; status?: number }): ClassifiedError {
+export function classifyError(err: {
+  message?: string;
+  status?: number;
+  code?: string;
+}): ClassifiedError {
   const msg = err.message || '';
   const status = err.status;
 
@@ -39,7 +43,8 @@ export function classifyError(err: { message?: string; status?: number }): Class
   if (status === 408 || msg.includes('timed out'))
     return { state: 'reconnecting', detail: 'Request timed out. Retrying...' };
 
-  if (['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'].some((c) => msg.includes(c))) {
+  const networkCodes = ['ECONNREFUSED', 'ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN'];
+  if ((err.code && networkCodes.includes(err.code)) || networkCodes.some((c) => msg.includes(c))) {
     return { state: 'offline', detail: 'Cannot reach server. Check your connection.' };
   }
 

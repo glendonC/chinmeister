@@ -13,48 +13,11 @@ import { scanIntegrationHealth, summarizeIntegrationScan } from './mcp-config.js
 import { classifyError } from './utils/errors.js';
 import { addToolToProject } from './utils/tool-actions.js';
 import { computeToolRecommendations } from './utils/tool-recommendations.js';
+import { evalToTool } from './utils/tool-catalog.js';
+import type { CatalogToolLike, EvalEntry } from './utils/tool-catalog.js';
 import { DetectedToolsList, RecommendationsList } from './tool-display.jsx';
 import type { IntegrationScanResult } from '@chinwag/shared/integration-doctor.js';
-
-interface CatalogToolLike {
-  id: string;
-  name: string;
-  description: string;
-  category?: string;
-  mcpCompatible?: boolean;
-  website?: string;
-  installCmd?: string | null;
-  featured?: boolean;
-  verdict?: string;
-  confidence?: string;
-}
-
-interface EvalEntry {
-  id: string;
-  name: string;
-  tagline: string;
-  category?: string;
-  mcp_support?: boolean;
-  metadata?: { website?: string; install_command?: string; featured?: boolean };
-  verdict?: string;
-  confidence?: string;
-}
-
-function evalToTool(e: EvalEntry): CatalogToolLike {
-  const meta = e.metadata || {};
-  return {
-    id: e.id,
-    name: e.name,
-    description: e.tagline,
-    category: e.category,
-    mcpCompatible: !!e.mcp_support,
-    website: meta.website,
-    installCmd: meta.install_command,
-    featured: !!meta.featured,
-    verdict: e.verdict,
-    confidence: e.confidence,
-  };
-}
+import type { ToolCatalogEntry } from '@chinwag/shared/contracts.js';
 
 let PKG_VERSION = '0.1.0';
 try {
@@ -397,7 +360,7 @@ export function Customize({
 
   // Compute recommendations for tools mode
   const { detected, recommendations } = computeToolRecommendations(
-    tools.catalog as import('@chinwag/shared/contracts.js').ToolCatalogEntry[],
+    tools.catalog as ToolCatalogEntry[],
     tools.statuses,
   );
   const integrationSummary = summarizeIntegrationScan(tools.statuses, { onlyDetected: true });

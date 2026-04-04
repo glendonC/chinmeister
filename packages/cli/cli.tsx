@@ -72,8 +72,11 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
     return { error };
   }
 
-  componentDidCatch(error: Error, _errorInfo: ErrorInfo): void {
+  componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     process.stderr.write(`[chinwag] Screen error: ${error.message}\n`);
+    if (errorInfo.componentStack) {
+      process.stderr.write(`[chinwag] Component stack:${errorInfo.componentStack}\n`);
+    }
   }
 
   render(): ReactNode {
