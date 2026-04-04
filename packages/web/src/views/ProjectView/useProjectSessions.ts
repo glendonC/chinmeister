@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { usePollingStore } from '../../lib/stores/polling.js';
+import { MAX_DISPLAY_SESSIONS } from '../../lib/constants.js';
 import {
   buildFilesTouched,
   countLiveSessions,
@@ -27,7 +28,7 @@ export default function useProjectSessions(): UseProjectSessionsReturn {
       ),
     [contextData],
   );
-  const sessions = allSessions.slice(0, 8);
+  const sessions = allSessions.slice(0, MAX_DISPLAY_SESSIONS);
   const filesTouched: string[] = useMemo(() => buildFilesTouched(allSessions), [allSessions]);
   const sessionEditCount: number = useMemo(() => sumSessionEdits(allSessions), [allSessions]);
   const filesTouchedCount = filesTouched.length;

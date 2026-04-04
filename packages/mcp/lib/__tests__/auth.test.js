@@ -5,6 +5,15 @@ vi.mock('@chinwag/shared/config.js', () => ({
   CONFIG_FILE: '/tmp/test-chinwag/config.json',
 }));
 
+vi.mock('../api.js', () => ({
+  getApiUrl: () => 'http://localhost:8787',
+}));
+
+const mockRefreshAndPersistToken = vi.fn();
+vi.mock('../token-refresh.js', () => ({
+  refreshAndPersistToken: (...args) => mockRefreshAndPersistToken(...args),
+}));
+
 import { validateConfig, registerProfile } from '../auth.js';
 
 describe('validateConfig', () => {
@@ -61,8 +70,8 @@ describe('validateConfig', () => {
     err401.status = 401;
     const mockClient = {
       get: vi.fn().mockRejectedValue(err401),
-      post: vi.fn().mockResolvedValue({ token: 'tok_new', refresh_token: 'rt_new' }),
     };
+    mockRefreshAndPersistToken.mockResolvedValue({ token: 'tok_new', refresh_token: 'rt_new' });
     const result = await validateConfig({
       configExists: () => true,
       loadConfig: () => ({ token: 'tok_old', refresh_token: 'rt_old', handle: 'alice' }),
@@ -70,6 +79,11 @@ describe('validateConfig', () => {
     });
     expect(result.config.token).toBe('tok_new');
     expect(result.config.refresh_token).toBe('rt_new');
+    expect(mockRefreshAndPersistToken).toHaveBeenCalledWith(
+      'http://localhost:8787',
+      'rt_old',
+      expect.objectContaining({ token: 'tok_old' }),
+    );
   });
 
   it('exits on 401 with no refresh token', async () => {

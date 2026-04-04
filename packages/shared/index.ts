@@ -35,6 +35,7 @@ export { formatError, formatErrorChain, getHttpStatus, getErrorCode } from './er
 export { createLogger, type Logger } from './logger.js';
 
 // contracts
+export { AGENT_STATUS } from './contracts.js';
 export type {
   AgentStatus,
   RuntimeIdentityContract,

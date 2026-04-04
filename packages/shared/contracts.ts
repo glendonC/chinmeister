@@ -10,7 +10,14 @@
  * Do not normalize between the two without updating all consumers.
  */
 
-export type AgentStatus = 'active' | 'idle' | 'offline' | string;
+export type AgentStatus = 'active' | 'idle' | 'offline';
+
+/** Runtime-safe constants for AgentStatus comparisons. */
+export const AGENT_STATUS = {
+  ACTIVE: 'active',
+  IDLE: 'idle',
+  OFFLINE: 'offline',
+} as const satisfies Record<string, AgentStatus>;
 
 export interface RuntimeIdentityContract {
   hostTool: string;

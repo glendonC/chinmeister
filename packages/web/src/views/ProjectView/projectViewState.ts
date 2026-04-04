@@ -1,3 +1,4 @@
+import { MAX_RECENT_SESSIONS } from '../../lib/constants.js';
 import type {
   Session,
   Member,
@@ -12,7 +13,7 @@ export function selectRecentSessions(sessions: Session[] = []): Session[] {
     .filter(
       (session) => session.edit_count > 0 || session.files_touched?.length > 0 || !session.ended_at,
     )
-    .slice(0, 24);
+    .slice(0, MAX_RECENT_SESSIONS);
 }
 
 export interface FileConflict {

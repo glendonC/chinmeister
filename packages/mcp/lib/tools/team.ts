@@ -5,7 +5,7 @@ import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
 import { errorResult, getHttpStatus, getErrorMessage, safeString } from '../utils/responses.js';
-import { MAX_HEARTBEAT_FAILURES } from '../constants.js';
+import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_FAILURES } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
@@ -75,7 +75,7 @@ export function registerTeamTool(
 
         state.heartbeatInterval = setInterval(() => {
           void runHeartbeat();
-        }, 30_000);
+        }, HEARTBEAT_INTERVAL_MS);
 
         let sessionStarted = false;
         try {

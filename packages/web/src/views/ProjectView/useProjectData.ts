@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { usePollingStore } from '../../lib/stores/polling.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { formatRelativeTime } from '../../lib/relativeTime.js';
+import { MAX_DISPLAY_SESSIONS } from '../../lib/constants.js';
 import {
   buildLiveToolMix,
   buildUsageEntries,
@@ -104,7 +105,7 @@ export function useProjectData(): UseProjectDataReturn {
     () => selectRecentSessions(contextData?.recentSessions || contextData?.sessions || []),
     [contextData?.recentSessions, contextData?.sessions],
   );
-  const sessions = allSessions.slice(0, 8);
+  const sessions = allSessions.slice(0, MAX_DISPLAY_SESSIONS);
   const locks = useMemo<Lock[]>(() => contextData?.locks ?? [], [contextData?.locks]);
   const toolsConfigured = useMemo<HostMetric[]>(
     () => contextData?.tools_configured ?? [],

@@ -11,9 +11,15 @@ import React, {
 import type { Dispatch, ReactNode } from 'react';
 import { basename } from 'path';
 import { buildCombinedAgentRows, buildDashboardView } from './view.js';
-import type { CombinedAgentRow, MemoryEntry, TeamContext } from './view.js';
+import type { CombinedAgentRow, ManagedAgent, MemoryEntry, TeamContext } from './view.js';
 import { isAgentAddressable } from './agent-display.js';
 import { getVisibleWindow } from './utils.js';
+import {
+  RECENTLY_FINISHED_LIMIT,
+  MIN_VIEWPORT_ROWS,
+  VIEWPORT_CHROME_ROWS,
+  COMMAND_SUGGESTION_LIMIT,
+} from './constants.js';
 import { dashboardReducer, createInitialState, clampSelection } from './reducer.js';
 import type { DashboardState, DashboardAction, DashboardNotice, NoticeTone } from './reducer.js';
 import type { UseAgentLifecycleReturn } from './agents.js';
@@ -22,12 +28,6 @@ import type { UseComposerReturn, ComposeMode } from './composer.js';
 import type { UseIntegrationDoctorReturn } from './integrations.js';
 import type { UseDashboardConnectionReturn } from './connection.jsx';
 import type { HostIntegration } from '@chinwag/shared/integration-model.js';
-
-// ── Constants ───────────────────────────────────────
-const RECENTLY_FINISHED_LIMIT = 3;
-const MIN_VIEWPORT_ROWS = 4;
-const VIEWPORT_CHROME_ROWS = 11;
-const COMMAND_SUGGESTION_LIMIT = 5;
 
 // ── Context value types ────────────────────────────
 
@@ -211,7 +211,7 @@ export function DataProvider({
   const combinedAgents = useMemo(
     () =>
       buildCombinedAgentRows({
-        managedAgents: agents.managedAgents as unknown as import('./view.js').ManagedAgent[],
+        managedAgents: agents.managedAgents as unknown as ManagedAgent[],
         connectedAgents: dashboardView.visibleAgents,
         getToolName: dashboardView.getToolName,
       }),

@@ -1,4 +1,6 @@
+import { AGENT_STATUS } from './contracts.js';
 import type {
+  AgentStatus,
   ActivityEvent,
   DashboardDeltaEvent,
   FileEvent,
@@ -15,6 +17,11 @@ import type {
   TeamMessage,
   TeamMember,
 } from './contracts.js';
+
+const VALID_STATUSES = new Set<string>(Object.values(AGENT_STATUS));
+function isAgentStatus(value: string): value is AgentStatus {
+  return VALID_STATUSES.has(value);
+}
 
 /** Maximum number of messages retained in local dashboard context. */
 const MAX_DASHBOARD_MESSAGES = 50;
@@ -80,7 +87,7 @@ export function normalizeDashboardDeltaEvent(value: unknown): DashboardDeltaEven
     case 'status_change': {
       const agentId = asString(event.agent_id);
       const status = asString(event.status);
-      return agentId && status
+      return agentId && status && isAgentStatus(status)
         ? ({ type, agent_id: agentId, status } satisfies StatusChangeEvent)
         : null;
     }
@@ -161,7 +168,7 @@ function applyHeartbeat(ctx: TeamContext, event: HeartbeatEvent): TeamContext {
   const members = (ctx.members || []).map((member) =>
     member.agent_id !== event.agent_id
       ? member
-      : { ...member, status: 'active', seconds_since_update: 0 },
+      : { ...member, status: AGENT_STATUS.ACTIVE, seconds_since_update: 0 },
   );
   return { ...ctx, members };
 }
@@ -171,7 +178,7 @@ function applyActivity(ctx: TeamContext, event: ActivityEvent): TeamContext {
     if (member.agent_id !== event.agent_id) return member;
     return {
       ...member,
-      status: 'active',
+      status: AGENT_STATUS.ACTIVE,
       seconds_since_update: 0,
       activity: {
         files: event.files || [],
@@ -192,7 +199,7 @@ function applyFileReport(ctx: TeamContext, event: FileEvent): TeamContext {
       : [...existingFiles, event.file];
     return {
       ...member,
-      status: 'active',
+      status: AGENT_STATUS.ACTIVE,
       seconds_since_update: 0,
       activity: { ...(member.activity || { summary: null }), files },
     };
@@ -207,7 +214,7 @@ function applyMemberJoined(ctx: TeamContext, event: MemberJoinedEvent): TeamCont
       if (member.agent_id !== event.agent_id) return member;
       return {
         ...member,
-        status: 'active',
+        status: AGENT_STATUS.ACTIVE,
         handle: event.handle || member.handle,
         host_tool: event.host_tool || member.host_tool,
       };
@@ -219,7 +226,7 @@ function applyMemberJoined(ctx: TeamContext, event: MemberJoinedEvent): TeamCont
     agent_id: event.agent_id,
     handle: event.handle || 'unknown',
     host_tool: event.host_tool || 'unknown',
-    status: 'active',
+    status: AGENT_STATUS.ACTIVE,
     seconds_since_update: 0,
     minutes_since_update: 0,
     activity: null,

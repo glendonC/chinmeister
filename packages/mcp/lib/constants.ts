@@ -33,6 +33,8 @@ export const PARENT_WATCH_INTERVAL_MS = 5_000;
 export const STUCKNESS_THRESHOLD_MINUTES = 15;
 
 // --- Heartbeat ---
+/** Interval between heartbeat pings to the team DO */
+export const HEARTBEAT_INTERVAL_MS = 30_000;
 /** Consecutive heartbeat failures before giving up */
 export const MAX_HEARTBEAT_FAILURES = 20;
 

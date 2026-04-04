@@ -19,9 +19,7 @@ import type { UseComposerReturn } from './composer.js';
 import type { UseMemoryManagerReturn } from './memory.js';
 import type { ManagedTool } from '../managed-agents.js';
 import type { NoticeTone } from './reducer.js';
-
-// ── Constants ───────────────────────────────────────
-const COMMAND_SUGGESTION_LIMIT = 5;
+import { COMMAND_SUGGESTION_LIMIT } from './constants.js';
 
 interface InkKey {
   escape?: boolean;
