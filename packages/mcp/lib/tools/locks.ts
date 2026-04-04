@@ -5,17 +5,21 @@ import { teamPreamble } from '../context.js';
 import { noTeam, errorResult, safeArray } from '../utils/responses.js';
 import { normalizeFiles } from '../utils/paths.js';
 import { formatWho } from '../utils/formatting.js';
+import { FILE_PATH_MAX_LENGTH, LOCK_FILE_LIST_MAX } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const claimFilesSchema = z.object({
-  files: z.array(z.string().max(500)).max(20).describe('File paths to claim'),
+  files: z
+    .array(z.string().max(FILE_PATH_MAX_LENGTH))
+    .max(LOCK_FILE_LIST_MAX)
+    .describe('File paths to claim'),
 });
 type ClaimFilesArgs = z.infer<typeof claimFilesSchema>;
 
 const releaseFilesSchema = z.object({
   files: z
-    .array(z.string().max(500))
-    .max(20)
+    .array(z.string().max(FILE_PATH_MAX_LENGTH))
+    .max(LOCK_FILE_LIST_MAX)
     .optional()
     .describe('File paths to release (omit to release all your locks)'),
 });

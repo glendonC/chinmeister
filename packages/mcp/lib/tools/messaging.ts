@@ -2,13 +2,14 @@
 
 import * as z from 'zod/v4';
 import { noTeam, errorResult } from '../utils/responses.js';
+import { MESSAGE_TEXT_MAX_LENGTH, MESSAGE_TARGET_MAX_LENGTH } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const sendMessageSchema = z.object({
-  text: z.string().max(500).describe('Message text'),
+  text: z.string().max(MESSAGE_TEXT_MAX_LENGTH).describe('Message text'),
   target: z
     .string()
-    .max(60)
+    .max(MESSAGE_TARGET_MAX_LENGTH)
     .optional()
     .describe('Target agent_id for a direct message (omit to broadcast to all)'),
 });

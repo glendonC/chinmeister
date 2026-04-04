@@ -5,13 +5,23 @@ import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
 import { noTeam, errorResult, safeArray } from '../utils/responses.js';
 import type { MemoryInfo } from '../utils/display.js';
+import {
+  MEMORY_TEXT_MAX_LENGTH,
+  TAG_MAX_LENGTH,
+  TAG_LIST_MAX,
+  SEARCH_QUERY_MAX_LENGTH,
+  SEARCH_LIMIT_MAX,
+} from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const saveMemorySchema = z.object({
-  text: z.string().max(2000).describe('The knowledge to save. Be specific and actionable.'),
+  text: z
+    .string()
+    .max(MEMORY_TEXT_MAX_LENGTH)
+    .describe('The knowledge to save. Be specific and actionable.'),
   tags: z
-    .array(z.string().max(50))
-    .max(10)
+    .array(z.string().max(TAG_MAX_LENGTH))
+    .max(TAG_LIST_MAX)
     .optional()
     .describe(
       'Optional tags for organization (e.g. ["setup", "redis", "testing"]). Use whatever labels make sense.',
@@ -21,19 +31,27 @@ type SaveMemoryArgs = z.infer<typeof saveMemorySchema>;
 
 const updateMemorySchema = z.object({
   id: z.string().describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
-  text: z.string().max(2000).optional().describe('Updated text content'),
-  tags: z.array(z.string().max(50)).max(10).optional().describe('Updated tags'),
+  text: z.string().max(MEMORY_TEXT_MAX_LENGTH).optional().describe('Updated text content'),
+  tags: z
+    .array(z.string().max(TAG_MAX_LENGTH))
+    .max(TAG_LIST_MAX)
+    .optional()
+    .describe('Updated tags'),
 });
 type UpdateMemoryArgs = z.infer<typeof updateMemorySchema>;
 
 const searchMemorySchema = z.object({
-  query: z.string().max(200).optional().describe('Search text (matches against memory content)'),
+  query: z
+    .string()
+    .max(SEARCH_QUERY_MAX_LENGTH)
+    .optional()
+    .describe('Search text (matches against memory content)'),
   tags: z
-    .array(z.string().max(50))
-    .max(10)
+    .array(z.string().max(TAG_MAX_LENGTH))
+    .max(TAG_LIST_MAX)
     .optional()
     .describe('Filter by tags (returns memories matching ANY of the listed tags)'),
-  limit: z.number().min(1).max(50).optional().describe('Max results (default 20)'),
+  limit: z.number().min(1).max(SEARCH_LIMIT_MAX).optional().describe('Max results (default 20)'),
 });
 type SearchMemoryArgs = z.infer<typeof searchMemorySchema>;
 

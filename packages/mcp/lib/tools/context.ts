@@ -6,6 +6,7 @@ import { createLogger } from '../utils/logger.js';
 import { noTeam, getErrorMessage, safeArray } from '../utils/responses.js';
 import { formatToolTag, formatWho, type TeamMember } from '../utils/formatting.js';
 import type { LockContextInfo, MessageInfo, MemoryInfo } from '../utils/display.js';
+import { MODEL_MAX_LENGTH } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('tools');
@@ -13,7 +14,7 @@ const log = createLogger('tools');
 const getTeamContextSchema = z.object({
   model: z
     .string()
-    .max(100)
+    .max(MODEL_MAX_LENGTH)
     .optional()
     .describe('Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.'),
 });

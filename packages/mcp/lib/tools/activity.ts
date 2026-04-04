@@ -5,12 +5,23 @@ import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import { teamPreamble } from '../context.js';
 import { noTeam, errorResult } from '../utils/responses.js';
 import { normalizeFiles } from '../utils/paths.js';
-import { TITLE_MAX_LENGTH } from '../constants.js';
+import {
+  TITLE_MAX_LENGTH,
+  FILE_PATH_MAX_LENGTH,
+  FILE_LIST_MAX,
+  SUMMARY_MAX_LENGTH,
+} from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const updateActivitySchema = z.object({
-  files: z.array(z.string().max(500)).max(100).describe('File paths being modified'),
-  summary: z.string().max(280).describe('Brief description, e.g. "Refactoring auth middleware"'),
+  files: z
+    .array(z.string().max(FILE_PATH_MAX_LENGTH))
+    .max(FILE_LIST_MAX)
+    .describe('File paths being modified'),
+  summary: z
+    .string()
+    .max(SUMMARY_MAX_LENGTH)
+    .describe('Brief description, e.g. "Refactoring auth middleware"'),
 });
 type UpdateActivityArgs = z.infer<typeof updateActivitySchema>;
 

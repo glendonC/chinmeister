@@ -3,6 +3,7 @@
 import * as z from 'zod/v4';
 import { formatIntegrationScanResults } from '@chinwag/shared/integration-doctor.js';
 import { getErrorMessage } from '../utils/responses.js';
+import { INTEGRATION_ID_MAX_LENGTH } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const scanIntegrationsSchema = z.object({
@@ -16,11 +17,11 @@ type ScanIntegrationsArgs = z.infer<typeof scanIntegrationsSchema>;
 const configureIntegrationSchema = z.object({
   host_id: z
     .string()
-    .max(50)
+    .max(INTEGRATION_ID_MAX_LENGTH)
     .describe('Host integration id, e.g. cursor, claude-code, windsurf, vscode'),
   surface_id: z
     .string()
-    .max(50)
+    .max(INTEGRATION_ID_MAX_LENGTH)
     .optional()
     .describe('Optional agent surface id for future host-specific integrations'),
 });

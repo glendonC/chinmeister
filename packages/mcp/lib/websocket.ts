@@ -4,7 +4,12 @@
 
 import { createLogger } from './utils/logger.js';
 import { getErrorMessage } from './utils/responses.js';
-import { WS_PING_MS, INITIAL_RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS } from './constants.js';
+import {
+  WS_PING_MS,
+  INITIAL_RECONNECT_DELAY_MS,
+  MAX_RECONNECT_DELAY_MS,
+  nextReconnectDelay,
+} from './constants.js';
 import type { ApiClient } from './team.js';
 
 // Re-export for backwards compatibility
@@ -64,14 +69,13 @@ export function createWebSocketManager({
       reconnectTimer = null;
     }
     if (state.shuttingDown) return;
-    // Jitter: 50-100% of delay to prevent thundering herd on mass reconnect
-    const jitteredDelay = Math.round(reconnectDelay * (0.5 + Math.random() * 0.5));
+    const { jitteredDelay, nextDelay } = nextReconnectDelay(reconnectDelay);
     log.info(`WebSocket disconnected, reconnecting in ${(jitteredDelay / 1000).toFixed(1)}s`, {
       reconnectDelay,
     });
     reconnectTimer = setTimeout(connectWs, jitteredDelay);
     if (reconnectTimer.unref) reconnectTimer.unref();
-    reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+    reconnectDelay = nextDelay;
   }
 
   function connectWs(): void {
@@ -81,7 +85,8 @@ export function createWebSocketManager({
 
     client
       .post('/auth/ws-ticket')
-      .then(({ ticket }: { ticket: string }) => {
+      .then((res: unknown) => {
+        const { ticket } = res as { ticket: string };
         if (state.shuttingDown) {
           connecting = false;
           return;

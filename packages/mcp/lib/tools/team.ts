@@ -5,7 +5,7 @@ import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
 import { errorResult, getHttpStatus, getErrorMessage, safeString } from '../utils/responses.js';
-import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_FAILURES } from '../constants.js';
+import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_FAILURES, TEAM_ID_MAX_LENGTH } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
@@ -13,7 +13,7 @@ const log = createLogger('team');
 const joinTeamSchema = z.object({
   team_id: z
     .string()
-    .max(30)
+    .max(TEAM_ID_MAX_LENGTH)
     .regex(/^[a-zA-Z0-9_-]+$/)
     .describe('Team ID (e.g., t_a7x9k2m). Found in the .chinwag file at the repo root.'),
 });

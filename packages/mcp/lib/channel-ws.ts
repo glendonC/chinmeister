@@ -12,7 +12,11 @@ import { applyDelta, normalizeDashboardDeltaEvent } from '@chinwag/shared/dashbo
 import type { TeamContext } from '@chinwag/shared/contracts.js';
 import type { ApiClient } from './team.js';
 import { getErrorMessage } from './utils/responses.js';
-import { INITIAL_RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS } from './constants.js';
+import {
+  INITIAL_RECONNECT_DELAY_MS,
+  MAX_RECONNECT_DELAY_MS,
+  nextReconnectDelay,
+} from './constants.js';
 
 interface Logger {
   info: (msg: string) => void;
@@ -59,7 +63,8 @@ export function createChannelWebSocket({
 
     client
       .post('/auth/ws-ticket')
-      .then(({ ticket }: { ticket: string }) => {
+      .then((res: unknown) => {
+        const { ticket } = res as { ticket: string };
         if (destroyed) {
           connecting = false;
           return;
@@ -124,12 +129,11 @@ export function createChannelWebSocket({
 
   function scheduleReconnect(): void {
     if (destroyed || reconnectTimer) return;
-    // Jitter: 50-100% of delay to prevent thundering herd on mass reconnect
-    const jitteredDelay = Math.round(reconnectDelay * (0.5 + Math.random() * 0.5));
+    const { jitteredDelay, nextDelay } = nextReconnectDelay(reconnectDelay);
     logger.info(`WebSocket reconnecting in ${(jitteredDelay / 1000).toFixed(1)}s`);
     reconnectTimer = setTimeout(connect, jitteredDelay);
     if (reconnectTimer.unref) reconnectTimer.unref();
-    reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY_MS);
+    reconnectDelay = nextDelay;
   }
 
   function disconnect(): void {

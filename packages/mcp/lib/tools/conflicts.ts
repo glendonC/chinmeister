@@ -6,10 +6,14 @@ import { noTeam, errorResult, getHttpStatus, safeArray } from '../utils/response
 import { formatConflictsList, type ConflictInfo, type LockedFileInfo } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
 import { normalizePath, normalizeFiles } from '../utils/paths.js';
+import { FILE_PATH_MAX_LENGTH, FILE_LIST_MAX } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const checkConflictsSchema = z.object({
-  files: z.array(z.string().max(500)).max(100).describe('File paths you plan to modify'),
+  files: z
+    .array(z.string().max(FILE_PATH_MAX_LENGTH))
+    .max(FILE_LIST_MAX)
+    .describe('File paths you plan to modify'),
 });
 type CheckConflictsArgs = z.infer<typeof checkConflictsSchema>;
 
