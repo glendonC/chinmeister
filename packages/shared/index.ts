@@ -2,6 +2,8 @@
 export {
   DEFAULT_API_URL,
   createJsonApiClient,
+  ApiRequestError,
+  type ApiError,
   type ApiClientConfig,
   type JsonApiClient,
 } from './api-client.js';
@@ -78,7 +80,7 @@ export type {
 } from './contracts.js';
 
 // dashboard-ws
-export { normalizeDashboardDeltaEvent, applyDelta } from './dashboard-ws.js';
+export { normalizeDashboardDeltaEvent, applyDelta, type DashboardLimits } from './dashboard-ws.js';
 
 // integration-doctor
 export {

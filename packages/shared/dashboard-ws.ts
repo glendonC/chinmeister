@@ -23,10 +23,17 @@ function isAgentStatus(value: string): value is AgentStatus {
   return VALID_STATUSES.has(value);
 }
 
-/** Maximum number of messages retained in local dashboard context. */
-const MAX_DASHBOARD_MESSAGES = 50;
-/** Maximum number of memories retained in local dashboard context. */
-const MAX_DASHBOARD_MEMORIES = 100;
+/** Default maximum number of messages retained in local dashboard context. */
+const DEFAULT_MAX_DASHBOARD_MESSAGES = 50;
+/** Default maximum number of memories retained in local dashboard context. */
+const DEFAULT_MAX_DASHBOARD_MEMORIES = 100;
+
+export interface DashboardLimits {
+  /** Maximum number of messages retained in local dashboard context. Defaults to 50. */
+  maxMessages?: number;
+  /** Maximum number of memories retained in local dashboard context. Defaults to 100. */
+  maxMemories?: number;
+}
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -136,9 +143,13 @@ export function normalizeDashboardDeltaEvent(value: unknown): DashboardDeltaEven
 export function applyDelta(
   context: TeamContext | null | undefined,
   rawEvent: DashboardDeltaEvent | unknown,
+  limits?: DashboardLimits,
 ): TeamContext | null | undefined {
   const event = normalizeDashboardDeltaEvent(rawEvent) || (rawEvent as DashboardDeltaEvent | null);
   if (!context || !event?.type) return context;
+
+  const maxMessages = limits?.maxMessages ?? DEFAULT_MAX_DASHBOARD_MESSAGES;
+  const maxMemories = limits?.maxMemories ?? DEFAULT_MAX_DASHBOARD_MEMORIES;
 
   switch (event.type) {
     case 'heartbeat':
@@ -156,9 +167,9 @@ export function applyDelta(
     case 'lock_change':
       return applyLockChange(context, event);
     case 'message':
-      return applyMessage(context, event);
+      return applyMessage(context, event, maxMessages);
     case 'memory':
-      return applyMemory(context, event);
+      return applyMemory(context, event, maxMemories);
     default:
       return context;
   }
@@ -265,17 +276,17 @@ function applyLockChange(ctx: TeamContext, event: LockChangeEvent): TeamContext 
   return { ...ctx, locks };
 }
 
-function applyMessage(ctx: TeamContext, event: MessageEvent): TeamContext {
+function applyMessage(ctx: TeamContext, event: MessageEvent, maxMessages: number): TeamContext {
   const newMessage: TeamMessage = {
     handle: event.handle,
     text: event.text,
     created_at: event.created_at || new Date().toISOString(),
   };
-  const messages = [...(ctx.messages || []), newMessage].slice(-MAX_DASHBOARD_MESSAGES);
+  const messages = [...(ctx.messages || []), newMessage].slice(-maxMessages);
   return { ...ctx, messages };
 }
 
-function applyMemory(ctx: TeamContext, event: MemoryDeltaEvent): TeamContext {
+function applyMemory(ctx: TeamContext, event: MemoryDeltaEvent, maxMemories: number): TeamContext {
   const newMemory: TeamMemory = {
     id: event.id || `memory:${Date.now()}`,
     text: event.text,
@@ -284,6 +295,6 @@ function applyMemory(ctx: TeamContext, event: MemoryDeltaEvent): TeamContext {
     host_tool: event.host_tool,
     created_at: event.created_at || new Date().toISOString(),
   };
-  const memories = [newMemory, ...(ctx.memories || [])].slice(0, MAX_DASHBOARD_MEMORIES);
+  const memories = [newMemory, ...(ctx.memories || [])].slice(0, maxMemories);
   return { ...ctx, memories };
 }

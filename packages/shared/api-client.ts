@@ -30,7 +30,47 @@ export interface JsonApiClient {
   del<T = unknown>(path: string, body?: unknown): Promise<T>;
 }
 
-interface ApiError extends Error {
+export type ApiError =
+  | { kind: 'http'; status: number; message: string; data?: unknown }
+  | { kind: 'network'; message: string; cause?: Error }
+  | { kind: 'timeout'; message: string };
+
+export class ApiRequestError extends Error {
+  readonly kind: ApiError['kind'];
+  readonly status?: number;
+  readonly data?: unknown;
+  readonly code?: string;
+
+  constructor(apiError: ApiError, options?: { cause?: Error; code?: string }) {
+    super(apiError.message);
+    this.name = 'ApiRequestError';
+    this.kind = apiError.kind;
+    if (apiError.kind === 'http') {
+      this.status = apiError.status;
+      this.data = apiError.data;
+    }
+    if (options?.cause) this.cause = options.cause;
+    if (options?.code) this.code = options.code;
+  }
+
+  toApiError(): ApiError {
+    switch (this.kind) {
+      case 'http':
+        return { kind: 'http', status: this.status!, message: this.message, data: this.data };
+      case 'network':
+        return {
+          kind: 'network',
+          message: this.message,
+          cause: this.cause instanceof Error ? this.cause : undefined,
+        };
+      case 'timeout':
+        return { kind: 'timeout', message: this.message };
+    }
+  }
+}
+
+/** @deprecated Use ApiRequestError. Kept for internal compatibility within the request function. */
+interface LegacyApiError extends Error {
   status?: number;
   data?: unknown;
   code?: string;
@@ -119,47 +159,59 @@ export function createJsonApiClient({
       try {
         data = await res.json();
       } catch {
-        const parseErr = new Error(
-          parseErrorMessage({ method, path, status: res.status }),
-        ) as ApiError;
-        parseErr.status = res.status;
-        throw parseErr;
+        throw new ApiRequestError({
+          kind: 'http',
+          status: res.status,
+          message: parseErrorMessage({ method, path, status: res.status }),
+        });
       }
 
       if (!res.ok) {
-        const err = new Error(
-          httpErrorMessage({ method, path, status: res.status, data }),
-        ) as ApiError;
-        err.status = res.status;
-        err.data = data;
-        throw err;
+        throw new ApiRequestError({
+          kind: 'http',
+          status: res.status,
+          message: httpErrorMessage({ method, path, status: res.status, data }),
+          data,
+        });
       }
 
       return data as T;
     } catch (error: unknown) {
-      const err: ApiError =
+      // Re-throw our own errors directly
+      if (error instanceof ApiRequestError) throw error;
+
+      const legacyErr: LegacyApiError =
         error instanceof Error
-          ? (error as ApiError)
+          ? (error as LegacyApiError)
           : (Object.assign(new Error(String(error)), {
               status: undefined,
               code: undefined,
-            }) as ApiError);
-      if (err.name === 'AbortError') {
+            }) as LegacyApiError);
+
+      if (legacyErr.name === 'AbortError') {
         if (attempt < maxTimeoutRetryAttempts) {
           await sleep(timeoutRetryDelayMs);
           return request<T>(method, path, body, attempt + 1);
         }
-        const timeoutErr = new Error(timeoutErrorMessage({ method, path })) as ApiError;
-        timeoutErr.status = 408;
-        throw timeoutErr;
+        throw new ApiRequestError({
+          kind: 'timeout',
+          message: timeoutErrorMessage({ method, path }),
+        });
       }
 
-      if (err.code && retryableCodes.includes(err.code) && attempt < maxRetryAttempts) {
+      if (legacyErr.code && retryableCodes.includes(legacyErr.code) && attempt < maxRetryAttempts) {
         await sleep(retryDelayMs * Math.pow(2, attempt));
         return request<T>(method, path, body, attempt + 1);
       }
 
-      throw err;
+      throw new ApiRequestError(
+        {
+          kind: 'network',
+          message: legacyErr.message,
+          cause: legacyErr instanceof Error ? legacyErr : undefined,
+        },
+        { code: legacyErr.code },
+      );
     } finally {
       clearTimeout(timeout);
     }
