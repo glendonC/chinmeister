@@ -29,13 +29,13 @@
 .signalList {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: var(--space-lg);
 }
 
 .signalRow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: var(--space-lg);
   align-items: end;
 }
 
@@ -43,7 +43,7 @@
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .signalValue {
@@ -90,7 +90,7 @@
 .list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .listRow {
@@ -209,7 +209,7 @@
       120px,
       1.6fr
     );
-  gap: 12px;
+  gap: var(--space-md);
   padding: 0 0 10px;
   align-items: baseline;
 }
@@ -252,13 +252,13 @@
       120px,
       1.6fr
     );
-  gap: 12px;
+  gap: var(--space-md);
   width: 100%;
   padding: 10px 14px;
   align-items: center;
   background: transparent;
   border: none;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   cursor: pointer;
   text-align: left;
   font-family: var(--sans);
@@ -276,7 +276,7 @@
 .verdictIncompatible {
   display: inline-block;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   font-weight: 500;
   padding: 2px 8px;
   border-radius: var(--radius-xs);
@@ -302,7 +302,7 @@
 
 .dirMcp {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   font-weight: 500;
   color: var(--accent);
   letter-spacing: 0.04em;
@@ -322,7 +322,7 @@
 
 .confidence {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   text-transform: capitalize;
 }
 
@@ -370,7 +370,7 @@
   font-size: var(--text-sm);
   color: var(--ink);
   line-height: 1.55;
-  margin-bottom: 12px;
+  margin-bottom: var(--space-md);
   max-width: 40rem;
 }
 
@@ -414,7 +414,7 @@
   color: var(--muted);
   background: var(--ghost);
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
 }
 
 .detailNotable {
@@ -432,7 +432,7 @@
 
 .sourcesToggle {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   color: var(--soft);
   cursor: pointer;
   list-style: none;
@@ -448,7 +448,7 @@ details[open] > .sourcesToggle::before {
 }
 
 .sourcesList {
-  padding-top: 8px;
+  padding-top: var(--space-sm);
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -457,12 +457,12 @@ details[open] > .sourcesToggle::before {
 .sourceEntry {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .sourceClaim {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   color: var(--soft);
   min-width: 80px;
   flex-shrink: 0;
@@ -475,7 +475,7 @@ details[open] > .sourcesToggle::before {
 }
 
 .citationLink {
-  font-size: 11px;
+  font-size: var(--text-11);
   color: var(--accent);
   text-decoration: none;
   opacity: 0.8;
@@ -496,13 +496,13 @@ details[open] > .sourcesToggle::before {
 
 .detailEvaluatedBy {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   color: var(--soft);
 }
 
 .detailDate {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-10);
   color: var(--soft);
 }
 
@@ -511,12 +511,12 @@ details[open] > .sourcesToggle::before {
   display: block;
   width: 100%;
   padding: 14px;
-  margin-top: 4px;
+  margin-top: var(--space-xs);
   background: none;
   border: 1px dashed var(--ghost);
-  border-radius: 10px;
+  border-radius: var(--radius-md);
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--text-12);
   color: var(--muted);
   cursor: pointer;
   transition: all 0.12s ease;
@@ -544,7 +544,7 @@ details[open] > .sourcesToggle::before {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-md);
 }
 
 .toolConfigured {
@@ -589,7 +589,7 @@ details[open] > .sourcesToggle::before {
   font-size: 0.9em;
   background: var(--ghost);
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
 }
 
 @media (max-width: 900px) {

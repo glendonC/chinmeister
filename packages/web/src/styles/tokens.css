@@ -16,6 +16,7 @@
   --radius-pill: 999px;
   --radius-circle: 50%;
   --radius-md: 10px;
+  --radius-2xs: 4px;
 
   /* ── Surfaces ── */
   --hover-bg: rgba(18, 19, 23, 0.04);
@@ -23,16 +24,19 @@
   --github-bg-hover: #1b1f23;
 
   /* ── Font sizes (aliases for raw px values used in module CSS) ── */
-  --text-11: 11px;
   --text-10: 10px;
-  --text-14: 14px;
+  --text-11: 11px;
   --text-12: 12px;
+  --text-14: 14px;
 
   /* ── Letter spacing patterns ── */
   --tracking-eyebrow: 0.14em;
   --tracking-stat: 0.12em;
   --tracking-action: 0.08em;
   --tracking-table: 0.1em;
+
+  /* ── Breakpoints (for documentation — CSS can't use vars in @media) ── */
+  /* Mobile: 480px | Small: 640px | Medium: 768px | Large: 900px | Wide: 980px */
 }
 
 [data-theme='dark'] {

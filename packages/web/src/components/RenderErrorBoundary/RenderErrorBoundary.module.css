@@ -29,7 +29,7 @@
 }
 
 .action {
-  margin-top: 4px;
+  margin-top: var(--space-xs);
   border: none;
   background: transparent;
   padding: 0;

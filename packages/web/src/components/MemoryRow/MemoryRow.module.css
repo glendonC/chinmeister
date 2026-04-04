@@ -43,7 +43,7 @@
   font-size: var(--text-11);
   color: var(--muted);
   flex-wrap: wrap;
-  row-gap: 4px;
+  row-gap: var(--space-xs);
 }
 
 .source {
@@ -81,7 +81,7 @@
   border-radius: 3px;
   background: var(--ghost);
   color: var(--soft);
-  margin-right: 4px;
+  margin-right: var(--space-xs);
 }
 
 .actions {
@@ -144,7 +144,7 @@
   font-size: var(--text-11);
   padding: 6px 10px;
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--ghost);
   color: var(--ink);
   outline: none;

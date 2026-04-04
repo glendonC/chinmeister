@@ -92,7 +92,7 @@
   align-self: flex-start;
   padding: var(--space-xs) var(--space-sm);
   margin-left: calc(-1 * var(--space-sm));
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   font-family: var(--mono);
   font-size: var(--text-2xs);
   font-weight: 500;
@@ -155,7 +155,7 @@
   max-width: 300px;
   padding: 7px 12px;
   border: 1px solid var(--hairline);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   font: inherit;
   font-size: var(--text-sm);
@@ -269,7 +269,7 @@
 .rosterTools {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--space-xs);
   margin-left: auto;
   opacity: 0.45;
 }
@@ -336,7 +336,7 @@
 .pathList {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-sm);
 }
 
 .pathRow {
@@ -363,7 +363,7 @@
 .summaryItem {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-xs);
 }
 
 .summaryValue {
@@ -403,7 +403,7 @@
 .distributionLabel {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-sm);
   font-size: var(--text-sm);
   color: var(--ink);
 }

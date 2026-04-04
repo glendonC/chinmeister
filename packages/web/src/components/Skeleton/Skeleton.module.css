@@ -2,7 +2,7 @@
 
 .line {
   display: block;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: linear-gradient(90deg, var(--ghost) 0%, var(--shimmer-peak) 40%, var(--ghost) 80%);
   background-size: 300% 100%;
   animation: shimmer 2s ease-in-out infinite;
@@ -13,14 +13,14 @@
 .statGrid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 4px;
+  gap: var(--space-xs);
   animation: fadeSlideIn 0.3s var(--motion) both;
 }
 
 .statCell {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--space-md);
   padding: 0;
   animation: fadeSlideIn 0.35s var(--motion) both;
 }
