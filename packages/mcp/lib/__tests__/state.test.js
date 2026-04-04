@@ -13,6 +13,7 @@ describe('createAgentState (Proxy-based state guard)', () => {
       modelReportInflight: null,
       lastActivity: 0,
       heartbeatInterval: null,
+      heartbeatRecoveryTimeout: null,
       shuttingDown: false,
       teamJoinError: null,
       heartbeatDead: false,

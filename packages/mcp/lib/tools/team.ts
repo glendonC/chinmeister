@@ -5,7 +5,12 @@ import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
 import { errorResult, getHttpStatus, getErrorMessage, safeString } from '../utils/responses.js';
-import { HEARTBEAT_INTERVAL_MS, MAX_HEARTBEAT_FAILURES, TEAM_ID_MAX_LENGTH } from '../constants.js';
+import {
+  HEARTBEAT_INTERVAL_MS,
+  HEARTBEAT_RECOVERY_INTERVAL_MS,
+  MAX_HEARTBEAT_FAILURES,
+  TEAM_ID_MAX_LENGTH,
+} from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
@@ -44,7 +49,33 @@ export function registerTeamTool(
         clearContextCache();
 
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
+        if (state.heartbeatRecoveryTimeout) {
+          clearTimeout(state.heartbeatRecoveryTimeout);
+          state.heartbeatRecoveryTimeout = null;
+        }
         let consecutiveFailures = 0;
+
+        function startRecoveryTimer(): void {
+          if (state.heartbeatRecoveryTimeout) clearTimeout(state.heartbeatRecoveryTimeout);
+          state.heartbeatRecoveryTimeout = setTimeout(async () => {
+            state.heartbeatRecoveryTimeout = null;
+            if (!state.teamId || state.shuttingDown) return;
+            try {
+              await team.heartbeat(state.teamId);
+              // Recovery succeeded — restart normal heartbeat loop
+              log.info('Heartbeat recovery succeeded, resuming normal interval');
+              consecutiveFailures = 0;
+              state.heartbeatDead = false;
+              state.heartbeatInterval = setInterval(() => {
+                void runHeartbeat();
+              }, HEARTBEAT_INTERVAL_MS);
+            } catch {
+              // Recovery failed — schedule another attempt
+              log.warn('Heartbeat recovery attempt failed, will retry');
+              startRecoveryTimer();
+            }
+          }, HEARTBEAT_RECOVERY_INTERVAL_MS);
+        }
 
         async function runHeartbeat(): Promise<void> {
           // Guard: if teamId was cleared (e.g. shutdown), skip
@@ -59,8 +90,15 @@ export function registerTeamTool(
                 await team.joinTeam(state.teamId!, basename(process.cwd()));
                 log.info('Rejoined team after eviction');
                 consecutiveFailures = 0;
+                // Immediately retry the heartbeat after successful rejoin
+                try {
+                  await team.heartbeat(state.teamId!);
+                } catch {
+                  // Non-critical: rejoin succeeded, next interval will retry
+                }
               } catch (joinErr: unknown) {
                 log.error('Rejoin failed: ' + getErrorMessage(joinErr));
+                // Rejoin failed — count it as a failure (already incremented above)
               }
             } else if (consecutiveFailures <= 3 || consecutiveFailures % 10 === 0) {
               // Log first few failures, then throttle to every 10th to avoid spam
@@ -77,8 +115,9 @@ export function registerTeamTool(
               state.heartbeatDead = true;
               log.error(
                 `Heartbeat stopped after ${MAX_HEARTBEAT_FAILURES} consecutive failures. ` +
-                  'Team tools will return an error until the team is rejoined.',
+                  'Starting recovery timer.',
               );
+              startRecoveryTimer();
             }
           }
         }

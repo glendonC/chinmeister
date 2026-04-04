@@ -36,20 +36,17 @@ export function withTeam(
       }
       return noTeam();
     }
-    if (state.heartbeatDead) {
-      return {
-        content: [
-          {
-            type: 'text' as const,
-            text: 'Connection to team lost after repeated failures. Try leaving and rejoining the team.',
-          },
-        ],
-        isError: true,
-      };
-    }
     try {
       const preamble = options.skipPreamble ? '' : await teamPreamble(team, state.teamId);
-      return await handler(args, { preamble });
+      const result = await handler(args, { preamble });
+      // Append degraded-presence warning when heartbeat is dead but tool still executed
+      if (state.heartbeatDead && result.content?.length) {
+        result.content.push({
+          type: 'text' as const,
+          text: '\n⚠ Presence degraded: heartbeat lost. Other agents may not see you. Recovery is in progress.',
+        });
+      }
+      return result;
     } catch (err: unknown) {
       return errorResult(err);
     }

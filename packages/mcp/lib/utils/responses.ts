@@ -72,6 +72,23 @@ export function textResult(text: string): McpToolResult {
   return { content: [{ type: 'text', text }] };
 }
 
+/**
+ * Append a degraded-presence warning to a tool result when heartbeat is dead.
+ * Returns the same result object (mutated) for convenience.
+ */
+export function appendDegradedWarning(
+  result: McpToolResult,
+  heartbeatDead: boolean,
+): McpToolResult {
+  if (heartbeatDead && result.content?.length) {
+    result.content.push({
+      type: 'text',
+      text: '\n⚠ Presence degraded: heartbeat lost. Other agents may not see you. Recovery is in progress.',
+    });
+  }
+  return result;
+}
+
 // --- API response validation helpers ---
 // Lightweight type guards for degrading gracefully on malformed API responses.
 // Avoids adding Zod to the MCP package while preventing unhandled TypeErrors

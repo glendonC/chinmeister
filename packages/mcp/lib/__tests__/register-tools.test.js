@@ -96,7 +96,12 @@ describe('registerTools', () => {
     server = createFakeServer();
     team = createFakeTeam();
     integrationDoctor = createFakeIntegrationDoctor();
-    state = { teamId: 't_test123', heartbeatInterval: null, sessionId: null };
+    state = {
+      teamId: 't_test123',
+      heartbeatInterval: null,
+      heartbeatRecoveryTimeout: null,
+      sessionId: null,
+    };
     profile = {
       framework: 'unknown',
       languages: ['javascript'],

@@ -7,6 +7,10 @@
 // --- Context cache ---
 /** TTL for cached team context before re-fetching */
 export const CONTEXT_TTL_MS = 30_000;
+/** Max age before stale cached context is discarded (returns null instead) */
+export const CONTEXT_MAX_STALE_MS = 300_000;
+/** How often to retry API when offline (instead of only on tool calls) */
+export const CONTEXT_OFFLINE_RETRY_MS = 60_000;
 
 // --- WebSocket connection ---
 /** Ping interval to keep DB heartbeat fresh */
@@ -37,6 +41,8 @@ export const STUCKNESS_THRESHOLD_MINUTES = 15;
 export const HEARTBEAT_INTERVAL_MS = 30_000;
 /** Consecutive heartbeat failures before giving up */
 export const MAX_HEARTBEAT_FAILURES = 20;
+/** Interval between recovery heartbeat attempts after heartbeat death */
+export const HEARTBEAT_RECOVERY_INTERVAL_MS = 300_000;
 
 // --- Reconnect backoff ---
 /**

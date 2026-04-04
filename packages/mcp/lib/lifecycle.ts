@@ -103,6 +103,8 @@ export interface McpState {
   modelReportInflight: string | null;
   lastActivity: number;
   heartbeatInterval?: ReturnType<typeof setInterval> | null;
+  /** Recovery timer that fires after heartbeat death to attempt a single recovery heartbeat. */
+  heartbeatRecoveryTimeout?: ReturnType<typeof setTimeout> | null;
   shuttingDown: boolean;
   /** Set when initial team join fails — tools can surface this instead of a generic "Not in a team" error. */
   teamJoinError: string | null;
@@ -184,6 +186,7 @@ export async function cleanupProcessSession(
   state.shuttingDown = true;
   deleteRecord(agentId, options.homeDir ? { homeDir: options.homeDir } : {});
   if (state.heartbeatInterval) clearTimer(state.heartbeatInterval);
+  if (state.heartbeatRecoveryTimeout) clearTimeout(state.heartbeatRecoveryTimeout);
   if (state.ws)
     try {
       state.ws.close();
