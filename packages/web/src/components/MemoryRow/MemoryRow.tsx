@@ -34,7 +34,7 @@ type RowAction =
   | { type: 'DELETE_SUCCESS' }
   | { type: 'DELETE_ERROR'; error: string };
 
-function rowReducer(state: RowState, action: RowAction): RowState {
+export function rowReducer(state: RowState, action: RowAction): RowState {
   switch (action.type) {
     case 'START_EDIT':
       if (state.mode !== 'view') return state;
@@ -89,7 +89,7 @@ function rowReducer(state: RowState, action: RowAction): RowState {
   }
 }
 
-function initState(memory: Memory): RowState {
+export function initState(memory: Memory): RowState {
   return {
     mode: 'view',
     editText: memory.text,

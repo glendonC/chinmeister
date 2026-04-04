@@ -1,133 +1,293 @@
 import { describe, expect, it } from 'vitest';
+import { rowReducer, initState } from './MemoryRow.tsx';
 
-/**
- * MemoryRow component tests.
- *
- * The component uses a useReducer-based state machine with 4 modes:
- * view, editing, confirming-delete, saving.
- *
- * Due to a pre-existing React 19 dual-instance issue with the monorepo test setup
- * (also affects App.test.jsx, OverviewView.test.jsx, ProjectView.test.jsx),
- * we test the state machine logic and validation through the validateTags utility,
- * which the component delegates to for all tag validation.
- *
- * The validateTags tests in src/lib/validateTags.test.js cover:
- * - Tag parsing, normalization, dedup
- * - MAX_TAG_LENGTH (50) and MAX_TAGS_COUNT (10) enforcement
- * - Special character stripping
- * - Error message generation
- *
- * The polling tests in src/lib/stores/polling.test.js cover:
- * - AbortController integration
- * - Team switch cancellation
- * - Error backoff and recovery
- */
+// ---------------------------------------------------------------------------
+// initState
+// ---------------------------------------------------------------------------
 
-describe('MemoryRow state machine', () => {
-  it('defines 4 modes: view, editing, confirming-delete, saving', () => {
-    // This documents the state machine contract.
-    // The component initializes in 'view' mode via useReducer.
-    const validModes = ['view', 'editing', 'confirming-delete', 'saving'];
-    expect(validModes).toHaveLength(4);
-  });
-
-  it('derives isEditing from mode (editing or saving)', () => {
-    // Both 'editing' and 'saving' modes render the edit form
-    for (const mode of ['editing', 'saving']) {
-      const isEditing = mode === 'editing' || mode === 'saving';
-      expect(isEditing).toBe(true);
-    }
-    for (const mode of ['view', 'confirming-delete']) {
-      const isEditing = mode === 'editing' || mode === 'saving';
-      expect(isEditing).toBe(false);
-    }
-  });
-
-  it('derives saving from mode', () => {
-    expect('saving' === 'saving').toBe(true);
-    expect('editing' === 'saving').toBe(false);
-    expect('view' === 'saving').toBe(false);
-  });
-
-  it('derives confirmDelete from mode', () => {
-    expect('confirming-delete' === 'confirming-delete').toBe(true);
-    expect('view' === 'confirming-delete').toBe(false);
-  });
-
-  describe('transition guards', () => {
-    it('startEdit only from view', () => {
-      const canStartEdit = (mode) => mode === 'view';
-      expect(canStartEdit('view')).toBe(true);
-      expect(canStartEdit('editing')).toBe(false);
-      expect(canStartEdit('saving')).toBe(false);
-      expect(canStartEdit('confirming-delete')).toBe(false);
-    });
-
-    it('cancelEdit only from editing', () => {
-      const canCancelEdit = (mode) => mode === 'editing';
-      expect(canCancelEdit('editing')).toBe(true);
-      expect(canCancelEdit('view')).toBe(false);
-      expect(canCancelEdit('saving')).toBe(false);
-    });
-
-    it('requestDelete only from view', () => {
-      const canRequestDelete = (mode) => mode === 'view';
-      expect(canRequestDelete('view')).toBe(true);
-      expect(canRequestDelete('editing')).toBe(false);
-    });
-
-    it('cancelDelete only from confirming-delete', () => {
-      const canCancelDelete = (mode) => mode === 'confirming-delete';
-      expect(canCancelDelete('confirming-delete')).toBe(true);
-      expect(canCancelDelete('view')).toBe(false);
-    });
-
-    it('save only from editing', () => {
-      const canSave = (mode) => mode === 'editing';
-      expect(canSave('editing')).toBe(true);
-      expect(canSave('view')).toBe(false);
-      expect(canSave('saving')).toBe(false);
-    });
-
-    it('confirmDelete only from confirming-delete', () => {
-      const canConfirmDelete = (mode) => mode === 'confirming-delete';
-      expect(canConfirmDelete('confirming-delete')).toBe(true);
-      expect(canConfirmDelete('view')).toBe(false);
+describe('initState', () => {
+  it('initializes in view mode with memory text and joined tags', () => {
+    const state = initState({ id: 'm1', text: 'hello', tags: ['a', 'b'] });
+    expect(state).toEqual({
+      mode: 'view',
+      editText: 'hello',
+      editTags: 'a, b',
+      error: null,
     });
   });
 
-  describe('transition targets', () => {
-    it('startEdit: view -> editing', () => {
-      expect('editing').toBe('editing');
+  it('handles missing tags', () => {
+    const state = initState({ id: 'm2', text: 'no tags' });
+    expect(state.editTags).toBe('');
+  });
+
+  it('handles empty tags array', () => {
+    const state = initState({ id: 'm3', text: 'empty', tags: [] });
+    expect(state.editTags).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// rowReducer
+// ---------------------------------------------------------------------------
+
+function viewState(overrides = {}) {
+  return {
+    mode: 'view',
+    editText: 'original',
+    editTags: 'tag1',
+    error: null,
+    ...overrides,
+  };
+}
+
+function editingState(overrides = {}) {
+  return {
+    mode: 'editing',
+    editText: 'edited',
+    editTags: 'tag1, tag2',
+    error: null,
+    ...overrides,
+  };
+}
+
+function savingState(overrides = {}) {
+  return {
+    mode: 'saving',
+    editText: 'edited',
+    editTags: 'tag1, tag2',
+    error: null,
+    ...overrides,
+  };
+}
+
+function confirmingDeleteState(overrides = {}) {
+  return {
+    mode: 'confirming-delete',
+    editText: 'original',
+    editTags: 'tag1',
+    error: null,
+    ...overrides,
+  };
+}
+
+describe('rowReducer', () => {
+  // --- START_EDIT ---
+  describe('START_EDIT', () => {
+    it('transitions from view to editing with provided text and tags', () => {
+      const result = rowReducer(viewState(), {
+        type: 'START_EDIT',
+        text: 'new text',
+        tags: 'new, tags',
+      });
+      expect(result.mode).toBe('editing');
+      expect(result.editText).toBe('new text');
+      expect(result.editTags).toBe('new, tags');
+      expect(result.error).toBeNull();
     });
 
-    it('cancelEdit: editing -> view', () => {
-      expect('view').toBe('view');
+    it('is a no-op from editing mode', () => {
+      const state = editingState();
+      const result = rowReducer(state, { type: 'START_EDIT', text: 'x', tags: 'y' });
+      expect(result).toBe(state);
     });
 
-    it('save success: saving -> view', () => {
-      expect('view').toBe('view');
+    it('is a no-op from saving mode', () => {
+      const state = savingState();
+      const result = rowReducer(state, { type: 'START_EDIT', text: 'x', tags: 'y' });
+      expect(result).toBe(state);
     });
 
-    it('save failure: saving -> editing (stays in edit form)', () => {
-      expect('editing').toBe('editing');
+    it('is a no-op from confirming-delete mode', () => {
+      const state = confirmingDeleteState();
+      const result = rowReducer(state, { type: 'START_EDIT', text: 'x', tags: 'y' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- CANCEL_EDIT ---
+  describe('CANCEL_EDIT', () => {
+    it('transitions from editing back to view', () => {
+      const result = rowReducer(editingState({ error: 'old error' }), { type: 'CANCEL_EDIT' });
+      expect(result.mode).toBe('view');
+      expect(result.error).toBeNull();
     });
 
-    it('requestDelete: view -> confirming-delete', () => {
-      expect('confirming-delete').toBe('confirming-delete');
+    it('is a no-op from view mode', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'CANCEL_EDIT' });
+      expect(result).toBe(state);
     });
 
-    it('cancelDelete: confirming-delete -> view', () => {
-      expect('view').toBe('view');
+    it('is a no-op from saving mode', () => {
+      const state = savingState();
+      const result = rowReducer(state, { type: 'CANCEL_EDIT' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- SET_TEXT ---
+  describe('SET_TEXT', () => {
+    it('updates editText in editing mode', () => {
+      const result = rowReducer(editingState(), { type: 'SET_TEXT', value: 'updated' });
+      expect(result.editText).toBe('updated');
     });
 
-    it('confirmDelete success: component unmounts (no state change)', () => {
-      // On successful delete, the parent removes the row
-      // No mode transition needed
+    it('is a no-op from view mode', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'SET_TEXT', value: 'x' });
+      expect(result).toBe(state);
     });
 
-    it('confirmDelete failure: saving -> view', () => {
-      expect('view').toBe('view');
+    it('is a no-op from saving mode', () => {
+      const state = savingState();
+      const result = rowReducer(state, { type: 'SET_TEXT', value: 'x' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- SET_TAGS ---
+  describe('SET_TAGS', () => {
+    it('updates editTags in editing mode', () => {
+      const result = rowReducer(editingState(), { type: 'SET_TAGS', value: 'new, tags' });
+      expect(result.editTags).toBe('new, tags');
+    });
+
+    it('is a no-op from view mode', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'SET_TAGS', value: 'x' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- SET_ERROR ---
+  describe('SET_ERROR', () => {
+    it('sets error in editing mode', () => {
+      const result = rowReducer(editingState(), { type: 'SET_ERROR', error: 'Bad input' });
+      expect(result.error).toBe('Bad input');
+      expect(result.mode).toBe('editing');
+    });
+
+    it('is a no-op from view mode', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'SET_ERROR', error: 'nope' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- REQUEST_DELETE ---
+  describe('REQUEST_DELETE', () => {
+    it('transitions from view to confirming-delete', () => {
+      const result = rowReducer(viewState(), { type: 'REQUEST_DELETE' });
+      expect(result.mode).toBe('confirming-delete');
+    });
+
+    it('is a no-op from editing mode', () => {
+      const state = editingState();
+      const result = rowReducer(state, { type: 'REQUEST_DELETE' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- CANCEL_DELETE ---
+  describe('CANCEL_DELETE', () => {
+    it('transitions from confirming-delete back to view', () => {
+      const result = rowReducer(confirmingDeleteState(), { type: 'CANCEL_DELETE' });
+      expect(result.mode).toBe('view');
+    });
+
+    it('is a no-op from view mode', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'CANCEL_DELETE' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- START_SAVE ---
+  describe('START_SAVE', () => {
+    it('transitions from editing to saving', () => {
+      const result = rowReducer(editingState({ error: 'old' }), { type: 'START_SAVE' });
+      expect(result.mode).toBe('saving');
+      expect(result.error).toBeNull();
+    });
+
+    it('transitions from confirming-delete to saving', () => {
+      const result = rowReducer(confirmingDeleteState(), { type: 'START_SAVE' });
+      expect(result.mode).toBe('saving');
+    });
+
+    it('is a no-op from view mode', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'START_SAVE' });
+      expect(result).toBe(state);
+    });
+
+    it('is a no-op from saving mode (already saving)', () => {
+      const state = savingState();
+      const result = rowReducer(state, { type: 'START_SAVE' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- SAVE_SUCCESS ---
+  describe('SAVE_SUCCESS', () => {
+    it('transitions from saving back to view', () => {
+      const result = rowReducer(savingState(), { type: 'SAVE_SUCCESS' });
+      expect(result.mode).toBe('view');
+    });
+
+    it('is a no-op from editing mode', () => {
+      const state = editingState();
+      const result = rowReducer(state, { type: 'SAVE_SUCCESS' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- SAVE_ERROR ---
+  describe('SAVE_ERROR', () => {
+    it('transitions from saving back to editing with error', () => {
+      const result = rowReducer(savingState(), { type: 'SAVE_ERROR', error: 'Network error' });
+      expect(result.mode).toBe('editing');
+      expect(result.error).toBe('Network error');
+    });
+
+    it('is a no-op from editing mode', () => {
+      const state = editingState();
+      const result = rowReducer(state, { type: 'SAVE_ERROR', error: 'err' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- DELETE_SUCCESS ---
+  describe('DELETE_SUCCESS', () => {
+    it('returns state unchanged (component will unmount)', () => {
+      const state = savingState();
+      const result = rowReducer(state, { type: 'DELETE_SUCCESS' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- DELETE_ERROR ---
+  describe('DELETE_ERROR', () => {
+    it('transitions from saving back to view with error', () => {
+      const result = rowReducer(savingState(), { type: 'DELETE_ERROR', error: 'Delete failed' });
+      expect(result.mode).toBe('view');
+      expect(result.error).toBe('Delete failed');
+    });
+
+    it('is a no-op from editing mode', () => {
+      const state = editingState();
+      const result = rowReducer(state, { type: 'DELETE_ERROR', error: 'err' });
+      expect(result).toBe(state);
+    });
+  });
+
+  // --- Default case ---
+  describe('unknown action', () => {
+    it('returns state unchanged for unknown action types', () => {
+      const state = viewState();
+      const result = rowReducer(state, { type: 'UNKNOWN_ACTION' });
+      expect(result).toBe(state);
     });
   });
 });
