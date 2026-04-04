@@ -27,11 +27,17 @@ function renderComponent(Component, props) {
   };
 }
 
+const navigateMock = vi.fn();
+
 async function loadProjectsPanel() {
   vi.resetModules();
 
   vi.doMock('../../lib/projectGradient.js', () => ({
     projectGradient: (id) => `gradient-${id}`,
+  }));
+
+  vi.doMock('../../lib/router.js', () => ({
+    navigate: navigateMock,
   }));
 
   const mod = await import('./ProjectsPanel.js');
@@ -74,8 +80,8 @@ describe('ProjectsPanel', () => {
     unmount();
   });
 
-  it('calls selectTeam when a project row is clicked', async () => {
-    const selectTeam = vi.fn();
+  it('navigates to project when a project row is clicked', async () => {
+    navigateMock.mockClear();
     const ProjectsPanel = await loadProjectsPanel();
     const projects = [{ team_id: 't_1', team_name: 'Alpha' }];
     const { container, unmount } = renderComponent(ProjectsPanel, {
@@ -83,7 +89,7 @@ describe('ProjectsPanel', () => {
       filteredProjects: projects,
       search: '',
       setSearch: vi.fn(),
-      selectTeam,
+      selectTeam: vi.fn(),
     });
 
     const btn = container.querySelector('button');
@@ -91,7 +97,7 @@ describe('ProjectsPanel', () => {
       btn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });
 
-    expect(selectTeam).toHaveBeenCalledWith('t_1');
+    expect(navigateMock).toHaveBeenCalledWith('project', 't_1');
 
     unmount();
   });

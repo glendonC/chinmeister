@@ -1,6 +1,7 @@
 import { type ChangeEvent } from 'react';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { projectGradient } from '../../lib/projectGradient.js';
+import { navigate } from '../../lib/router.js';
 import styles from './OverviewView.module.css';
 
 interface HostConfigured {
@@ -63,7 +64,7 @@ export default function ProjectsPanel({
                 type="button"
                 className={styles.tableRow}
                 style={{ '--row-index': i } as React.CSSProperties}
-                onClick={() => selectTeam(team.team_id)}
+                onClick={() => navigate('project', team.team_id)}
               >
                 <span className={styles.tdLeft}>
                   <span

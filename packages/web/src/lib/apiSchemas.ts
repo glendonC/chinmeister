@@ -67,16 +67,27 @@ const lockSchema = z.object({
   minutes_held: z.number().nullable().optional(),
 });
 
-const messageSchema = z.object({
-  id: z.string().optional(),
-  agent_id: z.string().nullable().optional(),
-  handle: z.string(),
-  host_tool: z.string().nullable().optional(),
-  agent_surface: z.string().nullable().optional(),
-  text: z.string(),
-  created_at: z.string().optional(),
-  target: z.string().nullable().optional(),
-});
+const messageSchema = z
+  .object({
+    id: z.string().optional(),
+    agent_id: z.string().nullable().optional(),
+    handle: z.string().optional(),
+    from_handle: z.string().optional(),
+    host_tool: z.string().nullable().optional(),
+    from_host_tool: z.string().nullable().optional(),
+    from_tool: z.string().nullable().optional(),
+    agent_surface: z.string().nullable().optional(),
+    from_agent_surface: z.string().nullable().optional(),
+    text: z.string(),
+    created_at: z.string().optional(),
+    target: z.string().nullable().optional(),
+  })
+  .transform((msg) => ({
+    ...msg,
+    handle: msg.handle || msg.from_handle || '',
+    host_tool: msg.host_tool || msg.from_host_tool || msg.from_tool || null,
+    agent_surface: msg.agent_surface || msg.from_agent_surface || null,
+  }));
 
 const sessionSchema = z
   .object({
@@ -171,18 +182,18 @@ export type ToolDirectoryEvaluation = z.infer<typeof toolDirectoryEvaluationSche
 
 export const teamContextSchema = z
   .object({
-    members: z.array(memberSchema).default([]),
-    memories: z.array(memorySchema).default([]),
-    locks: z.array(lockSchema).default([]),
-    messages: z.array(messageSchema).default([]),
-    recentSessions: z.array(sessionSchema).default([]),
-    sessions: z.array(sessionSchema).default([]),
-    conflicts: z.array(conflictSchema).default([]),
-    tools_configured: z.array(hostMetricSchema).default([]),
-    hosts_configured: z.array(hostMetricSchema).default([]),
-    surfaces_seen: z.array(surfaceMetricSchema).default([]),
-    models_seen: z.array(modelMetricSchema).default([]),
-    usage: z.record(z.number()).default({}),
+    members: z.array(memberSchema).catch([]),
+    memories: z.array(memorySchema).catch([]),
+    locks: z.array(lockSchema).catch([]),
+    messages: z.array(messageSchema).catch([]),
+    recentSessions: z.array(sessionSchema).catch([]),
+    sessions: z.array(sessionSchema).catch([]),
+    conflicts: z.array(conflictSchema).catch([]),
+    tools_configured: z.array(hostMetricSchema).catch([]),
+    hosts_configured: z.array(hostMetricSchema).catch([]),
+    surfaces_seen: z.array(surfaceMetricSchema).catch([]),
+    models_seen: z.array(modelMetricSchema).catch([]),
+    usage: z.record(z.number()).catch({}),
   })
   .transform((context) => ({
     ...context,

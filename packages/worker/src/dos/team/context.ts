@@ -23,7 +23,7 @@ import { inferHostToolFromAgentId } from './runtime.js';
 const log = createLogger('TeamDO.context');
 
 interface TelemetryBreakdown {
-  tools_configured: Array<{ tool: string; joins: number }>;
+  tools_configured: Array<{ host_tool: string; joins: number }>;
   hosts_configured: Array<{ host_tool: string; joins: number }>;
   surfaces_seen: Array<{ agent_surface: string; joins: number }>;
   models_seen: Array<{ agent_model: string; count: number }>;
@@ -36,7 +36,7 @@ export function getTelemetryBreakdown(sql: SqlStorage): TelemetryBreakdown {
     .exec('SELECT metric, count FROM telemetry ORDER BY count DESC LIMIT 10000')
     .toArray();
 
-  const tools_configured: Array<{ tool: string; joins: number }> = [];
+  const tools_configured: Array<{ host_tool: string; joins: number }> = [];
   const hosts_configured: Array<{ host_tool: string; joins: number }> = [];
   const surfaces_seen: Array<{ agent_surface: string; joins: number }> = [];
   const models_seen: Array<{ agent_model: string; count: number }> = [];
@@ -47,7 +47,10 @@ export function getTelemetryBreakdown(sql: SqlStorage): TelemetryBreakdown {
     const m = r.metric;
     if (m.startsWith(METRIC_KEYS.TOOL_PREFIX)) {
       if (tools_configured.length < 10) {
-        tools_configured.push({ tool: m.slice(METRIC_KEYS.TOOL_PREFIX.length), joins: r.count });
+        tools_configured.push({
+          host_tool: m.slice(METRIC_KEYS.TOOL_PREFIX.length),
+          joins: r.count,
+        });
       }
     } else {
       // All non-tool metrics go into the usage map

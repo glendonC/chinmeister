@@ -1,9 +1,26 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
+import { readFileSync } from 'fs';
+
+/** Vite plugin: rewrite dashboard routes to dashboard.html in dev. */
+function dashboardFallback() {
+  const DASHBOARD_ROUTES = /^\/(project|tools|settings)(\/|$)/;
+  return {
+    name: 'dashboard-fallback',
+    configureServer(server) {
+      server.middlewares.use((req, _res, next) => {
+        if (req.url && DASHBOARD_ROUTES.test(req.url)) {
+          req.url = '/dashboard.html';
+        }
+        next();
+      });
+    },
+  };
+}
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), dashboardFallback()],
   publicDir: 'public',
   build: {
     outDir: 'dist',
