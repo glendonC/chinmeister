@@ -75,6 +75,11 @@ async function loadWebSocketModule({
   vi.doMock('../../api.js', () => ({
     api: apiMock,
     getApiUrl: () => 'https://chinwag-api.example.workers.dev',
+    getRuntimeTargets: () => ({
+      profile: 'prod',
+      apiUrl: 'https://chinwag-api.example.workers.dev',
+      teamWsOrigin: 'wss://chinwag-api.example.workers.dev',
+    }),
   }));
 
   vi.doMock('@chinwag/shared/dashboard-ws.js', () => ({
@@ -795,6 +800,11 @@ describe('websocket module', () => {
       vi.doMock('../../api.js', () => ({
         api: apiMock,
         getApiUrl: () => 'https://chinwag-api.example.workers.dev',
+        getRuntimeTargets: () => ({
+          profile: 'prod',
+          apiUrl: 'https://chinwag-api.example.workers.dev',
+          teamWsOrigin: 'wss://chinwag-api.example.workers.dev',
+        }),
       }));
       vi.doMock('@chinwag/shared/dashboard-ws.js', () => ({
         applyDelta: vi.fn(),
@@ -1044,6 +1054,11 @@ describe('websocket module', () => {
       vi.doMock('../../api.js', () => ({
         api: apiMock,
         getApiUrl: () => 'https://chinwag-api.example.workers.dev',
+        getRuntimeTargets: () => ({
+          profile: 'prod',
+          apiUrl: 'https://chinwag-api.example.workers.dev',
+          teamWsOrigin: 'wss://chinwag-api.example.workers.dev',
+        }),
       }));
       vi.doMock('@chinwag/shared/dashboard-ws.js', () => ({
         applyDelta: vi.fn(),
@@ -1097,6 +1112,11 @@ describe('websocket module', () => {
       vi.doMock('../../api.js', () => ({
         api: apiMock,
         getApiUrl: () => 'https://chinwag-api.example.workers.dev',
+        getRuntimeTargets: () => ({
+          profile: 'prod',
+          apiUrl: 'https://chinwag-api.example.workers.dev',
+          teamWsOrigin: 'wss://chinwag-api.example.workers.dev',
+        }),
       }));
       vi.doMock('@chinwag/shared/dashboard-ws.js', () => ({
         applyDelta: vi.fn(),

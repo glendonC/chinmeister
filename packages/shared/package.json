@@ -45,6 +45,10 @@
       "types": "./dist/process-utils.d.ts",
       "import": "./dist/process-utils.js"
     },
+    "./runtime-profile.js": {
+      "types": "./dist/runtime-profile.d.ts",
+      "import": "./dist/runtime-profile.js"
+    },
     "./session-registry.js": {
       "types": "./dist/session-registry.d.ts",
       "import": "./dist/session-registry.js"

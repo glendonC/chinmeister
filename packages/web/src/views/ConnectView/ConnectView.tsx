@@ -1,7 +1,7 @@
 import { useState, useEffect, type KeyboardEvent } from 'react';
 import { authActions } from '../../lib/stores/auth.js';
 import { teamActions } from '../../lib/stores/teams.js';
-import { getApiUrl } from '../../lib/api.js';
+import { getApiUrl, getRuntimeTargets } from '../../lib/api.js';
 import { getErrorMessage } from '../../lib/errorHelpers.js';
 import styles from './ConnectView.module.css';
 
@@ -24,10 +24,10 @@ function friendlyGithubError(code: string): string {
   return GITHUB_ERROR_MAP[code] || 'Something went wrong with GitHub sign-in. Try again.';
 }
 
-function friendlyError(msg: string | null | undefined): string {
+function friendlyError(msg: string | null | undefined, tokenCommand: string): string {
   const m = (msg || '').toLowerCase();
   if (m.includes('unauthorized'))
-    return 'That token is invalid or expired. Generate a fresh one with npx chinwag token.';
+    return `That token is invalid or expired. Generate a fresh one with ${tokenCommand}.`;
   if (m.includes('timed out') || m.includes('timeout'))
     return 'Could not reach the server. Check your connection and try again.';
   if (m.includes('500') || m.includes('server error'))
@@ -38,6 +38,14 @@ function friendlyError(msg: string | null | undefined): string {
 }
 
 export default function ConnectView({ error: initialError = null }: Props) {
+  const runtime = getRuntimeTargets();
+  const isLocalProfile = runtime.profile === 'local';
+  const dashboardCommand = isLocalProfile
+    ? 'CHINWAG_PROFILE=local npx chinwag dashboard'
+    : 'npx chinwag dashboard';
+  const tokenCommand = isLocalProfile
+    ? 'CHINWAG_PROFILE=local npx chinwag token'
+    : 'npx chinwag token';
   const [tokenInput, setTokenInput] = useState<string>('');
   const [githubError, setGithubError] = useState<string | null>(null);
   const [tokenError, setTokenError] = useState<string | null>(null);
@@ -45,7 +53,7 @@ export default function ConnectView({ error: initialError = null }: Props) {
   const [copied, setCopied] = useState<boolean>(false);
 
   useEffect(() => {
-    if (initialError) setGithubError(friendlyError(initialError));
+    if (initialError) setGithubError(friendlyError(initialError, tokenCommand));
     const hash = window.location.hash;
     if (hash.includes('error=')) {
       const match = hash.match(/error=([^&]+)/);
@@ -54,11 +62,14 @@ export default function ConnectView({ error: initialError = null }: Props) {
         history.replaceState(null, '', window.location.pathname);
       }
     }
-  }, [initialError]);
+  }, [initialError, tokenCommand]);
 
   async function handleConnect(): Promise<void> {
     const t = tokenInput.trim();
-    if (!t) return;
+    if (!t) {
+      setTokenError('Paste a token first.');
+      return;
+    }
 
     setConnecting(true);
     setTokenError(null);
@@ -67,7 +78,7 @@ export default function ConnectView({ error: initialError = null }: Props) {
       await authActions.authenticate(t);
       await teamActions.loadTeams();
     } catch (err: unknown) {
-      setTokenError(friendlyError(getErrorMessage(err)));
+      setTokenError(friendlyError(getErrorMessage(err), tokenCommand));
     } finally {
       setConnecting(false);
     }
@@ -79,7 +90,7 @@ export default function ConnectView({ error: initialError = null }: Props) {
 
   async function copyCommand(): Promise<void> {
     try {
-      await navigator.clipboard.writeText('npx chinwag dashboard');
+      await navigator.clipboard.writeText(dashboardCommand);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
@@ -107,6 +118,11 @@ export default function ConnectView({ error: initialError = null }: Props) {
           <div className={styles.authBlock}>
             <span className={styles.eyebrow}>Connect</span>
             <h2 className={styles.authTitle}>Open your dashboard</h2>
+            <p className={styles.authHint}>
+              {isLocalProfile
+                ? 'Local profile: isolated auth, local worker, no production data.'
+                : 'Production profile: connects to the live chinwag service.'}
+            </p>
 
             <a className={styles.githubButton} href={`${getApiUrl()}/auth/github`}>
               <svg
@@ -135,7 +151,7 @@ export default function ConnectView({ error: initialError = null }: Props) {
 
             <button className={styles.commandBox} onClick={copyCommand} title="Copy to clipboard">
               <code className={styles.commandText}>
-                <span className={styles.commandPrompt}>$</span> npx chinwag dashboard
+                <span className={styles.commandPrompt}>$</span> {dashboardCommand}
               </code>
               <span className={styles.commandCopy}>
                 {copied ? (
@@ -172,8 +188,14 @@ export default function ConnectView({ error: initialError = null }: Props) {
 
           <div className={styles.tokenBlock}>
             <p className={styles.tokenLabel}>
-              Or paste a token from <code>npx chinwag token</code>
+              Or paste a token from <code>{tokenCommand}</code>
             </p>
+            {isLocalProfile && (
+              <p className={styles.authHint}>
+                GitHub sign-in can require a localhost callback in your GitHub OAuth app. The token
+                flow is the fastest local path.
+              </p>
+            )}
             <div className={styles.tokenForm}>
               <input
                 type="password"

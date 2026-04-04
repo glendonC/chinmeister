@@ -76,9 +76,15 @@ async function loadWebSocketModule({
   vi.resetModules();
   MockWebSocket.instances = [];
 
+  const wsProto = new URL(apiUrl).protocol === 'https:' ? 'wss:' : 'ws:';
   vi.doMock('../../api.js', () => ({
     api: apiMock,
     getApiUrl: () => apiUrl,
+    getRuntimeTargets: () => ({
+      profile: 'prod',
+      apiUrl,
+      teamWsOrigin: `${wsProto}//${new URL(apiUrl).host}`,
+    }),
   }));
   vi.doMock('../auth.js', () => ({
     authActions: {

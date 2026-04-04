@@ -39,6 +39,15 @@ async function loadConnectView({
   authenticateMock = vi.fn(),
   loadTeamsMock = vi.fn(),
   hash = '',
+  runtimeTargets = {
+    profile: 'prod',
+    apiUrl: 'https://test.chinwag.dev',
+    dashboardUrl: 'https://chinwag.dev/dashboard',
+    dashboardOrigin: 'https://chinwag.dev',
+    dashboardPath: '/dashboard',
+    chatWsUrl: 'wss://test.chinwag.dev/ws/chat',
+    teamWsOrigin: 'wss://test.chinwag.dev',
+  },
 } = {}) {
   vi.resetModules();
 
@@ -57,7 +66,8 @@ async function loadConnectView({
   }));
 
   vi.doMock('../../lib/api.js', () => ({
-    getApiUrl: () => 'https://test.chinwag.dev',
+    getApiUrl: () => runtimeTargets.apiUrl,
+    getRuntimeTargets: () => runtimeTargets,
   }));
 
   const mod = await import('./ConnectView.js');
@@ -77,6 +87,7 @@ describe('ConnectView', () => {
 
     expect(container.textContent).toContain('Open your dashboard');
     expect(container.textContent).toContain('Sign in with GitHub');
+    expect(container.textContent).toContain('Production profile');
     expect(container.querySelector('input[type="password"]')).not.toBeNull();
 
     unmount();
@@ -185,6 +196,27 @@ describe('ConnectView', () => {
     await flushEffects();
 
     expect(container.textContent).toContain('GitHub sign-in was cancelled');
+
+    unmount();
+  });
+
+  it('shows local-profile commands and guidance when targeting local dev', async () => {
+    const ConnectView = await loadConnectView({
+      runtimeTargets: {
+        profile: 'local',
+        apiUrl: 'http://localhost:8787',
+        dashboardUrl: 'http://localhost:56790/dashboard.html',
+        dashboardOrigin: 'http://localhost:56790',
+        dashboardPath: '/dashboard.html',
+        chatWsUrl: 'ws://localhost:8787/ws/chat',
+        teamWsOrigin: 'ws://localhost:8787',
+      },
+    });
+    const { container, unmount } = renderComponent(ConnectView, {});
+
+    expect(container.textContent).toContain('Local profile');
+    expect(container.textContent).toContain('CHINWAG_PROFILE=local npx chinwag dashboard');
+    expect(container.textContent).toContain('CHINWAG_PROFILE=local npx chinwag token');
 
     unmount();
   });
