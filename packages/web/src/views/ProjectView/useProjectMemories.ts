@@ -13,13 +13,10 @@ interface UseProjectMemoriesReturn {
 }
 
 export default function useProjectMemories(): UseProjectMemoriesReturn {
-  const contextData = usePollingStore((s) => s.contextData) as Record<string, unknown> | null;
+  const contextData = usePollingStore((s) => s.contextData);
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
 
-  const memories = useMemo<Memory[]>(
-    () => (contextData?.memories as Memory[]) ?? [],
-    [contextData?.memories],
-  );
+  const memories = useMemo<Memory[]>(() => contextData?.memories ?? [], [contextData?.memories]);
   const memoryBreakdown: [string, number][] = useMemo(
     () => buildMemoryBreakdown(memories),
     [memories],

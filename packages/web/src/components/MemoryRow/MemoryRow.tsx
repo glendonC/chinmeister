@@ -3,6 +3,7 @@ import type { Memory } from '../../lib/apiSchemas.js';
 import { formatRelativeTime } from '../../lib/relativeTime.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { validateTags } from '../../lib/validateTags.js';
+import { getErrorMessage } from '../../lib/errorHelpers.js';
 import ToolIcon from '../ToolIcon/ToolIcon.jsx';
 import styles from './MemoryRow.module.css';
 
@@ -83,7 +84,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }: Props) {
       );
       setMode('view');
     } catch (err) {
-      setError((err as Error).message || 'Update failed');
+      setError(getErrorMessage(err, 'Update failed'));
       setMode('editing');
     }
   }, [mode, editText, editTags, memory.id, memory.text, memory.tags, onUpdate]);
@@ -96,7 +97,7 @@ export default function MemoryRow({ memory, onUpdate, onDelete }: Props) {
       await onDelete?.(memory.id);
       // Component will unmount on success — no state update needed
     } catch (err) {
-      setError((err as Error).message || 'Delete failed');
+      setError(getErrorMessage(err, 'Delete failed'));
       setMode('view');
     }
   }, [mode, memory.id, onDelete]);

@@ -84,9 +84,28 @@ function resetAbortController(): AbortSignal {
   return pollState.pollAbortController.signal;
 }
 
-interface ApiError extends Error {
+interface ApiErrorShape {
   status?: number;
   data?: { error?: string; failed_teams?: Array<{ team_id?: string; team_name?: string }> };
+}
+
+/** Safely extract ApiError-like properties from an unknown thrown value. */
+function toApiError(err: unknown): ApiErrorShape {
+  if (typeof err !== 'object' || err === null) return {};
+  const result: ApiErrorShape = {};
+  if ('status' in err && typeof err.status === 'number') {
+    result.status = err.status;
+  }
+  if ('data' in err && typeof err.data === 'object' && err.data !== null) {
+    result.data = err.data as ApiErrorShape['data'];
+  }
+  return result;
+}
+
+/** Check if an unknown error is an AbortError. */
+function isAbortError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  return 'name' in err && err.name === 'AbortError';
 }
 
 /** Single poll cycle. */
@@ -106,12 +125,12 @@ async function poll(): Promise<void> {
         dashboardStatus: state.dashboardData ? state.dashboardStatus : ('loading' as DataStatus),
       }));
       const data = await api('GET', '/me/dashboard', null, token, { signal });
-      const validated: DashboardSummary = validateResponse(
+      const validated = validateResponse<DashboardSummary, DashboardSummary>(
         dashboardSummarySchema,
         data,
         'dashboard',
         { fallback: createEmptyDashboardSummary },
-      ) as DashboardSummary;
+      );
       if (validated.failed_teams?.length && validated.failed_teams.length > 0) {
         await teamActions.loadTeams();
       }
@@ -139,9 +158,14 @@ async function poll(): Promise<void> {
       });
       await teamActions.ensureJoined(snapshotTeamId);
       const data = await api('GET', `/teams/${snapshotTeamId}/context`, null, token, { signal });
-      const validated: TeamContext = validateResponse(teamContextSchema, data, 'team-context', {
-        fallback: createEmptyTeamContext,
-      }) as TeamContext;
+      const validated = validateResponse<TeamContext, TeamContext>(
+        teamContextSchema,
+        data,
+        'team-context',
+        {
+          fallback: createEmptyTeamContext,
+        },
+      );
       if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
       // Skip if WebSocket delivered newer data while this fetch was in flight
       if (pollState.dataVersion !== versionBeforeFetch) return;
@@ -162,23 +186,22 @@ async function poll(): Promise<void> {
     }
   } catch (err) {
     // Aborted requests are not failures — silently discard them.
-    if ((err as Error)?.name === 'AbortError') return;
+    if (isAbortError(err)) return;
 
-    if ((err as ApiError).status === 401) {
+    const apiErr = toApiError(err);
+
+    if (apiErr.status === 401) {
       authActions.logout();
       stopPolling();
       return;
     }
     if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
-    if (
-      snapshotTeamId === null &&
-      (err as ApiError)?.data?.failed_teams?.length &&
-      ((err as ApiError).data!.failed_teams!.length as number) > 0
-    ) {
+    const failedTeams = apiErr.data?.failed_teams;
+    if (snapshotTeamId === null && failedTeams && failedTeams.length > 0) {
       await teamActions.loadTeams();
     }
     const pollError = formatError(err);
-    const pollErrorData = ((err as ApiError)?.data || null) as DashboardSummary | null;
+    const pollErrorData = (apiErr.data || null) as DashboardSummary | null;
     if (snapshotTeamId === null) {
       pollingStore.setState((state) => ({
         pollError,
@@ -230,12 +253,13 @@ function stopPollTimer(): void {
 
 function formatError(err: unknown): string {
   if (typeof err === 'string') return err;
-  const msg = (err as Error)?.message || 'Something went wrong';
-  if ((err as ApiError)?.status === 408) return 'Request timed out. Try again.';
-  if (msg.includes('Failed to fetch') || (err as Error)?.name === 'TypeError') {
+  const msg = err instanceof Error ? err.message : 'Something went wrong';
+  const apiErr = toApiError(err);
+  if (apiErr.status === 408) return 'Request timed out. Try again.';
+  if (msg.includes('Failed to fetch') || (err instanceof Error && err.name === 'TypeError')) {
     return 'Cannot reach server. Check your connection.';
   }
-  return msg;
+  return msg || 'Something went wrong';
 }
 
 /** Start polling. Attempts WebSocket for project view, falls back to polling. */

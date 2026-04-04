@@ -335,7 +335,7 @@ interface ValidateOptions<F> {
  * data. On failure, either throws or returns a caller-provided safe fallback.
  */
 export function validateResponse<T, F = undefined>(
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   data: unknown,
   label: string,
   options: ValidateOptions<F> = {},

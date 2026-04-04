@@ -12,12 +12,9 @@ interface UseProjectMembersReturn {
 }
 
 export default function useProjectMembers(): UseProjectMembersReturn {
-  const contextData = usePollingStore((s) => s.contextData) as Record<string, unknown> | null;
+  const contextData = usePollingStore((s) => s.contextData);
 
-  const members = useMemo<Member[]>(
-    () => (contextData?.members as Member[]) ?? [],
-    [contextData?.members],
-  );
+  const members = useMemo<Member[]>(() => contextData?.members ?? [], [contextData?.members]);
 
   const activeAgents = useMemo(
     () => members.filter((member: Member) => member.status === 'active'),

@@ -19,12 +19,14 @@ interface UseProjectSessionsReturn {
 }
 
 export default function useProjectSessions(): UseProjectSessionsReturn {
-  const contextData = usePollingStore((s) => s.contextData) as Record<string, unknown> | null;
+  const contextData = usePollingStore((s) => s.contextData);
 
   const allSessions = useMemo(
     () =>
       selectRecentSessions(
-        (contextData?.recentSessions as Session[]) || (contextData?.sessions as Session[]) || [],
+        contextData?.recentSessions?.length
+          ? contextData.recentSessions
+          : (contextData?.sessions ?? []),
       ),
     [contextData],
   );

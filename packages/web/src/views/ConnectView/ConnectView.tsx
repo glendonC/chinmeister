@@ -2,6 +2,7 @@ import { useState, useEffect, type KeyboardEvent } from 'react';
 import { authActions } from '../../lib/stores/auth.js';
 import { teamActions } from '../../lib/stores/teams.js';
 import { getApiUrl } from '../../lib/api.js';
+import { getErrorMessage } from '../../lib/errorHelpers.js';
 import styles from './ConnectView.module.css';
 
 const GITHUB_ERROR_MAP: Record<string, string> = {
@@ -69,7 +70,7 @@ export default function ConnectView({ error: initialError = null }: Props) {
       await authActions.authenticate(t);
       await teamActions.loadTeams();
     } catch (err: unknown) {
-      setTokenError(friendlyError((err as Error).message));
+      setTokenError(friendlyError(getErrorMessage(err)));
     } finally {
       setConnecting(false);
     }

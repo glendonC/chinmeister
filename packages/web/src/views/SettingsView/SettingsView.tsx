@@ -4,6 +4,7 @@ import { stopPolling } from '../../lib/stores/polling.js';
 import { api } from '../../lib/api.js';
 import { COLOR_PALETTE, getColorHex } from '../../lib/utils.js';
 import { useTheme } from '../../lib/useTheme.js';
+import { getErrorMessage } from '../../lib/errorHelpers.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import styles from './SettingsView.module.css';
 
@@ -101,7 +102,7 @@ export default function SettingsView(_props: Props) {
     } catch (err: unknown) {
       setHandleForm((prev) => ({
         ...prev,
-        error: (err as Error).message || 'Update failed',
+        error: getErrorMessage(err, 'Update failed'),
         saving: false,
       }));
     }
@@ -121,7 +122,7 @@ export default function SettingsView(_props: Props) {
     } catch (err: unknown) {
       setColorForm((prev) => ({
         ...prev,
-        error: (err as Error).message || 'Could not update color',
+        error: getErrorMessage(err, 'Could not update color'),
       }));
     } finally {
       setColorForm((prev) => ({ ...prev, saving: false }));
@@ -137,7 +138,7 @@ export default function SettingsView(_props: Props) {
       }
       window.location.href = result.url;
     } catch (err: unknown) {
-      setLinkError((err as Error).message || 'Could not start GitHub linking');
+      setLinkError(getErrorMessage(err, 'Could not start GitHub linking'));
     }
   }
 
@@ -148,7 +149,7 @@ export default function SettingsView(_props: Props) {
       await api('PUT', '/me/github', { action: 'unlink' }, token);
       authActions.updateUser({ github_id: null, github_login: null, avatar_url: null });
     } catch (err: unknown) {
-      setLinkError((err as Error).message || 'Could not unlink GitHub');
+      setLinkError(getErrorMessage(err, 'Could not unlink GitHub'));
     } finally {
       setUnlinking(false);
     }

@@ -17,15 +17,12 @@ interface UseProjectAnalyticsReturn {
 }
 
 export default function useProjectAnalytics(): UseProjectAnalyticsReturn {
-  const contextData = usePollingStore((s) => s.contextData) as Record<string, unknown> | null;
+  const contextData = usePollingStore((s) => s.contextData);
 
-  const members = useMemo<Member[]>(
-    () => (contextData?.members as Member[]) ?? [],
-    [contextData?.members],
-  );
-  const locks = useMemo<Lock[]>(() => (contextData?.locks as Lock[]) ?? [], [contextData?.locks]);
+  const members = useMemo<Member[]>(() => contextData?.members ?? [], [contextData?.members]);
+  const locks = useMemo<Lock[]>(() => contextData?.locks ?? [], [contextData?.locks]);
   const toolsConfigured = useMemo<HostMetric[]>(
-    () => (contextData?.tools_configured as HostMetric[]) ?? [],
+    () => contextData?.tools_configured ?? [],
     [contextData?.tools_configured],
   );
 
@@ -34,7 +31,7 @@ export default function useProjectAnalytics(): UseProjectAnalyticsReturn {
     [members],
   );
   const conflicts = useMemo(
-    () => buildProjectConflicts((contextData?.conflicts as Conflict[]) || [], members),
+    () => buildProjectConflicts(contextData?.conflicts ?? [], members),
     [contextData?.conflicts, members],
   );
   const filesInPlay: string[] = useMemo(

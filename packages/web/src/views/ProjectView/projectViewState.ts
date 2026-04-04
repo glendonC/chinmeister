@@ -90,9 +90,15 @@ export function buildMemoryBreakdown(memories: MemoryWithTags[] = []): [string, 
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
+/** A configured-entries row must have a string identifier and a numeric join count. */
+interface ConfiguredEntry {
+  joins: number;
+  [key: string]: unknown;
+}
+
 interface UsageSummaryKeys {
   configuredKey: string;
-  memberKey: string;
+  memberKey: keyof Member;
   outputKey: string;
 }
 
@@ -105,43 +111,40 @@ export interface UsageSummaryEntry {
 
 function buildProjectUsageSummaries(
   members: Member[] = [],
-  configuredEntries: Record<string, unknown>[] = [],
+  configuredEntries: ConfiguredEntry[] = [],
   { configuredKey, memberKey, outputKey }: UsageSummaryKeys,
 ): UsageSummaryEntry[] {
-  const byEntity = new Map<string, Record<string, string | number>>();
+  const byEntity = new Map<
+    string,
+    { [key: string]: string | number; joins: number; live: number }
+  >();
 
   configuredEntries.forEach((entry) => {
-    const id = entry[configuredKey] as string;
-    if (!id) return;
+    const id = entry[configuredKey];
+    if (typeof id !== 'string' || !id) return;
     byEntity.set(id, {
       [outputKey]: id,
-      joins: (entry.joins as number) || 0,
+      joins: entry.joins || 0,
       live: 0,
     });
   });
 
   members.forEach((member) => {
-    const id = ((member as Record<string, unknown>)[memberKey] as string) || 'unknown';
+    const id = String(member[memberKey] ?? 'unknown') || 'unknown';
     if (!id) return;
     if (!byEntity.has(id)) {
       byEntity.set(id, { [outputKey]: id, joins: 0, live: 0 });
     }
     if (member.status === 'active') {
-      (byEntity.get(id)!.live as number) += 1;
+      byEntity.get(id)!.live += 1;
     }
   });
 
-  const totalJoins = [...byEntity.values()].reduce(
-    (sum, item) => sum + ((item.joins as number) || 0),
-    0,
-  );
-  const withShare: UsageSummaryEntry[] = [...byEntity.values()].map(
-    (item) =>
-      ({
-        ...item,
-        share: totalJoins > 0 ? (item.joins as number) / totalJoins : 0,
-      }) as UsageSummaryEntry,
-  );
+  const totalJoins = [...byEntity.values()].reduce((sum, item) => sum + item.joins, 0);
+  const withShare: UsageSummaryEntry[] = [...byEntity.values()].map((item) => ({
+    ...item,
+    share: totalJoins > 0 ? item.joins / totalJoins : 0,
+  }));
   return withShare.sort((a, b) => {
     const aScore = a.live * 100 + a.joins;
     const bScore = b.live * 100 + b.joins;
@@ -153,37 +156,29 @@ export function buildProjectToolSummaries(
   members: Member[] = [],
   toolsConfigured: HostMetric[] = [],
 ): UsageSummaryEntry[] {
-  return buildProjectUsageSummaries(
-    members,
-    toolsConfigured as unknown as Record<string, unknown>[],
-    {
-      configuredKey: 'host_tool',
-      memberKey: 'host_tool',
-      outputKey: 'tool',
-    },
-  );
+  return buildProjectUsageSummaries(members, toolsConfigured, {
+    configuredKey: 'host_tool',
+    memberKey: 'host_tool',
+    outputKey: 'tool',
+  });
 }
 
 export function buildProjectHostSummaries(
   members: Member[] = [],
   hostsConfigured: HostMetric[] = [],
 ): UsageSummaryEntry[] {
-  return buildProjectUsageSummaries(
-    members,
-    hostsConfigured as unknown as Record<string, unknown>[],
-    {
-      configuredKey: 'host_tool',
-      memberKey: 'host_tool',
-      outputKey: 'host_tool',
-    },
-  );
+  return buildProjectUsageSummaries(members, hostsConfigured, {
+    configuredKey: 'host_tool',
+    memberKey: 'host_tool',
+    outputKey: 'host_tool',
+  });
 }
 
 export function buildProjectSurfaceSummaries(
   members: Member[] = [],
   surfacesSeen: SurfaceMetric[] = [],
 ): UsageSummaryEntry[] {
-  return buildProjectUsageSummaries(members, surfacesSeen as unknown as Record<string, unknown>[], {
+  return buildProjectUsageSummaries(members, surfacesSeen, {
     configuredKey: 'agent_surface',
     memberKey: 'agent_surface',
     outputKey: 'agent_surface',

@@ -10,6 +10,7 @@ import {
   forceRefresh,
 } from './lib/stores/polling.js';
 import { formatRelativeTime } from './lib/relativeTime.js';
+import { getErrorMessage } from './lib/errorHelpers.js';
 import { useRoute, parseLocation, type Route } from './lib/router.js';
 
 import ConnectView from './views/ConnectView/ConnectView.js';
@@ -130,7 +131,7 @@ export default function App(): ReactNode {
           teamActions.selectTeam(initial.teamId);
         }
       } catch (err) {
-        setBootError((err as Error).message || 'Authentication failed');
+        setBootError(getErrorMessage(err, 'Authentication failed'));
       }
       setBootCompleted(true);
     }
