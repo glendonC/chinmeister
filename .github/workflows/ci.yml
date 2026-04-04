@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint:
-    name: Lint & Format
+  check:
+    name: Lint, Typecheck & Audit
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,37 +22,13 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      - run: npx turbo run typecheck
       - run: npx eslint .
       - run: npx prettier --check .
-
-  typecheck:
-    name: Type Check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run typecheck
-
-  audit:
-    name: Security Audit
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
       - run: npm audit --omit=dev
 
-  test-worker:
-    name: Test Worker
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,127 +38,28 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      # Worker tests run in the workerd runtime via @cloudflare/vitest-pool-workers.
-      # V8 coverage is not supported in workerd (no node:inspector/promises).
+      # Run coverage for shared, mcp, cli, web via turbo (parallel)
+      - run: npx turbo run test:coverage --filter=@chinwag/shared --filter=chinwag-mcp --filter=chinwag --filter=chinwag-web
+      # Worker tests run separately (workerd runtime via @cloudflare/vitest-pool-workers)
       - run: npm run test:worker
-
-  test-shared:
-    name: Test Shared
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run test:coverage:shared
-      - name: Upload Shared coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-shared
-          path: packages/shared/coverage/
-          retention-days: 3
-
-  test-mcp:
-    name: Test MCP
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      # Coverage thresholds enforced in vitest.config.js — fails if coverage drops below baseline.
-      - run: npm run test:coverage:mcp
-      - name: Upload MCP coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-mcp
-          path: packages/mcp/coverage/
-          retention-days: 3
-
-  test-cli:
-    name: Test CLI
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run test:coverage:cli
-      - name: Upload CLI coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-cli
-          path: packages/cli/coverage/
-          retention-days: 3
-
-  test-web:
-    name: Test Web
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run test:coverage:web
-      - name: Upload web coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-web
-          path: packages/web/coverage/
-          retention-days: 3
-
-  test-web-e2e:
-    name: Web E2E
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
+      # E2E tests need playwright
       - run: npx playwright install --with-deps chromium
       - run: npm run test:e2e:web
-
-  build:
-    name: Build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
         with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
-      - run: npm run build --workspace=packages/cli
-      - run: npm run build --workspace=packages/web
-      - run: cd packages/worker && npx wrangler deploy --dry-run
+          name: coverage
+          path: packages/*/coverage/
+          retention-days: 3
 
-  deploy-worker:
-    name: Deploy Worker
-    needs: [lint, typecheck, test-worker, test-shared, build]
+  deploy:
+    name: Deploy
+    needs: [check, test]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
     concurrency:
-      group: deploy-worker
+      group: deploy
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@v4
@@ -192,28 +69,13 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
+      # Deploy worker
       - run: npx wrangler deploy
         working-directory: packages/worker
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-  deploy-web:
-    name: Deploy Web
-    needs: [lint, typecheck, test-web, test-web-e2e, build]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    runs-on: ubuntu-latest
-    concurrency:
-      group: deploy-web
-      cancel-in-progress: false
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-      - run: npm ci
+      # Build and deploy web
       - run: npm run build --workspace=packages/web
       - run: npx wrangler pages deploy dist --project-name=chinwag
         working-directory: packages/web
