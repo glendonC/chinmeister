@@ -3,6 +3,7 @@ import { Box, Text, useInput } from 'ink';
 import TextInput from 'ink-text-input';
 import { getInkColor } from './colors.js';
 import type { ChinwagConfig } from './config.js';
+import { getRuntimeTargets } from './api.js';
 import { formatError, createLogger } from '@chinwag/shared';
 import {
   ERROR_DISPLAY_MS,
@@ -11,8 +12,6 @@ import {
 } from './constants/timings.js';
 
 const log = createLogger('chat');
-
-const WS_URL = process.env.CHINWAG_WS_URL || 'wss://chinwag-api.glendonchin.workers.dev/ws/chat';
 
 // ── Constants ───────────────────────────────────────
 const CHAT_HISTORY_LIMIT = 50;
@@ -146,7 +145,7 @@ export function Chat({ config, user, navigate }: ChatProps): React.ReactNode {
     function connect(shuffle = false): void {
       dispatch({ type: WS_ACTIONS.CONNECTING });
 
-      const url = new URL(WS_URL);
+      const url = new URL(getRuntimeTargets().chatWsUrl);
       if (shuffle) url.searchParams.set('shuffle', '1');
 
       // Node.js WebSocket accepts an options object as second arg for headers,

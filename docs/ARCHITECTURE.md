@@ -137,7 +137,7 @@ npx chinwag init
 
 This single command:
 
-1. Creates an account (if first run): generates token, saves to `~/.chinwag/config.json`
+1. Creates an account (if first run): generates token, saves to the active profile config (`~/.chinwag/config.json` for production, `~/.chinwag/local/config.json` for local dev)
 2. Creates a team for the project (or joins existing if `.chinwag` file exists)
 3. Writes MCP config files for all detected tools (driven by the shared registry in `packages/shared/tool-registry.js`, re-exported through `packages/cli/lib/tools.js`; the broader discover catalog lives in `packages/worker/src/catalog.js` and is served by `GET /tools/catalog`):
    - `.mcp.json`: Claude Code, Codex, Aider, Amazon Q
@@ -254,7 +254,7 @@ The monorepo has five packages:
 | `lib/tools/integrations.js` | Integration-related tool registration.                                                                                                                                                                                                                                                                                                                    |
 | `lib/api.js`                | HTTP client with Bearer token auth, 10s fetch timeout, retry with exponential backoff on 5xx/network errors.                                                                                                                                                                                                                                              |
 | `lib/team.js`               | Team operation wrappers: delegates to backend API for join/leave, context, activity, memory, locks, messaging, and session/history endpoints.                                                                                                                                                                                                             |
-| `lib/config.js`             | Reads `~/.chinwag/config.json` and `.chinwag` team file.                                                                                                                                                                                                                                                                                                  |
+| `lib/config.js`             | Reads the active profile config (`~/.chinwag/config.json` or `~/.chinwag/local/config.json`) and the `.chinwag` team file.                                                                                                                                                                                                                                |
 | `lib/profile.js`            | Auto-detects languages, frameworks, tools, and platforms from project files and environment variables.                                                                                                                                                                                                                                                    |
 | `lib/context.js`            | Shared context cache with TTL. Serves as preamble source and offline fallback when the API is unreachable.                                                                                                                                                                                                                                                |
 | `lib/diff-state.js`         | State diffing for the channel server. Compares team context snapshots and returns human-readable event strings for meaningful changes.                                                                                                                                                                                                                    |
@@ -277,7 +277,7 @@ The monorepo has five packages:
 | `lib/customize.jsx`      | Profile editor. Change handle, cycle through 12-color palette, set status.                                                                                                                                                                                          |
 | `lib/api.js`             | HTTP client. Wraps fetch with Bearer token auth, 10s timeout, retry with exponential backoff on 5xx/network errors.                                                                                                                                                 |
 | `lib/colors.js`          | Maps chinwag's 12 colors to ANSI terminal colors for Ink rendering.                                                                                                                                                                                                 |
-| `lib/config.js`          | Reads/writes `~/.chinwag/config.json`. Token, handle, color.                                                                                                                                                                                                        |
+| `lib/config.js`          | Reads/writes the active profile config. Production uses `~/.chinwag/config.json`; local dev uses `~/.chinwag/local/config.json`.                                                                                                                                    |
 
 ### Shared (`packages/shared/`)
 
@@ -290,7 +290,7 @@ The monorepo has five packages:
 | `contracts.ts`          | Type definitions for the API contract between packages: `TeamContext`, `TeamMember`, `DashboardDeltaEvent`, and all delta event types.                                                   |
 | `dashboard-ws.ts`       | WebSocket delta event normalization and application. `applyDelta()` maintains a local `TeamContext` from server-pushed events. Used by CLI dashboard, web dashboard, and channel server. |
 | `integration-doctor.ts` | Detects and configures MCP/hooks across editors. Scans for host integrations, validates config, writes MCP and hook settings.                                                            |
-| `config.ts`             | Reads and validates `~/.chinwag/config.json`.                                                                                                                                            |
+| `config.ts`             | Reads and validates the active profile config path.                                                                                                                                      |
 | `team-utils.ts`         | Team ID validation and `.chinwag` file discovery.                                                                                                                                        |
 | `process-utils.ts`      | Process info helpers (parent PID, TTY path).                                                                                                                                             |
 
@@ -302,7 +302,7 @@ The monorepo has five packages:
 2. CLI calls `POST /auth/init` (no auth required)
 3. Worker creates user in DatabaseDO: generates UUID, token, random two-word handle, random color
 4. Worker writes `token:{bearer-token} → user_id` to KV
-5. CLI saves `{token, handle, color}` to `~/.chinwag/config.json`
+5. CLI saves `{token, refresh_token, handle, color}` to the active profile config file
 6. CLI creates team via `POST /teams`, writes `.chinwag` file with team ID
 7. CLI writes MCP config files for detected tools (`.mcp.json`, `.cursor/mcp.json`, `.vscode/mcp.json`)
 8. For Claude Code: writes hooks config to `.claude/settings.json`
@@ -311,7 +311,7 @@ The monorepo has five packages:
 
 1. Developer opens any MCP-compatible tool (Claude Code, Cursor, Windsurf, etc.) in the project, or spawns a managed agent via TUI/`chinwag run`
 2. Tool discovers MCP config, starts chinwag MCP server subprocess
-3. MCP server reads `~/.chinwag/config.json` for auth token, `.chinwag` for team ID
+3. MCP server reads the active profile config for auth token, `.chinwag` for team ID
 4. MCP server joins team via backend API, reports agent type and session start
 5. **Claude Code (hooks path):** SessionStart hook fires, calls chinwag backend, injects team context into Claude's session ("2 other agents active, Sarah's Cursor editing auth.js")
 6. **Claude Code (channel path):** Channel pushes real-time updates as team state changes
@@ -350,7 +350,7 @@ Chat is available but secondary to the agent coordination focus. It exists becau
 
 **Three surfaces, one backend.** MCP server (for agents), TUI (for terminal users), web dashboard (for visual workflow management). All hit the same API. No surface gets special backend endpoints. This means features built for one surface are automatically available to the others.
 
-**One team per project, one account across projects.** The `.chinwag` file (committed to git) scopes a team to a repo. `~/.chinwag/config.json` gives the user a cross-project identity. This enables both team coordination within a repo and solo multi-project visibility across repos. Multi-project is a Coordinate concern (unified identity, user-level API) and an Observe concern (cross-project dashboard to see all agents across all projects).
+**One team per project, one account across projects within a runtime profile.** The `.chinwag` file (committed to git) scopes a team to a repo. `~/.chinwag/config.json` gives the user a cross-project production identity, while local development uses `~/.chinwag/local/config.json` so local testing never overwrites production auth. This enables both team coordination within a repo and solo multi-project visibility across repos while keeping local and production environments intentionally separate.
 
 **Claude Code gets the deepest integration.** Claude Code supports hooks (enforceable interception before file edits), channels (server-initiated push), and is a CLI tool (full process control). This enables conflict prevention that the agent cannot bypass plus managed lifecycle. Other tools get softer integration via MCP instructions and tool descriptions. As tools add hook-like capabilities, their integration deepens.
 

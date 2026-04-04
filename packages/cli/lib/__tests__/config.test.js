@@ -1,99 +1,41 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-// We need to test saveConfig and deleteConfig without touching the real config
-// Since config.js imports CONFIG_DIR from shared/config.js, we mock it
-vi.mock('../../shared/config.js', () => {
-  const tmpDir = mkdtempSync(join(tmpdir(), 'chinwag-config-test-'));
-  const CONFIG_DIR = join(tmpDir, '.chinwag');
-  const CONFIG_FILE = join(CONFIG_DIR, 'config.json');
-  return {
-    CONFIG_DIR,
-    CONFIG_FILE,
-    configExists: () => existsSync(CONFIG_FILE),
-    loadConfig: () => {
-      try {
-        return JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
-      } catch {
-        return null;
-      }
-    },
-  };
-});
+const { sharedConfigMock } = vi.hoisted(() => ({
+  sharedConfigMock: {
+    CONFIG_DIR: '/home/testuser/.chinwag',
+    CONFIG_FILE: '/home/testuser/.chinwag/config.json',
+    LOCAL_CONFIG_DIR: '/home/testuser/.chinwag/local',
+    LOCAL_CONFIG_FILE: '/home/testuser/.chinwag/local/config.json',
+    getConfigPaths: vi.fn(() => ({
+      profile: 'prod',
+      configDir: '/home/testuser/.chinwag',
+      configFile: '/home/testuser/.chinwag/config.json',
+    })),
+    configExists: vi.fn(() => true),
+    loadConfig: vi.fn(() => ({ token: 'tok_test' })),
+    saveConfig: vi.fn(),
+    deleteConfig: vi.fn(),
+  },
+}));
 
-import {
-  saveConfig,
-  deleteConfig,
-  configExists,
-  loadConfig,
-  CONFIG_DIR,
-  CONFIG_FILE,
-} from '../config.js';
+vi.mock('@chinwag/shared/config.js', () => sharedConfigMock);
+
+import * as cliConfig from '../config.js';
 
 afterEach(() => {
-  // Clean up
-  try {
-    rmSync(CONFIG_DIR, { recursive: true, force: true });
-  } catch {
-    /* cleanup best-effort */
-  }
+  vi.clearAllMocks();
 });
 
-describe('saveConfig', () => {
-  it('creates config directory and writes config file', () => {
-    saveConfig({ token: 'tok_test', handle: 'test_user' });
-
-    expect(existsSync(CONFIG_FILE)).toBe(true);
-    const content = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
-    expect(content).toEqual({ token: 'tok_test', handle: 'test_user' });
-  });
-
-  it('overwrites existing config', () => {
-    saveConfig({ token: 'old' });
-    saveConfig({ token: 'new', handle: 'updated' });
-
-    const content = JSON.parse(readFileSync(CONFIG_FILE, 'utf-8'));
-    expect(content.token).toBe('new');
-    expect(content.handle).toBe('updated');
-  });
-});
-
-describe('deleteConfig', () => {
-  it('deletes existing config file', () => {
-    saveConfig({ token: 'tok_test' });
-    expect(existsSync(CONFIG_FILE)).toBe(true);
-
-    deleteConfig();
-    expect(existsSync(CONFIG_FILE)).toBe(false);
-  });
-
-  it('does nothing when config does not exist', () => {
-    // Should not throw
-    deleteConfig();
-  });
-});
-
-describe('configExists', () => {
-  it('returns false when no config file exists', () => {
-    expect(configExists()).toBe(false);
-  });
-
-  it('returns true after saving config', () => {
-    saveConfig({ token: 'tok_test' });
-    expect(configExists()).toBe(true);
-  });
-});
-
-describe('loadConfig', () => {
-  it('returns null when config does not exist', () => {
-    expect(loadConfig()).toBeNull();
-  });
-
-  it('returns parsed config after save', () => {
-    saveConfig({ token: 'tok_test', handle: 'myuser' });
-    const config = loadConfig();
-    expect(config).toEqual({ token: 'tok_test', handle: 'myuser' });
+describe('cli config module', () => {
+  it('re-exports shared config helpers and paths', () => {
+    expect(cliConfig.CONFIG_DIR).toBe(sharedConfigMock.CONFIG_DIR);
+    expect(cliConfig.CONFIG_FILE).toBe(sharedConfigMock.CONFIG_FILE);
+    expect(cliConfig.LOCAL_CONFIG_DIR).toBe(sharedConfigMock.LOCAL_CONFIG_DIR);
+    expect(cliConfig.LOCAL_CONFIG_FILE).toBe(sharedConfigMock.LOCAL_CONFIG_FILE);
+    expect(cliConfig.getConfigPaths).toBe(sharedConfigMock.getConfigPaths);
+    expect(cliConfig.configExists).toBe(sharedConfigMock.configExists);
+    expect(cliConfig.loadConfig).toBe(sharedConfigMock.loadConfig);
+    expect(cliConfig.saveConfig).toBe(sharedConfigMock.saveConfig);
+    expect(cliConfig.deleteConfig).toBe(sharedConfigMock.deleteConfig);
   });
 });

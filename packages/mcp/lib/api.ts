@@ -1,5 +1,6 @@
-import { createJsonApiClient, DEFAULT_API_URL } from '@chinwag/shared/api-client.js';
+import { createJsonApiClient } from '@chinwag/shared/api-client.js';
 import type { RuntimeIdentity } from '@chinwag/shared/agent-identity.js';
+import { resolveRuntimeTargets, type RuntimeTargets } from '@chinwag/shared/runtime-profile.js';
 import { loadConfig } from './config.js';
 import { refreshAndPersistToken } from './token-refresh.js';
 import {
@@ -19,8 +20,17 @@ interface ApiOptions {
   runtimeIdentity?: RuntimeIdentity;
 }
 
+export function getRuntimeTargets(): RuntimeTargets {
+  return resolveRuntimeTargets({
+    profile: process.env.CHINWAG_PROFILE,
+    apiUrl: process.env.CHINWAG_API_URL,
+    dashboardUrl: process.env.CHINWAG_DASHBOARD_URL,
+    chatWsUrl: process.env.CHINWAG_WS_URL,
+  });
+}
+
 export function getApiUrl(): string {
-  return process.env.CHINWAG_API_URL || DEFAULT_API_URL;
+  return getRuntimeTargets().apiUrl;
 }
 
 /**
@@ -43,7 +53,7 @@ async function tryRefreshToken(baseUrl: string): Promise<string | null> {
 
 export function api(config: { token?: string | null } | null, options: ApiOptions = {}): ApiClient {
   const { agentId, runtimeIdentity } = options;
-  const baseUrl = getApiUrl();
+  const { apiUrl: baseUrl } = getRuntimeTargets();
 
   // Mutable token reference so refresh can update subsequent requests
   let currentToken = config?.token || null;

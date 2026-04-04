@@ -5,7 +5,7 @@ vi.mock('child_process', () => ({
   execFileSync: vi.fn(),
 }));
 
-import { openWebDashboard, DASHBOARD_URL } from '../dashboard/utils.js';
+import { openWebDashboard, getDashboardUrl } from '../dashboard/utils.js';
 import { execFileSync } from 'child_process';
 
 describe('openWebDashboard', () => {
@@ -18,6 +18,7 @@ describe('openWebDashboard', () => {
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -29,7 +30,7 @@ describe('openWebDashboard', () => {
     expect(result).toEqual({ ok: true });
     expect(execFileSync).toHaveBeenCalledWith(
       'open',
-      [`${DASHBOARD_URL}#token=my-token`],
+      [`${getDashboardUrl()}#token=my-token`],
       expect.objectContaining({ stdio: 'ignore' }),
     );
   });
@@ -42,7 +43,7 @@ describe('openWebDashboard', () => {
     expect(result).toEqual({ ok: true });
     expect(execFileSync).toHaveBeenCalledWith(
       'open',
-      [DASHBOARD_URL],
+      [getDashboardUrl()],
       expect.objectContaining({ stdio: 'ignore' }),
     );
   });
@@ -56,6 +57,20 @@ describe('openWebDashboard', () => {
     expect(execFileSync).toHaveBeenCalledWith(
       'xdg-open',
       expect.any(Array),
+      expect.objectContaining({ stdio: 'ignore' }),
+    );
+  });
+
+  it('uses the local dashboard URL when the local profile is active', () => {
+    Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+    vi.stubEnv('CHINWAG_PROFILE', 'local');
+
+    const result = openWebDashboard('tok');
+
+    expect(result).toEqual({ ok: true });
+    expect(execFileSync).toHaveBeenCalledWith(
+      'open',
+      ['http://localhost:56790/dashboard.html#token=tok'],
       expect.objectContaining({ stdio: 'ignore' }),
     );
   });

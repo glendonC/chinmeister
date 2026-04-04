@@ -354,6 +354,7 @@ export interface Env {
   AI: Ai;
   ENVIRONMENT: string;
   DASHBOARD_URL: string;
+  MODERATION_MODE?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   EXA_API_KEY?: string;

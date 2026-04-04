@@ -140,6 +140,13 @@ if (process.argv[2] === 'doctor') {
   process.exit(0);
 }
 
+// Handle token command before launching TUI
+if (process.argv[2] === 'token') {
+  const { runToken } = await import('./lib/commands/token.js');
+  await runToken();
+  process.exit(0);
+}
+
 // Handle team commands before launching TUI
 if (process.argv[2] === 'team') {
   const { handleTeamCommand } = await import('./lib/team.js');

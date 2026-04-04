@@ -8,6 +8,7 @@
 /** POST /auth/init */
 export interface InitAccountResponse {
   token: string;
+  refresh_token: string;
   handle: string;
   color: string;
 }

@@ -190,7 +190,12 @@ export async function runInit(): Promise<void> {
 
 async function createAccount(): Promise<ChinwagConfig> {
   const result = (await initAccount()) as InitAccountResponse;
-  const config: ChinwagConfig = { token: result.token, handle: result.handle, color: result.color };
+  const config: ChinwagConfig = {
+    token: result.token,
+    refresh_token: result.refresh_token,
+    handle: result.handle,
+    color: result.color,
+  };
   saveConfig(config);
   return config;
 }

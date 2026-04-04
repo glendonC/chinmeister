@@ -1,4 +1,7 @@
 import type { RuntimeIdentity } from './agent-identity.js';
+import { DEFAULT_API_URL } from './runtime-profile.js';
+
+export { DEFAULT_API_URL } from './runtime-profile.js';
 
 export interface ApiClientConfig {
   baseUrl?: string;
@@ -75,8 +78,6 @@ interface LegacyApiError extends Error {
   data?: unknown;
   code?: string;
 }
-
-export const DEFAULT_API_URL = 'https://chinwag-api.glendonchin.workers.dev';
 
 const DEFAULT_RETRYABLE_CODES = [
   'ECONNREFUSED',

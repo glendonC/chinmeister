@@ -9,6 +9,7 @@ import { formatError } from '@chinwag/shared';
 
 interface AccountResult {
   token: string;
+  refresh_token: string;
   handle: string;
   color: string;
 }
@@ -43,6 +44,7 @@ export function Welcome({ onComplete }: WelcomeProps): React.ReactNode {
         const result = (await initAccount()) as AccountResult;
         const config: ChinwagConfig = {
           token: result.token,
+          refresh_token: result.refresh_token,
           handle: result.handle,
           color: result.color,
         };
@@ -83,6 +85,7 @@ export function Welcome({ onComplete }: WelcomeProps): React.ReactNode {
     if (key.return) {
       const config: ChinwagConfig = {
         token: account!.token,
+        refresh_token: account!.refresh_token,
         handle: account!.handle,
         color: account!.color,
       };

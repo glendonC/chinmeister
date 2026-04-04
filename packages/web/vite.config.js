@@ -17,6 +17,7 @@ export default defineConfig({
   },
   server: {
     port: 56790,
+    strictPort: true,
   },
   test: {
     exclude: ['e2e/**', 'node_modules/**'],

@@ -41,42 +41,38 @@ cd chinwag
 npm install
 ```
 
-This installs the root workspace dependencies for `packages/cli`, `packages/worker`, `packages/mcp`, and `packages/shared`.
-
-If you are working on the web dashboard, install its dependencies separately:
-
-```bash
-cd packages/web
-npm install
-```
-
-`packages/web` keeps its own `package-lock.json` and is not part of the root npm workspaces.
+This installs the root workspace dependencies for `packages/cli`, `packages/worker`, `packages/mcp`, `packages/shared`, and `packages/web`.
+`packages/web` is part of the root npm workspaces too, so the root install is the only install step you need for local development.
 
 ### Running locally
 
 ```bash
-# CLI: build and run the terminal client
+# Recommended: start the full local stack with isolated local auth
+npm run dev:local
+
+# Optional: run individual pieces
 npm run dev:cli
-
-# Worker: start local dev server (Wrangler local mode)
 npm run dev:worker
-
-# Web dashboard: run the Vite app
 npm run dev:web
-
-# Run the pieces you need in separate terminals for full-stack development
 ```
 
-The CLI points to the production API by default. To point it at your local worker:
+`npm run dev:local` uses:
+
+- The worker in local mode
+- The web dashboard in the local profile
+- An isolated local config at `~/.chinwag/local/config.json`
+- A local dashboard URL that is safe to use without touching production auth
+
+If you want to run the CLI against the local worker manually:
 
 ```bash
-CHINWAG_API_URL=http://localhost:8787 CHINWAG_WS_URL=ws://localhost:8787/ws/chat npm run dev:cli
+CHINWAG_PROFILE=local CHINWAG_API_URL=http://localhost:8787 npm run dev:cli
 ```
 
-The web dashboard defaults to the production API too. To point the Vite app at a local or staging worker:
+If you want to run the web dashboard against the local worker manually:
 
 ```bash
-VITE_CHINWAG_API_URL=http://localhost:8787 npm run dev --workspace=packages/web
+VITE_CHINWAG_PROFILE=local npm run dev --workspace=packages/web
 ```
 
 ## Project structure
@@ -190,14 +186,14 @@ For manual testing:
 cd packages/cli && npm run dev
 
 # Worker changes: use local Wrangler dev server
-cd packages/worker && npx wrangler dev
+cd packages/worker && npm run dev:local
 
-# Web changes: run the dashboard locally
-npm run dev:web
+# Full local stack
+npm run dev:local
 
 # Test API endpoints directly
 curl http://localhost:8787/stats
-curl -X POST http://localhost:8787/auth/init
+curl -X POST http://localhost:8787/auth/init -H 'CF-Connecting-IP: 127.0.0.1'
 ```
 
 Current automated test commands:
@@ -225,7 +221,7 @@ These versions must not be unified. They target different runtimes, and Ink does
 - Bundled with esbuild to `dist/cli.js`
 - Screen components are in `lib/`. The dashboard is the primary control surface; other screens receive `navigate`, `user`, and `config` props as needed.
 - Colors are mapped in `lib/colors.js`. Use `getInkColor()` for Ink components.
-- Config lives at `~/.chinwag/config.json`. Use `lib/config.js` helpers; never write directly.
+- Production config lives at `~/.chinwag/config.json`. Local profile config lives at `~/.chinwag/local/config.json`. Use `lib/config.js` helpers; never write directly.
 
 **Worker (`packages/worker/`)**
 
@@ -240,7 +236,7 @@ These versions must not be unified. They target different runtimes, and Ink does
 
 - Landing page plus React 19 dashboard, built with Vite and Zustand.
 - Fetches the same public API as the CLI and MCP server.
-- Keeps its own `package-lock.json`; run `npm install` inside `packages/web` when working on it.
+- Uses the root workspace install. For the local profile, prefer `npm run dev:local` from the repo root.
 - Deployed on Cloudflare Pages.
 
 ## Commit conventions

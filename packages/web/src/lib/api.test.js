@@ -63,7 +63,13 @@ describe('web API client', () => {
     );
   });
 
-  it('uses DEFAULT_API_URL regardless of hostname when no env override', () => {
+  it('uses the local profile defaults without an explicit API override', () => {
+    vi.stubEnv('VITE_CHINWAG_PROFILE', 'local');
+
+    expect(getApiUrl()).toBe('http://localhost:8787');
+  });
+
+  it('uses DEFAULT_API_URL regardless of hostname when no local profile is set', () => {
     stubHostname('127.0.0.1');
 
     expect(getApiUrl()).toBe('https://chinwag-api.glendonchin.workers.dev');

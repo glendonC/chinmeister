@@ -217,7 +217,7 @@ describe('mcp stdio integration', () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'chinwag-mcp-repo-'));
     tempDirs.push(homeDir, repoDir);
 
-    const configDir = join(homeDir, '.chinwag');
+    const configDir = join(homeDir, '.chinwag', 'local');
     mkdirSync(configDir, { recursive: true });
     writeFileSync(
       join(configDir, 'config.json'),
@@ -232,6 +232,7 @@ describe('mcp stdio integration', () => {
       env: {
         HOME: homeDir,
         PATH: process.env.PATH,
+        CHINWAG_PROFILE: 'local',
         CHINWAG_API_URL: fakeApi.baseUrl,
       },
       stderr: 'pipe',

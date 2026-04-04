@@ -152,6 +152,14 @@ describe('checkContent', () => {
     expect(result.degraded).toBe(true);
   });
 
+  it('allows content through blocklist fallback in local_safe mode when AI is unavailable', async () => {
+    const result = await checkContent('hello world', {
+      ENVIRONMENT: 'local',
+      MODERATION_MODE: 'local_safe',
+    });
+    expect(result).toEqual({ blocked: false, degraded: true });
+  });
+
   it('returns not blocked when AI returns safe', async () => {
     const mockEnv = {
       AI: {
@@ -199,6 +207,20 @@ describe('checkContent', () => {
     expect(result.blocked).toBe(true);
     expect(result.reason).toBe('moderation_unavailable');
     expect(result.degraded).toBe(true);
+  });
+
+  it('allows content in local_safe mode when AI throws', async () => {
+    const mockEnv = {
+      ENVIRONMENT: 'local',
+      MODERATION_MODE: 'local_safe',
+      AI: {
+        run: async () => {
+          throw new Error('AI service unavailable');
+        },
+      },
+    };
+    const result = await checkContent('normal text here', mockEnv);
+    expect(result).toEqual({ blocked: false, degraded: true });
   });
 
   it('blocks as fail-safe when AI binding is undefined', async () => {

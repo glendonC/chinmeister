@@ -12,6 +12,9 @@ const log = createLogger('moderation');
 //          Runs on CF edge (same network), no external API keys, customizable taxonomy.
 //          Outperforms OpenAI Moderation API on real-world benchmarks (ToxicChat).
 
+const MODERATION_MODE_STRICT = 'strict';
+const MODERATION_MODE_LOCAL_SAFE = 'local_safe';
+
 const BLOCKED_PATTERNS = [
   'nigger',
   'nigga',
@@ -58,6 +61,17 @@ const BLOCKED_REGEXES = BLOCKED_PATTERNS.map(
 /** Layer 1: instant blocklist check (sync, <1ms). */
 export function isBlocked(text: string): boolean {
   return BLOCKED_REGEXES.some((r) => r.test(text));
+}
+
+function getModerationMode(env: Env): string {
+  const configured = String(env?.MODERATION_MODE || '')
+    .trim()
+    .toLowerCase();
+  if (configured === MODERATION_MODE_LOCAL_SAFE) return MODERATION_MODE_LOCAL_SAFE;
+  if (configured === MODERATION_MODE_STRICT) return MODERATION_MODE_STRICT;
+  return env?.ENVIRONMENT && env.ENVIRONMENT !== 'production'
+    ? MODERATION_MODE_LOCAL_SAFE
+    : MODERATION_MODE_STRICT;
 }
 
 interface AIResult {
@@ -133,6 +147,8 @@ export async function checkContent(text: string, env: Env): Promise<ModerationRe
     return { blocked: true, reason: 'blocked_term' };
   }
 
+  const moderationMode = getModerationMode(env);
+
   // Layer 2: AI moderation
   const ai = await moderateWithAI(text, env);
   if (ai.flagged) {
@@ -140,6 +156,12 @@ export async function checkContent(text: string, env: Env): Promise<ModerationRe
   }
 
   if (ai.degraded) {
+    if (moderationMode === MODERATION_MODE_LOCAL_SAFE) {
+      log.warn(
+        'AI moderation unavailable in local_safe mode; allowing content through blocklist fallback',
+      );
+      return { blocked: false, degraded: true };
+    }
     return { blocked: true, reason: 'moderation_unavailable', degraded: true };
   }
 

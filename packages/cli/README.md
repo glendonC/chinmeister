@@ -24,6 +24,7 @@ Documentation: [Architecture](https://github.com/glendonchin/chinwag/blob/main/d
 npx chinwag init          # account + team + MCP config
 npx chinwag add <tool>    # add one MCP-configurable tool
 npx chinwag add --list    # browse the discover catalog
+npx chinwag token         # print the active auth token
 npx chinwag dashboard     # open the web dashboard
 npx chinwag               # launch the terminal dashboard
 ```
@@ -39,6 +40,9 @@ npm run test --workspace=packages/cli
 
 ## Environment
 
+- `CHINWAG_PROFILE`: runtime profile (`prod` or `local`)
 - `CHINWAG_API_URL`: override the default API base URL
 - `CHINWAG_WS_URL`: override the chat WebSocket URL
 - `CHINWAG_DASHBOARD_URL`: override the browser dashboard URL opened by the CLI
+
+When `CHINWAG_PROFILE=local`, the CLI uses isolated auth at `~/.chinwag/local/config.json` instead of the production config path.

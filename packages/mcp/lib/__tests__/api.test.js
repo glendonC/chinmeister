@@ -24,15 +24,18 @@ describe('MCP API client', () => {
     vi.stubEnv('CHINWAG_API_URL', 'http://localhost:8787');
     fetch.mockResolvedValue(mockJsonResponse({ ok: true }));
 
-    await api({ token: 'mcp-token' }, {
-      agentId: 'cursor:abc123',
-      runtimeIdentity: {
-        hostTool: 'cursor',
-        agentSurface: 'cline',
-        transport: 'mcp',
-        tier: 'connected',
+    await api(
+      { token: 'mcp-token' },
+      {
+        agentId: 'cursor:abc123',
+        runtimeIdentity: {
+          hostTool: 'cursor',
+          agentSurface: 'cline',
+          transport: 'mcp',
+          tier: 'connected',
+        },
       },
-    }).get('/teams/t_test/context');
+    ).get('/teams/t_test/context');
 
     expect(getApiUrl()).toBe('http://localhost:8787');
     expect(fetch).toHaveBeenCalledWith(
@@ -49,7 +52,22 @@ describe('MCP API client', () => {
           'X-Agent-Transport': 'mcp',
           'X-Agent-Tier': 'connected',
         }),
-      })
+      }),
+    );
+  });
+
+  it('uses the local profile defaults without explicit URL overrides', async () => {
+    vi.stubEnv('CHINWAG_PROFILE', 'local');
+    fetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+    await api({ token: 'mcp-token' }, { agentId: 'cursor:abc123' }).get('/me');
+
+    expect(getApiUrl()).toBe('http://localhost:8787');
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8787/me',
+      expect.objectContaining({
+        method: 'GET',
+      }),
     );
   });
 
@@ -57,11 +75,12 @@ describe('MCP API client', () => {
     vi.useFakeTimers();
     const err = new Error('connection reset');
     err.code = 'ECONNRESET';
-    fetch
-      .mockRejectedValueOnce(err)
-      .mockResolvedValueOnce(mockJsonResponse({ ok: true }));
+    fetch.mockRejectedValueOnce(err).mockResolvedValueOnce(mockJsonResponse({ ok: true }));
 
-    const request = api({ token: 'mcp-token' }, { agentId: 'cursor:abc123' }).post('/teams/t_test/heartbeat', {});
+    const request = api({ token: 'mcp-token' }, { agentId: 'cursor:abc123' }).post(
+      '/teams/t_test/heartbeat',
+      {},
+    );
     await vi.runAllTimersAsync();
 
     await expect(request).resolves.toEqual({ ok: true });

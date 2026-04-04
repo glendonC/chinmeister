@@ -1,4 +1,5 @@
 import type { Env, User } from '../types.js';
+import { resolveRuntimeTargets } from '@chinwag/shared/runtime-profile.js';
 import { TOOL_CATALOG, CATEGORY_NAMES } from '../catalog.js';
 import { getDB, getLobby, rpc } from '../lib/env.js';
 import { json } from '../lib/http.js';
@@ -20,7 +21,10 @@ const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const GITHUB_USER_URL = 'https://api.github.com/user';
 
 function getDashboardUrl(env: Env): string {
-  return (env.DASHBOARD_URL || 'https://chinwag.dev') + '/dashboard';
+  return resolveRuntimeTargets({
+    profile: env.ENVIRONMENT,
+    dashboardUrl: env.DASHBOARD_URL,
+  }).dashboardUrl;
 }
 
 interface CatalogEntry {

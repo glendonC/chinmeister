@@ -1,10 +1,18 @@
 // chinwag API client
 // Pure utility — no store imports to avoid circular deps.
 
-import { createJsonApiClient, DEFAULT_API_URL } from '@chinwag/shared/api-client.js';
+import { createJsonApiClient } from '@chinwag/shared/api-client.js';
+import { resolveRuntimeTargets, type RuntimeTargets } from '@chinwag/shared/runtime-profile.js';
+
+export function getRuntimeTargets(): RuntimeTargets {
+  return resolveRuntimeTargets({
+    profile: import.meta.env.VITE_CHINWAG_PROFILE,
+    apiUrl: import.meta.env.VITE_CHINWAG_API_URL,
+  });
+}
 
 export function getApiUrl(): string {
-  return import.meta.env.VITE_CHINWAG_API_URL || DEFAULT_API_URL;
+  return getRuntimeTargets().apiUrl;
 }
 
 interface ApiOptions {
@@ -21,8 +29,9 @@ export async function api<T = unknown>(
   authToken: string | null = null,
   options: ApiOptions = {},
 ): Promise<T> {
+  const runtime = getRuntimeTargets();
   return createJsonApiClient({
-    baseUrl: getApiUrl(),
+    baseUrl: runtime.apiUrl,
     authToken,
     timeoutMs: 15_000,
     signal: options.signal,

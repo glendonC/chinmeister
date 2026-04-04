@@ -5,9 +5,9 @@ import { execFileSync } from 'child_process';
 import { configExists, loadConfig } from './config.js';
 import { createLogger } from '@chinwag/shared';
 import { EXEC_TIMEOUT_MS } from './constants/timings.js';
+import { getRuntimeTargets } from './api.js';
 
 const log = createLogger('open-dashboard');
-const DASHBOARD_URL: string = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
 
 export async function openDashboard(): Promise<void> {
   if (!configExists()) {
@@ -21,7 +21,8 @@ export async function openDashboard(): Promise<void> {
     return;
   }
 
-  const url = `${DASHBOARD_URL}#token=${config.token}`;
+  const { dashboardUrl } = getRuntimeTargets();
+  const url = `${dashboardUrl}#token=${config.token}`;
 
   try {
     // macOS

@@ -1,4 +1,4 @@
-import { api, getApiUrl } from '../api.js';
+import { api, getRuntimeTargets } from '../api.js';
 import { applyDelta } from '@chinwag/shared/dashboard-ws.js';
 import type { TeamContext } from '../apiSchemas.js';
 import { RECONCILE_INITIAL_MS, RECONCILE_MAX_MS } from '../constants.js';
@@ -134,7 +134,7 @@ export async function connectTeamWebSocket(teamId: string): Promise<void> {
   // Guard: a newer connectTeamWebSocket call superseded this one
   if (wsGeneration !== gen) return;
 
-  const wsBase = getApiUrl().replace(/^http/, 'ws');
+  const wsBase = getRuntimeTargets().teamWsOrigin;
   const agentId = `web-dashboard:${token.slice(0, 8)}`;
   const wsUrl = `${wsBase}/teams/${teamId}/ws?agentId=${encodeURIComponent(agentId)}&ticket=${encodeURIComponent(ticket)}`;
 

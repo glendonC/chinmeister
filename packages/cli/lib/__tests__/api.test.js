@@ -36,7 +36,22 @@ describe('CLI API client', () => {
           Authorization: 'Bearer cli-token',
           'Content-Type': 'application/json',
         }),
-      })
+      }),
+    );
+  });
+
+  it('uses the local profile defaults without explicit URL overrides', async () => {
+    vi.stubEnv('CHINWAG_PROFILE', 'local');
+    fetch.mockResolvedValue(mockJsonResponse({ ok: true }));
+
+    await api({ token: 'cli-token' }).get('/me');
+
+    expect(getApiUrl()).toBe('http://localhost:8787');
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8787/me',
+      expect.objectContaining({
+        method: 'GET',
+      }),
     );
   });
 
@@ -66,7 +81,7 @@ describe('CLI API client', () => {
         headers: expect.not.objectContaining({
           Authorization: expect.any(String),
         }),
-      })
+      }),
     );
   });
 });

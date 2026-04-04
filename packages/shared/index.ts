@@ -1,6 +1,25 @@
+// runtime-profile
+export {
+  PROD_RUNTIME_PROFILE,
+  LOCAL_RUNTIME_PROFILE,
+  DEFAULT_API_URL,
+  DEFAULT_DASHBOARD_URL,
+  LOCAL_API_URL,
+  LOCAL_DASHBOARD_URL,
+  normalizeRuntimeProfile,
+  isLoopbackUrl,
+  getDefaultDashboardPath,
+  coerceDashboardUrl,
+  resolveRuntimeProfile,
+  resolveRuntimeTargets,
+  toWebSocketOrigin,
+  type ChinwagRuntimeProfile,
+  type RuntimeProfileOptions,
+  type RuntimeTargets,
+} from './runtime-profile.js';
+
 // api-client
 export {
-  DEFAULT_API_URL,
   createJsonApiClient,
   ApiRequestError,
   type ApiError,
@@ -24,10 +43,17 @@ export {
 export {
   CONFIG_DIR,
   CONFIG_FILE,
+  LOCAL_CONFIG_DIR,
+  LOCAL_CONFIG_FILE,
+  getConfigPaths,
   configExists,
   loadConfig,
+  saveConfig,
+  deleteConfig,
   validateConfigShape,
   type ChinwagConfig,
+  type ConfigPathOptions,
+  type ConfigPaths,
 } from './config.js';
 
 // error-utils

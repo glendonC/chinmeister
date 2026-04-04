@@ -30,24 +30,26 @@ The `.chinwag` file gets committed to git. When a teammate runs `npx chinwag ini
 npx chinwag init              # Setup: account + team + tool configs
 npx chinwag add <tool>        # Add a specific tool
 npx chinwag add --list        # Browse all tools
+npx chinwag token             # Print the active auth token
 npx chinwag dashboard         # Open web dashboard
 npx chinwag                   # TUI: dashboard, discover, chat, settings
 ```
 
 ## Architecture
 
-Monorepo with four packages: MCP server (agent interface), Cloudflare Workers backend, CLI/TUI, and web dashboard. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
+Monorepo with five packages: MCP server (agent interface), Cloudflare Workers backend, CLI/TUI, shared primitives, and the web dashboard. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
 
 ## Development
 
 ```bash
+npm run dev:local         # Full local stack: worker + web + isolated local auth
 npm run dev:cli           # Build + run CLI
-npm run dev:worker        # Local worker dev server
-npm run dev:web           # Web dashboard (after `cd packages/web && npm install`)
+npm run dev:worker        # Worker dev server
+npm run dev:web           # Web dashboard only
 npm run deploy            # Deploy worker to production
 ```
 
-`packages/web` keeps its own lockfile, so install dependencies there when you are working on the dashboard. See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for setup and code style.
+`npm run dev:local` keeps local development isolated from production by using the local worker, the local dashboard, and `~/.chinwag/local/config.json`. See [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) for setup and code style.
 
 ## Security
 

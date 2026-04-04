@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "dev:local": "wrangler dev --env local",
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:coverage": "vitest run",

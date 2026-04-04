@@ -8,29 +8,29 @@ The web package contains two surfaces:
 ## Install
 
 ```bash
-cd packages/web
 npm install
 ```
 
-This package keeps its own `package-lock.json` and is installed separately from the root npm workspaces.
+This package is part of the root npm workspaces, so the root install is enough.
 
 ## Development
 
 ```bash
-cd packages/web
-npm run dev
+npm run dev:local
 ```
 
-Or from the repo root:
+That starts the worker, provisions isolated local auth in `~/.chinwag/local/config.json`, and starts the local dashboard on `http://localhost:56790/dashboard.html`.
+
+If you only need the web app:
 
 ```bash
 npm run dev:web
 ```
 
-Point the dashboard at a local or staging worker:
+To point the Vite app at the local profile manually:
 
 ```bash
-VITE_CHINWAG_API_URL=http://localhost:8787 npm run dev
+VITE_CHINWAG_PROFILE=local npm run dev:web
 ```
 
 Other useful commands:

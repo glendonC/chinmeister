@@ -1,20 +1,37 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('fs', () => ({
+vi.mock('node:fs', () => ({
   existsSync: vi.fn(),
+  mkdirSync: vi.fn(),
   readFileSync: vi.fn(),
+  unlinkSync: vi.fn(),
+  writeFileSync: vi.fn(),
 }));
 
-vi.mock('os', () => ({
+vi.mock('node:os', () => ({
   homedir: vi.fn(() => '/home/testuser'),
 }));
 
-import { configExists, loadConfig, CONFIG_DIR, CONFIG_FILE } from '../config.js';
-import { existsSync, readFileSync } from 'fs';
+import {
+  CONFIG_DIR,
+  CONFIG_FILE,
+  LOCAL_CONFIG_DIR,
+  LOCAL_CONFIG_FILE,
+  getConfigPaths,
+  configExists,
+  loadConfig,
+  saveConfig,
+  deleteConfig,
+} from '../config.js';
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 
 describe('config', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
   });
 
   describe('CONFIG_DIR and CONFIG_FILE', () => {
@@ -24,6 +41,46 @@ describe('config', () => {
 
     it('CONFIG_FILE points to ~/.chinwag/config.json', () => {
       expect(CONFIG_FILE).toBe('/home/testuser/.chinwag/config.json');
+    });
+
+    it('LOCAL_CONFIG_FILE points to ~/.chinwag/local/config.json', () => {
+      expect(LOCAL_CONFIG_DIR).toBe('/home/testuser/.chinwag/local');
+      expect(LOCAL_CONFIG_FILE).toBe('/home/testuser/.chinwag/local/config.json');
+    });
+  });
+
+  describe('getConfigPaths', () => {
+    it('defaults to the production config path', () => {
+      expect(getConfigPaths()).toEqual({
+        profile: 'prod',
+        configDir: CONFIG_DIR,
+        configFile: CONFIG_FILE,
+      });
+    });
+
+    it('uses the local config path when CHINWAG_PROFILE=local', () => {
+      vi.stubEnv('CHINWAG_PROFILE', 'local');
+
+      expect(getConfigPaths()).toEqual({
+        profile: 'local',
+        configDir: LOCAL_CONFIG_DIR,
+        configFile: LOCAL_CONFIG_FILE,
+      });
+    });
+
+    it('infers the local config path from a loopback API override', () => {
+      vi.stubEnv('CHINWAG_API_URL', 'http://localhost:8787');
+
+      expect(getConfigPaths()).toEqual({
+        profile: 'local',
+        configDir: LOCAL_CONFIG_DIR,
+        configFile: LOCAL_CONFIG_FILE,
+      });
+    });
+
+    it('allows callers to override the profile explicitly', () => {
+      expect(getConfigPaths({ profile: 'local' }).configFile).toBe(LOCAL_CONFIG_FILE);
+      expect(getConfigPaths({ profile: 'prod' }).configFile).toBe(CONFIG_FILE);
     });
   });
 
@@ -50,11 +107,16 @@ describe('config', () => {
       readFileSync.mockReturnValue(
         JSON.stringify({
           token: 'test-token',
+          refresh_token: 'refresh-test-token',
           handle: 'alice',
         }),
       );
       const config = loadConfig();
-      expect(config).toEqual({ token: 'test-token', handle: 'alice' });
+      expect(config).toEqual({
+        token: 'test-token',
+        refresh_token: 'refresh-test-token',
+        handle: 'alice',
+      });
     });
 
     it('returns null when file is corrupted (invalid JSON)', () => {
@@ -100,6 +162,30 @@ describe('config', () => {
       expect(loadConfig()).toBeNull();
       expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining('EACCES'));
       consoleSpy.mockRestore();
+    });
+  });
+
+  describe('saveConfig and deleteConfig', () => {
+    it('writes to the local config path when the local profile is active', () => {
+      vi.stubEnv('CHINWAG_PROFILE', 'local');
+
+      saveConfig({ token: 'tok_local' });
+
+      expect(mkdirSync).toHaveBeenCalledWith(LOCAL_CONFIG_DIR, { recursive: true, mode: 0o700 });
+      expect(writeFileSync).toHaveBeenCalledWith(
+        LOCAL_CONFIG_FILE,
+        expect.stringContaining('"token": "tok_local"'),
+        { mode: 0o600 },
+      );
+    });
+
+    it('deletes from the active config path', () => {
+      vi.stubEnv('CHINWAG_PROFILE', 'local');
+      existsSync.mockReturnValue(true);
+
+      deleteConfig();
+
+      expect(unlinkSync).toHaveBeenCalledWith(LOCAL_CONFIG_FILE);
     });
   });
 });

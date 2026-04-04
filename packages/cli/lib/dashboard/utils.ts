@@ -10,11 +10,11 @@ export function truncateText(
 import { execFileSync } from 'child_process';
 import { homedir } from 'os';
 import { createLogger } from '@chinwag/shared';
+import { getRuntimeTargets } from '../api.js';
 
 const log = createLogger('dashboard-utils');
 
 const EXEC_TIMEOUT_MS = 10000;
-export const DASHBOARD_URL = process.env.CHINWAG_DASHBOARD_URL || 'https://chinwag.dev/dashboard';
 export const MIN_WIDTH = 50;
 export const SPINNER = [
   '\u280B',
@@ -34,8 +34,13 @@ interface OpenResult {
   error?: string;
 }
 
+export function getDashboardUrl(): string {
+  return getRuntimeTargets().dashboardUrl;
+}
+
 export function openWebDashboard(token?: string | null): OpenResult {
-  const url = token ? `${DASHBOARD_URL}#token=${token}` : DASHBOARD_URL;
+  const dashboardUrl = getDashboardUrl();
+  const url = token ? `${dashboardUrl}#token=${token}` : dashboardUrl;
   try {
     if (process.platform === 'darwin') {
       execFileSync('open', [url], { stdio: 'ignore', timeout: EXEC_TIMEOUT_MS });
