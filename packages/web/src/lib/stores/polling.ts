@@ -14,31 +14,21 @@ import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
 import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
-
-type DataStatus = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
-
-interface PollingState {
-  dashboardData: DashboardSummary | null;
-  dashboardStatus: DataStatus;
-  contextData: TeamContext | null;
-  contextStatus: DataStatus;
-  contextTeamId: string | null;
-  pollError: string | null;
-  pollErrorData: DashboardSummary | null;
-  lastUpdate: Date | null;
-}
+import { type PollingState, type DataStatus, buildContextReadyPatch } from './pollingTypes.js';
 
 /**
  * Internal mutable state for the polling subsystem.
  * Encapsulated in a single object so it's easy to reset and test.
  * `pollingBridge` is intentionally kept separate — it's a cross-module
  * callback interface, not internal polling state.
+ *
+ * Note: `consecutiveFailures` lives in the Zustand store (not here) so
+ * concurrent poll() calls cannot race on it. Timer/controller state stays
+ * here because it is only ever mutated synchronously.
  */
 interface InternalPollingState {
   /** setInterval ID for the poll timer. */
   pollTimer: ReturnType<typeof setInterval> | null;
-  /** API failure counter — triggers slow mode at 3+. */
-  consecutiveFailures: number;
   /** Incremented on every WebSocket state update. If a poll started before
    *  a WS update and finishes after, the poll result is stale — skip it. */
   dataVersion: number;
@@ -47,16 +37,15 @@ interface InternalPollingState {
   pollAbortController: AbortController | null;
 }
 
-function createPollingState(): InternalPollingState {
+function createInternalPollingState(): InternalPollingState {
   return {
     pollTimer: null,
-    consecutiveFailures: 0,
     dataVersion: 0,
     pollAbortController: null,
   };
 }
 
-const pollState = createPollingState();
+const pollState = createInternalPollingState();
 
 const pollingStore = createStore<PollingState>(() => ({
   dashboardData: null,
@@ -67,14 +56,15 @@ const pollingStore = createStore<PollingState>(() => ({
   pollError: null,
   pollErrorData: null,
   lastUpdate: null,
+  consecutiveFailures: 0,
 }));
 
 // Wire up the bridge so the WebSocket module can update polling state
 // without a circular import.
 setPollingBridge({
-  setState: (...args: unknown[]) => {
+  setState: (partial) => {
     pollState.dataVersion++;
-    (pollingStore.setState as (...a: unknown[]) => void)(...args);
+    pollingStore.setState(partial);
   },
   getState: pollingStore.getState,
   stopPollTimer() {
@@ -156,9 +146,7 @@ async function poll(): Promise<void> {
       // Skip if WebSocket delivered newer data while this fetch was in flight
       if (pollState.dataVersion !== versionBeforeFetch) return;
       pollingStore.setState({
-        contextData: validated,
-        contextStatus: 'ready',
-        contextTeamId: snapshotTeamId,
+        ...buildContextReadyPatch(snapshotTeamId, validated),
         dashboardData: null,
         dashboardStatus: 'idle',
       });
@@ -166,8 +154,10 @@ async function poll(): Promise<void> {
 
     pollingStore.setState({ pollError: null, pollErrorData: null, lastUpdate: new Date() });
 
-    if (pollState.consecutiveFailures > 0) {
-      pollState.consecutiveFailures = 0;
+    // Read consecutiveFailures atomically from the store, then reset
+    const { consecutiveFailures: prevFailures } = pollingStore.getState();
+    if (prevFailures > 0) {
+      pollingStore.setState({ consecutiveFailures: 0 });
       restartPolling();
     }
   } catch (err) {
@@ -187,13 +177,13 @@ async function poll(): Promise<void> {
     ) {
       await teamActions.loadTeams();
     }
-    pollState.consecutiveFailures++;
     const pollError = formatError(err);
     const pollErrorData = ((err as ApiError)?.data || null) as DashboardSummary | null;
     if (snapshotTeamId === null) {
       pollingStore.setState((state) => ({
         pollError,
         pollErrorData,
+        consecutiveFailures: state.consecutiveFailures + 1,
         dashboardStatus: (state.dashboardData ? 'stale' : 'error') as DataStatus,
         contextData: null,
         contextStatus: 'idle' as DataStatus,
@@ -205,6 +195,7 @@ async function poll(): Promise<void> {
         return {
           pollError,
           pollErrorData,
+          consecutiveFailures: state.consecutiveFailures + 1,
           dashboardData: null,
           dashboardStatus: 'idle' as DataStatus,
           contextStatus: (hasSnapshot ? 'stale' : 'error') as DataStatus,
@@ -212,7 +203,8 @@ async function poll(): Promise<void> {
         };
       });
     }
-    if (pollState.consecutiveFailures >= 3) restartPolling();
+    // Re-read from store after the atomic increment
+    if (pollingStore.getState().consecutiveFailures >= 3) restartPolling();
   }
 }
 
@@ -220,7 +212,7 @@ setRefreshHandler(poll);
 
 function restartPolling(): void {
   stopPollTimer();
-  const delay = pollState.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+  const delay = pollingStore.getState().consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
   pollState.pollTimer = setInterval(poll, delay);
 }
 
@@ -252,16 +244,13 @@ export function startPolling(): void {
   poll(); // immediate first poll
 
   const { activeTeamId } = teamActions.getState();
+  const delay = pollingStore.getState().consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
+  pollState.pollTimer = setInterval(poll, delay);
   if (activeTeamId) {
     // Project view — try WebSocket, polling runs as fallback until WS connects
-    const delay = pollState.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-    pollState.pollTimer = setInterval(poll, delay);
     connectTeamWebSocket(activeTeamId);
-  } else {
-    // Overview — polling only (aggregates across all teams, no single-team WS)
-    const delay = pollState.consecutiveFailures >= 3 ? SLOW_POLL_MS : POLL_MS;
-    pollState.pollTimer = setInterval(poll, delay);
   }
+  // Overview — polling only (aggregates across all teams, no single-team WS)
 }
 
 /** Stop polling and close WebSocket. */
@@ -276,7 +265,7 @@ export function resetPollingState(): void {
   if (pollState.pollAbortController) {
     pollState.pollAbortController.abort();
   }
-  Object.assign(pollState, createPollingState());
+  Object.assign(pollState, createInternalPollingState());
   pollingStore.setState({
     dashboardData: null,
     dashboardStatus: 'idle',
@@ -286,6 +275,7 @@ export function resetPollingState(): void {
     pollError: null,
     pollErrorData: null,
     lastUpdate: null,
+    consecutiveFailures: 0,
   });
 }
 
