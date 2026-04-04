@@ -25,6 +25,13 @@ export const handleTeamSaveMemory = teamJsonRoute(async ({ body, user, env, team
   if (text.length > MAX_MEMORY_TEXT_LENGTH)
     return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
 
+  // Validate tags before moderation — no point running AI on invalid input
+  const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
+  if (tagsResult.error) return json({ error: tagsResult.error }, 400);
+  const tags = tagsResult.tags!;
+  // Tags are short — blocklist is sufficient
+  if (tags.some((t) => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
+
   const modResult = await checkContent(text, env);
   if (modResult.blocked) {
     if (modResult.reason === 'moderation_unavailable') {
@@ -36,12 +43,6 @@ export const handleTeamSaveMemory = teamJsonRoute(async ({ body, user, env, team
     }
     return json({ error: 'Content blocked' }, 400);
   }
-
-  const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
-  if (tagsResult.error) return json({ error: tagsResult.error }, 400);
-  const tags = tagsResult.tags!;
-  // Moderation: check tag content (tags are short, blocklist is sufficient)
-  if (tags.some((t) => isBlocked(t))) return json({ error: 'Content blocked' }, 400);
 
   return withTeamRateLimit({
     request,

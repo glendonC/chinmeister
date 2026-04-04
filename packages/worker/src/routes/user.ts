@@ -163,6 +163,10 @@ export const handleUpdateHandle = authedJsonRoute(async ({ user, env, body }) =>
   if (!handle || typeof handle !== 'string') {
     return json({ error: 'Handle is required' }, 400);
   }
+  // Validate format before moderation — no point running AI on something we'll reject
+  if (!/^[a-zA-Z0-9_]{3,20}$/.test(handle)) {
+    return json({ error: 'Handle must be 3-20 characters, alphanumeric + underscores only' }, 400);
+  }
 
   const modResult = await checkContent(handle, env);
   if (modResult.blocked) {
