@@ -5,6 +5,27 @@ import { formatIntegrationScanResults } from '@chinwag/shared/integration-doctor
 import { getErrorMessage } from '../utils/responses.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
+const scanIntegrationsSchema = z.object({
+  only_detected: z
+    .boolean()
+    .optional()
+    .describe('If true, only include integrations detected in this repo or environment'),
+});
+type ScanIntegrationsArgs = z.infer<typeof scanIntegrationsSchema>;
+
+const configureIntegrationSchema = z.object({
+  host_id: z
+    .string()
+    .max(50)
+    .describe('Host integration id, e.g. cursor, claude-code, windsurf, vscode'),
+  surface_id: z
+    .string()
+    .max(50)
+    .optional()
+    .describe('Optional agent surface id for future host-specific integrations'),
+});
+type ConfigureIntegrationArgs = z.infer<typeof configureIntegrationSchema>;
+
 export function registerIntegrationTools(
   addTool: AddToolFn,
   { integrationDoctor }: Pick<ToolDeps, 'integrationDoctor'>,
@@ -16,14 +37,10 @@ export function registerIntegrationTools(
     {
       description:
         'Inspect local Chinwag integration health for supported hosts in this repo. Use this to see which tools are detected, configured, missing setup, or need repair before asking the user to debug settings manually.',
-      inputSchema: z.object({
-        only_detected: z
-          .boolean()
-          .optional()
-          .describe('If true, only include integrations detected in this repo or environment'),
-      }),
+      inputSchema: scanIntegrationsSchema,
     },
-    async ({ only_detected }: { only_detected?: boolean }) => {
+    async (args) => {
+      const { only_detected } = args as ScanIntegrationsArgs;
       try {
         const results = integrationDoctor.scanHostIntegrations(process.cwd());
         return {
@@ -49,19 +66,10 @@ export function registerIntegrationTools(
     {
       description:
         'Configure Chinwag for a supported host tool in the current repo by writing the required MCP config and related local setup files. Use chinwag_scan_integrations first so you know what needs repair.',
-      inputSchema: z.object({
-        host_id: z
-          .string()
-          .max(50)
-          .describe('Host integration id, e.g. cursor, claude-code, windsurf, vscode'),
-        surface_id: z
-          .string()
-          .max(50)
-          .optional()
-          .describe('Optional agent surface id for future host-specific integrations'),
-      }),
+      inputSchema: configureIntegrationSchema,
     },
-    async ({ host_id, surface_id }: { host_id: string; surface_id?: string }) => {
+    async (args) => {
+      const { host_id, surface_id } = args as ConfigureIntegrationArgs;
       try {
         const result = integrationDoctor.configureHostIntegration(process.cwd(), host_id, {
           surfaceId: surface_id,
@@ -72,7 +80,7 @@ export function registerIntegrationTools(
 
         const scan = integrationDoctor
           .scanHostIntegrations(process.cwd())
-          .find((item: any) => item.id === host_id);
+          .find((item) => item.id === host_id);
 
         const lines = [`Configured ${result.name}: ${result.detail}`];
         if (scan) {

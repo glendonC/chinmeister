@@ -10,6 +10,15 @@ import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('tools');
 
+const getTeamContextSchema = z.object({
+  model: z
+    .string()
+    .max(100)
+    .optional()
+    .describe('Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.'),
+});
+type GetTeamContextArgs = z.infer<typeof getTeamContextSchema>;
+
 export function registerContextTool(
   addTool: AddToolFn,
   { team, state }: Pick<ToolDeps, 'team' | 'state'>,
@@ -19,18 +28,11 @@ export function registerContextTool(
     {
       description:
         'Get the full state of your team: who is online, what everyone is working on, and any file overlaps. Use this to orient yourself before starting work.',
-      inputSchema: z.object({
-        model: z
-          .string()
-          .max(100)
-          .optional()
-          .describe(
-            'Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.',
-          ),
-      }),
+      inputSchema: getTeamContextSchema,
     },
-    async ({ model }: { model?: string } = {}) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { model } = (args ?? {}) as GetTeamContextArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
 
       // Deferred model enrichment -- fire-and-forget on first report.
       // Tracks which model was reported (not just a boolean) so a different

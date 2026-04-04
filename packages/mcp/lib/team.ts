@@ -37,11 +37,8 @@ export interface MemorySearchResult {
   memories: MemoryInfo[];
 }
 
-/** Standard API result for mutating operations. */
-export interface OkResult {
-  ok?: boolean;
-  error?: string;
-}
+/** Standard API result for mutating operations — discriminated union. */
+export type OkResult = ({ ok: true } & Record<string, unknown>) | { ok: false; error: string };
 
 /** Team membership: join, leave, heartbeat. */
 export interface TeamMemberHandlers {

@@ -74,6 +74,8 @@ async function main() {
     lastActivity: Date.now(),
     heartbeatInterval: null,
     shuttingDown: false,
+    teamJoinError: null,
+    heartbeatDead: false,
   });
 
   const projectName = basename(process.cwd());
@@ -87,8 +89,15 @@ async function main() {
 
       try {
         const session = await team.startSession(state.teamId, profile.framework);
-        state.sessionId = session.session_id;
-        console.error(`[chinwag] Session started: ${state.sessionId}`);
+        const sessionId = session?.session_id;
+        if (!sessionId) {
+          console.error(
+            '[chinwag] Session start returned invalid response — continuing without session',
+          );
+        } else {
+          state.sessionId = sessionId;
+          console.error(`[chinwag] Session started: ${state.sessionId}`);
+        }
       } catch (err) {
         console.error('[chinwag] Failed to start session:', err.message);
       }
@@ -102,7 +111,13 @@ async function main() {
       });
       wsManager.connect();
     } catch (err) {
-      console.error(`[chinwag] Failed to join team ${state.teamId}:`, err.message);
+      const failedTeamId = state.teamId;
+      const reason = err?.message || 'unknown error';
+      console.error(
+        `[chinwag] WARNING: Failed to join team "${failedTeamId}": ${reason}. ` +
+          'Team features will be unavailable. Check your network connection and team ID.',
+      );
+      state.teamJoinError = `Join failed for team "${failedTeamId}": ${reason}`;
       state.teamId = null;
     }
   }

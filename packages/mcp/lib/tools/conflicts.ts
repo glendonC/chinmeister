@@ -5,8 +5,13 @@ import { teamPreamble, getCachedContext } from '../context.js';
 import { noTeam, errorResult, getHttpStatus, safeArray } from '../utils/responses.js';
 import { formatConflictsList, type ConflictInfo, type LockedFileInfo } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
-import { normalizePath } from '../utils/paths.js';
+import { normalizePath, normalizeFiles } from '../utils/paths.js';
 import type { AddToolFn, ToolDeps } from './types.js';
+
+const checkConflictsSchema = z.object({
+  files: z.array(z.string().max(500)).max(100).describe('File paths you plan to modify'),
+});
+type CheckConflictsArgs = z.infer<typeof checkConflictsSchema>;
 
 export function registerConflictsTool(
   addTool: AddToolFn,
@@ -17,12 +22,12 @@ export function registerConflictsTool(
     {
       description:
         'Check if any teammate agents are working on the same files you plan to edit. Call this BEFORE starting edits on shared code to avoid merge conflicts.',
-      inputSchema: z.object({
-        files: z.array(z.string().max(500)).max(100).describe('File paths you plan to modify'),
-      }),
+      inputSchema: checkConflictsSchema,
     },
-    async ({ files }: { files: string[] }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { files: rawFiles } = args as CheckConflictsArgs;
+      const files = normalizeFiles(rawFiles);
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         const result = await team.checkConflicts(state.teamId, files);
         const preamble = await teamPreamble(team, state.teamId);

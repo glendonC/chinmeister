@@ -3,8 +3,23 @@
 import * as z from 'zod/v4';
 import { teamPreamble } from '../context.js';
 import { noTeam, errorResult, safeArray } from '../utils/responses.js';
+import { normalizeFiles } from '../utils/paths.js';
 import { formatWho } from '../utils/formatting.js';
 import type { AddToolFn, ToolDeps } from './types.js';
+
+const claimFilesSchema = z.object({
+  files: z.array(z.string().max(500)).max(20).describe('File paths to claim'),
+});
+type ClaimFilesArgs = z.infer<typeof claimFilesSchema>;
+
+const releaseFilesSchema = z.object({
+  files: z
+    .array(z.string().max(500))
+    .max(20)
+    .optional()
+    .describe('File paths to release (omit to release all your locks)'),
+});
+type ReleaseFilesArgs = z.infer<typeof releaseFilesSchema>;
 
 export function registerLockTools(
   addTool: AddToolFn,
@@ -15,12 +30,12 @@ export function registerLockTools(
     {
       description:
         'Claim advisory locks on files you are about to edit. Other agents will be warned if they try to edit locked files. Locks auto-release when your session ends or you stop heartbeating.',
-      inputSchema: z.object({
-        files: z.array(z.string().max(500)).max(20).describe('File paths to claim'),
-      }),
+      inputSchema: claimFilesSchema,
     },
-    async ({ files }: { files: string[] }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { files: rawFiles } = args as ClaimFilesArgs;
+      const files = normalizeFiles(rawFiles);
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         const result = await team.claimFiles(state.teamId, files);
         const preamble = await teamPreamble(team, state.teamId);
@@ -49,16 +64,12 @@ export function registerLockTools(
     {
       description:
         'Release advisory locks on files you previously claimed. Call this when you are done editing files so other agents can work on them.',
-      inputSchema: z.object({
-        files: z
-          .array(z.string().max(500))
-          .max(20)
-          .optional()
-          .describe('File paths to release (omit to release all your locks)'),
-      }),
+      inputSchema: releaseFilesSchema,
     },
-    async ({ files }: { files?: string[] }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { files: rawFiles } = args as ReleaseFilesArgs;
+      const files = rawFiles ? normalizeFiles(rawFiles) : undefined;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         await team.releaseFiles(state.teamId, files);
         const msg = files ? `Released: ${files.join(', ')}` : 'All locks released.';

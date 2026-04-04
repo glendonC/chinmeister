@@ -7,6 +7,41 @@ import { noTeam, errorResult, safeArray } from '../utils/responses.js';
 import type { MemoryInfo } from '../utils/display.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
+const saveMemorySchema = z.object({
+  text: z.string().max(2000).describe('The knowledge to save. Be specific and actionable.'),
+  tags: z
+    .array(z.string().max(50))
+    .max(10)
+    .optional()
+    .describe(
+      'Optional tags for organization (e.g. ["setup", "redis", "testing"]). Use whatever labels make sense.',
+    ),
+});
+type SaveMemoryArgs = z.infer<typeof saveMemorySchema>;
+
+const updateMemorySchema = z.object({
+  id: z.string().describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
+  text: z.string().max(2000).optional().describe('Updated text content'),
+  tags: z.array(z.string().max(50)).max(10).optional().describe('Updated tags'),
+});
+type UpdateMemoryArgs = z.infer<typeof updateMemorySchema>;
+
+const searchMemorySchema = z.object({
+  query: z.string().max(200).optional().describe('Search text (matches against memory content)'),
+  tags: z
+    .array(z.string().max(50))
+    .max(10)
+    .optional()
+    .describe('Filter by tags (returns memories matching ANY of the listed tags)'),
+  limit: z.number().min(1).max(50).optional().describe('Max results (default 20)'),
+});
+type SearchMemoryArgs = z.infer<typeof searchMemorySchema>;
+
+const deleteMemorySchema = z.object({
+  id: z.string().describe('Memory ID to delete (UUID format, get from chinwag_search_memory)'),
+});
+type DeleteMemoryArgs = z.infer<typeof deleteMemorySchema>;
+
 export function registerMemoryTools(
   addTool: AddToolFn,
   { team, state }: Pick<ToolDeps, 'team' | 'state'>,
@@ -16,19 +51,11 @@ export function registerMemoryTools(
     {
       description:
         'Save project knowledge that persists across sessions and is shared with all agents on the team. Store anything worth remembering: setup requirements, conventions, architecture decisions, gotchas, useful links, or context that would help a future agent working in this codebase. You decide what to store and how to tag it.',
-      inputSchema: z.object({
-        text: z.string().max(2000).describe('The knowledge to save. Be specific and actionable.'),
-        tags: z
-          .array(z.string().max(50))
-          .max(10)
-          .optional()
-          .describe(
-            'Optional tags for organization (e.g. ["setup", "redis", "testing"]). Use whatever labels make sense.',
-          ),
-      }),
+      inputSchema: saveMemorySchema,
     },
-    async ({ text, tags }: { text: string; tags?: string[] }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { text, tags } = args as SaveMemoryArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         await team.saveMemory(state.teamId, text, tags);
         const preamble = await teamPreamble(team, state.teamId);
@@ -47,16 +74,11 @@ export function registerMemoryTools(
     {
       description:
         'Update an existing team memory. Use chinwag_search_memory first to find the ID. Any team member can update any memory -- memories are team knowledge. Use this to correct, improve, or re-tag knowledge without creating duplicates.',
-      inputSchema: z.object({
-        id: z
-          .string()
-          .describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
-        text: z.string().max(2000).optional().describe('Updated text content'),
-        tags: z.array(z.string().max(50)).max(10).optional().describe('Updated tags'),
-      }),
+      inputSchema: updateMemorySchema,
     },
-    async ({ id, text, tags }: { id: string; text?: string; tags?: string[] }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { id, text, tags } = args as UpdateMemoryArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       if (!text && !tags) {
         return {
           content: [
@@ -67,7 +89,7 @@ export function registerMemoryTools(
       }
       try {
         const result = await team.updateMemory(state.teamId, id, text, tags);
-        if (result.error) {
+        if (!result.ok) {
           return {
             content: [
               { type: 'text' as const, text: `Failed to update memory ${id}: ${result.error}` },
@@ -98,22 +120,11 @@ export function registerMemoryTools(
     {
       description:
         'Search team project memories by keyword and/or tags. Use this to find knowledge the team has saved before starting work or when you need context.',
-      inputSchema: z.object({
-        query: z
-          .string()
-          .max(200)
-          .optional()
-          .describe('Search text (matches against memory content)'),
-        tags: z
-          .array(z.string().max(50))
-          .max(10)
-          .optional()
-          .describe('Filter by tags (returns memories matching ANY of the listed tags)'),
-        limit: z.number().min(1).max(50).optional().describe('Max results (default 20)'),
-      }),
+      inputSchema: searchMemorySchema,
     },
-    async ({ query, tags, limit }: { query?: string; tags?: string[]; limit?: number }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { query, tags, limit } = args as SearchMemoryArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         const result = await team.searchMemories(state.teamId, query, tags, limit);
         const memories = safeArray<MemoryInfo>(result, 'memories');
@@ -136,17 +147,14 @@ export function registerMemoryTools(
     {
       description:
         'Delete a team memory by ID. Use chinwag_search_memory first to find the ID of the memory to delete. Use this to remove outdated, incorrect, or redundant knowledge.',
-      inputSchema: z.object({
-        id: z
-          .string()
-          .describe('Memory ID to delete (UUID format, get from chinwag_search_memory)'),
-      }),
+      inputSchema: deleteMemorySchema,
     },
-    async ({ id }: { id: string }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { id } = args as DeleteMemoryArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         const result = await team.deleteMemory(state.teamId, id);
-        if (result.error) {
+        if (!result.ok) {
           return {
             content: [
               { type: 'text' as const, text: `Failed to delete memory ${id}: ${result.error}` },

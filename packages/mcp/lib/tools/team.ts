@@ -10,6 +10,15 @@ import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
 
+const joinTeamSchema = z.object({
+  team_id: z
+    .string()
+    .max(30)
+    .regex(/^[a-zA-Z0-9_-]+$/)
+    .describe('Team ID (e.g., t_a7x9k2m). Found in the .chinwag file at the repo root.'),
+});
+type JoinTeamArgs = z.infer<typeof joinTeamSchema>;
+
 export function registerTeamTool(
   addTool: AddToolFn,
   { team, state, profile }: Pick<ToolDeps, 'team' | 'state' | 'profile'>,
@@ -19,15 +28,10 @@ export function registerTeamTool(
     {
       description:
         'Join a chinwag team for multi-agent coordination. Agents on the same team can see what each other is working on and detect file conflicts before they happen.',
-      inputSchema: z.object({
-        team_id: z
-          .string()
-          .max(30)
-          .regex(/^[a-zA-Z0-9_-]+$/)
-          .describe('Team ID (e.g., t_a7x9k2m). Found in the .chinwag file at the repo root.'),
-      }),
+      inputSchema: joinTeamSchema,
     },
-    async ({ team_id }: { team_id: string }) => {
+    async (args) => {
+      const { team_id } = args as JoinTeamArgs;
       const previousTeamId = state.teamId;
       const previousSessionId = state.sessionId;
       try {
@@ -35,6 +39,8 @@ export function registerTeamTool(
         state.teamId = team_id;
         state.sessionId = null;
         state.modelReported = null;
+        state.heartbeatDead = false;
+        state.teamJoinError = null;
         clearContextCache();
 
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
@@ -68,7 +74,11 @@ export function registerTeamTool(
             if (consecutiveFailures >= MAX_HEARTBEAT_FAILURES && state.heartbeatInterval) {
               clearInterval(state.heartbeatInterval);
               state.heartbeatInterval = null;
-              log.error(`Heartbeat stopped after ${MAX_HEARTBEAT_FAILURES} consecutive failures`);
+              state.heartbeatDead = true;
+              log.error(
+                `Heartbeat stopped after ${MAX_HEARTBEAT_FAILURES} consecutive failures. ` +
+                  'Team tools will return an error until the team is rejoined.',
+              );
             }
           }
         }

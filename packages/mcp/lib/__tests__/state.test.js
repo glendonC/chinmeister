@@ -14,6 +14,8 @@ describe('createAgentState (Proxy-based state guard)', () => {
       lastActivity: 0,
       heartbeatInterval: null,
       shuttingDown: false,
+      teamJoinError: null,
+      heartbeatDead: false,
     };
   }
 

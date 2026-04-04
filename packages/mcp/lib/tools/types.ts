@@ -8,12 +8,12 @@ import type { IntegrationScanResult, ConfigureResult } from '@chinwag/shared/int
 
 /**
  * Function signature for registering an MCP tool.
- * Handler args are typed as `never` in the base signature and widened
- * at each call site via the Zod schema — the SDK validates input before
- * the handler runs, so the destructured types are guaranteed correct.
+ * Handler args are typed as Record<string, unknown> at the registration
+ * boundary — individual tool handlers use Zod-inferred types internally
+ * for static type checking, with a cast at the registration site only.
  */
- 
-export type ToolHandler = (args: any) => Promise<McpToolResult>;
+
+export type ToolHandler = (args: Record<string, unknown>) => Promise<McpToolResult>;
 
 export type AddToolFn = (
   name: string,

@@ -104,6 +104,10 @@ export interface McpState {
   lastActivity: number;
   heartbeatInterval?: ReturnType<typeof setInterval> | null;
   shuttingDown: boolean;
+  /** Set when initial team join fails — tools can surface this instead of a generic "Not in a team" error. */
+  teamJoinError: string | null;
+  /** Set when heartbeat exhausts all retries — tools should tell the user to rejoin. */
+  heartbeatDead: boolean;
 }
 
 // ── Shutdown ──

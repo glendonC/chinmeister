@@ -23,8 +23,29 @@ export function getErrorMessage(err: unknown): string {
 
 /**
  * Error response for tools that require team membership.
+ * Accepts optional context to surface specific failure reasons.
  */
-export function noTeam(): McpToolResult {
+export function noTeam(context?: {
+  teamJoinError?: string | null;
+  heartbeatDead?: boolean;
+}): McpToolResult {
+  if (context?.heartbeatDead) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: 'Connection to team lost after repeated failures. Try leaving and rejoining the team.',
+        },
+      ],
+      isError: true,
+    };
+  }
+  if (context?.teamJoinError) {
+    return {
+      content: [{ type: 'text', text: `Not in a team. ${context.teamJoinError}` }],
+      isError: true,
+    };
+  }
   return {
     content: [{ type: 'text', text: 'Not in a team. Join one first with chinwag_join_team.' }],
     isError: true,

@@ -4,6 +4,16 @@ import * as z from 'zod/v4';
 import { noTeam, errorResult } from '../utils/responses.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
+const sendMessageSchema = z.object({
+  text: z.string().max(500).describe('Message text'),
+  target: z
+    .string()
+    .max(60)
+    .optional()
+    .describe('Target agent_id for a direct message (omit to broadcast to all)'),
+});
+type SendMessageArgs = z.infer<typeof sendMessageSchema>;
+
 export function registerMessagingTool(
   addTool: AddToolFn,
   { team, state }: Pick<ToolDeps, 'team' | 'state'>,
@@ -13,17 +23,11 @@ export function registerMessagingTool(
     {
       description:
         'Send a message to other agents on the team. Messages are ephemeral (auto-expire after 1 hour). Use this to coordinate with other agents -- e.g. "I just refactored auth.js, rebase before editing" or "Need help with failing tests in api/".',
-      inputSchema: z.object({
-        text: z.string().max(500).describe('Message text'),
-        target: z
-          .string()
-          .max(60)
-          .optional()
-          .describe('Target agent_id for a direct message (omit to broadcast to all)'),
-      }),
+      inputSchema: sendMessageSchema,
     },
-    async ({ text, target }: { text: string; target?: string }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { text, target } = args as SendMessageArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         await team.sendMessage(state.teamId, text, target);
         const dest = target ? `to ${target}` : 'to team';

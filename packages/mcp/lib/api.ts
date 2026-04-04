@@ -48,6 +48,11 @@ export function api(config: { token?: string | null } | null, options: ApiOption
   // Mutable token reference so refresh can update subsequent requests
   let currentToken = config?.token || null;
 
+  // Inflight deduplication: if two concurrent 401s trigger refresh,
+  // the second awaits the first's promise instead of starting a new one.
+  // Same pattern as context.ts inflightRefresh.
+  let inflightRefresh: Promise<string | null> | null = null;
+
   function buildClient(token: string | null): ApiClient {
     return createJsonApiClient({
       baseUrl,
@@ -71,6 +76,7 @@ export function api(config: { token?: string | null } | null, options: ApiOption
    * Wrap an API call with automatic token refresh on 401.
    * On 401, attempts one refresh cycle. If successful, rebuilds the inner
    * client with the new token and retries the original request once.
+   * Uses inflight deduplication so concurrent 401s share a single refresh call.
    */
   async function withRefresh<T>(fn: (client: ApiClient) => Promise<T>): Promise<T> {
     try {
@@ -79,8 +85,13 @@ export function api(config: { token?: string | null } | null, options: ApiOption
       const httpErr = err as HttpError;
       if (httpErr.status !== 401) throw err;
 
-      // Attempt runtime token refresh
-      const newToken = await tryRefreshToken(baseUrl);
+      // Deduplicate concurrent refresh attempts
+      if (!inflightRefresh) {
+        inflightRefresh = tryRefreshToken(baseUrl).finally(() => {
+          inflightRefresh = null;
+        });
+      }
+      const newToken = await inflightRefresh;
       if (!newToken) throw err; // refresh failed, propagate original 401
 
       // Rebuild client with new token and retry once

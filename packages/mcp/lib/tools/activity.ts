@@ -4,8 +4,15 @@ import * as z from 'zod/v4';
 import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import { teamPreamble } from '../context.js';
 import { noTeam, errorResult } from '../utils/responses.js';
+import { normalizeFiles } from '../utils/paths.js';
 import { TITLE_MAX_LENGTH } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
+
+const updateActivitySchema = z.object({
+  files: z.array(z.string().max(500)).max(100).describe('File paths being modified'),
+  summary: z.string().max(280).describe('Brief description, e.g. "Refactoring auth middleware"'),
+});
+type UpdateActivityArgs = z.infer<typeof updateActivitySchema>;
 
 export function registerActivityTool(
   addTool: AddToolFn,
@@ -16,17 +23,13 @@ export function registerActivityTool(
     {
       description:
         'Report what files you are currently working on. IMPORTANT: Call this immediately after chinwag_claim_files to broadcast your activity. Other agents across all tools will see this in their team context.',
-      inputSchema: z.object({
-        files: z.array(z.string().max(500)).max(100).describe('File paths being modified'),
-        summary: z
-          .string()
-          .max(280)
-          .describe('Brief description, e.g. "Refactoring auth middleware"'),
-      }),
+      inputSchema: updateActivitySchema,
     },
-    async ({ files, summary }: { files: string[]; summary: string }) => {
-      if (!state.teamId) return noTeam();
+    async (args) => {
+      const { files: rawFiles, summary } = args as UpdateActivityArgs;
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
+        const files = normalizeFiles(rawFiles);
         await team.updateActivity(state.teamId, files, summary);
         // Set terminal tab title to the agent's task -- stable identity
         if (state.tty && summary) {

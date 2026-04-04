@@ -22,11 +22,31 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
  */
 export function withTeam(
   { state, team }: Pick<ToolDeps, 'state' | 'team'>,
-  handler: (args: any, ctx: { preamble: string }) => Promise<McpToolResult>,
+  handler: (args: Record<string, unknown>, ctx: { preamble: string }) => Promise<McpToolResult>,
   options: { skipPreamble?: boolean } = {},
-): (args: any) => Promise<McpToolResult> {
-  return async (args: any) => {
-    if (!state.teamId) return noTeam();
+): (args: Record<string, unknown>) => Promise<McpToolResult> {
+  return async (args: Record<string, unknown>) => {
+    if (!state.teamId) {
+      // Surface a specific error if we know why the team is unavailable
+      if (state.teamJoinError) {
+        return {
+          content: [{ type: 'text' as const, text: `Not in a team. ${state.teamJoinError}` }],
+          isError: true,
+        };
+      }
+      return noTeam();
+    }
+    if (state.heartbeatDead) {
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: 'Connection to team lost after repeated failures. Try leaving and rejoining the team.',
+          },
+        ],
+        isError: true,
+      };
+    }
     try {
       const preamble = options.skipPreamble ? '' : await teamPreamble(team, state.teamId);
       return await handler(args, { preamble });
