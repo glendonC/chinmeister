@@ -1,15 +1,25 @@
-// Shared context cache -- serves as both preamble source and offline fallback.
-// When the API is unreachable, tools return this cached state with an [offline] tag.
+/**
+ * Shared context cache -- serves as both preamble source and offline fallback.
+ * When the API is unreachable, tools return this cached state with an [offline] tag.
+ *
+ * Architecture note: This MCP server runs as a single Node.js process with serial
+ * tool execution (stdio transport). The module-level cache singleton is the simplest
+ * correct design for this single-process architecture — there is no concurrent access
+ * and no multi-instance scenario that would justify dependency injection for state.
+ *
+ * The `createContextCache()` factory exists purely for test isolation: tests can call
+ * `vi.resetModules()` to get a fresh module instance with clean state, or use
+ * `clearContextCache()` to reset the singleton in-place.
+ */
 
 import { formatToolTag } from './utils/formatting.js';
 import { createLogger } from './utils/logger.js';
 import { getErrorMessage } from './utils/responses.js';
+import { CONTEXT_TTL_MS } from './constants.js';
 import type { TeamContext } from './utils/display.js';
 import type { TeamHandlers } from './team.js';
 
 const log = createLogger('context');
-
-const CONTEXT_TTL_MS = 30_000;
 
 /** All mutable state for the context cache. */
 export interface ContextCacheState {

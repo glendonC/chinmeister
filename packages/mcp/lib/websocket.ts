@@ -4,16 +4,13 @@
 
 import { createLogger } from './utils/logger.js';
 import { getErrorMessage } from './utils/responses.js';
+import { WS_PING_MS, INITIAL_RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS } from './constants.js';
 import type { ApiClient } from './team.js';
 
-const log = createLogger('ws');
+// Re-export for backwards compatibility
+export { WS_PING_MS, INITIAL_RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS } from './constants.js';
 
-/** Ping interval to keep DB heartbeat fresh */
-export const WS_PING_MS: number = 60_000;
-/** Initial delay before first reconnect attempt */
-export const INITIAL_RECONNECT_DELAY_MS: number = 1_000;
-/** Maximum reconnect backoff cap */
-export const MAX_RECONNECT_DELAY_MS: number = 60_000;
+const log = createLogger('ws');
 
 /** Shared mutable state that the WebSocket manager reads and writes. */
 interface WsManagerState {

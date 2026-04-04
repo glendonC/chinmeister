@@ -10,6 +10,7 @@ import {
 import { generateAgentId, getConfiguredAgentId } from './identity.js';
 import { createLogger } from './utils/logger.js';
 import { getErrorMessage } from './utils/responses.js';
+import { FORCE_EXIT_TIMEOUT_MS, PARENT_WATCH_INTERVAL_MS } from './constants.js';
 import type { TeamHandlers } from './team.js';
 
 const log = createLogger('lifecycle');
@@ -107,8 +108,8 @@ export interface McpState {
 
 // ── Shutdown ──
 
-export const FORCE_EXIT_TIMEOUT_MS = 3_000;
-export const PARENT_WATCH_INTERVAL_MS = 5_000;
+// Re-export for backwards compatibility
+export { FORCE_EXIT_TIMEOUT_MS, PARENT_WATCH_INTERVAL_MS } from './constants.js';
 
 interface ShutdownOptions {
   agentId: string;

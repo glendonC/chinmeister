@@ -5,6 +5,7 @@ import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
 import { errorResult, getHttpStatus, getErrorMessage, safeString } from '../utils/responses.js';
+import { MAX_HEARTBEAT_FAILURES } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
@@ -38,7 +39,6 @@ export function registerTeamTool(
 
         if (state.heartbeatInterval) clearInterval(state.heartbeatInterval);
         let consecutiveFailures = 0;
-        const MAX_HEARTBEAT_FAILURES = 20;
 
         async function runHeartbeat(): Promise<void> {
           // Guard: if teamId was cleared (e.g. shutdown), skip

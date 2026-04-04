@@ -5,8 +5,7 @@
 import { formatAgentLabel, formatWho } from './utils/formatting.js';
 import type { TeamContext } from './utils/display.js';
 import type { TeamMember } from './utils/formatting.js';
-
-const STUCKNESS_THRESHOLD_MINUTES = 15;
+import { STUCKNESS_THRESHOLD_MINUTES } from './constants.js';
 
 function agentKey(m: TeamMember): string {
   return m.agent_id || m.handle;

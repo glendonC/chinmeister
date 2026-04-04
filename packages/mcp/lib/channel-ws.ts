@@ -12,9 +12,7 @@ import { applyDelta, normalizeDashboardDeltaEvent } from '@chinwag/shared/dashbo
 import type { TeamContext } from '@chinwag/shared/contracts.js';
 import type { ApiClient } from './team.js';
 import { getErrorMessage } from './utils/responses.js';
-
-const INITIAL_RECONNECT_DELAY_MS = 1_000;
-const MAX_RECONNECT_DELAY_MS = 60_000;
+import { INITIAL_RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS } from './constants.js';
 
 interface Logger {
   info: (msg: string) => void;

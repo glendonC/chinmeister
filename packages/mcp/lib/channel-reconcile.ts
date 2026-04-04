@@ -11,9 +11,7 @@ import { diffState } from './diff-state.js';
 import type { TeamContext } from './utils/display.js';
 import type { TeamHandlers } from './team.js';
 import { getErrorMessage } from './utils/responses.js';
-
-const RECONCILE_INTERVAL_MS = 60_000;
-const FALLBACK_POLL_MS = 10_000;
+import { RECONCILE_INTERVAL_MS, FALLBACK_POLL_MS } from './constants.js';
 
 interface Logger {
   info: (msg: string) => void;
@@ -83,7 +81,11 @@ export function createReconciler({
     if (stopped) return;
     const delay = isWsConnected() ? RECONCILE_INTERVAL_MS : FALLBACK_POLL_MS;
     timer = setTimeout(async () => {
-      await reconcile();
+      try {
+        await reconcile();
+      } catch (err: unknown) {
+        logger.error('Unexpected reconciliation error: ' + getErrorMessage(err));
+      }
       scheduleNext();
     }, delay);
     if (timer.unref) timer.unref();

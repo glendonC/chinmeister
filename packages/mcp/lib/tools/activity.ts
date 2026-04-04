@@ -4,6 +4,7 @@ import * as z from 'zod/v4';
 import { setTerminalTitle } from '@chinwag/shared/session-registry.js';
 import { teamPreamble } from '../context.js';
 import { noTeam, errorResult } from '../utils/responses.js';
+import { TITLE_MAX_LENGTH } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 export function registerActivityTool(
@@ -29,9 +30,10 @@ export function registerActivityTool(
         await team.updateActivity(state.teamId, files, summary);
         // Set terminal tab title to the agent's task -- stable identity
         if (state.tty && summary) {
-          const TITLE_MAX = 40;
           const label =
-            summary.length > TITLE_MAX ? summary.slice(0, TITLE_MAX - 1) + '\u2026' : summary;
+            summary.length > TITLE_MAX_LENGTH
+              ? summary.slice(0, TITLE_MAX_LENGTH - 1) + '\u2026'
+              : summary;
           setTerminalTitle(state.tty, `chinwag \u00B7 ${label}`);
         }
         const preamble = await teamPreamble(team, state.teamId);
