@@ -33,7 +33,7 @@ async function loadAuthModule({ apiMock = vi.fn(), hash = '' } = {}) {
     globalThis as Record<string, unknown> & { window: { history: unknown } }
   ).window.history;
   (globalThis as Record<string, unknown>).localStorage = createStorage();
-  vi.doMock('../api.js', () => ({
+  vi.doMock('../../api.js', () => ({
     api: apiMock,
   }));
   return import('../auth.js');

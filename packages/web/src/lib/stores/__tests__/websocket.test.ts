@@ -76,24 +76,24 @@ async function loadWebSocketModule({
   vi.resetModules();
   MockWebSocket.instances = [];
 
-  vi.doMock('../api.js', () => ({
+  vi.doMock('../../api.js', () => ({
     api: apiMock,
     getApiUrl: () => apiUrl,
   }));
-  vi.doMock('./auth.js', () => ({
+  vi.doMock('../auth.js', () => ({
     authActions: {
       getState: () => ({ token }),
       subscribe: vi.fn(),
     },
   }));
-  vi.doMock('./teams.js', () => ({
+  vi.doMock('../teams.js', () => ({
     teamActions: {
       getState: () => ({ activeTeamId }),
     },
   }));
 
   const setWsConnectedMock = vi.fn();
-  vi.doMock('./refresh.js', () => ({
+  vi.doMock('../refresh.js', () => ({
     setWsConnected: setWsConnectedMock,
   }));
 

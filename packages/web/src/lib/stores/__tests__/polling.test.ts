@@ -28,24 +28,24 @@ async function loadPollingModule({
     delete (globalThis as Record<string, unknown>).document;
   }
 
-  vi.doMock('../api.js', () => ({
+  vi.doMock('../../api.js', () => ({
     api: apiMock,
   }));
-  vi.doMock('./auth.js', () => ({
+  vi.doMock('../auth.js', () => ({
     authActions: {
       getState: () => ({ token }),
       logout: logoutMock,
       subscribe: vi.fn(),
     },
   }));
-  vi.doMock('./teams.js', () => ({
+  vi.doMock('../teams.js', () => ({
     teamActions: {
       getState: () => teamState,
       ensureJoined: ensureJoinedMock,
       loadTeams: loadTeamsMock,
     },
   }));
-  vi.doMock('./websocket.js', () => ({
+  vi.doMock('../websocket.js', () => ({
     closeWebSocket: vi.fn(),
     connectTeamWebSocket: vi.fn(),
     setPollingBridge: vi.fn(),

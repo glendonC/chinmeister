@@ -6,15 +6,15 @@ async function loadTeamsModule({
   requestRefreshMock = vi.fn(),
 } = {}) {
   vi.resetModules();
-  vi.doMock('../api.js', () => ({
+  vi.doMock('../../api.js', () => ({
     api: apiMock,
   }));
-  vi.doMock('./auth.js', () => ({
+  vi.doMock('../auth.js', () => ({
     authActions: {
       getState: () => ({ token }),
     },
   }));
-  vi.doMock('./refresh.js', () => ({
+  vi.doMock('../refresh.js', () => ({
     requestRefresh: requestRefreshMock,
   }));
   const mod = await import('../teams.js');
@@ -99,15 +99,15 @@ describe('team store', () => {
       vi.resetModules();
       const apiMock = vi.fn().mockResolvedValue({ ok: true });
       const requestRefreshMock = vi.fn();
-      vi.doMock('../api.js', () => ({
+      vi.doMock('../../api.js', () => ({
         api: apiMock,
       }));
-      vi.doMock('./auth.js', () => ({
+      vi.doMock('../auth.js', () => ({
         authActions: {
           getState: () => tokenState,
         },
       }));
-      vi.doMock('./refresh.js', () => ({
+      vi.doMock('../refresh.js', () => ({
         requestRefresh: requestRefreshMock,
       }));
       const { teamActions } = await import('../teams.js');

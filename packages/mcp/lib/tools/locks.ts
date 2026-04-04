@@ -33,9 +33,9 @@ export function registerLockTools(
       inputSchema: claimFilesSchema,
     },
     async (args) => {
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       const { files: rawFiles } = args as ClaimFilesArgs;
       const files = normalizeFiles(rawFiles);
-      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         const result = await team.claimFiles(state.teamId, files);
         const preamble = await teamPreamble(team, state.teamId);
@@ -67,9 +67,9 @@ export function registerLockTools(
       inputSchema: releaseFilesSchema,
     },
     async (args) => {
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       const { files: rawFiles } = args as ReleaseFilesArgs;
       const files = rawFiles ? normalizeFiles(rawFiles) : undefined;
-      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         await team.releaseFiles(state.teamId, files);
         const msg = files ? `Released: ${files.join(', ')}` : 'All locks released.';

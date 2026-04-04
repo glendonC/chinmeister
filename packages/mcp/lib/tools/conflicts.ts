@@ -25,9 +25,9 @@ export function registerConflictsTool(
       inputSchema: checkConflictsSchema,
     },
     async (args) => {
+      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       const { files: rawFiles } = args as CheckConflictsArgs;
       const files = normalizeFiles(rawFiles);
-      if (!state.teamId || state.heartbeatDead) return noTeam(state);
       try {
         const result = await team.checkConflicts(state.teamId, files);
         const preamble = await teamPreamble(team, state.teamId);
