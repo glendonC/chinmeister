@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { detectRuntimeIdentity, detectToolName, generateAgentId, generateSessionAgentId, getConfiguredAgentId } from '../agent-identity.js';
+import {
+  detectRuntimeIdentity,
+  detectToolName,
+  generateAgentId,
+  generateSessionAgentId,
+  getConfiguredAgentId,
+} from '../agent-identity.js';
 
 describe('agent-identity', () => {
   const originalEnv = { ...process.env };
@@ -166,6 +172,104 @@ describe('agent-identity', () => {
         parentPid: 100,
       });
       expect(result.hostTool).toBe('claude-code');
+    });
+
+    it('detects tool via alias matching in process tree (e.g., "claude code")', () => {
+      const processTree = {
+        100: { ppid: 50, command: '/usr/bin/node some-script' },
+        50: { ppid: 25, command: 'claude code --project /foo' },
+        25: { ppid: 1, command: 'init' },
+      };
+      const readFn = (pid) => processTree[pid] || null;
+
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js'],
+        readProcessInfoFn: readFn,
+        parentPid: 100,
+      });
+      expect(result.hostTool).toBe('claude-code');
+      expect(result.detectionSource).toBe('parent-process');
+    });
+
+    it('detects tool from --tool=value flag syntax (with equals)', () => {
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js', '--tool=windsurf'],
+        readProcessInfoFn: () => null,
+        parentPid: 1,
+      });
+      expect(result.hostTool).toBe('windsurf');
+      expect(result.detectionSource).toBe('explicit');
+    });
+
+    it('detects transport from --transport=value flag syntax', () => {
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js', '--transport=managed-cli'],
+        readProcessInfoFn: () => null,
+        parentPid: 1,
+      });
+      expect(result.transport).toBe('managed-cli');
+    });
+
+    it('detects surface from --surface=value flag syntax', () => {
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js', '--surface=cline'],
+        readProcessInfoFn: () => null,
+        parentPid: 1,
+      });
+      expect(result.agentSurface).toBe('cline');
+    });
+
+    it('respects options.defaultTransport fallback', () => {
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js'],
+        readProcessInfoFn: () => null,
+        parentPid: 1,
+        defaultTransport: 'channel',
+      });
+      expect(result.transport).toBe('channel');
+    });
+
+    it('stops process walk when ppid is 0 (falsy)', () => {
+      const readFn = vi.fn().mockReturnValue({ ppid: 0, command: '/bin/sh' });
+      const result = detectRuntimeIdentity('fallback', {
+        argv: ['node', 'script.js'],
+        readProcessInfoFn: readFn,
+        parentPid: 100,
+      });
+      expect(result.hostTool).toBe('fallback');
+      expect(readFn).toHaveBeenCalledTimes(1);
+    });
+
+    it('detects jetbrains via "intellij idea" alias', () => {
+      const processTree = {
+        100: { ppid: 1, command: 'IntelliJ IDEA Ultimate /some/path' },
+      };
+      const readFn = (pid) => processTree[pid] || null;
+
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js'],
+        readProcessInfoFn: readFn,
+        parentPid: 100,
+      });
+      expect(result.hostTool).toBe('jetbrains');
+    });
+
+    it('detects vscode via "code helper" alias', () => {
+      const processTree = {
+        100: {
+          ppid: 1,
+          command:
+            '/Applications/Visual Studio Code.app/Contents/Frameworks/Code Helper (Plugin).app/Contents/MacOS/Code Helper (Plugin)',
+        },
+      };
+      const readFn = (pid) => processTree[pid] || null;
+
+      const result = detectRuntimeIdentity('unknown', {
+        argv: ['node', 'script.js'],
+        readProcessInfoFn: readFn,
+        parentPid: 100,
+      });
+      expect(result.hostTool).toBe('vscode');
     });
 
     it('returns capabilities sorted alphabetically', () => {

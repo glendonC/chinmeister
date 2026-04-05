@@ -173,6 +173,116 @@ describe('claude-code availability check parser', () => {
   });
 });
 
+describe('claude-code failure pattern matching', () => {
+  const cc = MCP_TOOLS.find((t) => t.id === 'claude-code');
+  const patterns = cc.failurePatterns;
+
+  it('matches "auth" in error output', () => {
+    const match = patterns.find((p) => p.pattern.test('auth error occurred'));
+    expect(match).toBeDefined();
+    expect(match.recoveryCommand).toContain('auth login');
+  });
+
+  it('matches "not logged in" in error output', () => {
+    const match = patterns.find((p) => p.pattern.test('You are not logged in'));
+    expect(match).toBeDefined();
+  });
+
+  it('matches "please log in" in error output', () => {
+    const match = patterns.find((p) => p.pattern.test('Please log in first'));
+    expect(match).toBeDefined();
+  });
+
+  it('matches "authentication" in error output', () => {
+    const match = patterns.find((p) => p.pattern.test('Authentication failed'));
+    expect(match).toBeDefined();
+  });
+
+  it('does not match unrelated error', () => {
+    const match = patterns.find((p) => p.pattern.test('file not found'));
+    expect(match).toBeUndefined();
+  });
+});
+
+describe('codex failure pattern matching', () => {
+  const codex = MCP_TOOLS.find((t) => t.id === 'codex');
+  const patterns = codex.failurePatterns;
+
+  it('matches "refresh token already used"', () => {
+    const match = patterns.find((p) =>
+      p.pattern.test('The refresh token has already used, please try again'),
+    );
+    expect(match).toBeDefined();
+    expect(match.recoveryCommand).toContain('login');
+  });
+
+  it('matches "log out and sign in again"', () => {
+    const match = patterns.find((p) => p.pattern.test('Please log out and sign in again'));
+    expect(match).toBeDefined();
+  });
+
+  it('matches "token expired"', () => {
+    const match = patterns.find((p) => p.pattern.test('Your token expired'));
+    expect(match).toBeDefined();
+  });
+
+  it('matches "401 unauthorized"', () => {
+    const match = patterns.find((p) => p.pattern.test('Received 401 Unauthorized'));
+    expect(match).toBeDefined();
+  });
+
+  it('matches "could not be refreshed"', () => {
+    const match = patterns.find((p) => p.pattern.test('Your session could not be refreshed'));
+    expect(match).toBeDefined();
+  });
+
+  it('does not match unrelated error', () => {
+    const match = patterns.find((p) => p.pattern.test('file not found'));
+    expect(match).toBeUndefined();
+  });
+});
+
+describe('tool spawn configurations', () => {
+  it('claude-code spawn uses claude with --print args', () => {
+    const cc = MCP_TOOLS.find((t) => t.id === 'claude-code');
+    expect(cc.spawn.cmd).toBe('claude');
+    expect(cc.spawn.args).toEqual(['--print']);
+    expect(cc.spawn.interactiveArgs).toEqual([]);
+  });
+
+  it('codex spawn uses codex with exec --color never', () => {
+    const codex = MCP_TOOLS.find((t) => t.id === 'codex');
+    expect(codex.spawn.cmd).toBe('codex');
+    expect(codex.spawn.args).toEqual(['exec', '--color', 'never']);
+  });
+
+  it('aider spawn uses aider with --message', () => {
+    const aider = MCP_TOOLS.find((t) => t.id === 'aider');
+    expect(aider.spawn.cmd).toBe('aider');
+    expect(aider.spawn.args).toEqual(['--message']);
+  });
+
+  it('amazon-q spawn uses q with taskArg positional', () => {
+    const aq = MCP_TOOLS.find((t) => t.id === 'amazon-q');
+    expect(aq.spawn.cmd).toBe('q');
+    expect(aq.spawn.taskArg).toBe('positional');
+  });
+});
+
+describe('tool catalog mcpCompatible flags', () => {
+  it('all tools have mcpCompatible set to true', () => {
+    for (const tool of MCP_TOOLS) {
+      expect(tool.catalog.mcpCompatible).toBe(true);
+    }
+  });
+
+  it('all tools have mcpConfigurable set to true', () => {
+    for (const tool of MCP_TOOLS) {
+      expect(tool.catalog.mcpConfigurable).toBe(true);
+    }
+  });
+});
+
 describe('codex availability check parser', () => {
   const codex = MCP_TOOLS.find((t) => t.id === 'codex');
   const parse = codex.availabilityCheck.parse;

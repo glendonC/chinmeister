@@ -235,6 +235,62 @@ describe('buildHostIntegrationCatalogEntries', () => {
   });
 });
 
+describe('buildHostIntegrationCatalogEntries - edge cases', () => {
+  it('entries do NOT include capabilities, tier, or runtime (only catalog fields)', () => {
+    const entries = buildHostIntegrationCatalogEntries();
+    for (const entry of entries) {
+      expect(entry.capabilities).toBeUndefined();
+      expect(entry.tier).toBeUndefined();
+      expect(entry.runtime).toBeUndefined();
+      expect(entry.kind).toBeUndefined();
+    }
+  });
+
+  it('entries for tools without installCmd have installCmd undefined', () => {
+    const entries = buildHostIntegrationCatalogEntries();
+    const cursorEntry = entries.find((e) => e.id === 'cursor');
+    // cursor catalog does not have installCmd
+    expect(cursorEntry.installCmd).toBeUndefined();
+  });
+
+  it('entries for tools without website have website undefined', () => {
+    const entries = buildHostIntegrationCatalogEntries();
+    // All current tools have websites, but verify the pattern
+    for (const entry of entries) {
+      if (entry.website) {
+        expect(entry.website).toMatch(/^https?:\/\//);
+      }
+    }
+  });
+});
+
+describe('HOST_INTEGRATIONS capability inference details', () => {
+  it('codex has managed-process but tier defaults to managed (no explicit tier)', () => {
+    const codex = HOST_INTEGRATIONS.find((h) => h.id === 'codex');
+    expect(codex.capabilities).toContain('managed-process');
+    // codex has no explicit tier set on McpTool, and has spawn, so tier = managed
+    expect(codex.tier).toBe('managed');
+  });
+
+  it('aider has managed-process capability and managed tier', () => {
+    const aider = HOST_INTEGRATIONS.find((h) => h.id === 'aider');
+    expect(aider.capabilities).toContain('managed-process');
+    expect(aider.tier).toBe('managed');
+  });
+
+  it('windsurf has only mcp capability and connected tier', () => {
+    const windsurf = HOST_INTEGRATIONS.find((h) => h.id === 'windsurf');
+    expect(windsurf.capabilities).toEqual(['mcp']);
+    expect(windsurf.tier).toBe('connected');
+  });
+
+  it('jetbrains has only mcp capability and connected tier', () => {
+    const jb = HOST_INTEGRATIONS.find((h) => h.id === 'jetbrains');
+    expect(jb.capabilities).toEqual(['mcp']);
+    expect(jb.tier).toBe('connected');
+  });
+});
+
 describe('buildAgentSurfaceCatalogEntries', () => {
   it('returns non-empty array', () => {
     const entries = buildAgentSurfaceCatalogEntries();

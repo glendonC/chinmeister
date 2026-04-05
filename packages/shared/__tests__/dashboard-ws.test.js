@@ -274,6 +274,88 @@ describe('dashboard-ws', () => {
       expect(result.id).toBeUndefined();
       expect(result.tags).toBeUndefined();
     });
+
+    it('returns undefined for activity files when files contains non-strings', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'activity',
+        agent_id: 'a',
+        files: ['valid', 123, null],
+      });
+      expect(result.files).toBeUndefined();
+    });
+
+    it('returns undefined for lock_change files when files is not an array', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'lock_change',
+        action: 'claim',
+        agent_id: 'a',
+        files: 'not-an-array',
+      });
+      expect(result.files).toBeUndefined();
+    });
+
+    it('returns undefined for memory tags when tags contains non-strings', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'memory',
+        text: 'note',
+        tags: ['valid', 42],
+      });
+      expect(result.tags).toBeUndefined();
+    });
+
+    it('normalizes heartbeat with non-string agent_id returns null', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'heartbeat', agent_id: 123 })).toBeNull();
+    });
+
+    it('normalizes file event with non-string file returns null', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'file', agent_id: 'a', file: 42 })).toBeNull();
+    });
+
+    it('normalizes status_change without status field returns null', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'status_change', agent_id: 'a' })).toBeNull();
+    });
+
+    it('normalizes message with created_at preserves it', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'message',
+        handle: 'alice',
+        text: 'hi',
+        created_at: '2025-01-01T00:00:00Z',
+      });
+      expect(result.created_at).toBe('2025-01-01T00:00:00Z');
+    });
+
+    it('normalizes message without created_at sets undefined', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'message',
+        handle: 'alice',
+        text: 'hi',
+      });
+      expect(result.created_at).toBeUndefined();
+    });
+
+    it('normalizes member_joined with host_tool prefers host_tool over tool', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'member_joined',
+        agent_id: 'a',
+        host_tool: 'cursor',
+        tool: 'windsurf',
+      });
+      expect(result.host_tool).toBe('cursor');
+    });
+
+    it('normalizes member_joined without handle or host_tool gives undefined for both', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'member_joined',
+        agent_id: 'a',
+      });
+      expect(result.handle).toBeUndefined();
+      expect(result.host_tool).toBeUndefined();
+    });
+
+    it('normalizes lock_change without action returns null', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'lock_change', agent_id: 'a' })).toBeNull();
+    });
   });
 
   describe('applyDelta - general', () => {
@@ -681,6 +763,95 @@ describe('dashboard-ws', () => {
       const event = { type: 'memory', text: 'no id' };
       const result = applyDelta(baseContext, event);
       expect(result.memories[0].id).toMatch(/^memory:\d+$/);
+    });
+  });
+
+  describe('lock_change edge cases', () => {
+    it('release with undefined files does not remove any locks', () => {
+      const ctx = {
+        ...baseContext,
+        locks: [{ file_path: 'src/a.js', agent_id: 'agent-1' }],
+      };
+      const event = {
+        type: 'lock_change',
+        action: 'release',
+        agent_id: 'agent-1',
+      };
+      const result = applyDelta(ctx, event);
+      // files defaults to [] via Set, so released set is empty and nothing matches
+      expect(result.locks).toHaveLength(1);
+    });
+
+    it('claim with undefined files adds no locks', () => {
+      const event = {
+        type: 'lock_change',
+        action: 'claim',
+        agent_id: 'agent-1',
+      };
+      const result = applyDelta(baseContext, event);
+      expect(result.locks).toHaveLength(0);
+    });
+  });
+
+  describe('message edge cases', () => {
+    it('uses provided created_at from event', () => {
+      const event = {
+        type: 'message',
+        handle: 'alice',
+        text: 'hello',
+        created_at: '2025-06-15T12:00:00Z',
+      };
+      const result = applyDelta(baseContext, event);
+      expect(result.messages[0].created_at).toBe('2025-06-15T12:00:00Z');
+    });
+
+    it('auto-generates created_at when not in event', () => {
+      const event = { type: 'message', handle: 'alice', text: 'hello' };
+      const result = applyDelta(baseContext, event);
+      expect(result.messages[0].created_at).toBeDefined();
+      // Should be a valid ISO string
+      expect(() => new Date(result.messages[0].created_at)).not.toThrow();
+    });
+  });
+
+  describe('memory edge cases', () => {
+    it('uses provided id from event', () => {
+      const event = { type: 'memory', id: 'custom-id-123', text: 'remember' };
+      const result = applyDelta(baseContext, event);
+      expect(result.memories[0].id).toBe('custom-id-123');
+    });
+
+    it('uses provided created_at from event', () => {
+      const event = {
+        type: 'memory',
+        text: 'remember',
+        created_at: '2025-06-15T12:00:00Z',
+      };
+      const result = applyDelta(baseContext, event);
+      expect(result.memories[0].created_at).toBe('2025-06-15T12:00:00Z');
+    });
+
+    it('preserves handle and host_tool from event', () => {
+      const event = {
+        type: 'memory',
+        text: 'note',
+        handle: 'alice',
+        host_tool: 'cursor',
+      };
+      const result = applyDelta(baseContext, event);
+      expect(result.memories[0].handle).toBe('alice');
+      expect(result.memories[0].host_tool).toBe('cursor');
+    });
+  });
+
+  describe('applyDelta with raw (unnormalized) events', () => {
+    it('accepts and normalizes raw event objects', () => {
+      const rawEvent = { type: 'heartbeat', agent_id: 'agent-1', extra_field: 'ignored' };
+      const result = applyDelta(baseContext, rawEvent);
+      expect(result).not.toBe(baseContext);
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
+      expect(alice.status).toBe('active');
+      expect(alice.seconds_since_update).toBe(0);
     });
   });
 

@@ -489,6 +489,165 @@ describe('api-client', () => {
     });
   });
 
+  describe('timeout retry behavior', () => {
+    it('retries on AbortError when maxTimeoutRetryAttempts > 0 and succeeds', async () => {
+      let callCount = 0;
+      mockFetch.mockImplementation((_url, opts) => {
+        callCount++;
+        if (callCount === 1) {
+          return new Promise((_resolve, reject) => {
+            opts.signal.addEventListener('abort', () => {
+              const abortErr = new Error('The operation was aborted');
+              abortErr.name = 'AbortError';
+              reject(abortErr);
+            });
+          });
+        }
+        return Promise.resolve(jsonResponse({ ok: true }));
+      });
+
+      const client = createJsonApiClient({
+        timeoutMs: 50,
+        maxTimeoutRetryAttempts: 1,
+        timeoutRetryDelayMs: 10,
+      });
+
+      const promise = client.get('/slow');
+      vi.advanceTimersByTime(100);
+      const result = await promise;
+      expect(result).toEqual({ ok: true });
+      expect(callCount).toBe(2);
+    });
+
+    it('exhausts timeout retries then throws timeout error', async () => {
+      mockFetch.mockImplementation((_url, opts) => {
+        return new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => {
+            const abortErr = new Error('The operation was aborted');
+            abortErr.name = 'AbortError';
+            reject(abortErr);
+          });
+        });
+      });
+
+      const client = createJsonApiClient({
+        timeoutMs: 50,
+        maxTimeoutRetryAttempts: 2,
+        timeoutRetryDelayMs: 10,
+      });
+
+      const promise = client.get('/always-slow');
+      vi.advanceTimersByTime(500);
+      try {
+        await promise;
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiRequestError);
+        expect(err.kind).toBe('timeout');
+        // 1 initial + 2 retries = 3 total
+        expect(mockFetch).toHaveBeenCalledTimes(3);
+      }
+    });
+  });
+
+  describe('non-Error rejection from fetch', () => {
+    it('wraps non-Error rejection into ApiRequestError with kind=network', async () => {
+      mockFetch.mockRejectedValue('string error');
+      const client = createJsonApiClient();
+      try {
+        await client.get('/fail');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiRequestError);
+        expect(err.kind).toBe('network');
+        expect(err.message).toBe('string error');
+      }
+    });
+  });
+
+  describe('exponential backoff for 5xx', () => {
+    it('uses exponential backoff delay for server errors', async () => {
+      mockFetch
+        .mockResolvedValueOnce(jsonResponse({}, 503))
+        .mockResolvedValueOnce(jsonResponse({}, 502))
+        .mockResolvedValueOnce(jsonResponse({ ok: true }, 200));
+
+      const client = createJsonApiClient({ maxRetryAttempts: 2, retryDelayMs: 100 });
+      const result = await client.get('/server-flaky');
+      expect(result).toEqual({ ok: true });
+      expect(mockFetch).toHaveBeenCalledTimes(3);
+    });
+  });
+
+  describe('429 Retry-After header parsing', () => {
+    it('uses minimum 1000ms even when Retry-After is 0', async () => {
+      const rateLimitResponse = {
+        ok: false,
+        status: 429,
+        headers: new Map([['retry-after', '0']]),
+        json: () => Promise.resolve({ error: 'rate limited' }),
+      };
+      mockFetch
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+      const client = createJsonApiClient({ maxRetryAttempts: 1 });
+      const result = await client.get('/rate-limit');
+      expect(result).toEqual({ ok: true });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('handles missing Retry-After header on 429 with 1s default', async () => {
+      const rateLimitResponse = {
+        ok: false,
+        status: 429,
+        headers: new Map(),
+        json: () => Promise.resolve({ error: 'rate limited' }),
+      };
+      mockFetch
+        .mockResolvedValueOnce(rateLimitResponse)
+        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+      const client = createJsonApiClient({ maxRetryAttempts: 1 });
+      const result = await client.get('/rate-limit');
+      expect(result).toEqual({ ok: true });
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('retryable network error codes', () => {
+    for (const code of ['ECONNRESET', 'ENOTFOUND', 'EAI_AGAIN', 'EPIPE', 'ETIMEDOUT']) {
+      it(`retries on ${code}`, async () => {
+        const networkErr = new Error(`${code} error`);
+        networkErr.code = code;
+        mockFetch
+          .mockRejectedValueOnce(networkErr)
+          .mockResolvedValueOnce(jsonResponse({ ok: true }));
+
+        const client = createJsonApiClient({ maxRetryAttempts: 1, retryDelayMs: 10 });
+        const result = await client.get('/fail');
+        expect(result).toEqual({ ok: true });
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+    }
+  });
+
+  describe('body handling', () => {
+    it('does not send body when body is null on POST', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+      const client = createJsonApiClient({ baseUrl: 'https://api.test' });
+      await client.post('/items');
+      expect(mockFetch.mock.calls[0][1].body).toBeUndefined();
+    });
+
+    it('sends body on DELETE when provided', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+      const client = createJsonApiClient({ baseUrl: 'https://api.test' });
+      await client.del('/items/1', { reason: 'cleanup' });
+      expect(mockFetch.mock.calls[0][1].body).toBe('{"reason":"cleanup"}');
+    });
+  });
+
   describe('base URL', () => {
     it('uses DEFAULT_API_URL when no baseUrl is provided', async () => {
       mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
