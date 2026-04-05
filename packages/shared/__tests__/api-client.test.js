@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createJsonApiClient, DEFAULT_API_URL } from '../api-client.js';
+import { createJsonApiClient, ApiRequestError, DEFAULT_API_URL } from '../api-client.js';
 
 describe('api-client', () => {
   let mockFetch;
@@ -32,6 +32,97 @@ describe('api-client', () => {
       json: () => Promise.reject(new Error('not json')),
     };
   }
+
+  describe('ApiRequestError', () => {
+    it('constructor sets kind, status, data, and message for http errors', () => {
+      const err = new ApiRequestError({
+        kind: 'http',
+        status: 404,
+        message: 'Not found',
+        data: { detail: 'missing' },
+      });
+      expect(err.kind).toBe('http');
+      expect(err.status).toBe(404);
+      expect(err.data).toEqual({ detail: 'missing' });
+      expect(err.message).toBe('Not found');
+      expect(err.name).toBe('ApiRequestError');
+      expect(err).toBeInstanceOf(Error);
+    });
+
+    it('constructor sets kind and message for network errors', () => {
+      const cause = new Error('socket hang up');
+      const err = new ApiRequestError(
+        { kind: 'network', message: 'Connection failed', cause },
+        { cause },
+      );
+      expect(err.kind).toBe('network');
+      expect(err.message).toBe('Connection failed');
+      expect(err.cause).toBe(cause);
+      expect(err.status).toBeUndefined();
+      expect(err.data).toBeUndefined();
+    });
+
+    it('constructor sets kind and message for timeout errors', () => {
+      const err = new ApiRequestError({ kind: 'timeout', message: 'Timed out' });
+      expect(err.kind).toBe('timeout');
+      expect(err.message).toBe('Timed out');
+      expect(err.status).toBeUndefined();
+    });
+
+    it('constructor sets code from options', () => {
+      const err = new ApiRequestError(
+        { kind: 'network', message: 'fail' },
+        { code: 'ECONNREFUSED' },
+      );
+      expect(err.code).toBe('ECONNREFUSED');
+    });
+
+    it('toApiError() returns correct shape for http kind', () => {
+      const err = new ApiRequestError({
+        kind: 'http',
+        status: 500,
+        message: 'Server error',
+        data: { error: 'internal' },
+      });
+      const apiError = err.toApiError();
+      expect(apiError).toEqual({
+        kind: 'http',
+        status: 500,
+        message: 'Server error',
+        data: { error: 'internal' },
+      });
+    });
+
+    it('toApiError() returns correct shape for network kind', () => {
+      const cause = new Error('DNS failure');
+      const err = new ApiRequestError(
+        { kind: 'network', message: 'Network error', cause },
+        { cause },
+      );
+      const apiError = err.toApiError();
+      expect(apiError).toEqual({
+        kind: 'network',
+        message: 'Network error',
+        cause,
+      });
+    });
+
+    it('toApiError() returns correct shape for timeout kind', () => {
+      const err = new ApiRequestError({ kind: 'timeout', message: 'Request timed out' });
+      const apiError = err.toApiError();
+      expect(apiError).toEqual({
+        kind: 'timeout',
+        message: 'Request timed out',
+      });
+    });
+
+    it('toApiError() returns undefined cause for network kind when cause is not Error', () => {
+      const err = new ApiRequestError({ kind: 'network', message: 'fail' });
+      const apiError = err.toApiError();
+      expect(apiError.kind).toBe('network');
+      expect(apiError.cause).toBeUndefined();
+    });
+  });
 
   describe('DEFAULT_API_URL', () => {
     it('exports the production API URL', () => {
@@ -101,6 +192,16 @@ describe('api-client', () => {
       expect(headers['X-Agent-Tier']).toBe('connected');
     });
 
+    it('sends X-Agent-Host-Tool header when agentHostTool provided via runtimeIdentity', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
+      const client = createJsonApiClient({
+        runtimeIdentity: { hostTool: 'windsurf' },
+      });
+      await client.get('/test');
+      const headers = mockFetch.mock.calls[0][1].headers;
+      expect(headers['X-Agent-Host-Tool']).toBe('windsurf');
+    });
+
     it('omits optional headers when not provided', async () => {
       mockFetch.mockResolvedValue(jsonResponse({ ok: true }));
       const client = createJsonApiClient();
@@ -118,9 +219,12 @@ describe('api-client', () => {
       const client = createJsonApiClient({ baseUrl: 'https://api.test' });
       const result = await client.get('/path');
       expect(result).toEqual({ data: 1 });
-      expect(mockFetch).toHaveBeenCalledWith('https://api.test/path', expect.objectContaining({
-        method: 'GET',
-      }));
+      expect(mockFetch).toHaveBeenCalledWith(
+        'https://api.test/path',
+        expect.objectContaining({
+          method: 'GET',
+        }),
+      );
       expect(mockFetch.mock.calls[0][1].body).toBeUndefined();
     });
 
@@ -193,6 +297,86 @@ describe('api-client', () => {
       });
       await expect(client.get('/y')).rejects.toThrow('GET /y failed with 400');
     });
+
+    it('throws ApiRequestError with kind=http on non-ok response', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ error: 'nope' }, 422));
+      const client = createJsonApiClient();
+      try {
+        await client.get('/bad');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiRequestError);
+        expect(err.kind).toBe('http');
+        expect(err.status).toBe(422);
+      }
+    });
+
+    it('throws ApiRequestError with kind=network when fetch rejects', async () => {
+      const networkErr = new Error('fetch failed');
+      mockFetch.mockRejectedValue(networkErr);
+      const client = createJsonApiClient();
+      try {
+        await client.get('/down');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiRequestError);
+        expect(err.kind).toBe('network');
+        expect(err.message).toBe('fetch failed');
+      }
+    });
+
+    it('throws ApiRequestError with kind=timeout when AbortError occurs', async () => {
+      mockFetch.mockImplementation((_url, opts) => {
+        return new Promise((_resolve, reject) => {
+          opts.signal.addEventListener('abort', () => {
+            const abortErr = new Error('The operation was aborted');
+            abortErr.name = 'AbortError';
+            reject(abortErr);
+          });
+        });
+      });
+
+      const client = createJsonApiClient({
+        timeoutMs: 50,
+        maxTimeoutRetryAttempts: 0,
+      });
+
+      const promise = client.get('/slow');
+      vi.advanceTimersByTime(100);
+      try {
+        await promise;
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiRequestError);
+        expect(err.kind).toBe('timeout');
+      }
+    });
+
+    it('throws ApiRequestError on JSON parse error with http kind', async () => {
+      mockFetch.mockResolvedValue(textResponse('not json', 200));
+      const client = createJsonApiClient();
+      try {
+        await client.get('/html');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err).toBeInstanceOf(ApiRequestError);
+        expect(err.kind).toBe('http');
+        expect(err.status).toBe(200);
+      }
+    });
+
+    it('generates fallback error message for non-ok non-JSON responses with data.error missing', async () => {
+      mockFetch.mockResolvedValue(jsonResponse({ info: 'no error field' }, 418));
+      const client = createJsonApiClient();
+      try {
+        await client.get('/teapot');
+        expect.fail('should have thrown');
+      } catch (err) {
+        expect(err.message).toContain('GET');
+        expect(err.message).toContain('/teapot');
+        expect(err.message).toContain('418');
+      }
+    });
   });
 
   describe('retry behavior', () => {
@@ -234,9 +418,7 @@ describe('api-client', () => {
     it('retries on network errors with retryable codes', async () => {
       const connError = new Error('Connection refused');
       connError.code = 'ECONNREFUSED';
-      mockFetch
-        .mockRejectedValueOnce(connError)
-        .mockResolvedValueOnce(jsonResponse({ ok: true }));
+      mockFetch.mockRejectedValueOnce(connError).mockResolvedValueOnce(jsonResponse({ ok: true }));
 
       const client = createJsonApiClient({ maxRetryAttempts: 1, retryDelayMs: 10 });
       const result = await client.get('/down');

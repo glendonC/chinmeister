@@ -17,6 +17,7 @@ import {
   CONFIG_FILE,
   LOCAL_CONFIG_DIR,
   LOCAL_CONFIG_FILE,
+  validateConfigShape,
   getConfigPaths,
   configExists,
   loadConfig,
@@ -32,6 +33,67 @@ describe('config', () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+  });
+
+  describe('validateConfigShape', () => {
+    it('returns null for valid config with all string fields', () => {
+      expect(
+        validateConfigShape({
+          token: 'tok_abc',
+          refresh_token: 'ref_123',
+          handle: 'alice',
+          userId: 'user_1',
+          color: 'cyan',
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null for an empty object (all fields optional)', () => {
+      expect(validateConfigShape({})).toBeNull();
+    });
+
+    it('returns null for config with extra unknown fields', () => {
+      expect(validateConfigShape({ token: 'tok', customField: 42 })).toBeNull();
+    });
+
+    it('returns error when a known field has a number value', () => {
+      const result = validateConfigShape({ token: 123 });
+      expect(result).toContain('"token" must be a string');
+      expect(result).toContain('got number');
+    });
+
+    it('returns error for each invalid known field', () => {
+      expect(validateConfigShape({ handle: true })).toContain('"handle" must be a string');
+      expect(validateConfigShape({ color: [] })).toContain('"color" must be a string');
+      expect(validateConfigShape({ refresh_token: 42 })).toContain(
+        '"refresh_token" must be a string',
+      );
+    });
+
+    it('returns error for an array', () => {
+      const result = validateConfigShape([1, 2, 3]);
+      expect(result).toContain('array');
+    });
+
+    it('returns error for null', () => {
+      const result = validateConfigShape(null);
+      expect(result).toContain('object');
+    });
+
+    it('returns error for a string', () => {
+      const result = validateConfigShape('not an object');
+      expect(result).toContain('string');
+    });
+
+    it('returns error for a number', () => {
+      const result = validateConfigShape(42);
+      expect(result).toContain('number');
+    });
+
+    it('returns error for undefined (non-object)', () => {
+      const result = validateConfigShape(undefined);
+      expect(result).toContain('undefined');
+    });
   });
 
   describe('CONFIG_DIR and CONFIG_FILE', () => {
@@ -165,7 +227,7 @@ describe('config', () => {
     });
   });
 
-  describe('saveConfig and deleteConfig', () => {
+  describe('saveConfig', () => {
     it('writes to the local config path when the local profile is active', () => {
       vi.stubEnv('CHINWAG_PROFILE', 'local');
 
@@ -179,6 +241,42 @@ describe('config', () => {
       );
     });
 
+    it('writes to the default config path in production profile', () => {
+      saveConfig({ token: 'tok_prod', handle: 'alice' });
+
+      expect(mkdirSync).toHaveBeenCalledWith(CONFIG_DIR, { recursive: true, mode: 0o700 });
+      expect(writeFileSync).toHaveBeenCalledWith(
+        CONFIG_FILE,
+        expect.stringContaining('"token": "tok_prod"'),
+        { mode: 0o600 },
+      );
+    });
+
+    it('creates directory with 0o700 permissions', () => {
+      saveConfig({ token: 'tok' });
+      expect(mkdirSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ mode: 0o700 }),
+      );
+    });
+
+    it('writes file with 0o600 permissions', () => {
+      saveConfig({ token: 'tok' });
+      expect(writeFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.objectContaining({ mode: 0o600 }),
+      );
+    });
+
+    it('includes trailing newline in written content', () => {
+      saveConfig({ handle: 'bob' });
+      const writtenContent = writeFileSync.mock.calls[0][1];
+      expect(writtenContent).toMatch(/\n$/);
+    });
+  });
+
+  describe('deleteConfig', () => {
     it('deletes from the active config path', () => {
       vi.stubEnv('CHINWAG_PROFILE', 'local');
       existsSync.mockReturnValue(true);
@@ -186,6 +284,22 @@ describe('config', () => {
       deleteConfig();
 
       expect(unlinkSync).toHaveBeenCalledWith(LOCAL_CONFIG_FILE);
+    });
+
+    it('does nothing when config file does not exist (handles gracefully)', () => {
+      existsSync.mockReturnValue(false);
+
+      deleteConfig();
+
+      expect(unlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('deletes the default config file in production profile', () => {
+      existsSync.mockReturnValue(true);
+
+      deleteConfig();
+
+      expect(unlinkSync).toHaveBeenCalledWith(CONFIG_FILE);
     });
   });
 });

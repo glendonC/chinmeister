@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { applyDelta } from '../dashboard-ws.js';
+import { normalizeDashboardDeltaEvent, applyDelta } from '../dashboard-ws.js';
 
 describe('dashboard-ws', () => {
   let baseContext;
@@ -30,9 +30,259 @@ describe('dashboard-ws', () => {
     };
   });
 
+  describe('normalizeDashboardDeltaEvent', () => {
+    it('returns null for non-object input', () => {
+      expect(normalizeDashboardDeltaEvent(null)).toBeNull();
+      expect(normalizeDashboardDeltaEvent(undefined)).toBeNull();
+      expect(normalizeDashboardDeltaEvent('string')).toBeNull();
+      expect(normalizeDashboardDeltaEvent(42)).toBeNull();
+      expect(normalizeDashboardDeltaEvent(true)).toBeNull();
+    });
+
+    it('returns null for object without type', () => {
+      expect(normalizeDashboardDeltaEvent({ agent_id: 'a' })).toBeNull();
+    });
+
+    it('returns null for object with non-string type', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 123 })).toBeNull();
+    });
+
+    it('returns null for invalid/unknown type', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'unknown_event' })).toBeNull();
+      expect(normalizeDashboardDeltaEvent({ type: 'foobar' })).toBeNull();
+    });
+
+    it('normalizes a valid heartbeat event', () => {
+      const result = normalizeDashboardDeltaEvent({ type: 'heartbeat', agent_id: 'agent-1' });
+      expect(result).toEqual({ type: 'heartbeat', agent_id: 'agent-1' });
+    });
+
+    it('returns null for heartbeat without agent_id', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'heartbeat' })).toBeNull();
+    });
+
+    it('normalizes a valid activity event with files and summary', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'activity',
+        agent_id: 'agent-1',
+        files: ['src/a.js', 'src/b.js'],
+        summary: 'refactoring',
+      });
+      expect(result).toEqual({
+        type: 'activity',
+        agent_id: 'agent-1',
+        files: ['src/a.js', 'src/b.js'],
+        summary: 'refactoring',
+      });
+    });
+
+    it('returns null for activity without agent_id', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'activity', files: ['x'] })).toBeNull();
+    });
+
+    it('normalizes activity with optional fields missing', () => {
+      const result = normalizeDashboardDeltaEvent({ type: 'activity', agent_id: 'a' });
+      expect(result).toEqual({
+        type: 'activity',
+        agent_id: 'a',
+        files: undefined,
+        summary: null,
+      });
+    });
+
+    it('normalizes a valid file event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'file',
+        agent_id: 'agent-1',
+        file: 'src/x.js',
+      });
+      expect(result).toEqual({ type: 'file', agent_id: 'agent-1', file: 'src/x.js' });
+    });
+
+    it('returns null for file event without file field', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'file', agent_id: 'a' })).toBeNull();
+    });
+
+    it('normalizes a valid member_joined with all fields', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'member_joined',
+        agent_id: 'agent-1',
+        handle: 'alice',
+        host_tool: 'cursor',
+      });
+      expect(result).toEqual({
+        type: 'member_joined',
+        agent_id: 'agent-1',
+        handle: 'alice',
+        host_tool: 'cursor',
+      });
+    });
+
+    it('normalizes member_joined with tool field fallback for host_tool', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'member_joined',
+        agent_id: 'agent-1',
+        tool: 'windsurf',
+      });
+      expect(result.host_tool).toBe('windsurf');
+    });
+
+    it('returns null for member_joined without agent_id', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'member_joined', handle: 'alice' })).toBeNull();
+    });
+
+    it('normalizes a valid member_left event', () => {
+      const result = normalizeDashboardDeltaEvent({ type: 'member_left', agent_id: 'agent-1' });
+      expect(result).toEqual({ type: 'member_left', agent_id: 'agent-1' });
+    });
+
+    it('returns null for member_left without agent_id', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'member_left' })).toBeNull();
+    });
+
+    it('normalizes a valid status_change event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'status_change',
+        agent_id: 'agent-1',
+        status: 'idle',
+      });
+      expect(result).toEqual({ type: 'status_change', agent_id: 'agent-1', status: 'idle' });
+    });
+
+    it('returns null for status_change with invalid status', () => {
+      expect(
+        normalizeDashboardDeltaEvent({
+          type: 'status_change',
+          agent_id: 'a',
+          status: 'invalid',
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null for status_change without agent_id', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'status_change', status: 'active' })).toBeNull();
+    });
+
+    it('normalizes valid lock_change claim event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'lock_change',
+        action: 'claim',
+        agent_id: 'agent-1',
+        files: ['src/a.js'],
+      });
+      expect(result).toEqual({
+        type: 'lock_change',
+        action: 'claim',
+        agent_id: 'agent-1',
+        files: ['src/a.js'],
+      });
+    });
+
+    it('normalizes valid lock_change release event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'lock_change',
+        action: 'release',
+        agent_id: 'agent-1',
+        files: ['src/b.js'],
+      });
+      expect(result.action).toBe('release');
+    });
+
+    it('normalizes valid lock_change release_all event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'lock_change',
+        action: 'release_all',
+        agent_id: 'agent-1',
+      });
+      expect(result.action).toBe('release_all');
+    });
+
+    it('returns null for lock_change with invalid action', () => {
+      expect(
+        normalizeDashboardDeltaEvent({
+          type: 'lock_change',
+          action: 'invalid',
+          agent_id: 'a',
+        }),
+      ).toBeNull();
+    });
+
+    it('returns null for lock_change without agent_id', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'lock_change', action: 'claim' })).toBeNull();
+    });
+
+    it('normalizes a valid message event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'message',
+        handle: 'alice',
+        text: 'hello world',
+        created_at: '2024-01-01T00:00:00Z',
+      });
+      expect(result).toEqual({
+        type: 'message',
+        handle: 'alice',
+        text: 'hello world',
+        created_at: '2024-01-01T00:00:00Z',
+      });
+    });
+
+    it('falls back from_handle to handle for message event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'message',
+        from_handle: 'bob',
+        text: 'hi',
+      });
+      expect(result.handle).toBe('bob');
+    });
+
+    it('returns null for message without text', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'message', handle: 'a' })).toBeNull();
+    });
+
+    it('returns null for message without handle or from_handle', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'message', text: 'hi' })).toBeNull();
+    });
+
+    it('normalizes a valid memory event', () => {
+      const result = normalizeDashboardDeltaEvent({
+        type: 'memory',
+        id: 'mem-1',
+        text: 'remember this',
+        tags: ['important'],
+        handle: 'alice',
+        host_tool: 'cursor',
+        created_at: '2024-01-01T00:00:00Z',
+      });
+      expect(result).toEqual({
+        type: 'memory',
+        id: 'mem-1',
+        text: 'remember this',
+        tags: ['important'],
+        handle: 'alice',
+        host_tool: 'cursor',
+        created_at: '2024-01-01T00:00:00Z',
+      });
+    });
+
+    it('returns null for memory without text', () => {
+      expect(normalizeDashboardDeltaEvent({ type: 'memory', id: 'mem-1' })).toBeNull();
+    });
+
+    it('normalizes memory with optional fields missing (generates no id)', () => {
+      const result = normalizeDashboardDeltaEvent({ type: 'memory', text: 'bare' });
+      expect(result.text).toBe('bare');
+      expect(result.id).toBeUndefined();
+      expect(result.tags).toBeUndefined();
+    });
+  });
+
   describe('applyDelta - general', () => {
     it('returns context unchanged for null context', () => {
       expect(applyDelta(null, { type: 'heartbeat' })).toBeNull();
+    });
+
+    it('returns context unchanged for undefined context', () => {
+      expect(applyDelta(undefined, { type: 'heartbeat' })).toBeUndefined();
     });
 
     it('returns context unchanged for null event', () => {
@@ -352,6 +602,21 @@ describe('dashboard-ws', () => {
       const result = applyDelta({ members: [] }, { type: 'message', handle: 'x', text: 'hi' });
       expect(result.messages).toHaveLength(1);
     });
+
+    it('respects custom maxMessages limit', () => {
+      const ctx = {
+        ...baseContext,
+        messages: Array.from({ length: 5 }, (_, i) => ({
+          handle: 'user',
+          text: `msg ${i}`,
+          created_at: new Date().toISOString(),
+        })),
+      };
+      const event = { type: 'message', handle: 'alice', text: 'new' };
+      const result = applyDelta(ctx, event, { maxMessages: 3 });
+      expect(result.messages).toHaveLength(3);
+      expect(result.messages[2].text).toBe('new');
+    });
   });
 
   describe('memory', () => {
@@ -394,6 +659,43 @@ describe('dashboard-ws', () => {
       const result = applyDelta(ctx, event);
       expect(result.memories[0].text).toBe('new');
       expect(result.memories[1].text).toBe('old');
+    });
+
+    it('respects custom maxMemories limit', () => {
+      const ctx = {
+        ...baseContext,
+        memories: Array.from({ length: 5 }, (_, i) => ({
+          id: `mem-${i}`,
+          text: `mem ${i}`,
+          tags: [],
+          created_at: new Date().toISOString(),
+        })),
+      };
+      const event = { type: 'memory', text: 'newest' };
+      const result = applyDelta(ctx, event, { maxMemories: 3 });
+      expect(result.memories).toHaveLength(3);
+      expect(result.memories[0].text).toBe('newest');
+    });
+
+    it('generates an ID if missing from the event', () => {
+      const event = { type: 'memory', text: 'no id' };
+      const result = applyDelta(baseContext, event);
+      expect(result.memories[0].id).toMatch(/^memory:\d+$/);
+    });
+  });
+
+  describe('activity updated_at', () => {
+    it('sets updated_at on activity events', () => {
+      const event = {
+        type: 'activity',
+        agent_id: 'agent-1',
+        files: ['src/z.js'],
+        summary: 'test',
+      };
+      const result = applyDelta(baseContext, event);
+      const alice = result.members.find((m) => m.agent_id === 'agent-1');
+      expect(alice.activity.updated_at).toBeDefined();
+      expect(typeof alice.activity.updated_at).toBe('string');
     });
   });
 });
