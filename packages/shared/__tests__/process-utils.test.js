@@ -12,7 +12,6 @@ describe('process-utils', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    // Restore platform after any test that overrides it
     Object.defineProperty(process, 'platform', { value: originalPlatform });
   });
 
@@ -21,6 +20,9 @@ describe('process-utils', () => {
     delete process.env.CHINWAG_DEBUG;
   });
 
+  // ---------------------------------------------------------------------------
+  // readProcessInfo
+  // ---------------------------------------------------------------------------
   describe('readProcessInfo', () => {
     it('returns {ppid, command} on valid ps output', () => {
       execFileSync.mockReturnValue('  1234 /usr/bin/node index.js\n');
@@ -54,7 +56,6 @@ describe('process-utils', () => {
       execFileSync.mockReturnValue('  100 some-command\nwith extra lines');
 
       const result = readProcessInfo(10);
-      // The regex uses /s flag so . matches newlines
       expect(result).toEqual({
         ppid: 100,
         command: 'some-command\nwith extra lines',
@@ -107,6 +108,13 @@ describe('process-utils', () => {
       expect(result).toBeNull();
     });
 
+    it('returns null when ps output is just a number with no command', () => {
+      execFileSync.mockReturnValue('1234');
+      // The regex requires at least one space between ppid and command
+      const result = readProcessInfo(42);
+      expect(result).toBeNull();
+    });
+
     it('returns null when execFileSync throws (process not found)', () => {
       execFileSync.mockImplementation(() => {
         throw new Error('Command failed: ps');
@@ -151,8 +159,48 @@ describe('process-utils', () => {
       const result = readProcessInfo(55);
       expect(result).toEqual({ ppid: 1, command: '/bin/bash' });
     });
+
+    it('works on darwin platform', () => {
+      Object.defineProperty(process, 'platform', { value: 'darwin' });
+      execFileSync.mockReturnValue('  100 /usr/bin/zsh');
+
+      const result = readProcessInfo(1);
+      expect(result).toEqual({ ppid: 100, command: '/usr/bin/zsh' });
+    });
+
+    it('converts pid to string when calling ps', () => {
+      execFileSync.mockReturnValue('  1 /bin/sh');
+
+      readProcessInfo(999);
+      expect(execFileSync).toHaveBeenCalledWith(
+        'ps',
+        ['-o', 'ppid=,command=', '-p', '999'],
+        expect.any(Object),
+      );
+    });
+
+    it('uses 5000ms timeout for execFileSync', () => {
+      execFileSync.mockReturnValue('  1 /bin/sh');
+
+      readProcessInfo(1);
+      expect(execFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ timeout: 5000 }),
+      );
+    });
+
+    it('handles large ppid numbers', () => {
+      execFileSync.mockReturnValue('  999999 /usr/bin/node');
+
+      const result = readProcessInfo(1);
+      expect(result).toEqual({ ppid: 999999, command: '/usr/bin/node' });
+    });
   });
 
+  // ---------------------------------------------------------------------------
+  // getProcessTtyPath
+  // ---------------------------------------------------------------------------
   describe('getProcessTtyPath', () => {
     it('returns /dev/<tty> when ps reports a tty', () => {
       execFileSync.mockReturnValue('ttys003\n');
@@ -186,6 +234,13 @@ describe('process-utils', () => {
       expect(result).toBeNull();
     });
 
+    it('returns null when tty output is just whitespace', () => {
+      execFileSync.mockReturnValue('  ');
+
+      const result = getProcessTtyPath(42);
+      expect(result).toBeNull();
+    });
+
     it('returns null when execFileSync throws', () => {
       execFileSync.mockImplementation(() => {
         throw new Error('ps failed');
@@ -200,6 +255,20 @@ describe('process-utils', () => {
 
       const result = getProcessTtyPath(42);
       expect(result).toBe('/dev/pts/0');
+    });
+
+    it('handles pts with higher numbers', () => {
+      execFileSync.mockReturnValue('pts/42\n');
+
+      const result = getProcessTtyPath(100);
+      expect(result).toBe('/dev/pts/42');
+    });
+
+    it('trims whitespace from tty name', () => {
+      execFileSync.mockReturnValue('  ttys005  \n');
+
+      const result = getProcessTtyPath(1);
+      expect(result).toBe('/dev/ttys005');
     });
 
     it('logs debug info when CHINWAG_DEBUG is set and ps fails', () => {
@@ -231,6 +300,9 @@ describe('process-utils', () => {
     });
   });
 
+  // ---------------------------------------------------------------------------
+  // getProcessCommandString
+  // ---------------------------------------------------------------------------
   describe('getProcessCommandString', () => {
     it('returns the trimmed command string on success', () => {
       execFileSync.mockReturnValue('  /usr/bin/node server.js  \n');
@@ -266,6 +338,13 @@ describe('process-utils', () => {
 
       const result = getProcessCommandString(100);
       expect(result).toBe('/usr/bin/python3 -u script.py --config=/etc/app.conf --verbose');
+    });
+
+    it('handles command strings with equals signs and quotes', () => {
+      execFileSync.mockReturnValue('node --max-old-space-size=4096 app.js');
+
+      const result = getProcessCommandString(200);
+      expect(result).toBe('node --max-old-space-size=4096 app.js');
     });
 
     it('logs debug info when CHINWAG_DEBUG is set and ps fails', () => {
@@ -307,6 +386,17 @@ describe('process-utils', () => {
 
       expect(spy).toHaveBeenCalledWith(expect.stringContaining('string error'));
       spy.mockRestore();
+    });
+
+    it('uses 5000ms timeout', () => {
+      execFileSync.mockReturnValue('cmd');
+
+      getProcessCommandString(1);
+      expect(execFileSync).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(Array),
+        expect.objectContaining({ timeout: 5000 }),
+      );
     });
   });
 });
