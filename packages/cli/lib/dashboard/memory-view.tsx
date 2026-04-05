@@ -26,7 +26,7 @@ interface CommandBarProps {
 /**
  * Renders the command bar with input bars, notice line, and hint row.
  */
-function CommandBar({
+export function CommandBar({
   composer,
   memory,
   notice,

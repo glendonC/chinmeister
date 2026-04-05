@@ -174,7 +174,10 @@ async function loadMainPaneModule() {
   vi.doMock('@chinwag/shared/integration-doctor.js', () => ({}));
 
   const mod = await import('../dashboard/main-pane.js');
-  return mod;
+  const memoryMod = await import('../dashboard/memory-view.js');
+  const sessionsMod = await import('../dashboard/sessions-view.js');
+  const inputBarsMod = await import('../dashboard/input-bars.js');
+  return { ...mod, ...memoryMod, ...sessionsMod, ...inputBarsMod };
 }
 
 // ── Shared test fixtures ──────────────────────────────
