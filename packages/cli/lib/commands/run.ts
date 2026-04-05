@@ -42,7 +42,8 @@ interface ParsedArgs {
   task: string;
 }
 
-function parseArgs(argv: string[]): ParsedArgs {
+/** @internal Exported for testing. */
+export function parseArgs(argv: string[]): ParsedArgs {
   const args = [...argv];
   let toolId: string | null = null;
   const taskParts: string[] = [];

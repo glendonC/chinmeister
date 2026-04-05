@@ -82,11 +82,13 @@ interface ChatMessage {
   timestamp?: string;
 }
 
-function isRecord(v: unknown): v is Record<string, unknown> {
+/** @internal Exported for testing. */
+export function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null;
 }
 
-function toChatMessage(v: unknown): ChatMessage | null {
+/** @internal Exported for testing. */
+export function toChatMessage(v: unknown): ChatMessage | null {
   if (!isRecord(v)) return null;
   if (typeof v.type !== 'string') return null;
   return {
@@ -98,7 +100,8 @@ function toChatMessage(v: unknown): ChatMessage | null {
   };
 }
 
-function toChatMessages(v: unknown): ChatMessage[] {
+/** @internal Exported for testing. */
+export function toChatMessages(v: unknown): ChatMessage[] {
   if (!Array.isArray(v)) return [];
   const result: ChatMessage[] = [];
   for (const item of v) {
