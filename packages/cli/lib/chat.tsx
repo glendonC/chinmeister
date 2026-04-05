@@ -53,7 +53,10 @@ export const WS_INITIAL_STATE: WsState = {
 export function wsReducer(state: WsState, action: WsAction): WsState {
   switch (action.type) {
     case WS_ACTIONS.CONNECTING:
-      return { ...state, status: 'connecting', error: null };
+      // Reset intentionalClose so reconnect logic fires if this connection attempt fails.
+      // Critical for shuffle(): CLOSED sets intentionalClose=true, then connect(true) dispatches
+      // CONNECTING — without this reset, a subsequent DISCONNECTED would be ignored.
+      return { ...state, status: 'connecting', error: null, intentionalClose: false };
     case WS_ACTIONS.CONNECTED:
       return { ...state, status: 'connected', retryCount: 0, error: null, intentionalClose: false };
     case WS_ACTIONS.DISCONNECTED:

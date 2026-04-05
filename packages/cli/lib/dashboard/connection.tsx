@@ -167,26 +167,30 @@ export function useDashboardConnection({
 
   // ── WebSocket connection with polling fallback ───
   const wsRef = useRef<WebSocket | null>(null);
+  const destroyedRef = useRef(false);
+  const joinedRef = useRef(false);
   const timers = useTimerRegistry();
 
   useEffect(() => {
     if (!teamId) return;
     const dashboardAgentId = `dashboard:${(config?.token || '').slice(0, 8)}`;
     const client = api(config, { agentId: dashboardAgentId });
-    const joined = { current: false };
     let pollInterval: ReturnType<typeof setTimeout> | null = null;
     let reconcileInterval: ReturnType<typeof setInterval> | null = null;
     let wsConnectTimeout: ReturnType<typeof setTimeout> | null = null;
-    let destroyed = false;
+    // Reset refs at the start of each effect run so stale values from a
+    // previous render cycle don't leak into the new one.
+    destroyedRef.current = false;
+    joinedRef.current = false;
 
     async function fetchContextOnce(): Promise<void> {
-      if (!joined.current) {
+      if (!joinedRef.current) {
         try {
           await client.post(`/teams/${teamId}/join`, { name: teamName });
         } catch (joinErr: unknown) {
           if ((joinErr as { status?: number }).status !== 429) throw joinErr;
         }
-        joined.current = true;
+        joinedRef.current = true;
       }
       const ctx = (await client.get(`/teams/${teamId}/context`)) as TeamContext;
       setContext(ctx);
@@ -207,7 +211,7 @@ export function useDashboardConnection({
 
     function handleFetchError(err: unknown): void {
       const error = err as { message?: string; status?: number };
-      if (error.message?.includes('Not a member')) joined.current = false;
+      if (error.message?.includes('Not a member')) joinedRef.current = false;
       consecutiveFailures.current++;
       const classified = classifyError(error);
       if (consecutiveFailures.current >= OFFLINE_THRESHOLD && classified.state === 'reconnecting') {
@@ -229,16 +233,16 @@ export function useDashboardConnection({
     }
 
     function startPolling(): void {
-      if (destroyed || pollInterval) return;
+      if (destroyedRef.current || pollInterval) return;
       function schedulePoll(): void {
         pollInterval = timers.setTimeout(async () => {
-          if (destroyed) return;
+          if (destroyedRef.current) return;
           try {
             await fetchContextOnce();
           } catch (err: unknown) {
             handleFetchError(err);
           }
-          if (!destroyed) schedulePoll();
+          if (!destroyedRef.current) schedulePoll();
         }, getLocalPollInterval());
       }
       schedulePoll();
@@ -292,7 +296,7 @@ export function useDashboardConnection({
             timers.clearTimeout(wsConnectTimeout);
             wsConnectTimeout = null;
           }
-          if (destroyed) {
+          if (destroyedRef.current) {
             ws.close();
             return;
           }
@@ -311,7 +315,7 @@ export function useDashboardConnection({
         };
 
         ws.onmessage = (evt: MessageEvent): void => {
-          if (destroyed) return;
+          if (destroyedRef.current) return;
           try {
             const event = JSON.parse(typeof evt.data === 'string' ? evt.data : evt.data.toString());
             if (event.type === 'context') {
@@ -325,7 +329,7 @@ export function useDashboardConnection({
         };
 
         ws.onclose = (): void => {
-          if (destroyed) return;
+          if (destroyedRef.current) return;
           wsRef.current = null;
           if (reconcileInterval) {
             timers.clearInterval(reconcileInterval);
@@ -348,7 +352,7 @@ export function useDashboardConnection({
     connect();
 
     return () => {
-      destroyed = true;
+      destroyedRef.current = true;
       timers.clearAll();
       if (wsRef.current) {
         try {

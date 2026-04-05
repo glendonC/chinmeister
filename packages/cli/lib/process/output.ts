@@ -5,6 +5,10 @@ import { stripAnsi } from '../utils/ansi.js';
 import { MAX_OUTPUT_LINES } from '../constants/timings.js';
 import type { ManagedProcess } from './types.js';
 
+/** Cap incoming data chunks to 1 MB to prevent a single massive write from
+ *  allocating an unbounded number of line strings before the trim can fire. */
+const MAX_CHUNK_BYTES = 1_048_576;
+
 /**
  * Check if a line looks like terminal control noise (escape sequences only).
  */
@@ -38,6 +42,12 @@ export function summarizeOutput(outputBuffer: string[], task = ''): string | nul
  * Append a line to the circular output buffer, maintaining the max size.
  */
 export function appendOutput(proc: ManagedProcess, data: string): void {
+  // Truncate excessively large chunks to cap memory before splitting into lines.
+  // A single 100 MB write would otherwise create millions of line strings.
+  if (data.length > MAX_CHUNK_BYTES) {
+    data = data.slice(0, MAX_CHUNK_BYTES);
+  }
+
   // Split incoming data on newlines, merge with any partial last line
   const lines = data.split('\n');
 

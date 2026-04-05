@@ -32,11 +32,12 @@ describe('wsReducer', () => {
       expect(result.error).toBeNull();
     });
 
-    it('preserves retryCount and intentionalClose', () => {
-      const result = wsReducer(state({ retryCount: 3, intentionalClose: false }), {
+    it('preserves retryCount but resets intentionalClose', () => {
+      const result = wsReducer(state({ retryCount: 3, intentionalClose: true }), {
         type: WS_ACTIONS.CONNECTING,
       });
       expect(result.retryCount).toBe(3);
+      // CONNECTING must clear intentionalClose so reconnect logic works after shuffle
       expect(result.intentionalClose).toBe(false);
     });
   });

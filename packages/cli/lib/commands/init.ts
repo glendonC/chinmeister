@@ -66,10 +66,20 @@ export async function runInit(): Promise<void> {
     } catch (err: unknown) {
       const typedErr = err as { status?: number; message?: string };
       if (typedErr.status === 401 || typedErr.status === 403) {
-        config = await createAccount();
-        handle = config.handle!;
-        color = config.color!;
-        accountVerb = 'created';
+        // Token expired — attempt refresh before creating a new account.
+        // Creating a new account would orphan the user's existing team memberships.
+        const refreshed = await tryRefreshConfig(config);
+        if (refreshed) {
+          config = refreshed.config;
+          handle = refreshed.handle;
+          color = refreshed.color;
+          accountVerb = 'refreshed';
+        } else {
+          config = await createAccount();
+          handle = config.handle!;
+          color = config.color!;
+          accountVerb = 'created';
+        }
       } else {
         console.log(`  ${chalk.red('✖')} Could not reach server: ${typedErr.message}`);
         console.log(`  ${dim('Check your internet connection and try again.')}`);
@@ -148,11 +158,12 @@ export async function runInit(): Promise<void> {
 
   // Step 4: Configure detected integrations through the shared doctor path
   const configured: Array<{ name: string; detail: string }> = [];
+  const failed: Array<{ name: string; error: string }> = [];
 
   for (const tool of detected) {
     const result = configureTool(cwd, tool.id);
     if (result.error) {
-      console.log(`  ${chalk.red('✖')} Could not configure ${tool.name}: ${result.error}`);
+      failed.push({ name: tool.name, error: result.error });
       continue;
     }
     configured.push({ name: result.name || tool.name, detail: dim(result.detail || '') });
@@ -164,10 +175,19 @@ export async function runInit(): Promise<void> {
     for (const { name, detail } of configured) {
       console.log(`      ${bullet} ${name.padEnd(maxName + 1)} ${detail}`);
     }
-  } else {
+  } else if (detected.length === 0) {
     console.log('');
     console.log(
       `  ${dim('No tools detected.')} Run ${chalk.cyan('npx chinwag add --list')} to see available tools.`,
+    );
+  }
+
+  if (failed.length > 0) {
+    for (const { name, error } of failed) {
+      console.log(`  ${chalk.red('✖')} Could not configure ${name}: ${error}`);
+    }
+    console.log(
+      `    ${dim('Run')} ${chalk.cyan('npx chinwag doctor')} ${dim('to diagnose and repair.')}`,
     );
   }
 
@@ -198,4 +218,32 @@ async function createAccount(): Promise<ChinwagConfig> {
   };
   saveConfig(config);
   return config;
+}
+
+/**
+ * Attempt to refresh an expired token using the stored refresh_token.
+ * Returns refreshed config with verified handle/color, or null on failure.
+ */
+async function tryRefreshConfig(
+  staleConfig: ChinwagConfig,
+): Promise<{ config: ChinwagConfig; handle: string; color: string } | null> {
+  if (!staleConfig.refresh_token) return null;
+  try {
+    const client = api(null); // unauthenticated — refresh endpoint uses body token
+    const result = await client.post<{ token: string; refresh_token: string }>('/auth/refresh', {
+      refresh_token: staleConfig.refresh_token,
+    });
+    if (!result.token) return null;
+    const refreshedConfig: ChinwagConfig = {
+      ...staleConfig,
+      token: result.token,
+      refresh_token: result.refresh_token,
+    };
+    saveConfig(refreshedConfig);
+    // Verify the new token and fetch current profile
+    const me = await api(refreshedConfig).get<AuthenticatedUser>('/me');
+    return { config: refreshedConfig, handle: me.handle, color: me.color };
+  } catch {
+    return null; // Refresh failed — caller will fall back to new account
+  }
 }
