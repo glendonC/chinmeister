@@ -2,16 +2,13 @@ import React, { Component, useEffect } from 'react';
 import type { ReactNode, ErrorInfo } from 'react';
 import { Box, Text, useStdout } from 'ink';
 import { useDashboardConnection } from './connection.jsx';
-import type { UseDashboardConnectionReturn } from './connection.jsx';
 import { useMemoryManager } from './memory.js';
-import type { UseMemoryManagerReturn } from './memory.js';
 import { useAgentLifecycle } from './agents.js';
-import type { UseAgentLifecycleReturn } from './agents.js';
-import { useComposer } from './composer.js';
-import type { UseComposerReturn } from './composer.js';
+import { useComposer as useComposerHook } from './composer.js';
 import { useIntegrationDoctor } from './integrations.js';
-import type { UseIntegrationDoctorReturn } from './integrations.js';
-import { MainPane, MemoryView, SessionsView } from './main-pane.jsx';
+import { MainPane } from './main-pane.jsx';
+import { MemoryView } from './memory-view.jsx';
+import { SessionsView } from './sessions-view.jsx';
 import { AgentFocusView } from './agent-focus.jsx';
 import { formatProjectPath } from './utils.js';
 import { useDashboardHandlers } from './useDashboardHandlers.js';
@@ -20,8 +17,17 @@ import { DashboardGuards } from './DashboardGuards.jsx';
 import {
   ViewProvider,
   ConnectionProvider,
+  AgentProvider,
+  ComposerProvider,
+  MemoryProvider,
+  IntegrationProvider,
   DataProvider,
   useView,
+  useConnection,
+  useAgents,
+  useComposerCtx,
+  useMemory,
+  useIntegrations,
   useData,
   useCommandSuggestions,
 } from './context.jsx';
@@ -126,7 +132,9 @@ interface DashboardProvidersProps {
  * Sets up connection + domain hooks, wires them into the provider tree.
  * Must be a child of ViewProvider so hooks can call useView().
  *
- * Provider tree: ViewProvider → ConnectionProvider → DataProvider → DashboardView
+ * Provider tree:
+ *   ViewProvider → ConnectionProvider → AgentProvider → ComposerProvider
+ *     → MemoryProvider → IntegrationProvider → DataProvider → DashboardView
  */
 function DashboardProviders({
   config,
@@ -139,7 +147,7 @@ function DashboardProviders({
 
   // ── Connection + project state ─────────────────────
   const connection = useDashboardConnection({ config, stdout });
-  const { teamId, teamName, projectRoot, detectedTools, context, cols } = connection;
+  const { teamId, projectRoot } = connection;
 
   // ── Custom hooks ───────────────────────────────────
   const memoryHook = useMemoryManager({
@@ -156,7 +164,7 @@ function DashboardProviders({
     flash,
   });
   const integrations = useIntegrationDoctor({ projectRoot, flash });
-  const composer = useComposer({
+  const composer = useComposerHook({
     config,
     teamId,
     bumpRefreshKey: connection.bumpRefreshKey,
@@ -165,32 +173,25 @@ function DashboardProviders({
     clearMemoryInput: memoryHook.clearMemoryInput,
   });
 
-  // ── Flat provider tree ────────────────────────────
+  // ── Nested provider tree ──────────────────────────
   return (
     <DashboardErrorBoundary>
       <ConnectionProvider connection={connection}>
-        <DataProvider
-          agents={agentsHook}
-          memory={memoryHook}
-          context={context}
-          detectedTools={detectedTools}
-          teamName={teamName}
-          cols={cols}
-          composeMode={composer.composeMode}
-          viewportRows={viewportRows}
-        >
-          <DashboardViewComponent
-            config={config}
-            navigate={navigate}
-            viewportRows={viewportRows}
-            setFooterHints={setFooterHints}
-            connection={connection}
-            memoryHook={memoryHook}
-            agentsHook={agentsHook}
-            integrations={integrations}
-            composer={composer}
-          />
-        </DataProvider>
+        <AgentProvider value={agentsHook}>
+          <ComposerProvider value={composer}>
+            <MemoryProvider value={memoryHook}>
+              <IntegrationProvider value={integrations}>
+                <DataProvider viewportRows={viewportRows}>
+                  <DashboardViewComponent
+                    config={config}
+                    navigate={navigate}
+                    setFooterHints={setFooterHints}
+                  />
+                </DataProvider>
+              </IntegrationProvider>
+            </MemoryProvider>
+          </ComposerProvider>
+        </AgentProvider>
       </ConnectionProvider>
     </DashboardErrorBoundary>
   );
@@ -199,31 +200,26 @@ function DashboardProviders({
 interface DashboardViewProps {
   config: ChinwagConfig | null;
   navigate: (to: string) => void;
-  viewportRows: number;
   setFooterHints: ((hints: FooterHint[]) => void) | null;
-  connection: UseDashboardConnectionReturn;
-  memoryHook: UseMemoryManagerReturn;
-  agentsHook: UseAgentLifecycleReturn;
-  integrations: UseIntegrationDoctorReturn;
-  composer: UseComposerReturn;
 }
 
 /**
  * Handles input, rendering, and all view-level logic.
- * Consumes DataProvider for derived data and useCommandSuggestions hook
+ * Consumes providers for domain data and useCommandSuggestions hook
  * for command palette.
  */
 function DashboardViewComponent({
   config,
   navigate,
-  viewportRows: _viewportRows,
   setFooterHints,
-  connection,
-  memoryHook,
-  agentsHook,
-  integrations,
-  composer,
 }: DashboardViewProps): React.ReactNode {
+  // ── Context hooks ─────────────────────────────────
+  const connection = useConnection();
+  const agentsHook = useAgents();
+  const composer = useComposerCtx();
+  const memoryHook = useMemory();
+  const integrations = useIntegrations();
+
   const {
     context,
     error,

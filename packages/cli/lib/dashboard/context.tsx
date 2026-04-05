@@ -24,10 +24,9 @@ import { dashboardReducer, createInitialState, clampSelection } from './reducer.
 import type { DashboardState, DashboardAction, DashboardNotice, NoticeTone } from './reducer.js';
 import type { UseAgentLifecycleReturn } from './agents.js';
 import type { UseMemoryManagerReturn } from './memory.js';
-import type { UseComposerReturn, ComposeMode } from './composer.js';
+import type { UseComposerReturn } from './composer.js';
 import type { UseIntegrationDoctorReturn } from './integrations.js';
 import type { UseDashboardConnectionReturn } from './connection.jsx';
-import type { HostIntegration } from '@chinwag/shared/integration-model.js';
 
 // ── Context value types ────────────────────────────
 
@@ -67,6 +66,10 @@ export interface CommandSuggestion {
 
 const ViewContext = createContext<ViewContextValue | null>(null);
 const ConnectionContext = createContext<UseDashboardConnectionReturn | null>(null);
+const AgentContext = createContext<UseAgentLifecycleReturn | null>(null);
+const ComposerContext = createContext<UseComposerReturn | null>(null);
+const MemoryContext = createContext<UseMemoryManagerReturn | null>(null);
+const IntegrationContext = createContext<UseIntegrationDoctorReturn | null>(null);
 const DataContext = createContext<DataContextValue | null>(null);
 
 // ── Hooks ───────────────────────────────────────────
@@ -80,6 +83,30 @@ export function useView(): ViewContextValue {
 export function useConnection(): UseDashboardConnectionReturn {
   const ctx = useContext(ConnectionContext);
   if (!ctx) throw new Error('useConnection must be used within ConnectionProvider');
+  return ctx;
+}
+
+export function useAgents(): UseAgentLifecycleReturn {
+  const ctx = useContext(AgentContext);
+  if (!ctx) throw new Error('useAgents must be used within AgentProvider');
+  return ctx;
+}
+
+export function useComposerCtx(): UseComposerReturn {
+  const ctx = useContext(ComposerContext);
+  if (!ctx) throw new Error('useComposerCtx must be used within ComposerProvider');
+  return ctx;
+}
+
+export function useMemory(): UseMemoryManagerReturn {
+  const ctx = useContext(MemoryContext);
+  if (!ctx) throw new Error('useMemory must be used within MemoryProvider');
+  return ctx;
+}
+
+export function useIntegrations(): UseIntegrationDoctorReturn {
+  const ctx = useContext(IntegrationContext);
+  if (!ctx) throw new Error('useIntegrations must be used within IntegrationProvider');
   return ctx;
 }
 
@@ -199,14 +226,46 @@ export function ConnectionProvider({
   return <ConnectionContext.Provider value={connection}>{children}</ConnectionContext.Provider>;
 }
 
+interface AgentProviderProps {
+  value: UseAgentLifecycleReturn;
+  children: ReactNode;
+}
+
+export function AgentProvider({ value, children }: AgentProviderProps): React.ReactNode {
+  return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
+}
+
+interface ComposerProviderProps {
+  value: UseComposerReturn;
+  children: ReactNode;
+}
+
+export function ComposerProvider({ value, children }: ComposerProviderProps): React.ReactNode {
+  return <ComposerContext.Provider value={value}>{children}</ComposerContext.Provider>;
+}
+
+interface MemoryProviderProps {
+  value: UseMemoryManagerReturn;
+  children: ReactNode;
+}
+
+export function MemoryProvider({ value, children }: MemoryProviderProps): React.ReactNode {
+  return <MemoryContext.Provider value={value}>{children}</MemoryContext.Provider>;
+}
+
+interface IntegrationProviderProps {
+  value: UseIntegrationDoctorReturn;
+  children: ReactNode;
+}
+
+export function IntegrationProvider({
+  value,
+  children,
+}: IntegrationProviderProps): React.ReactNode {
+  return <IntegrationContext.Provider value={value}>{children}</IntegrationContext.Provider>;
+}
+
 interface DataProviderProps {
-  agents: UseAgentLifecycleReturn;
-  memory: UseMemoryManagerReturn;
-  context: TeamContext | null;
-  detectedTools: HostIntegration[];
-  teamName: string | null;
-  cols: number;
-  composeMode: ComposeMode;
   viewportRows: number;
   children: ReactNode;
 }
@@ -217,23 +276,18 @@ interface DataProviderProps {
  * visibleSessionRows, liveAgentNameCounts, conflicts, memories, filteredMemories,
  * visibleMemories, visibleKnowledgeRows, hasMemories.
  *
- * Reads selectedIdx/mainFocus from ViewProvider (useView) for agent selection.
+ * Reads from AgentProvider, ComposerProvider, MemoryProvider, and ConnectionProvider
+ * via context hooks instead of props.
  */
-export function DataProvider({
-  agents,
-  memory,
-  context,
-  detectedTools,
-  teamName,
-  cols,
-  composeMode,
-  viewportRows,
-  children,
-}: DataProviderProps): React.ReactNode {
+export function DataProvider({ viewportRows, children }: DataProviderProps): React.ReactNode {
   const { state, dispatch } = useView();
   const { selectedIdx, mainFocus } = state;
+  const agents = useAgents();
+  const memory = useMemory();
+  const composer = useComposerCtx();
+  const { context, detectedTools, teamName, cols } = useConnection();
 
-  const memorySearch = composeMode === 'memory-search' ? memory.memorySearch : '';
+  const memorySearch = composer.composeMode === 'memory-search' ? memory.memorySearch : '';
 
   // Build dashboard view data (tool name resolver, visible agents, conflicts, memories)
   const dashboardView = useMemo(
