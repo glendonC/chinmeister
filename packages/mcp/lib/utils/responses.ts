@@ -89,6 +89,22 @@ export function appendDegradedWarning(
   return result;
 }
 
+// --- Timeout ---
+
+/**
+ * Race a promise against a timeout. Rejects with a descriptive error if
+ * the timeout fires first. The timer is always cleaned up.
+ */
+export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error(`Operation timed out after ${ms}ms`)), ms);
+    }),
+  ]).finally(() => clearTimeout(timer!));
+}
+
 // --- API response validation helpers ---
 // Lightweight type guards for degrading gracefully on malformed API responses.
 // Avoids adding Zod to the MCP package while preventing unhandled TypeErrors

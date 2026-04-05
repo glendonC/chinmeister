@@ -1,9 +1,6 @@
 // MCP tool and resource registration orchestrator.
 // Wires together all tool modules and registers them on the MCP server.
 
-import { teamPreamble } from '../context.js';
-import { noTeam, errorResult } from '../utils/responses.js';
-import type { McpToolResult } from '../utils/responses.js';
 import { registerTeamTool } from './team.js';
 import { registerActivityTool } from './activity.js';
 import { registerConflictsTool } from './conflicts.js';
@@ -16,42 +13,8 @@ import type { ToolDeps, AddToolFn } from './types.js';
 import type { EnvironmentProfile } from '../profile.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 
-/**
- * Middleware that guards a tool handler with team membership check,
- * optional preamble injection, and error handling.
- */
-export function withTeam(
-  { state, team }: Pick<ToolDeps, 'state' | 'team'>,
-  handler: (args: Record<string, unknown>, ctx: { preamble: string }) => Promise<McpToolResult>,
-  options: { skipPreamble?: boolean } = {},
-): (args: Record<string, unknown>) => Promise<McpToolResult> {
-  return async (args: Record<string, unknown>) => {
-    if (!state.teamId) {
-      // Surface a specific error if we know why the team is unavailable
-      if (state.teamJoinError) {
-        return {
-          content: [{ type: 'text' as const, text: `Not in a team. ${state.teamJoinError}` }],
-          isError: true,
-        };
-      }
-      return noTeam();
-    }
-    try {
-      const preamble = options.skipPreamble ? '' : await teamPreamble(team, state.teamId);
-      const result = await handler(args, { preamble });
-      // Append degraded-presence warning when heartbeat is dead but tool still executed
-      if (state.heartbeatDead && result.content?.length) {
-        result.content.push({
-          type: 'text' as const,
-          text: '\n⚠ Presence degraded: heartbeat lost. Other agents may not see you. Recovery is in progress.',
-        });
-      }
-      return result;
-    } catch (err: unknown) {
-      return errorResult(err);
-    }
-  };
-}
+// Re-export withTeam for any external consumers.
+export { withTeam } from './middleware.js';
 
 /**
  * Wraps addTool to track last activity time.

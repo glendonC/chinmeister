@@ -623,6 +623,9 @@ describe('context tool (unit)', () => {
     // First call with model — should report
     await collector.callTool('chinwag_get_team_context', { model: 'claude-opus-4-6' });
     expect(team.reportModel).toHaveBeenCalledWith('t_ctx', 'claude-opus-4-6');
+    // reportModelAsync is fire-and-forget; flush microtasks so the withTimeout
+    // wrapper settles before checking state.
+    await new Promise((r) => setTimeout(r, 10));
     expect(state.modelReported).toBe('claude-opus-4-6');
 
     team.reportModel.mockClear();

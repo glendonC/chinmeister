@@ -4,16 +4,26 @@ import { basename } from 'path';
 import * as z from 'zod/v4';
 import { clearContextCache } from '../context.js';
 import { createLogger } from '../utils/logger.js';
-import { errorResult, getHttpStatus, getErrorMessage, safeString } from '../utils/responses.js';
+import {
+  errorResult,
+  getHttpStatus,
+  getErrorMessage,
+  safeString,
+  withTimeout,
+} from '../utils/responses.js';
 import {
   HEARTBEAT_INTERVAL_MS,
   HEARTBEAT_RECOVERY_INTERVAL_MS,
   MAX_HEARTBEAT_FAILURES,
   TEAM_ID_MAX_LENGTH,
+  API_TIMEOUT_MS,
 } from '../constants.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const log = createLogger('team');
+
+/** Shorter timeout for heartbeats — lightweight, latency-sensitive. */
+const HEARTBEAT_TIMEOUT_MS = 5_000;
 
 const joinTeamSchema = z.object({
   team_id: z
@@ -40,7 +50,7 @@ export function registerTeamTool(
       const previousTeamId = state.teamId;
       const previousSessionId = state.sessionId;
       try {
-        await team.joinTeam(team_id, basename(process.cwd()));
+        await withTimeout(team.joinTeam(team_id, basename(process.cwd())), API_TIMEOUT_MS);
         state.teamId = team_id;
         state.sessionId = null;
         state.modelReported = null;
@@ -61,7 +71,7 @@ export function registerTeamTool(
             state.heartbeatRecoveryTimeout = null;
             if (!state.teamId || state.shuttingDown) return;
             try {
-              await team.heartbeat(state.teamId);
+              await withTimeout(team.heartbeat(state.teamId), HEARTBEAT_TIMEOUT_MS);
               // Recovery succeeded — restart normal heartbeat loop
               log.info('Heartbeat recovery succeeded, resuming normal interval');
               consecutiveFailures = 0;
@@ -81,18 +91,21 @@ export function registerTeamTool(
           // Guard: if teamId was cleared (e.g. shutdown), skip
           if (!state.teamId) return;
           try {
-            await team.heartbeat(state.teamId);
+            await withTimeout(team.heartbeat(state.teamId), HEARTBEAT_TIMEOUT_MS);
             consecutiveFailures = 0;
           } catch (err: unknown) {
             consecutiveFailures++;
             if (getHttpStatus(err) === 403) {
               try {
-                await team.joinTeam(state.teamId!, basename(process.cwd()));
+                await withTimeout(
+                  team.joinTeam(state.teamId!, basename(process.cwd())),
+                  API_TIMEOUT_MS,
+                );
                 log.info('Rejoined team after eviction');
                 consecutiveFailures = 0;
                 // Immediately retry the heartbeat after successful rejoin
                 try {
-                  await team.heartbeat(state.teamId!);
+                  await withTimeout(team.heartbeat(state.teamId!), HEARTBEAT_TIMEOUT_MS);
                 } catch (hbErr: unknown) {
                   log.warn('Post-rejoin heartbeat failed, next interval will retry', {
                     error: getErrorMessage(hbErr),
@@ -130,7 +143,10 @@ export function registerTeamTool(
 
         let sessionStarted = false;
         try {
-          const session = await team.startSession(state.teamId, profile.framework);
+          const session = await withTimeout(
+            team.startSession(state.teamId, profile.framework),
+            API_TIMEOUT_MS,
+          );
           const sessionId = safeString(session, 'session_id');
           if (sessionId) {
             state.sessionId = sessionId;
@@ -142,11 +158,14 @@ export function registerTeamTool(
 
         if (previousTeamId && previousTeamId !== team_id) {
           if (previousSessionId) {
-            await team.endSession(previousTeamId, previousSessionId).catch((err: Error) => {
+            await withTimeout(
+              team.endSession(previousTeamId, previousSessionId),
+              API_TIMEOUT_MS,
+            ).catch((err: Error) => {
               log.error('Failed to end previous session: ' + err.message);
             });
           }
-          await team.leaveTeam(previousTeamId).catch((err: Error) => {
+          await withTimeout(team.leaveTeam(previousTeamId), API_TIMEOUT_MS).catch((err: Error) => {
             log.error('Failed to leave previous team: ' + err.message);
           });
         }
