@@ -342,12 +342,12 @@ describe('Sessions', () => {
   });
 
   it('recordEdit increments edit count', async () => {
-    const res = await team().recordEdit(agentId, 'src/app.js', ownerId);
+    const res = await team().recordEdit(agentId, 'src/app.js', 0, 0, ownerId);
     expect(res.ok).toBe(true);
     expect(res.skipped).toBeUndefined();
 
     // Record another edit on the same file
-    const res2 = await team().recordEdit(agentId, 'src/app.js', ownerId);
+    const res2 = await team().recordEdit(agentId, 'src/app.js', 0, 0, ownerId);
     expect(res2.ok).toBe(true);
 
     // Verify via getHistory
@@ -389,7 +389,7 @@ describe('Session lifecycle — edge cases', () => {
     const hb = await team().heartbeat(agentId);
     expect(hb.ok).toBe(true);
 
-    const edit = await team().recordEdit(agentId, 'src/lifecycle.js', ownerId);
+    const edit = await team().recordEdit(agentId, 'src/lifecycle.js', 0, 0, ownerId);
     expect(edit.ok).toBe(true);
     expect(edit.skipped).toBeUndefined();
 
@@ -433,7 +433,7 @@ describe('Session lifecycle — edge cases', () => {
     const s = await team().startSession(agentId, 'alice', 'react', ownerId);
     await team().endSession(agentId, s.session_id, ownerId);
 
-    const edit = await team().recordEdit(agentId, 'src/no-session.js', ownerId);
+    const edit = await team().recordEdit(agentId, 'src/no-session.js', 0, 0, ownerId);
     expect(edit.ok).toBe(true);
     expect(edit.skipped).toBe(true);
   });

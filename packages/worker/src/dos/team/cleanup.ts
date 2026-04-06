@@ -11,7 +11,11 @@
 import { getErrorMessage } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
 import { buildInClause, withTransaction } from '../../lib/validation.js';
-import { HEARTBEAT_STALE_WINDOW_S, SESSION_RETENTION_DAYS } from '../../lib/constants.js';
+import {
+  HEARTBEAT_STALE_WINDOW_S,
+  SESSION_RETENTION_DAYS,
+  DAILY_METRICS_RETENTION_DAYS,
+} from '../../lib/constants.js';
 import { expireCommands as expireCommandsFn } from './commands.js';
 
 const log = createLogger('TeamDO:cleanup');
@@ -102,6 +106,13 @@ export function runCleanup(
 
     step('delete old telemetry', () =>
       sql.exec("DELETE FROM telemetry WHERE last_at < datetime('now', '-30 days')"),
+    );
+
+    step('delete old daily metrics', () =>
+      sql.exec(
+        `DELETE FROM daily_metrics WHERE date < date('now', '-' || ? || ' days')`,
+        DAILY_METRICS_RETENTION_DAYS,
+      ),
     );
   });
 }

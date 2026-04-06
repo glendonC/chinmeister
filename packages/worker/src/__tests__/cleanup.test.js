@@ -102,11 +102,11 @@ describe('Cleanup — recent sessions preserved', () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
 
     const s1 = await team().startSession(agentId, 'alice', 'react', ownerId);
-    await team().recordEdit(agentId, 'src/a.js', ownerId);
+    await team().recordEdit(agentId, 'src/a.js', 0, 0, ownerId);
     await team().endSession(agentId, s1.session_id, ownerId);
 
     const s2 = await team().startSession(agentId, 'alice', 'next', ownerId);
-    await team().recordEdit(agentId, 'src/b.js', ownerId);
+    await team().recordEdit(agentId, 'src/b.js', 0, 0, ownerId);
     await team().endSession(agentId, s2.session_id, ownerId);
   });
 

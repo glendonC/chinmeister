@@ -137,6 +137,7 @@ export function queryTeamContext(
       `
     SELECT agent_id, handle AS owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
+           outcome, outcome_summary, lines_added, lines_removed,
            ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
     FROM sessions
     WHERE started_at > datetime('now', '-24 hours')

@@ -125,6 +125,53 @@ export interface TeamSession extends AgentMetadata {
   conflicts_hit?: number;
   memories_saved?: number;
   duration_minutes?: number | null;
+  outcome?: string | null;
+  outcome_summary?: string | null;
+  lines_added?: number;
+  lines_removed?: number;
+}
+
+// -- Analytics types (workflow intelligence) --
+
+export interface FileHeatmapEntry {
+  file: string;
+  touch_count: number;
+}
+
+export interface DailyTrend {
+  day: string;
+  sessions: number;
+  edits: number;
+  lines_added: number;
+  lines_removed: number;
+  avg_duration_min: number;
+}
+
+export interface OutcomeCount {
+  outcome: string;
+  count: number;
+}
+
+export interface ToolDistribution {
+  host_tool: string;
+  sessions: number;
+  edits: number;
+}
+
+export interface DailyMetricEntry {
+  date: string;
+  metric: string;
+  count: number;
+}
+
+export interface TeamAnalytics {
+  ok: true;
+  period_days: number;
+  file_heatmap: FileHeatmapEntry[];
+  daily_trends: DailyTrend[];
+  tool_distribution: ToolDistribution[];
+  outcome_distribution: OutcomeCount[];
+  daily_metrics: DailyMetricEntry[];
 }
 
 export interface HostJoinMetric {

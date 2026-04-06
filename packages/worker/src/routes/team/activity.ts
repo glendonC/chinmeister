@@ -135,6 +135,8 @@ export const handleTeamEndSession = teamJsonRoute(async ({ body, user, agentId, 
   return json(result);
 });
 
+const MAX_DIFF_LINES = 100000;
+
 export const handleTeamSessionEdit = teamJsonRoute(async ({ body, user, db, agentId, team }) => {
   const { file } = body;
   if (typeof file !== 'string' || !file.trim()) {
@@ -142,13 +144,17 @@ export const handleTeamSessionEdit = teamJsonRoute(async ({ body, user, db, agen
   }
   if (file.length > MAX_FILE_PATH_LENGTH) return json({ error: 'file path too long' }, 400);
 
+  // Optional diff stats (lines added/removed) — privacy-safe counts only
+  const linesAdded = Math.max(0, Math.min(Number(body.lines_added) || 0, MAX_DIFF_LINES));
+  const linesRemoved = Math.max(0, Math.min(Number(body.lines_removed) || 0, MAX_DIFF_LINES));
+
   return withRateLimit(
     db,
     `edit:${user.id}`,
     RATE_LIMIT_EDITS,
     'Edit recording limit reached. Try again tomorrow.',
     async () => {
-      const result = rpc(await team.recordEdit(agentId, file, user.id));
+      const result = rpc(await team.recordEdit(agentId, file, linesAdded, linesRemoved, user.id));
       if ('error' in result) {
         log.warn(`recordEdit failed: ${result.error}`);
         return json({ error: result.error }, teamErrorStatus(result));
@@ -157,6 +163,31 @@ export const handleTeamSessionEdit = teamJsonRoute(async ({ body, user, db, agen
     },
   );
 });
+
+export const handleTeamReportOutcome = teamJsonRoute(
+  async ({ body, user, env, db, agentId, team }) => {
+    const { outcome, summary } = body;
+    if (typeof outcome !== 'string' || !['completed', 'abandoned', 'failed'].includes(outcome)) {
+      return json({ error: 'outcome must be completed, abandoned, or failed' }, 400);
+    }
+
+    const summaryStr = typeof summary === 'string' ? summary.slice(0, 500) : null;
+    if (summaryStr) {
+      const modResult = await checkContent(summaryStr, env);
+      if (modResult.blocked) return json({ error: 'Content blocked' }, 400);
+    }
+
+    return withRateLimit(
+      db,
+      `session:${user.id}`,
+      RATE_LIMIT_SESSIONS,
+      'Session operation limit reached. Try again tomorrow.',
+      async () => {
+        return doResult(team.reportOutcome(agentId, outcome, summaryStr, user.id), 'reportOutcome');
+      },
+    );
+  },
+);
 
 export const handleTeamHistory = teamRoute(async ({ request, agentId, team, user }) => {
   const url = new URL(request.url);

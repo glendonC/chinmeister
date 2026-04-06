@@ -31,7 +31,7 @@ describe('Cleanup — data consistency across multiple cycles', () => {
       owner1,
     );
     await team().startSession(agent1, 'alice', 'react', owner1);
-    await team().recordEdit(agent1, 'src/a.js', owner1);
+    await team().recordEdit(agent1, 'src/a.js', 0, 0, owner1);
     await team().sendMessage(agent1, 'alice', 'cursor', 'Working on feature X', null, owner1);
 
     // Agent 2: partial state
@@ -87,7 +87,7 @@ describe('Cleanup — leave closes active session', () => {
     const session = await team().startSession(agent1, 'alice', 'react', owner1);
     expect(session.ok).toBe(true);
 
-    await team().recordEdit(agent1, 'src/leaving.js', owner1);
+    await team().recordEdit(agent1, 'src/leaving.js', 0, 0, owner1);
 
     // Leave
     const leaveRes = await team().leave(agent1, owner1);
@@ -272,7 +272,7 @@ describe('Cleanup — session history integrity', () => {
 
     for (let i = 0; i < 3; i++) {
       const s = await team().startSession(agentId, 'alice', `framework-${i}`, ownerId);
-      await team().recordEdit(agentId, `src/file-${i}.js`, ownerId);
+      await team().recordEdit(agentId, `src/file-${i}.js`, 0, 0, ownerId);
       await team().endSession(agentId, s.session_id, ownerId);
     }
   });

@@ -84,14 +84,77 @@ export function endSession(
   sql: SqlStorage,
   resolvedAgentId: string,
   sessionId: string,
-): DOResult<{ ok: true }> {
+): DOResult<{ ok: true; outcome?: string | null }> {
+  // Read session state for outcome inference before closing
+  const rows = sql
+    .exec(
+      `SELECT edit_count, conflicts_hit, started_at, outcome FROM sessions WHERE id = ? AND agent_id = ? AND ended_at IS NULL`,
+      sessionId,
+      resolvedAgentId,
+    )
+    .toArray();
+
+  if (rows.length === 0)
+    return { error: 'Session not found or not owned by this agent', code: 'NOT_FOUND' };
+
+  const session = rows[0] as Record<string, unknown>;
+  let outcome = session.outcome as string | null;
+
+  // Infer outcome only if not explicitly set via reportOutcome
+  if (!outcome) {
+    const editCount = (session.edit_count as number) || 0;
+    const conflictsHit = (session.conflicts_hit as number) || 0;
+    const startedAt = session.started_at as string;
+    // SQLite datetime: "2026-01-15 10:30:45" (space, no T) — normalize for JS Date
+    const durationMin =
+      (new Date().getTime() - new Date(String(startedAt).replace(' ', 'T') + 'Z').getTime()) /
+      60000;
+
+    if (editCount > 0) {
+      outcome = 'completed';
+    } else if (conflictsHit > 0 || durationMin > 5) {
+      outcome = 'abandoned';
+    }
+    // else: leave null (short no-op sessions)
+  }
+
+  // Use existing outcome if already set (via reportOutcome), else use inference
+  const existingOutcome = session.outcome as string | null;
+  const finalOutcome = existingOutcome || outcome;
+
   sql.exec(
-    `UPDATE sessions SET ended_at = datetime('now') WHERE id = ? AND agent_id = ? AND ended_at IS NULL`,
+    `UPDATE sessions SET ended_at = datetime('now'), outcome = COALESCE(outcome, ?) WHERE id = ? AND agent_id = ? AND ended_at IS NULL`,
+    outcome,
     sessionId,
     resolvedAgentId,
   );
   if (sqlChanges(sql) === 0)
     return { error: 'Session not found or not owned by this agent', code: 'NOT_FOUND' };
+  return { ok: true, outcome: finalOutcome };
+}
+
+const VALID_OUTCOMES = new Set(['completed', 'abandoned', 'failed']);
+
+export function reportOutcome(
+  sql: SqlStorage,
+  resolvedAgentId: string,
+  outcome: string,
+  summary: string | null,
+): DOResult<{ ok: true }> {
+  if (!VALID_OUTCOMES.has(outcome))
+    return {
+      error: `Invalid outcome: ${outcome}. Must be completed, abandoned, or failed`,
+      code: 'INVALID',
+    };
+
+  sql.exec(
+    `UPDATE sessions SET outcome = ?, outcome_summary = ? WHERE agent_id = ? AND ended_at IS NULL`,
+    outcome,
+    summary,
+    resolvedAgentId,
+  );
+  if (sqlChanges(sql) === 0)
+    return { error: 'No active session found for this agent', code: 'NOT_FOUND' };
   return { ok: true };
 }
 
@@ -99,6 +162,8 @@ export function recordEdit(
   sql: SqlStorage,
   resolvedAgentId: string,
   filePath: string,
+  linesAdded = 0,
+  linesRemoved = 0,
 ): { ok: true; skipped?: boolean } {
   const normalized = normalizePath(filePath);
 
@@ -125,7 +190,9 @@ export function recordEdit(
   }
 
   sql.exec(
-    `UPDATE sessions SET edit_count = edit_count + 1, files_touched = ? WHERE id = ?`,
+    `UPDATE sessions SET edit_count = edit_count + 1, lines_added = lines_added + ?, lines_removed = lines_removed + ?, files_touched = ? WHERE id = ?`,
+    linesAdded,
+    linesRemoved,
     JSON.stringify(files),
     session.id as string,
   );
@@ -140,6 +207,7 @@ export function getSessionHistory(
     .exec(
       `SELECT handle AS owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
+           outcome, outcome_summary, lines_added, lines_removed,
            ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
      FROM sessions
      WHERE started_at > datetime('now', '-' || ? || ' days')

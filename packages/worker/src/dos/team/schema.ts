@@ -279,6 +279,29 @@ const migrations: Migration[] = [
       sql.exec('CREATE INDEX IF NOT EXISTS idx_commands_status ON commands(status, created_at)');
     },
   },
+  {
+    name: '005_intelligence_foundation',
+    up(sql) {
+      // Session outcome tracking
+      addColumnIfMissing(sql, 'sessions', 'outcome TEXT DEFAULT NULL');
+      addColumnIfMissing(sql, 'sessions', 'outcome_summary TEXT DEFAULT NULL');
+
+      // Edit diff stats (accumulated per session, not per edit)
+      addColumnIfMissing(sql, 'sessions', 'lines_added INTEGER DEFAULT 0');
+      addColumnIfMissing(sql, 'sessions', 'lines_removed INTEGER DEFAULT 0');
+
+      // Time-bucketed telemetry for trend analysis
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS daily_metrics (
+          date TEXT NOT NULL,
+          metric TEXT NOT NULL,
+          count INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (date, metric)
+        )
+      `);
+      sql.exec('CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON daily_metrics(date)');
+    },
+  },
 ];
 
 export function ensureSchema(

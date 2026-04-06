@@ -27,6 +27,7 @@ import {
   detectSpawnableTools,
   executeSpawnCommand,
   executeStopCommand,
+  cleanupSpawnedProcesses,
 } from './dist/command-executor.js';
 
 const log = createLogger('mcp');
@@ -102,7 +103,10 @@ async function main() {
     agentId,
     state,
     team,
-    onDisconnectWs: () => wsManager?.disconnect(),
+    onDisconnectWs: () => {
+      wsManager?.disconnect();
+      cleanupSpawnedProcesses();
+    },
   });
 
   // ── Team join helper — called once after identity is fully resolved ──
@@ -115,7 +119,7 @@ async function main() {
       log.info(`Joined team ${state.teamId}`);
 
       try {
-        const session = await team.startSession(state.teamId, profile.framework);
+        const session = await team.startSession(state.teamId, profile.frameworks?.[0] || 'unknown');
         const sessionId = session?.session_id;
         if (!sessionId) {
           log.warn('Session start returned invalid response — continuing without session');

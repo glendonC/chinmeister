@@ -45,9 +45,11 @@ import {
   startSession as startSessionFn,
   endSession as endSessionFn,
   recordEdit as recordEditFn,
+  reportOutcome as reportOutcomeFn,
   getSessionHistory,
   enrichSessionModel as enrichSessionModelFn,
 } from './sessions.js';
+import { getAnalytics as getAnalyticsFn } from './analytics.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import {
   submitCommand as submitCommandFn,
@@ -475,9 +477,16 @@ export class TeamDO extends DurableObject<Env> {
   }
 
   #recordMetric(metric: string): void {
+    // Lifetime counter
     this.sql.exec(
       `INSERT INTO telemetry (metric, count, last_at) VALUES (?, 1, datetime('now'))
        ON CONFLICT(metric) DO UPDATE SET count = count + 1, last_at = datetime('now')`,
+      metric,
+    );
+    // Daily bucket for trend analysis
+    this.sql.exec(
+      `INSERT INTO daily_metrics (date, metric, count) VALUES (date('now'), ?, 1)
+       ON CONFLICT(date, metric) DO UPDATE SET count = count + 1`,
       metric,
     );
   }
@@ -671,28 +680,49 @@ export class TeamDO extends DurableObject<Env> {
     runtime: Record<string, unknown> | null = null,
     ownerId: string | null = null,
   ): Promise<DOResult<{ ok: true; session_id: string }> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      startSessionFn(this.sql, resolved, handle, framework, runtime, this.#transact),
-    );
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = startSessionFn(this.sql, resolved, handle, framework, runtime, this.#transact);
+      if (!isDOError(result)) {
+        this.#recordMetric('sessions_started');
+      }
+      return result;
+    });
   }
 
   async endSession(
     agentId: string,
     sessionId: string,
     ownerId: string | null = null,
-  ): Promise<DOResult<{ ok: true }> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      endSessionFn(this.sql, resolved, sessionId),
-    );
+  ): Promise<DOResult<{ ok: true; outcome?: string | null }> | DOError> {
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = endSessionFn(this.sql, resolved, sessionId);
+      if (!isDOError(result) && result.outcome) {
+        this.#recordMetric(`outcome:${result.outcome}`);
+      }
+      return result;
+    });
   }
 
   async recordEdit(
     agentId: string,
     filePath: string,
+    linesAdded = 0,
+    linesRemoved = 0,
     ownerId: string | null = null,
   ): Promise<{ ok: true; skipped?: boolean } | DOError> {
     return this.#withMember(agentId, ownerId, (resolved) =>
-      recordEditFn(this.sql, resolved, filePath),
+      recordEditFn(this.sql, resolved, filePath, linesAdded, linesRemoved),
+    );
+  }
+
+  async reportOutcome(
+    agentId: string,
+    outcome: string,
+    summary: string | null = null,
+    ownerId: string | null = null,
+  ): Promise<DOResult<{ ok: true }> | DOError> {
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      reportOutcomeFn(this.sql, resolved, outcome, summary),
     );
   }
 
@@ -702,6 +732,14 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
   ): Promise<ReturnType<typeof getSessionHistory> | DOError> {
     return this.#withMember(agentId, ownerId, () => getSessionHistory(this.sql, days));
+  }
+
+  async getAnalytics(
+    agentId: string,
+    days: number,
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof getAnalyticsFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () => getAnalyticsFn(this.sql, days));
   }
 
   async enrichModel(

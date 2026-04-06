@@ -95,9 +95,28 @@ async function reportEdit(team, teamId, input) {
   const filePath = input?.tool_input?.file_path;
   if (!filePath) process.exit(0);
 
+  // Compute diff stats from hook payload (counts only, never content)
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  const oldStr = input?.tool_input?.old_string;
+  const newStr = input?.tool_input?.new_string;
+  const content = input?.tool_input?.content;
+
+  if (typeof oldStr === 'string' && typeof newStr === 'string') {
+    // Edit tool: old → new
+    linesRemoved = oldStr.split('\n').length;
+    linesAdded = newStr.split('\n').length;
+  } else if (typeof content === 'string') {
+    // Write tool: new file content (no way to know previous, so lines_removed = 0)
+    linesAdded = content.split('\n').length;
+  }
+
   try {
-    // Update current activity + record in session history (parallel)
-    await Promise.all([team.reportFile(teamId, filePath), team.recordEdit(teamId, filePath)]);
+    // Update current activity + record in session history with diff stats (parallel)
+    await Promise.all([
+      team.reportFile(teamId, filePath),
+      team.recordEdit(teamId, filePath, linesAdded, linesRemoved),
+    ]);
   } catch (err) {
     log.warn(`Activity report failed: ${err.message}`);
   }

@@ -413,9 +413,9 @@ describe('recordEdit extended', () => {
   });
 
   it('records multiple edits, increments count', async () => {
-    await team().recordEdit(agentId, 'src/a.js', ownerId);
-    await team().recordEdit(agentId, 'src/b.js', ownerId);
-    await team().recordEdit(agentId, 'src/a.js', ownerId); // same file again
+    await team().recordEdit(agentId, 'src/a.js', 0, 0, ownerId);
+    await team().recordEdit(agentId, 'src/b.js', 0, 0, ownerId);
+    await team().recordEdit(agentId, 'src/a.js', 0, 0, ownerId); // same file again
 
     const history = await team().getHistory(agentId, 1, ownerId);
     const session = history.sessions.find((s) => s.owner_handle === 'alice');
@@ -428,7 +428,7 @@ describe('recordEdit extended', () => {
   });
 
   it('normalizes paths on record', async () => {
-    await team().recordEdit(agentId, './src//c.js', ownerId);
+    await team().recordEdit(agentId, './src//c.js', 0, 0, ownerId);
     const history = await team().getHistory(agentId, 1, ownerId);
     const session = history.sessions.find((s) => s.owner_handle === 'alice');
     expect(session.files_touched).toContain('src/c.js');
@@ -439,7 +439,7 @@ describe('recordEdit extended', () => {
     const freshTeam = () => getTeam('recordedit-nosession');
     await freshTeam().join('cursor:nosess', 'user-nosess', 'bob', 'cursor');
     // No startSession called
-    const res = await freshTeam().recordEdit('cursor:nosess', 'file.js', 'user-nosess');
+    const res = await freshTeam().recordEdit('cursor:nosess', 'file.js', 0, 0, 'user-nosess');
     expect(res.ok).toBe(true);
     expect(res.skipped).toBe(true);
   });
@@ -467,7 +467,7 @@ describe('session ownership', () => {
   });
 
   it('rejects recordEdit spoofing another agent', async () => {
-    const res = await team().recordEdit(ownerAgent, 'src/hijack.js', peerId);
+    const res = await team().recordEdit(ownerAgent, 'src/hijack.js', 0, 0, peerId);
     expect(res.error).toBe('Not a member of this team');
   });
 
@@ -487,11 +487,11 @@ describe('getHistory', () => {
   it('setup: join, create and end sessions', async () => {
     await team().join(agentId, ownerId, 'alice', 'cursor');
     const s1 = await team().startSession(agentId, 'alice', 'react', ownerId);
-    await team().recordEdit(agentId, 'src/x.js', ownerId);
+    await team().recordEdit(agentId, 'src/x.js', 0, 0, ownerId);
     await team().endSession(agentId, s1.session_id, ownerId);
 
     const s2 = await team().startSession(agentId, 'alice', 'next', ownerId);
-    await team().recordEdit(agentId, 'src/y.js', ownerId);
+    await team().recordEdit(agentId, 'src/y.js', 0, 0, ownerId);
     await team().endSession(agentId, s2.session_id, ownerId);
   });
 

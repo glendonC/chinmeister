@@ -28,6 +28,7 @@ export const HEARTBEAT_STALE_WINDOW_S = 900;
 
 // --- Retention ---
 export const SESSION_RETENTION_DAYS = 30;
+export const DAILY_METRICS_RETENTION_DAYS = 90;
 export const CONTEXT_CACHE_TTL_MS = 5000;
 export const CONTEXT_MEMBERS_LIMIT = 100;
 export const CONTEXT_LOCKS_LIMIT = 100;

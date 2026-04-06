@@ -878,11 +878,11 @@ describe('Session interaction with WebSocket lifecycle', () => {
     expect(sess.ok).toBe(true);
 
     // Simulate file edits that would be reported via WS
-    const edit1 = await team().recordEdit(agentId, 'src/component.tsx', ownerId);
+    const edit1 = await team().recordEdit(agentId, 'src/component.tsx', 0, 0, ownerId);
     expect(edit1.ok).toBe(true);
     expect(edit1.skipped).toBeUndefined();
 
-    const edit2 = await team().recordEdit(agentId, 'src/hook.ts', ownerId);
+    const edit2 = await team().recordEdit(agentId, 'src/hook.ts', 0, 0, ownerId);
     expect(edit2.ok).toBe(true);
 
     // Session reflects the edits

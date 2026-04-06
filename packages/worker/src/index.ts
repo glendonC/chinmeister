@@ -62,8 +62,10 @@ import {
   handleTeamStartSession,
   handleTeamSubmitCommand,
   handleTeamSessionEdit,
+  handleTeamReportOutcome,
   handleTeamUpdateMemory,
   handleTeamEnrichModel,
+  handleTeamAnalytics,
   handleTeamWebSocket,
 } from './routes/team/index.js';
 
@@ -207,7 +209,9 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'POST', path: `/teams/${TID}/sessionend`, handler: handleTeamEndSession },
   { method: 'PUT', path: `/teams/${TID}/sessionmodel`, handler: handleTeamEnrichModel },
   { method: 'POST', path: `/teams/${TID}/sessionedit`, handler: handleTeamSessionEdit },
+  { method: 'PUT', path: `/teams/${TID}/sessionoutcome`, handler: handleTeamReportOutcome },
   { method: 'GET', path: `/teams/${TID}/history`, handler: handleTeamHistory },
+  { method: 'GET', path: `/teams/${TID}/analytics`, handler: handleTeamAnalytics },
 ];
 
 const routes = buildRoutes(routeDefinitions);

@@ -75,7 +75,13 @@ export interface TeamCoordinationHandlers {
   sendMessage(teamId: string, text: string, target?: string): Promise<OkResult>;
   startSession(teamId: string, framework?: string): Promise<SessionResult>;
   endSession(teamId: string, sessionId: string): Promise<OkResult>;
-  recordEdit(teamId: string, file: string): Promise<OkResult>;
+  recordEdit(
+    teamId: string,
+    file: string,
+    linesAdded?: number,
+    linesRemoved?: number,
+  ): Promise<OkResult>;
+  reportOutcome(teamId: string, outcome: string, summary?: string | null): Promise<OkResult>;
   reportModel(teamId: string, model: string): Promise<OkResult>;
 }
 
@@ -190,9 +196,19 @@ export function teamHandlers(client: ApiClient): TeamHandlers {
       return client.post(`/teams/${teamId}/sessionend`, { session_id: sessionId });
     },
 
-    async recordEdit(teamId, file) {
+    async recordEdit(teamId, file, linesAdded, linesRemoved) {
       validateTeam(teamId);
-      return client.post(`/teams/${teamId}/sessionedit`, { file });
+      const body: Record<string, unknown> = { file };
+      if (linesAdded) body.lines_added = linesAdded;
+      if (linesRemoved) body.lines_removed = linesRemoved;
+      return client.post(`/teams/${teamId}/sessionedit`, body);
+    },
+
+    async reportOutcome(teamId, outcome, summary) {
+      validateTeam(teamId);
+      const body: Record<string, unknown> = { outcome };
+      if (summary) body.summary = summary;
+      return client.put(`/teams/${teamId}/sessionoutcome`, body);
     },
 
     async reportModel(teamId, model) {

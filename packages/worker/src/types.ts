@@ -238,6 +238,10 @@ export interface SessionInfo {
   files_touched: string[];
   conflicts_hit: number;
   memories_saved: number;
+  outcome?: string | null;
+  outcome_summary?: string | null;
+  lines_added?: number;
+  lines_removed?: number;
   /** Computed elapsed time */
   duration_minutes: number;
   /** Present in context query responses, inferred from host_tool/agent_id */
