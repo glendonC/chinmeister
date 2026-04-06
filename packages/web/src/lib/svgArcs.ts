@@ -6,6 +6,11 @@ export const SW = 13;
 export const GAP = 14;
 export const DEG = Math.PI / 180;
 
+// Leader line geometry: ring edge → radial stub → horizontal to text
+export const LEADER_GAP = 5; // gap between ring outer edge and line start
+export const LEADER_STUB = 20; // radial segment length
+export const LEADER_H = 22; // horizontal extension from elbow to text
+
 export function arcPath(
   cx: number,
   cy: number,

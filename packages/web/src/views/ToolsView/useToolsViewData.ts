@@ -19,7 +19,18 @@ import {
   type CategoryEntry,
 } from '../../lib/toolAnalytics.js';
 import { normalizeToolId, isKnownTool } from '../../lib/toolMeta.js';
-import { arcPath, CX, CY, R, SW, GAP, DEG } from '../../lib/svgArcs.js';
+import {
+  arcPath,
+  CX,
+  CY,
+  R,
+  SW,
+  GAP,
+  DEG,
+  LEADER_GAP,
+  LEADER_STUB,
+  LEADER_H,
+} from '../../lib/svgArcs.js';
 
 export { arcPath, CX, CY, R, SW };
 
@@ -38,10 +49,12 @@ export interface ArcEntry {
   share: number;
   startDeg: number;
   sweepDeg: number;
-  labelX: number;
-  labelY: number;
   anchorX: number;
   anchorY: number;
+  elbowX: number;
+  elbowY: number;
+  labelX: number;
+  labelY: number;
   side: 'left' | 'right';
 }
 
@@ -51,6 +64,7 @@ export interface ToolsViewData {
   categories: Record<string, string>;
   evaluations: ToolDirectoryEvaluation[];
   toolShare: JoinShareEntry[];
+  knownToolShare: JoinShareEntry[];
   hostShare: JoinShareEntry[];
   surfaceShare: JoinShareEntry[];
   categoryShare: CategoryEntry[];
@@ -163,34 +177,43 @@ export function useToolsViewData(): ToolsViewData {
   const categoryList = useMemo(() => Object.entries(categories), [categories]);
   const connectedProjects = dashboardSnapshot?.teams?.length || 0;
 
-  // Ring chart arcs — only known tools (filter out "unknown", "daemon", etc.)
-  const knownToolShare = useMemo(
-    () => toolShare.filter((t) => isKnownTool(t.tool as string)),
-    [toolShare],
-  );
+  // Known tools only — filter out "unknown", "daemon", unidentified agents.
+  // Recalculate shares so they sum to 100% among recognized tools.
+  const knownToolShare = useMemo(() => {
+    const known = toolShare.filter((t) => isKnownTool(t.tool as string));
+    const total = known.reduce((s, e) => s + e.value, 0);
+    return known.map((t) => ({ ...t, share: total > 0 ? t.value / total : 0 }) as JoinShareEntry);
+  }, [toolShare]);
   const arcs = useMemo((): ArcEntry[] => {
     if (!knownToolShare.length) return [];
     const totalGap = GAP * knownToolShare.length;
     const available = 360 - totalGap;
     const total = knownToolShare.reduce((s, e) => s + e.value, 0);
+    const anchorR = R + SW / 2 + LEADER_GAP;
+    const elbowR = R + SW / 2 + LEADER_GAP + LEADER_STUB;
     let offset = 0;
     return knownToolShare.map((entry) => {
       const share = total > 0 ? entry.value / total : 0;
       const sweep = Math.max(share * available, 4);
       const midDeg = (offset + sweep / 2 - 90) * DEG;
-      const labelR = R + SW / 2 + 22;
-      const anchorR = R + SW / 2 + 5;
+      const anchorX = CX + anchorR * Math.cos(midDeg);
+      const anchorY = CY + anchorR * Math.sin(midDeg);
+      const elbowX = CX + elbowR * Math.cos(midDeg);
+      const elbowY = CY + elbowR * Math.sin(midDeg);
+      const side: 'left' | 'right' = Math.cos(midDeg) >= 0 ? 'right' : 'left';
       const arc: ArcEntry = {
         tool: entry.tool as string,
         joins: entry.value,
         share,
         startDeg: offset,
         sweepDeg: sweep,
-        labelX: CX + labelR * Math.cos(midDeg),
-        labelY: CY + labelR * Math.sin(midDeg),
-        anchorX: CX + anchorR * Math.cos(midDeg),
-        anchorY: CY + anchorR * Math.sin(midDeg),
-        side: Math.cos(midDeg) >= 0 ? 'right' : 'left',
+        anchorX,
+        anchorY,
+        elbowX,
+        elbowY,
+        labelX: side === 'right' ? elbowX + LEADER_H : elbowX - LEADER_H,
+        labelY: elbowY,
+        side,
       };
       offset += sweep + GAP;
       return arc;
@@ -260,6 +283,7 @@ export function useToolsViewData(): ToolsViewData {
     categories,
     evaluations,
     toolShare,
+    knownToolShare,
     hostShare,
     surfaceShare,
     categoryShare,

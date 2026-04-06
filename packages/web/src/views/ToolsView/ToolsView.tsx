@@ -29,6 +29,7 @@ export default function ToolsView() {
     categories,
     categoryList,
     toolShare,
+    knownToolShare,
     arcs,
     uniqueTools,
     filteredEvaluations,
@@ -134,11 +135,9 @@ export default function ToolsView() {
                         strokeLinecap="round"
                         opacity="0.8"
                       />
-                      <line
-                        x1={arc.anchorX}
-                        y1={arc.anchorY}
-                        x2={arc.labelX}
-                        y2={arc.labelY}
+                      <path
+                        d={`M ${arc.anchorX} ${arc.anchorY} L ${arc.elbowX} ${arc.elbowY} L ${arc.labelX} ${arc.labelY}`}
+                        fill="none"
                         stroke="var(--faint)"
                         strokeWidth="1"
                         strokeDasharray="2 3"
@@ -199,7 +198,7 @@ export default function ToolsView() {
 
           {/* Configured tools list */}
           <div className={styles.stackList}>
-            {toolShare.map((tool, i) => {
+            {knownToolShare.map((tool, i) => {
               const meta = getToolMeta(tool.tool as string);
               return (
                 <div
