@@ -13,13 +13,15 @@ import {
 } from '../../components/Skeleton/Skeleton.jsx';
 import KeyboardHint from '../../components/KeyboardHint/KeyboardHint.jsx';
 import { useTabs } from '../../hooks/useTabs.js';
+import { useTeamAnalytics } from '../../hooks/useTeamAnalytics.js';
 import ProjectOverviewTab from './ProjectOverviewTab.jsx';
 import ProjectLiveTab from './ProjectLiveTab.jsx';
+import ProjectSessionsTab from './ProjectSessionsTab.jsx';
 import ProjectMemoryTab from './ProjectMemoryTab.jsx';
 import { useProjectData } from './useProjectData.js';
 import styles from './ProjectView.module.css';
 
-const PROJECT_TABS = ['overview', 'agents', 'memory'] as const;
+const PROJECT_TABS = ['overview', 'agents', 'sessions', 'memory'] as const;
 type ProjectTab = (typeof PROJECT_TABS)[number];
 
 interface StatEntry {
@@ -47,6 +49,7 @@ export default function ProjectView(_props: Props) {
     liveToolMix,
     allSessions,
     sessions,
+    filesTouched,
     filesTouchedCount,
     sessionEditCount,
     liveSessionCount,
@@ -57,7 +60,11 @@ export default function ProjectView(_props: Props) {
     toolSummaries,
     memories,
     memoryBreakdown,
+    outcomeBreakdown,
+    lineStats,
   } = useProjectData();
+
+  const { analytics, isLoading: analyticsLoading } = useTeamAnalytics(activeTeamId, 30);
 
   const handleUpdateMemory = useCallback(
     async (id: string, text?: string, tags?: string[]) => {
@@ -90,6 +97,12 @@ export default function ProjectView(_props: Props) {
       value: activeAgents.length,
       tone: activeAgents.length > 0 ? 'accent' : '',
     },
+    {
+      id: 'sessions',
+      label: 'Sessions',
+      value: allSessions.length,
+      tone: liveSessionCount > 0 ? 'accent' : '',
+    },
     { id: 'memory', label: 'Memory', value: memories.length, tone: '' },
   ];
 
@@ -102,7 +115,7 @@ export default function ProjectView(_props: Props) {
             {`Loading ${projectLabel}`}
           </ShimmerText>
         </header>
-        <SkeletonStatGrid count={3} />
+        <SkeletonStatGrid count={4} />
         <div style={{ marginTop: 40 }}>
           <SkeletonLine width="100%" height={32} />
         </div>
@@ -198,6 +211,7 @@ export default function ProjectView(_props: Props) {
               liveSessionCount={liveSessionCount}
               filesTouchedCount={filesTouchedCount}
               toolSummaries={toolSummaries}
+              lineStats={lineStats}
             />
           </div>
         )}
@@ -215,6 +229,22 @@ export default function ProjectView(_props: Props) {
               liveToolMix={liveToolMix}
               sessions={sessions as never[]}
               availableSpawnTools={availableSpawnTools}
+            />
+          </div>
+        )}
+
+        {activeViz === 'sessions' && (
+          <div className={styles.vizPanel} role="tabpanel" id="panel-sessions">
+            <ProjectSessionsTab
+              sessions={sessions as never[]}
+              sessionEditCount={sessionEditCount}
+              filesTouched={filesTouched}
+              filesTouchedCount={filesTouchedCount}
+              liveSessionCount={liveSessionCount}
+              outcomeBreakdown={outcomeBreakdown}
+              lineStats={lineStats}
+              analytics={analytics}
+              analyticsLoading={analyticsLoading}
             />
           </div>
         )}

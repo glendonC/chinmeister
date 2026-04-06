@@ -192,3 +192,43 @@ export function sumSessionEdits(sessions: { edit_count?: number }[] = []): numbe
 export function countLiveSessions(sessions: { ended_at?: string | null }[] = []): number {
   return sessions.filter((session) => !session.ended_at).length;
 }
+
+export interface OutcomeBreakdown {
+  completed: number;
+  abandoned: number;
+  failed: number;
+  unknown: number;
+  total: number;
+}
+
+export function buildOutcomeBreakdown(
+  sessions: { outcome?: string | null }[] = [],
+): OutcomeBreakdown {
+  const result: OutcomeBreakdown = { completed: 0, abandoned: 0, failed: 0, unknown: 0, total: 0 };
+  for (const s of sessions) {
+    result.total++;
+    const o = s.outcome;
+    if (o === 'completed') result.completed++;
+    else if (o === 'abandoned') result.abandoned++;
+    else if (o === 'failed') result.failed++;
+    else result.unknown++;
+  }
+  return result;
+}
+
+export interface LineStats {
+  added: number;
+  removed: number;
+}
+
+export function sumLineStats(
+  sessions: { lines_added?: number; lines_removed?: number }[] = [],
+): LineStats {
+  let added = 0;
+  let removed = 0;
+  for (const s of sessions) {
+    added += s.lines_added || 0;
+    removed += s.lines_removed || 0;
+  }
+  return { added, removed };
+}

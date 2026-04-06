@@ -107,6 +107,10 @@ const sessionSchema = z
     conflicts_hit: z.number().default(0),
     memories_saved: z.number().default(0),
     duration_minutes: z.number().nullable().optional(),
+    outcome: z.string().nullable().optional(),
+    outcome_summary: z.string().nullable().optional(),
+    lines_added: z.number().default(0),
+    lines_removed: z.number().default(0),
   })
   .transform((session) => ({
     ...session,
@@ -280,6 +284,68 @@ export const toolDirectorySchema = z.object({
 });
 
 export type ToolDirectory = z.infer<typeof toolDirectorySchema>;
+
+// ── Analytics ──────────────────────────────────────
+
+const fileHeatmapEntrySchema = z.object({
+  file: z.string(),
+  touch_count: z.number(),
+});
+
+const dailyTrendSchema = z.object({
+  day: z.string(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+});
+
+const outcomeCountSchema = z.object({
+  outcome: z.string(),
+  count: z.number().default(0),
+});
+
+const toolDistributionSchema = z.object({
+  host_tool: z.string(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+});
+
+const dailyMetricEntrySchema = z.object({
+  date: z.string(),
+  metric: z.string(),
+  count: z.number().default(0),
+});
+
+export const teamAnalyticsSchema = z.object({
+  ok: z.literal(true),
+  period_days: z.number(),
+  file_heatmap: z.array(fileHeatmapEntrySchema).default([]),
+  daily_trends: z.array(dailyTrendSchema).default([]),
+  tool_distribution: z.array(toolDistributionSchema).default([]),
+  outcome_distribution: z.array(outcomeCountSchema).default([]),
+  daily_metrics: z.array(dailyMetricEntrySchema).default([]),
+});
+
+export type TeamAnalytics = z.infer<typeof teamAnalyticsSchema>;
+export type FileHeatmapEntry = z.infer<typeof fileHeatmapEntrySchema>;
+export type DailyTrend = z.infer<typeof dailyTrendSchema>;
+export type OutcomeCount = z.infer<typeof outcomeCountSchema>;
+export type ToolDistributionEntry = z.infer<typeof toolDistributionSchema>;
+export type DailyMetricEntry = z.infer<typeof dailyMetricEntrySchema>;
+
+export function createEmptyAnalytics(): TeamAnalytics {
+  return {
+    ok: true,
+    period_days: 7,
+    file_heatmap: [],
+    daily_trends: [],
+    tool_distribution: [],
+    outcome_distribution: [],
+    daily_metrics: [],
+  };
+}
 
 export function createEmptyTeamContext(): TeamContext {
   return {

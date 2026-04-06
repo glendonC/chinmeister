@@ -28,11 +28,15 @@ import {
   buildProjectConflicts,
   buildProjectSurfaceSummaries,
   buildProjectToolSummaries,
+  buildOutcomeBreakdown,
+  sumLineStats,
   countLiveSessions,
   selectRecentSessions,
   sumSessionEdits,
   type UsageSummaryEntry,
   type FileConflict,
+  type OutcomeBreakdown,
+  type LineStats,
 } from './projectViewState.js';
 
 type Team = { team_id: string; team_name?: string; joined_at?: string };
@@ -69,6 +73,8 @@ interface UseProjectDataReturn {
   sessionEditCount: number;
   filesTouchedCount: number;
   liveSessionCount: number;
+  outcomeBreakdown: OutcomeBreakdown;
+  lineStats: LineStats;
   toolSummaries: UsageSummaryEntry[];
   hostSummaries: UsageSummaryEntry[];
   surfaceSummaries: UsageSummaryEntry[];
@@ -131,6 +137,8 @@ export function useProjectData(): UseProjectDataReturn {
   const sortedAgents = activeAgents.concat(offlineAgents);
   const sessionEditCount: number = sumSessionEdits(allSessions);
   const liveSessionCount: number = countLiveSessions(allSessions);
+  const outcomeBreakdown: OutcomeBreakdown = buildOutcomeBreakdown(allSessions);
+  const lineStats: LineStats = sumLineStats(allSessions);
 
   // Heavier derivations — build Maps/Sets/complex structures, worth memoizing
   const liveToolMix = useMemo(() => buildLiveToolMix(members), [members]);
@@ -213,6 +221,8 @@ export function useProjectData(): UseProjectDataReturn {
     sessionEditCount,
     filesTouchedCount,
     liveSessionCount,
+    outcomeBreakdown,
+    lineStats,
     toolSummaries,
     hostSummaries,
     surfaceSummaries,

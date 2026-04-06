@@ -66,6 +66,18 @@ describe('ProjectSessionsTab', () => {
       filesTouched: [],
       filesTouchedCount: 0,
       liveSessionCount: 0,
+      outcomeBreakdown: { completed: 0, abandoned: 0, failed: 0, unknown: 0, total: 0 },
+      lineStats: { added: 0, removed: 0 },
+      analytics: {
+        ok: true,
+        period_days: 7,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+      },
+      analyticsLoading: false,
     });
 
     const emptyState = container.querySelector('[data-testid="empty-state"]');
@@ -86,6 +98,18 @@ describe('ProjectSessionsTab', () => {
       filesTouched: ['src/app.ts'],
       filesTouchedCount: 1,
       liveSessionCount: 1,
+      outcomeBreakdown: { completed: 0, abandoned: 0, failed: 0, unknown: 0, total: 0 },
+      lineStats: { added: 0, removed: 0 },
+      analytics: {
+        ok: true,
+        period_days: 7,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+      },
+      analyticsLoading: false,
     });
 
     const rows = container.querySelectorAll('[data-testid="session-row"]');
@@ -104,6 +128,18 @@ describe('ProjectSessionsTab', () => {
       filesTouched: ['a.ts', 'b.ts'],
       filesTouchedCount: 2,
       liveSessionCount: 3,
+      outcomeBreakdown: { completed: 0, abandoned: 0, failed: 0, unknown: 0, total: 0 },
+      lineStats: { added: 0, removed: 0 },
+      analytics: {
+        ok: true,
+        period_days: 7,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+      },
+      analyticsLoading: false,
     });
 
     expect(container.textContent).toContain('25');
@@ -124,6 +160,18 @@ describe('ProjectSessionsTab', () => {
       filesTouched: ['src/index.ts', 'src/utils.ts', 'package.json'],
       filesTouchedCount: 3,
       liveSessionCount: 0,
+      outcomeBreakdown: { completed: 0, abandoned: 0, failed: 0, unknown: 0, total: 0 },
+      lineStats: { added: 0, removed: 0 },
+      analytics: {
+        ok: true,
+        period_days: 7,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+      },
+      analyticsLoading: false,
     });
 
     expect(container.textContent).toContain('Files touched');
@@ -142,6 +190,18 @@ describe('ProjectSessionsTab', () => {
       filesTouched: [],
       filesTouchedCount: 0,
       liveSessionCount: 0,
+      outcomeBreakdown: { completed: 0, abandoned: 0, failed: 0, unknown: 0, total: 0 },
+      lineStats: { added: 0, removed: 0 },
+      analytics: {
+        ok: true,
+        period_days: 7,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+      },
+      analyticsLoading: false,
     });
 
     expect(container.textContent).not.toContain('Files touched');

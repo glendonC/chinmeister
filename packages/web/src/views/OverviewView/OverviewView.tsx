@@ -76,6 +76,7 @@ export default function OverviewView() {
 
   const {
     totalActive,
+    totalSessions,
     totalMemories,
     hostShare,
     surfaceShare,

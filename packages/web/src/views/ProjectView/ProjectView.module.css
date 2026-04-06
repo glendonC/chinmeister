@@ -67,7 +67,7 @@
 
 .statsRow {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--space-xs);
 }
 
@@ -382,12 +382,90 @@
 }
 
 .pathRow {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-sm);
   font-family: var(--mono);
   font-size: var(--text-11);
   color: var(--muted);
   overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pathFile {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.pathCount {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--soft);
+}
+
+/* -- Inline tables (daily trends, etc.) -- */
+
+.tableWrap {
+  width: 100%;
+}
+
+.tableHead {
+  display: grid;
+  grid-template-columns: var(--table-grid, 1fr repeat(3, 72px));
+  gap: var(--space-sm);
+  padding: 0 0 10px;
+}
+
+.tableBody {
+  display: flex;
+  flex-direction: column;
+}
+
+.tableRow {
+  display: grid;
+  grid-template-columns: var(--table-grid, 1fr repeat(3, 72px));
+  gap: var(--space-sm);
+  padding: 6px 0;
+  animation: fadeRow var(--motion-base) var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 30ms);
+}
+
+.thLeft,
+.th {
+  font-family: var(--mono);
+  font-size: var(--text-10);
+  color: var(--soft);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-table);
+}
+
+.th {
+  text-align: right;
+}
+
+.tdLeft,
+.td {
+  font-family: var(--mono);
+  font-size: var(--text-11);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.td {
+  text-align: right;
+}
+
+@keyframes fadeRow {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .lockList {

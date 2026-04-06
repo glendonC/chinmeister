@@ -28,6 +28,24 @@
   letter-spacing: 0.1em;
 }
 
+.outcome {
+  font-size: var(--text-11);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.completed {
+  color: var(--success);
+}
+
+.abandoned {
+  color: var(--soft);
+}
+
+.failed {
+  color: var(--danger);
+}
+
 .meta {
   font-family: var(--mono);
   font-size: var(--text-11);

@@ -33,6 +33,7 @@ interface ProjectOverviewTabProps {
   liveSessionCount: number;
   filesTouchedCount: number;
   toolSummaries: UsageSummaryEntry[];
+  lineStats?: { added: number; removed: number };
 }
 
 export default function ProjectOverviewTab({
@@ -44,6 +45,7 @@ export default function ProjectOverviewTab({
   liveSessionCount,
   filesTouchedCount,
   toolSummaries,
+  lineStats,
 }: ProjectOverviewTabProps) {
   const stuckAgents = useMemo(
     () => activeAgents.filter((a) => (a.minutes_since_update || 0) >= 15),
@@ -157,6 +159,12 @@ export default function ProjectOverviewTab({
             <SummaryStat label="files touched" value={filesTouchedCount} />
             <SummaryStat label="live sessions" value={liveSessionCount} />
             <SummaryStat label="agents now" value={activeAgents.length} />
+            {lineStats && (lineStats.added > 0 || lineStats.removed > 0) && (
+              <SummaryStat
+                label="lines changed"
+                value={`+${lineStats.added} / \u2212${lineStats.removed}`}
+              />
+            )}
           </div>
         </section>
 

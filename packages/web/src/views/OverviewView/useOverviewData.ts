@@ -57,6 +57,7 @@ export interface LiveAgent {
 
 interface UseOverviewDataReturn {
   totalActive: number;
+  totalSessions: number;
   totalMemories: number;
   hostShare: JoinShareEntry[];
   surfaceShare: JoinShareEntry[];
@@ -69,6 +70,14 @@ interface UseOverviewDataReturn {
 export function useOverviewData(summaries: TeamSummary[]): UseOverviewDataReturn {
   const totalActive = useMemo(
     () => summaries.reduce((s, t) => s + (t.active_agents || 0), 0),
+    [summaries],
+  );
+  const totalSessions = useMemo(
+    () =>
+      summaries.reduce(
+        (s, t) => s + (((t as Record<string, unknown>).recent_sessions_24h as number) || 0),
+        0,
+      ),
     [summaries],
   );
   const totalMemories = useMemo(
@@ -147,6 +156,7 @@ export function useOverviewData(summaries: TeamSummary[]): UseOverviewDataReturn
 
   return {
     totalActive,
+    totalSessions,
     totalMemories,
     hostShare,
     surfaceShare,

@@ -46,10 +46,11 @@ export default function ProjectsPanel({
           className={styles.searchInput}
         />
       )}
-      <div className={styles.tableWrap}>
+      <div className={styles.tableWrap} style={{ '--cols': 4 } as React.CSSProperties}>
         <div className={styles.tableHead}>
           <span className={styles.thLeft}>Name</span>
           <span className={styles.th}>Live</span>
+          <span className={styles.th}>Sessions</span>
           <span className={styles.th}>Memories</span>
           <span className={styles.th}>Tools</span>
         </div>
@@ -75,6 +76,9 @@ export default function ProjectsPanel({
                   {team.team_name || team.team_id}
                 </span>
                 <span className={clsx(styles.td, agents > 0 && styles.tdAccent)}>{agents}</span>
+                <span className={styles.td}>
+                  {((team as Record<string, unknown>).recent_sessions_24h as number) || 0}
+                </span>
                 <span className={styles.td}>{team.memory_count || 0}</span>
                 <span className={styles.td}>{toolCount}</span>
               </button>
