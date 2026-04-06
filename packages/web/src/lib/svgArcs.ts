@@ -10,6 +10,7 @@ export const DEG = Math.PI / 180;
 export const LEADER_GAP = 5; // gap between ring outer edge and line start
 export const LEADER_STUB = 20; // radial segment length
 export const LEADER_H = 22; // horizontal extension from elbow to text
+export const MIN_LABEL_GAP = 28; // min vertical px between labels on the same side
 
 export function arcPath(
   cx: number,

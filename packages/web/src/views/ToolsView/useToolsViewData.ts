@@ -30,6 +30,7 @@ import {
   LEADER_GAP,
   LEADER_STUB,
   LEADER_H,
+  MIN_LABEL_GAP,
 } from '../../lib/svgArcs.js';
 
 export { arcPath, CX, CY, R, SW };
@@ -56,6 +57,7 @@ export interface ArcEntry {
   labelX: number;
   labelY: number;
   side: 'left' | 'right';
+  labeled: boolean;
 }
 
 export interface ToolsViewData {
@@ -184,6 +186,9 @@ export function useToolsViewData(): ToolsViewData {
     const total = known.reduce((s, e) => s + e.value, 0);
     return known.map((t) => ({ ...t, share: total > 0 ? t.value / total : 0 }) as JoinShareEntry);
   }, [toolShare]);
+
+  // All tools get arc segments; labels shown unless they'd overlap on the same side.
+  // Highest-value tools win label priority when space is contested.
   const arcs = useMemo((): ArcEntry[] => {
     if (!knownToolShare.length) return [];
     const totalGap = GAP * knownToolShare.length;
@@ -191,17 +196,24 @@ export function useToolsViewData(): ToolsViewData {
     const total = knownToolShare.reduce((s, e) => s + e.value, 0);
     const anchorR = R + SW / 2 + LEADER_GAP;
     const elbowR = R + SW / 2 + LEADER_GAP + LEADER_STUB;
-    let offset = 0;
-    return knownToolShare.map((entry) => {
+
+    // Precompute sweep widths and cumulative offsets (no mutation inside map)
+    const sweeps = knownToolShare.map((e) =>
+      Math.max((total > 0 ? e.value / total : 0) * available, 4),
+    );
+    const offsets = sweeps.map((_, i, arr) => arr.slice(0, i).reduce((s, sw) => s + sw + GAP, 0));
+
+    const entries: ArcEntry[] = knownToolShare.map((entry, i) => {
       const share = total > 0 ? entry.value / total : 0;
-      const sweep = Math.max(share * available, 4);
+      const sweep = sweeps[i];
+      const offset = offsets[i];
       const midDeg = (offset + sweep / 2 - 90) * DEG;
+      const side: 'left' | 'right' = Math.cos(midDeg) >= 0 ? 'right' : 'left';
       const anchorX = CX + anchorR * Math.cos(midDeg);
       const anchorY = CY + anchorR * Math.sin(midDeg);
       const elbowX = CX + elbowR * Math.cos(midDeg);
       const elbowY = CY + elbowR * Math.sin(midDeg);
-      const side: 'left' | 'right' = Math.cos(midDeg) >= 0 ? 'right' : 'left';
-      const arc: ArcEntry = {
+      return {
         tool: entry.tool as string,
         joins: entry.value,
         share,
@@ -214,10 +226,27 @@ export function useToolsViewData(): ToolsViewData {
         labelX: side === 'right' ? elbowX + LEADER_H : elbowX - LEADER_H,
         labelY: elbowY,
         side,
+        labeled: false,
       };
-      offset += sweep + GAP;
-      return arc;
     });
+
+    // Pass 2: per-side collision detection — highest-value arcs get label priority
+    for (const side of ['left', 'right'] as const) {
+      const candidates = entries
+        .map((e, i) => ({ i, value: e.joins, y: e.labelY }))
+        .filter(({ i }) => entries[i].side === side)
+        .sort((a, b) => b.value - a.value);
+
+      const placed: number[] = [];
+      for (const { i, y } of candidates) {
+        if (placed.every((py) => Math.abs(py - y) >= MIN_LABEL_GAP)) {
+          entries[i].labeled = true;
+          placed.push(y);
+        }
+      }
+    }
+
+    return entries;
   }, [knownToolShare]);
 
   const uniqueTools = knownToolShare.length;

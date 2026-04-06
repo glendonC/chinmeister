@@ -1,4 +1,4 @@
-import { type CSSProperties } from 'react';
+import { type CSSProperties, useState } from 'react';
 import clsx from 'clsx';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { summarizeList } from '../../lib/summarize.js';
@@ -45,8 +45,9 @@ export default function ToolsView() {
     setShowAll,
     hideConfigured,
     setHideConfigured,
-    isConfigured,
   } = useToolsViewData();
+
+  const [hoveredTool, setHoveredTool] = useState<string | null>(null);
 
   if (loading && evaluations.length === 0 && toolShare.length === 0) {
     return (
@@ -118,53 +119,76 @@ export default function ToolsView() {
           </div>
         </section>
       ) : (
-        <section className={styles.stackZone}>
+        <section className={styles.stackZone} onMouseLeave={() => setHoveredTool(null)}>
           {/* Ring chart */}
           {arcs.length > 0 && (
             <div className={styles.ringWrap}>
               <svg viewBox="0 0 260 260" className={styles.ringSvg}>
                 {arcs.map((arc) => {
                   const meta = getToolMeta(arc.tool);
+                  const dimmed = hoveredTool && hoveredTool !== arc.tool;
+                  const highlighted = hoveredTool === arc.tool;
                   return (
-                    <g key={arc.tool}>
+                    <g
+                      key={arc.tool}
+                      style={{
+                        opacity: dimmed ? 0.15 : 1,
+                        transition: 'opacity 0.2s ease',
+                      }}
+                      onMouseEnter={() => setHoveredTool(arc.tool)}
+                      onMouseLeave={() => setHoveredTool(null)}
+                    >
+                      {/* Invisible wider hit area */}
+                      <path
+                        d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={SW + 16}
+                        style={{ cursor: 'pointer' }}
+                      />
                       <path
                         d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)}
                         fill="none"
                         stroke={meta.color}
                         strokeWidth={SW}
                         strokeLinecap="round"
-                        opacity="0.8"
+                        opacity={highlighted ? 1 : 0.8}
+                        style={{ transition: 'opacity 0.2s ease' }}
                       />
-                      <path
-                        d={`M ${arc.anchorX} ${arc.anchorY} L ${arc.elbowX} ${arc.elbowY} L ${arc.labelX} ${arc.labelY}`}
-                        fill="none"
-                        stroke="var(--faint)"
-                        strokeWidth="1"
-                        strokeDasharray="2 3"
-                      />
-                      <text
-                        x={arc.labelX}
-                        y={arc.labelY - 4}
-                        textAnchor={arc.side === 'right' ? 'start' : 'end'}
-                        fill={meta.color}
-                        fontSize="16"
-                        fontWeight="400"
-                        fontFamily="var(--display)"
-                        letterSpacing="-0.04em"
-                      >
-                        {Math.round(arc.share * 100)}%
-                      </text>
-                      <text
-                        x={arc.labelX}
-                        y={arc.labelY + 10}
-                        textAnchor={arc.side === 'right' ? 'start' : 'end'}
-                        fill="var(--muted)"
-                        fontSize="9"
-                        fontFamily="var(--sans)"
-                        fontWeight="500"
-                      >
-                        {meta.label}
-                      </text>
+                      {arc.labeled && (
+                        <>
+                          <path
+                            d={`M ${arc.anchorX} ${arc.anchorY} L ${arc.elbowX} ${arc.elbowY} L ${arc.labelX} ${arc.labelY}`}
+                            fill="none"
+                            stroke="var(--faint)"
+                            strokeWidth="1"
+                            strokeDasharray="2 3"
+                          />
+                          <text
+                            x={arc.labelX}
+                            y={arc.labelY - 4}
+                            textAnchor={arc.side === 'right' ? 'start' : 'end'}
+                            fill={meta.color}
+                            fontSize="16"
+                            fontWeight="400"
+                            fontFamily="var(--display)"
+                            letterSpacing="-0.04em"
+                          >
+                            {Math.round(arc.share * 100)}%
+                          </text>
+                          <text
+                            x={arc.labelX}
+                            y={arc.labelY + 10}
+                            textAnchor={arc.side === 'right' ? 'start' : 'end'}
+                            fill="var(--muted)"
+                            fontSize="9"
+                            fontFamily="var(--sans)"
+                            fontWeight="500"
+                          >
+                            {meta.label}
+                          </text>
+                        </>
+                      )}
                     </g>
                   );
                 })}
@@ -196,29 +220,37 @@ export default function ToolsView() {
             </div>
           )}
 
-          {/* Configured tools list */}
-          <div className={styles.stackList}>
+          {/* Configured tools table */}
+          <div className={styles.stackTable}>
+            <div className={styles.stackColHeader}>
+              <span>Tool</span>
+              <span>Projects</span>
+              <span>Share</span>
+              <span>Sessions</span>
+            </div>
             {knownToolShare.map((tool, i) => {
               const meta = getToolMeta(tool.tool as string);
+              const toolId = tool.tool as string;
               return (
                 <div
-                  key={tool.tool as string}
-                  className={styles.stackRow}
+                  key={toolId}
+                  className={clsx(
+                    styles.stackRow,
+                    hoveredTool && hoveredTool !== toolId && styles.stackRowDim,
+                  )}
                   style={{ '--row-index': i } as CSSProperties}
+                  onMouseEnter={() => setHoveredTool(toolId)}
+                  onMouseLeave={() => setHoveredTool(null)}
                 >
                   <div className={styles.stackIdentity}>
-                    <ToolIcon tool={tool.tool as string} size={20} />
-                    <div className={styles.stackCopy}>
-                      <span className={styles.stackName}>{meta.label}</span>
-                      <span className={styles.stackProjects}>
-                        {summarizeList(tool.projects as string[])}
-                      </span>
-                    </div>
+                    <ToolIcon tool={toolId} size={20} />
+                    <span className={styles.stackName}>{meta.label}</span>
                   </div>
-                  <span className={styles.stackShare}>{Math.round(tool.share * 100)}%</span>
-                  <span className={styles.stackJoins}>
-                    {tool.value} session{tool.value === 1 ? '' : 's'}
+                  <span className={styles.stackProjects}>
+                    {summarizeList(tool.projects as string[])}
                   </span>
+                  <span className={styles.stackShare}>{Math.round(tool.share * 100)}%</span>
+                  <span className={styles.stackJoins}>{tool.value}</span>
                 </div>
               );
             })}

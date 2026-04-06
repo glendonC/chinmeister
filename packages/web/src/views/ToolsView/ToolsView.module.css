@@ -38,27 +38,54 @@
   overflow: visible;
 }
 
-.stackList {
+.stackTable {
   display: flex;
   flex-direction: column;
-  gap: var(--space-xs);
-  padding-top: 10px;
+  padding-top: 2px;
+}
+
+.stackColHeader {
+  display: grid;
+  grid-template-columns: minmax(120px, 1.2fr) minmax(60px, 0.8fr) 48px 64px;
+  gap: var(--space-md);
+  padding: 0 4px 8px;
+  align-items: baseline;
+}
+
+.stackColHeader > span {
+  font-family: var(--mono);
+  font-size: var(--text-10);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-table);
+  color: var(--soft);
+}
+
+.stackColHeader > span:nth-child(3),
+.stackColHeader > span:nth-child(4) {
+  text-align: right;
 }
 
 .stackRow {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
-  gap: var(--space-lg);
+  grid-template-columns: minmax(120px, 1.2fr) minmax(60px, 0.8fr) 48px 64px;
+  gap: var(--space-md);
   align-items: center;
-  padding: 10px 4px;
+  padding: 8px 4px;
   border-radius: var(--radius-sm);
   animation: rowReveal 0.3s var(--motion) both;
   animation-delay: calc(var(--row-index, 0) * 45ms);
-  transition: background 0.12s ease;
+  transition:
+    opacity 0.2s ease,
+    background 0.12s ease;
+  cursor: default;
 }
 
 .stackRow:hover {
   background: var(--hover-bg);
+}
+
+.stackRowDim {
+  opacity: 0.25;
 }
 
 @keyframes rowReveal {
@@ -75,14 +102,7 @@
 .stackIdentity {
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.stackCopy {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -91,6 +111,9 @@
   font-weight: 400;
   color: var(--ink);
   letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .stackProjects {
@@ -106,7 +129,6 @@
   font-size: var(--text-11);
   color: var(--muted);
   text-align: right;
-  min-width: 32px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -115,7 +137,6 @@
   font-size: var(--text-11);
   color: var(--soft);
   text-align: right;
-  min-width: 72px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -658,10 +679,20 @@ details[open] > .sourcesToggle::before {
     width: 100%;
   }
 
-  .stackRow {
-    grid-template-columns: minmax(0, 1fr) auto;
+  .stackColHeader {
+    grid-template-columns: minmax(0, 1fr) 48px;
   }
 
+  .stackColHeader > span:nth-child(2),
+  .stackColHeader > span:nth-child(4) {
+    display: none;
+  }
+
+  .stackRow {
+    grid-template-columns: minmax(0, 1fr) 48px;
+  }
+
+  .stackProjects,
   .stackJoins {
     display: none;
   }
