@@ -12,11 +12,13 @@ Meanwhile, real development looks like this: you run Claude Code and Cursor on t
 
 No vendor is incentivized to build cross-tool coordination — doing so would help their competitors. The space between tools stays empty.
 
+Beyond coordination, there's a deeper gap: no developer has structured visibility into how they develop with AI. How effective are your agent sessions? Where do agents struggle in your codebase? Is your workflow improving over time? The tools themselves don't answer these questions — each session runs and disappears. There's no persistent view, no trend analysis, no feedback loop.
+
 ## What chinwag is
 
-chinwag is the **control layer for agentic development**: vendor-neutral infrastructure that connects AI tools, shares state across them, coordinates agents across developers, and gives you visibility into the whole system.
+chinwag is the **control and intelligence layer for agentic development**: vendor-neutral infrastructure that connects AI tools, coordinates agents, and gives you deep visibility into your development workflow — from real-time agent coordination to long-term patterns in how you build with AI.
 
-One command (`npx chinwag init`) connects your stack. From that point, agents share a brain, coordinate across tools and teammates, and show up in one place.
+One command (`npx chinwag init`) connects your stack. From that point, agents share a brain, coordinate across tools and teammates, and your entire AI-assisted workflow becomes observable and improvable.
 
 ## What it does
 
@@ -30,22 +32,15 @@ Cross-vendor, cross-developer, real-time agent coordination.
 - **File locking and activity tracking.** Claim files, report activity, detect conflicts.
 - **Cross-machine coordination.** Works across developers on different machines through the shared backend.
 
-### Observability
+### Workflow Intelligence
 
-You can't control what you can't see.
+Understand and improve how you develop with AI.
 
-- **Agent activity** across all tools and projects in one view.
-- **Session history.** What agents accomplished, where they got stuck.
-- **Shared notes** and project knowledge that persist across sessions.
-- **Multi-project dashboard.** See your full AI workflow across all repos — which agents are running where, what they're working on.
-
-### Tool discovery
-
-Expand your stack without friction.
-
-- **Curated catalog** of AI dev tools, browsable from the TUI and web dashboard.
-- **One-command integration.** `chinwag add <tool>` configures MCP, writes config, done.
-- **Where it's going:** Agent-assisted tool research, instant experimentation, and a feedback loop between users and tool makers.
+- **Session analytics.** Every agent session tracked — duration, edit velocity, file scope, outcome. See patterns evolve over time: not just what happened, but whether your workflow is improving.
+- **Codebase heatmaps.** Where does AI touch your project most? Where do agents struggle, where are the blind spots? Your codebase through the lens of how AI interacts with it.
+- **Project lenses.** View your project through different perspectives — security posture, test health, architecture quality, documentation freshness — each with actions to spawn an agent and address what you see.
+- **Multi-project dashboard.** Your full AI workflow across all repos. Which projects are actively agent-developed, session distribution across tools, cross-project trends.
+- **Proactive insights.** chinwag surfaces what you'd miss: a module where agents consistently struggle, an area that hasn't been audited since a major change, retry patterns that suggest a task needs different scoping.
 
 ## How it works
 
@@ -57,14 +52,17 @@ Expand your stack without friction.
 
 **One team per project, one account across projects.** The `.chinwag` file (committed to git) scopes a team to a repo. `~/.chinwag/config.json` gives each developer a cross-project identity. Teammates auto-join when they run `chinwag init` in a project that already has a `.chinwag` file.
 
+**Integration depth scales with the tool.** Tools that support hooks (like Claude Code) get the richest experience: enforced conflict prevention, automatic edit tracking, and full session analytics. Tools connected via MCP get coordination, shared memory, and activity awareness. Every tool benefits; deeper integration unlocks deeper intelligence.
+
+**Expand your stack as you go.** `chinwag add <tool>` integrates any supported AI tool — MCP config, hooks where supported, done.
+
 ## What chinwag is not
 
 - **Not an agent orchestrator.** chinwag does not spawn, assign, or manage agent reasoning. It coordinates agents already running in their native tools.
-- **Not a standalone APM.** Observability supports the workflow, not a separate monitoring product.
-- **Not a marketplace.** Tool discovery serves the workflow. chinwag is not competing with Smithery or npm.
+- **Not a monitoring dashboard.** Workflow intelligence drives action — every insight connects to something you can do about it. chinwag is a cockpit, not a display.
 - **Not a community platform.** Chat exists but is secondary.
 - **Not a replacement for CLAUDE.md or AGENTS.md.** Those are static per-tool instructions. chinwag is dynamic shared memory and real-time coordination.
 
 ---
 
-*For system design and code structure, see [ARCHITECTURE.md](ARCHITECTURE.md). For build status and tasks, see [ROADMAP.md](ROADMAP.md).*
+_For system design and code structure, see [ARCHITECTURE.md](ARCHITECTURE.md). For build status and tasks, see [ROADMAP.md](ROADMAP.md)._

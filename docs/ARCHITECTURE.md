@@ -328,6 +328,16 @@ The monorepo has five packages:
 4. Future agent sessions on the same team find memories via `chinwag_search_memory` (text search, tag filter) or receive recent memories in `chinwag_get_team_context`
 5. Memories are team knowledge — any team member can update or delete. Agents manage relevance themselves; chinwag stores and retrieves
 
+### Session Intelligence
+
+chinwag captures session-level data that powers workflow analytics and long-term intelligence.
+
+1. **Automatic capture (hook-enabled tools).** Every file edit fires a PostToolUse hook that records the file path, increments the session's edit count, and appends to files_touched. This happens without the agent opting in — hooks are system-level.
+2. **Voluntary reporting (all MCP tools).** Agents report activity, check conflicts, and manage memory through MCP tool calls. Each call updates the session's last-activity timestamp.
+3. **Session record.** Each session stores: `edit_count`, `files_touched`, `conflicts_hit`, `memories_saved`, `duration_minutes`, `agent_model`, `host_tool`, `transport`, `framework`. This is the raw material for analytics.
+4. **Derived metrics.** From raw session data, chinwag derives edit velocity (edits/minute), codebase heatmaps (aggregate files_touched), stuckness patterns (correlate stuck sessions with file areas), and retry detection (multiple sessions on same files in short windows).
+5. **Integration depth determines data richness.** Hook-enabled tools provide granular, automatic data on every edit. MCP-only tools provide coordination data and voluntary reporting. The intelligence layer works with both, surfacing richer insights where richer data is available.
+
 ### Chat (Secondary)
 
 Chat is available but secondary to the agent coordination focus. It exists because the infrastructure supports it, not because it's core to the product.
@@ -353,6 +363,8 @@ Chat is available but secondary to the agent coordination focus. It exists becau
 **One team per project, one account across projects within a runtime profile.** The `.chinwag` file (committed to git) scopes a team to a repo. `~/.chinwag/config.json` gives the user a cross-project production identity, while local development uses `~/.chinwag/local/config.json` so local testing never overwrites production auth. This enables both team coordination within a repo and solo multi-project visibility across repos while keeping local and production environments intentionally separate.
 
 **Claude Code gets the deepest integration.** Claude Code supports hooks (enforceable interception before file edits), channels (server-initiated push), and is a CLI tool (full process control). This enables conflict prevention that the agent cannot bypass plus managed lifecycle. Other tools get softer integration via MCP instructions and tool descriptions. As tools add hook-like capabilities, their integration deepens.
+
+**Integration depth is a feature, not a limitation.** Tools with hook support (currently Claude Code) provide automatic, granular session analytics — every edit tracked, conflicts enforced, stuckness detected without agent cooperation. MCP-connected tools get coordination and shared memory. This graduated model means developers using deeply-integrated tools get the richest workflow intelligence, and all tools benefit as their platforms add hook-like capabilities.
 
 **Durable Objects over external databases.** Each DO provides single-threaded coordination with embedded SQLite, eliminating the need for external database connections, connection pooling, or cache invalidation. State and compute are colocated at the edge. Trade-off: single-instance bottleneck for DatabaseDO, but adequate for our scale.
 

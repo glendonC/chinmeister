@@ -89,6 +89,7 @@ Every change must pass these checks. These are not aspirational; they are blocke
 - **Three surfaces, one backend:** MCP server (agents), TUI (terminal users), web dashboard (visual workflow management). All hit the same API.
 - **`chinwag init` writes config for all detected tools:** zero-friction, one command setup
 - **Claude Code gets deepest integration** (hooks + channels = enforceable). Other tools get MCP-based awareness. Depth increases as tools add hook-like capabilities.
+- **Session data powers workflow intelligence:** every session captures duration, edits, files touched, conflicts, and outcome. Hook-enabled tools (Claude Code) provide automatic granular capture; MCP-only tools provide coordination data. This is the foundation for analytics, codebase heatmaps, and proactive insights.
 - **TeamDO is the coordination hub:** one instance per team, single-writer for conflict detection
 - **One team per project, one account across projects:** `.chinwag` file scopes team to repo, `~/.chinwag/config.json` gives the user a cross-project identity
 - Handle format: 3-20 chars, alphanumeric + underscores, globally unique
@@ -99,5 +100,6 @@ Every change must pass these checks. These are not aspirational; they are blocke
 See [`docs/VISION.md`](docs/VISION.md) for the full list. Key ones for development: chinwag is not an agent orchestrator, not a standalone APM, and not an MCP server registry.
 
 ### Chat (secondary)
+
 - No "room" jargon exposed to users; chat just says "N devs here"
 - Status line: use a simple separator, not a "Working on:" prefix
