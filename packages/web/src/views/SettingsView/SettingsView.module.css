@@ -1,51 +1,27 @@
 .page {
   animation: dashboardViewFadeIn 0.25s var(--motion) both;
-  max-width: 640px;
+  max-width: 720px;
 }
 
-.identitySection {
+.settingGroup {
   display: flex;
   flex-direction: column;
-  gap: var(--space-lg);
-  margin-top: var(--space-sm);
+  gap: 14px;
   animation: fadeSlideIn var(--motion-slow) var(--motion) both;
+  animation-delay: calc(var(--group-index, 0) * 45ms);
+}
+
+.settingGroup + .settingGroup {
+  margin-top: clamp(24px, 4vw, 38px);
 }
 
 .sectionLabel {
   font-family: var(--mono);
   font-size: var(--text-2xs);
+  font-weight: 500;
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
   color: var(--soft);
-}
-
-.handleSection {
-  min-width: 0;
-}
-
-.handleButton {
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--space-lg);
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  text-align: left;
-  transition:
-    opacity var(--motion-fast) var(--motion),
-    transform var(--motion-fast) var(--motion);
-}
-
-.handleButton:hover {
-  opacity: 0.78;
-}
-
-.handleButton:focus-visible {
-  outline: none;
-  transform: translateY(-1px);
 }
 
 .handleValue {
@@ -58,105 +34,147 @@
   transition: color var(--motion-fast) var(--motion);
 }
 
-.handleAction {
+.heroRow {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 18px;
+  flex-wrap: wrap;
+  width: fit-content;
+  max-width: 100%;
+}
+
+.heroValue {
+  min-width: 0;
+}
+
+.settingValue {
+  font-family: var(--display);
+  font-size: clamp(1.3rem, 2.7vw, 1.95rem);
+  font-weight: 300;
+  letter-spacing: -0.06em;
+  line-height: 0.98;
+  color: var(--ink);
+}
+
+.inlineAction {
   display: inline-flex;
   align-items: center;
-  gap: var(--space-sm);
-  padding-bottom: var(--space-sm);
-  font-family: var(--mono);
-  font-size: var(--text-11);
-  color: color-mix(in srgb, var(--preview-color) 68%, var(--ink));
-  letter-spacing: var(--tracking-action);
-  text-transform: uppercase;
-  flex-shrink: 0;
-  transition: color var(--motion-fast) var(--motion);
-}
-
-.handleEditor {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  animation: fadeSlideIn var(--motion-fast) var(--motion) both;
-}
-
-.handleEditorRow {
-  display: flex;
-  align-items: flex-end;
-  gap: 14px;
-  flex-wrap: wrap;
-}
-
-.handleInput {
-  flex: 1;
-  min-width: 220px;
-  font-family: var(--display);
-  font-size: var(--display-inline);
-  font-weight: 300;
-  color: var(--preview-color);
-  background: transparent;
-  border: none;
-  border-bottom: 1px solid color-mix(in srgb, var(--preview-color) 32%, var(--hairline));
-  padding: 0 0 10px;
-  outline: none;
-  letter-spacing: var(--display-spacing);
-  line-height: var(--display-line);
-  transition:
-    color var(--motion-fast) var(--motion),
-    border-color var(--motion-fast) var(--motion);
-}
-
-.handleInput:focus {
-  border-color: color-mix(in srgb, var(--preview-color) 62%, var(--hairline));
-}
-
-.handleInput::placeholder {
-  color: var(--soft);
-}
-
-.actionButton {
-  min-height: 24px;
   padding: 0;
   border: none;
   background: transparent;
-  color: var(--muted);
   font-family: var(--mono);
   font-size: var(--text-11);
+  font-weight: 500;
   letter-spacing: var(--tracking-action);
   text-transform: uppercase;
+  color: var(--soft);
   cursor: pointer;
   transition:
     color var(--motion-fast) var(--motion),
     opacity var(--motion-fast) var(--motion);
 }
 
-.actionButton:hover:not(:disabled) {
+.inlineAction:hover:not(:disabled),
+.inlineAction:focus-visible {
   color: var(--ink);
+  outline: none;
 }
 
-.actionButtonPrimary {
-  color: color-mix(in srgb, var(--preview-color) 76%, var(--ink));
+.inlineActionPrimary {
+  color: color-mix(in srgb, var(--preview-color) 72%, var(--ink));
 }
 
-.actionButton:disabled {
-  opacity: 0.45;
-  cursor: default;
+.inlineActionPrimary:hover:not(:disabled),
+.inlineActionPrimary:focus-visible {
+  color: var(--preview-color);
 }
 
-.handleError {
-  font-size: var(--text-11);
+.inlineActionDanger {
+  color: color-mix(in srgb, var(--danger) 72%, var(--muted));
+}
+
+.inlineActionDanger:hover:not(:disabled),
+.inlineActionDanger:focus-visible {
   color: var(--danger);
 }
 
-.colorSection {
+.inlineAction:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.handleEditButton {
+  gap: 6px;
+  padding-bottom: 8px;
+  color: color-mix(in srgb, var(--preview-color) 68%, var(--ink));
+}
+
+.handleEditButton:hover:not(:disabled),
+.handleEditButton:focus-visible {
+  color: var(--preview-color);
+}
+
+.handleEditButton svg {
+  flex-shrink: 0;
+}
+
+.handleEditor {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: 12px;
+  animation: fadeSlideIn var(--motion-fast) var(--motion) both;
+  max-width: 520px;
+}
+
+.handleInput {
+  width: 100%;
+  max-width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--preview-color) 28%, var(--hairline));
+  padding: 0 0 10px;
+  outline: none;
+  font-family: var(--display);
+  font-size: var(--display-inline);
+  font-weight: 300;
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
+  color: var(--preview-color);
+  transition:
+    color var(--motion-fast) var(--motion),
+    border-color var(--motion-fast) var(--motion);
+}
+
+.handleInput:focus {
+  border-color: color-mix(in srgb, var(--preview-color) 60%, var(--hairline));
+}
+
+.handleInput::placeholder {
+  color: var(--soft);
+}
+
+.handleInput:disabled {
+  opacity: 0.55;
+}
+
+.editorActions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding-top: 2px;
+}
+
+.feedback {
+  font-size: var(--text-11);
+  color: var(--danger);
 }
 
 .colorPicker {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
+  padding-top: 2px;
 }
 
 .colorDot {
@@ -175,17 +193,13 @@
 }
 
 .colorDot:hover:not(:disabled),
+.colorDot:focus-visible,
 .colorDotPreview {
-  transform: scale(1.08);
+  transform: translateY(-1px) scale(1.08);
+  outline: none;
 }
 
 .colorDotCurrent {
-  box-shadow:
-    0 0 0 2px var(--page-bg),
-    0 0 0 3px var(--dot-color);
-}
-
-.colorDotCurrent.colorDotPreview {
   box-shadow:
     0 0 0 2px var(--page-bg),
     0 0 0 3px var(--dot-color);
@@ -196,177 +210,137 @@
   opacity: 0.5;
 }
 
-/* ── Appearance ── */
-
-.appearanceSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  margin-top: 24px;
-  animation: fadeSlideIn var(--motion-slow) var(--motion) 0.03s both;
-}
-
 .themeToggle {
   display: flex;
-  gap: 0;
+  gap: clamp(18px, 3vw, 30px);
+  flex-wrap: wrap;
+  align-items: baseline;
 }
 
 .themeOption {
+  padding: 0;
   border: none;
   background: transparent;
+  font-family: var(--display);
+  font-size: clamp(1.35rem, 3vw, 1.95rem);
+  font-weight: 300;
+  letter-spacing: -0.06em;
+  line-height: 1;
   color: var(--soft);
-  font-family: var(--mono);
-  font-size: var(--text-11);
-  letter-spacing: var(--tracking-action);
-  text-transform: uppercase;
   cursor: pointer;
-  padding: 6px 16px;
   transition: color var(--motion-fast) var(--motion);
 }
 
-.themeOption:first-child {
-  padding-left: 0;
-}
-
-.themeOption:hover:not(.themeOptionActive) {
+.themeOption:hover:not(.themeOptionActive),
+.themeOption:focus-visible {
   color: var(--muted);
+  outline: none;
 }
 
 .themeOptionActive {
   color: var(--ink);
 }
 
-/* ── GitHub ── */
-
-.githubSection {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-  margin-top: 24px;
-  animation: fadeSlideIn var(--motion-slow) var(--motion) 0.05s both;
-}
-
-.githubConnected {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
-
-.githubIdentity {
-  display: flex;
+.githubButton {
+  width: fit-content;
+  display: inline-flex;
   align-items: center;
   gap: 10px;
-}
-
-.githubAvatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-}
-
-.githubLogin {
+  padding: 10px 18px 10px 16px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--github-bg);
+  color: #fff;
+  font-family: var(--sans);
   font-size: var(--text-md);
   font-weight: 500;
-  color: var(--ink);
-}
-
-.githubBadge {
-  font-family: var(--mono);
-  font-size: var(--text-10);
-  letter-spacing: var(--tracking-action);
-  text-transform: uppercase;
-  color: var(--success, #34c759);
-  background: color-mix(in srgb, var(--success, #34c759) 10%, transparent);
-  padding: 3px 8px;
-  border-radius: var(--radius-2xs);
-}
-
-.githubUnlink {
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: var(--text-11);
-  letter-spacing: var(--tracking-action);
-  text-transform: uppercase;
-  cursor: pointer;
-  padding: 0;
-  transition: color var(--motion-fast) var(--motion);
-}
-
-.githubUnlink:hover:not(:disabled) {
-  color: var(--danger);
-}
-
-.githubUnlink:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.githubLinkButton {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: fit-content;
-  padding: 10px 20px;
-  font-family: var(--sans);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: #fff;
-  background: var(--github-bg);
-  border: none;
-  border-radius: var(--radius-md);
+  letter-spacing: -0.01em;
+  line-height: 1;
   cursor: pointer;
   transition:
-    background 0.2s ease,
-    transform 0.1s ease;
+    background var(--motion-fast) var(--motion),
+    transform var(--motion-fast) var(--motion),
+    opacity var(--motion-fast) var(--motion);
 }
 
-.githubLinkButton:hover {
+.githubButton:hover,
+.githubButton:focus-visible {
   background: var(--github-bg-hover);
+  transform: translateY(-1px);
+  outline: none;
 }
 
-.githubLinkButton:active {
-  transform: scale(0.98);
+.githubButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
 }
 
-.linkError {
-  font-size: var(--text-11);
-  color: var(--danger);
+.githubButton svg {
+  flex-shrink: 0;
 }
 
-.signoutBtn {
-  margin-top: 30px;
+.sessionButton {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px 10px 16px;
   border: none;
-  background: transparent;
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
   color: var(--danger);
-  font-family: var(--mono);
-  font-size: var(--text-11);
-  letter-spacing: var(--tracking-action);
-  text-transform: uppercase;
+  font-family: var(--sans);
+  font-size: var(--text-md);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  line-height: 1;
   cursor: pointer;
-  padding: 0;
-  transition: opacity var(--motion-fast) var(--motion);
+  transition:
+    background var(--motion-fast) var(--motion),
+    color var(--motion-fast) var(--motion),
+    transform var(--motion-fast) var(--motion),
+    opacity var(--motion-fast) var(--motion);
 }
 
-.signoutBtn:hover {
-  opacity: 0.68;
+.sessionButton:hover,
+.sessionButton:focus-visible {
+  background: color-mix(in srgb, var(--danger) 14%, transparent);
+  color: color-mix(in srgb, var(--danger) 88%, var(--ink));
+  transform: translateY(-1px);
+  outline: none;
+}
+
+.sessionButton:disabled {
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+}
+
+.sessionButton svg {
+  flex-shrink: 0;
 }
 
 @media (max-width: 640px) {
-  .handleButton,
-  .handleEditorRow {
+  .heroRow {
     flex-direction: column;
-    align-items: stretch;
-  }
-
-  .handleAction {
-    justify-content: space-between;
-    padding-bottom: 0;
+    align-items: flex-start;
+    gap: 10px;
   }
 
   .colorPicker {
     gap: 8px;
+  }
+
+  .themeToggle {
+    gap: var(--space-lg);
+  }
+
+  .githubButton {
+    border-radius: var(--radius-xs);
+  }
+
+  .sessionButton {
+    border-radius: var(--radius-xs);
   }
 }

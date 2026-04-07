@@ -23,19 +23,15 @@ function isValidRedirectUrl(url: string): boolean {
   }
 }
 
-function isSafeImageUrl(url: string): boolean {
-  try {
-    return new URL(url).protocol === 'https:';
-  } catch {
-    return false;
-  }
-}
-
 function validateHandleInput(value: string): string | null {
   if (!value) return 'Handle is required.';
   if (value.length < 3 || value.length > 20) return 'Handle must be 3-20 characters.';
   if (!HANDLE_PATTERN.test(value)) return 'Handle may use letters, numbers, and underscores only.';
   return null;
+}
+
+function formatDisplayLabel(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
 interface HandleFormState {
@@ -165,96 +161,95 @@ export default function SettingsView(_props: Props) {
     <div className={styles.page} style={{ '--preview-color': previewColor } as CSSProperties}>
       <ViewHeader eyebrow="Configure" title="Settings" />
 
-      <section className={styles.identitySection}>
+      <section className={styles.settingGroup} style={{ '--group-index': 0 } as CSSProperties}>
         <span className={styles.sectionLabel}>Identity</span>
 
-        <div className={styles.handleSection}>
-          {handleForm.editing ? (
-            <div className={styles.handleEditor}>
-              <div className={styles.handleEditorRow}>
-                <input
-                  className={styles.handleInput}
-                  value={handleForm.value}
-                  onChange={(e) => setHandleForm((prev) => ({ ...prev, value: e.target.value }))}
-                  onKeyDown={handleHandleKeyDown}
-                  maxLength={20}
-                  autoFocus
-                  disabled={handleForm.saving}
-                  placeholder="3-20 chars"
-                />
-                <button
-                  className={clsx(styles.actionButton, styles.actionButtonPrimary)}
-                  onClick={saveHandle}
-                  disabled={handleForm.saving}
-                >
-                  {handleForm.saving ? 'Saving...' : 'Save'}
-                </button>
-                <button
-                  className={styles.actionButton}
-                  onClick={() => setHandleForm((prev) => ({ ...prev, editing: false }))}
-                  disabled={handleForm.saving}
-                >
-                  Cancel
-                </button>
-              </div>
-              {handleForm.error ? (
-                <span className={styles.handleError}>{handleForm.error}</span>
-              ) : null}
+        {handleForm.editing ? (
+          <div className={styles.handleEditor}>
+            <input
+              className={styles.handleInput}
+              value={handleForm.value}
+              onChange={(e) => setHandleForm((prev) => ({ ...prev, value: e.target.value }))}
+              onKeyDown={handleHandleKeyDown}
+              maxLength={20}
+              autoFocus
+              disabled={handleForm.saving}
+              placeholder="3-20 chars"
+            />
+            {handleForm.error ? <span className={styles.feedback}>{handleForm.error}</span> : null}
+            <div className={styles.editorActions}>
+              <button
+                className={clsx(styles.inlineAction, styles.inlineActionPrimary)}
+                onClick={saveHandle}
+                disabled={handleForm.saving}
+              >
+                {handleForm.saving ? 'Saving...' : 'Save'}
+              </button>
+              <button
+                className={styles.inlineAction}
+                onClick={() => setHandleForm((prev) => ({ ...prev, editing: false }))}
+                disabled={handleForm.saving}
+              >
+                Cancel
+              </button>
             </div>
-          ) : (
+          </div>
+        ) : (
+          <div className={styles.heroRow}>
+            <div className={styles.heroValue}>
+              <span className={styles.handleValue}>{user?.handle || 'Unknown user'}</span>
+            </div>
             <button
-              className={styles.handleButton}
+              className={clsx(styles.inlineAction, styles.handleEditButton)}
               onClick={startEditHandle}
               aria-label="Edit handle"
             >
-              <span className={styles.handleValue}>{user?.handle || 'Unknown user'}</span>
-              <span className={styles.handleAction}>
-                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
-                  <path
-                    d="M11.5 1.5l3 3L5 14H2v-3z"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-                <span>Edit</span>
-              </span>
-            </button>
-          )}
-        </div>
-
-        <div className={styles.colorSection}>
-          <span className={styles.sectionLabel}>Color</span>
-          <div className={styles.colorPicker}>
-            {COLOR_PALETTE.map((color) => {
-              const isCurrent = user?.color === color.name;
-              const isPreview = previewColorName === color.name;
-              return (
-                <button
-                  key={color.name}
-                  className={clsx(
-                    styles.colorDot,
-                    isCurrent && styles.colorDotCurrent,
-                    isPreview && styles.colorDotPreview,
-                  )}
-                  style={{ '--dot-color': color.hex } as CSSProperties}
-                  onClick={() => selectColor(color.name)}
-                  onMouseEnter={() => setColorForm((prev) => ({ ...prev, hovered: color.name }))}
-                  onMouseLeave={() => setColorForm((prev) => ({ ...prev, hovered: null }))}
-                  onFocus={() => setColorForm((prev) => ({ ...prev, hovered: color.name }))}
-                  onBlur={() => setColorForm((prev) => ({ ...prev, hovered: null }))}
-                  disabled={colorForm.saving}
-                  title={color.name}
-                  aria-label={`Select ${color.name}`}
+              <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path
+                  d="M11.5 1.5l3 3L5 14H2v-3z"
+                  stroke="currentColor"
+                  strokeWidth="1.3"
+                  strokeLinejoin="round"
                 />
-              );
-            })}
+              </svg>
+              <span>Edit</span>
+            </button>
           </div>
-          {colorForm.error && <span className={styles.handleError}>{colorForm.error}</span>}
-        </div>
+        )}
       </section>
 
-      <section className={styles.appearanceSection}>
+      <section className={styles.settingGroup} style={{ '--group-index': 1 } as CSSProperties}>
+        <span className={styles.sectionLabel}>Color</span>
+        <div className={styles.colorPicker}>
+          {COLOR_PALETTE.map((color) => {
+            const isCurrent = user?.color === color.name;
+            const isPreview = previewColorName === color.name;
+            return (
+              <button
+                key={color.name}
+                className={clsx(
+                  styles.colorDot,
+                  isCurrent && styles.colorDotCurrent,
+                  isPreview && styles.colorDotPreview,
+                )}
+                style={{ '--dot-color': color.hex } as CSSProperties}
+                onClick={() => selectColor(color.name)}
+                onMouseEnter={() => setColorForm((prev) => ({ ...prev, hovered: color.name }))}
+                onMouseLeave={() => setColorForm((prev) => ({ ...prev, hovered: null }))}
+                onFocus={() => setColorForm((prev) => ({ ...prev, hovered: color.name }))}
+                onBlur={() => setColorForm((prev) => ({ ...prev, hovered: null }))}
+                disabled={colorForm.saving}
+                title={color.name}
+                aria-label={`Select ${color.name}`}
+                aria-pressed={isCurrent}
+              />
+            );
+          })}
+        </div>
+        {colorForm.error ? <span className={styles.feedback}>{colorForm.error}</span> : null}
+      </section>
+
+      <section className={styles.settingGroup} style={{ '--group-index': 2 } as CSSProperties}>
         <span className={styles.sectionLabel}>Appearance</span>
         <div className={styles.themeToggle}>
           {THEME_OPTIONS.map((option) => (
@@ -262,52 +257,62 @@ export default function SettingsView(_props: Props) {
               key={option}
               className={clsx(styles.themeOption, theme === option && styles.themeOptionActive)}
               onClick={() => setTheme(option as ThemePreference)}
+              aria-pressed={theme === option}
             >
-              {option.charAt(0).toUpperCase() + option.slice(1)}
+              {formatDisplayLabel(option)}
             </button>
           ))}
         </div>
       </section>
 
-      <section className={styles.githubSection}>
+      <section className={styles.settingGroup} style={{ '--group-index': 3 } as CSSProperties}>
         <span className={styles.sectionLabel}>GitHub</span>
-
         {user?.github_login ? (
-          <div className={styles.githubConnected}>
-            <div className={styles.githubIdentity}>
-              {user.avatar_url && isSafeImageUrl(user.avatar_url) && (
-                <img
-                  src={user.avatar_url}
-                  alt={`${user.github_login}'s avatar`}
-                  className={styles.githubAvatar}
-                />
-              )}
-              <span className={styles.githubLogin}>{user.github_login}</span>
-              <span className={styles.githubBadge}>Connected</span>
+          <div className={styles.heroRow}>
+            <div className={styles.heroValue}>
+              <span className={styles.settingValue}>@{user.github_login}</span>
             </div>
             <button
-              className={styles.githubUnlink}
+              className={clsx(styles.inlineAction, styles.inlineActionDanger)}
               onClick={handleGithubUnlink}
               disabled={unlinking}
             >
-              {unlinking ? 'Unlinking...' : 'Disconnect'}
+              {unlinking ? 'Disconnecting...' : 'Disconnect'}
             </button>
           </div>
         ) : (
-          <button className={styles.githubLinkButton} onClick={handleGithubLink}>
-            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor">
+          <button className={styles.githubButton} onClick={handleGithubLink}>
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z" />
             </svg>
             Connect GitHub
           </button>
         )}
-
-        {linkError && <p className={styles.linkError}>{linkError}</p>}
+        {linkError ? <p className={styles.feedback}>{linkError}</p> : null}
       </section>
 
-      <button className={styles.signoutBtn} onClick={handleLogout}>
-        Sign out
-      </button>
+      <section className={styles.settingGroup} style={{ '--group-index': 4 } as CSSProperties}>
+        <span className={styles.sectionLabel}>Session</span>
+        <button className={styles.sessionButton} onClick={handleLogout}>
+          <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path
+              d="M6 2.75H3.75v10.5H6"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d="M8.25 5.25L12 8m0 0l-3.75 2.75M12 8H5"
+              stroke="currentColor"
+              strokeWidth="1.25"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+          Sign out
+        </button>
+      </section>
     </div>
   );
 }
