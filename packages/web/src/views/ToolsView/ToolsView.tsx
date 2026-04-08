@@ -152,8 +152,8 @@ export default function ToolsView() {
     return (
       <div className={styles.page}>
         <section className={styles.header}>
-          <ViewHeader eyebrow="Across projects" title="" />
-          <ShimmerText as="h1" className={styles.heroTitle}>
+          <span className={styles.loadingEyebrow}>Across projects</span>
+          <ShimmerText as="h1" className={styles.loadingTitle}>
             Loading your tools
           </ShimmerText>
           <SkeletonStatGrid count={3} />

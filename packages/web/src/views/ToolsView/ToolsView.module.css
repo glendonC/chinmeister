@@ -38,9 +38,20 @@
   margin-bottom: 48px;
 }
 
-.heroTitle {
+.loadingEyebrow {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  animation: fadeSlideIn 0.3s var(--motion) both;
+}
+
+.loadingTitle {
   font-family: var(--display);
-  font-size: var(--display-hero);
+  font-size: var(--display-page);
   font-weight: 300;
   line-height: var(--display-line);
   letter-spacing: var(--display-spacing);
