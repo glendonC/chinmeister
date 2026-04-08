@@ -26,6 +26,20 @@ function createApiMock({
     if (path === '/me/dashboard') {
       return dashboard;
     }
+    if (path.startsWith('/me/analytics')) {
+      return {
+        ok: true,
+        period_days: 7,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+        degraded: false,
+        failed_teams: [],
+        truncated: false,
+      };
+    }
     if (method === 'POST' && /^\/teams\/[^/]+\/join$/.test(path)) {
       return { ok: true };
     }
