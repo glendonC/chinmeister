@@ -47,9 +47,14 @@ import {
   recordEdit as recordEditFn,
   reportOutcome as reportOutcomeFn,
   getSessionHistory,
+  getEditHistory as getEditHistoryFn,
   enrichSessionModel as enrichSessionModelFn,
 } from './sessions.js';
-import { getAnalytics as getAnalyticsFn } from './analytics.js';
+import type { EditEntry } from './sessions.js';
+import {
+  getAnalytics as getAnalyticsFn,
+  getExtendedAnalytics as getExtendedAnalyticsFn,
+} from './analytics.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import {
   submitCommand as submitCommandFn,
@@ -392,7 +397,19 @@ export class TeamDO extends DurableObject<Env> {
       this.ctx
         .getWebSockets('role:agent')
         .flatMap((ws) => this.ctx.getTags(ws))
-        .filter((tag) => !tag.startsWith('role:')),
+        .filter((tag) => !tag.startsWith('role:') && !tag.startsWith('spawn:')),
+    );
+  }
+
+  /** All member IDs with any active WebSocket (agent, watcher, daemon).
+   *  Used for cleanup eviction protection — any connected socket keeps
+   *  the member row alive regardless of role. */
+  #getAllConnectedMemberIds(): Set<string> {
+    return new Set(
+      this.ctx
+        .getWebSockets()
+        .flatMap((ws) => this.ctx.getTags(ws))
+        .filter((tag) => !tag.startsWith('role:') && !tag.startsWith('spawn:')),
     );
   }
 
@@ -473,7 +490,7 @@ export class TeamDO extends DurableObject<Env> {
     const now = Date.now();
     if (now - this.#lastCleanup < CLEANUP_INTERVAL_MS) return;
     this.#lastCleanup = now;
-    runCleanup(this.sql, this.#getConnectedAgentIds(), this.#transact);
+    runCleanup(this.sql, this.#getAllConnectedMemberIds(), this.#transact);
   }
 
   #recordMetric(metric: string): void {
@@ -734,6 +751,19 @@ export class TeamDO extends DurableObject<Env> {
     return this.#withMember(agentId, ownerId, () => getSessionHistory(this.sql, days));
   }
 
+  async getEditHistory(
+    agentId: string,
+    days: number,
+    filePath: string | null = null,
+    handle: string | null = null,
+    limit = 200,
+    ownerId: string | null = null,
+  ): Promise<{ ok: true; edits: EditEntry[] } | DOError> {
+    return this.#withMember(agentId, ownerId, () =>
+      getEditHistoryFn(this.sql, days, filePath, handle, limit),
+    );
+  }
+
   async getAnalytics(
     agentId: string,
     days: number,
@@ -942,6 +972,20 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
   ): Promise<ReturnType<typeof getPendingCommandsFn> | DOError> {
     return this.#withMember(agentId, ownerId, () => getPendingCommandsFn(this.sql));
+  }
+
+  // -- Extended analytics (cross-project dashboard) --
+
+  async getAnalyticsForOwner(
+    ownerId: string,
+    days: number,
+  ): Promise<ReturnType<typeof getExtendedAnalyticsFn> | DOError> {
+    this.#ensureSchema();
+    const ownerRow = this.sql
+      .exec('SELECT 1 FROM members WHERE owner_id = ? LIMIT 1', ownerId)
+      .toArray();
+    if (ownerRow.length === 0) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    return getExtendedAnalyticsFn(this.sql, days);
   }
 
   // -- Summary (lightweight, for cross-project dashboard) --

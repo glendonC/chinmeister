@@ -102,6 +102,13 @@ export function useTeamStore<T>(selector: (state: TeamState) => T): T {
   return useStore(teamStore, selector);
 }
 
+/** Clear the per-session join cache for a specific team so the next
+ *  ensureJoined() call actually POSTs /join again. Called when a poll
+ *  returns NOT_MEMBER — the member row was evicted server-side. */
+export function clearJoinedCache(teamId: string): void {
+  joinedTeams.delete(teamId);
+}
+
 /** Direct access — use outside components */
 export const teamActions = {
   getState: (): TeamState => teamStore.getState(),

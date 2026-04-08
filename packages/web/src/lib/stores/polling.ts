@@ -11,7 +11,7 @@ import {
   createEmptyDashboardSummary,
 } from '../apiSchemas.js';
 import { authActions } from './auth.js';
-import { teamActions } from './teams.js';
+import { teamActions, clearJoinedCache } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
 import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
 import { type PollingState, type DataStatus, buildContextReadyPatch } from './pollingTypes.js';
@@ -200,6 +200,11 @@ async function poll(): Promise<void> {
       authActions.logout();
       stopPolling();
       return;
+    }
+    // Member was evicted server-side (stale heartbeat). Clear the join
+    // cache so the next poll cycle re-joins before fetching context.
+    if (apiErr.status === 403 && snapshotTeamId) {
+      clearJoinedCache(snapshotTeamId);
     }
     if (teamActions.getState().activeTeamId !== snapshotTeamId) return;
     const failedTeams = apiErr.data?.failed_teams;
