@@ -16,6 +16,7 @@ export {
   handleTeamSessionEdit,
   handleTeamReportOutcome,
   handleTeamHistory,
+  handleTeamEditHistory,
   handleTeamEnrichModel,
 } from './activity.js';
 export {

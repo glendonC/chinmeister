@@ -200,6 +200,34 @@ export const handleTeamHistory = teamRoute(async ({ request, agentId, team, user
   return doResult(team.getHistory(agentId, days, user.id), 'getHistory');
 });
 
+const EDITS_DEFAULT_LIMIT = 200;
+const EDITS_MAX_LIMIT = 500;
+
+export const handleTeamEditHistory = teamRoute(async ({ request, agentId, team, user }) => {
+  const url = new URL(request.url);
+  const parsed = parseInt(url.searchParams.get('days') || String(HISTORY_DEFAULT_DAYS), 10);
+  const days = Math.max(
+    1,
+    Math.min(isNaN(parsed) ? HISTORY_DEFAULT_DAYS : parsed, HISTORY_MAX_DAYS),
+  );
+
+  const file = url.searchParams.get('file') || null;
+  if (file && file.length > MAX_FILE_PATH_LENGTH) return json({ error: 'file path too long' }, 400);
+
+  const handle = url.searchParams.get('handle') || null;
+
+  const parsedLimit = parseInt(url.searchParams.get('limit') || String(EDITS_DEFAULT_LIMIT), 10);
+  const limit = Math.max(
+    1,
+    Math.min(isNaN(parsedLimit) ? EDITS_DEFAULT_LIMIT : parsedLimit, EDITS_MAX_LIMIT),
+  );
+
+  return doResult(
+    team.getEditHistory(agentId, days, file, handle, limit, user.id),
+    'getEditHistory',
+  );
+});
+
 export const handleTeamEnrichModel = teamJsonRoute(async ({ body, agentId, team, user }) => {
   const { model } = body;
   if (typeof model !== 'string' || !model.trim()) {

@@ -14,6 +14,7 @@ import {
 import KeyboardHint from '../../components/KeyboardHint/KeyboardHint.jsx';
 import { useTabs } from '../../hooks/useTabs.js';
 import { useTeamAnalytics } from '../../hooks/useTeamAnalytics.js';
+import { useEditHistory } from '../../hooks/useEditHistory.js';
 import ProjectOverviewTab from './ProjectOverviewTab.jsx';
 import ProjectLiveTab from './ProjectLiveTab.jsx';
 import ProjectSessionsTab from './ProjectSessionsTab.jsx';
@@ -65,6 +66,7 @@ export default function ProjectView(_props: Props) {
   } = useProjectData();
 
   const { analytics, isLoading: analyticsLoading } = useTeamAnalytics(activeTeamId, 30);
+  const { editHistory } = useEditHistory(activeTeamId, 7);
 
   const handleUpdateMemory = useCallback(
     async (id: string, text?: string, tags?: string[]) => {
@@ -245,6 +247,7 @@ export default function ProjectView(_props: Props) {
               lineStats={lineStats}
               analytics={analytics}
               analyticsLoading={analyticsLoading}
+              edits={editHistory.edits}
             />
           </div>
         )}

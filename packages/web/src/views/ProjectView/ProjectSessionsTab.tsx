@@ -1,6 +1,7 @@
 import { type CSSProperties } from 'react';
-import type { Session, TeamAnalytics } from '../../lib/apiSchemas.js';
+import type { Session, TeamAnalytics, EditEntry } from '../../lib/apiSchemas.js';
 import type { OutcomeBreakdown, LineStats } from './projectViewState.js';
+import { formatRelativeTime } from '../../lib/relativeTime.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import SessionRow from '../../components/SessionRow/SessionRow.jsx';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
@@ -19,6 +20,7 @@ interface ProjectSessionsTabProps {
   lineStats: LineStats;
   analytics: TeamAnalytics;
   analyticsLoading: boolean;
+  edits: EditEntry[];
 }
 
 export default function ProjectSessionsTab({
@@ -31,12 +33,14 @@ export default function ProjectSessionsTab({
   lineStats,
   analytics,
   analyticsLoading: _analyticsLoading,
+  edits,
 }: ProjectSessionsTabProps) {
   const hasFiles = filesTouched.length > 0;
   const hasLines = lineStats.added > 0 || lineStats.removed > 0;
   const hasHeatmap = analytics.file_heatmap.length > 0;
   const hasTrends = analytics.daily_trends.length > 0;
   const hasToolDist = analytics.tool_distribution.length > 0;
+  const hasEdits = edits.length > 0;
 
   if (sessions.length === 0 && !hasHeatmap && !hasTrends) {
     return <EmptyState title="No recent sessions" hint="Reported sessions appear here." />;
@@ -100,6 +104,54 @@ export default function ProjectSessionsTab({
                     </span>
                     <span className={styles.td}>
                       {trend.avg_duration_min > 0 ? trend.avg_duration_min.toFixed(0) : '\u2014'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Edit log */}
+        {hasEdits && (
+          <section className={styles.block} style={{ marginTop: 32 }}>
+            <div className={styles.blockHeader}>
+              <h2 className={styles.blockTitle}>Edit log</h2>
+              <span className={styles.blockMeta}>{edits.length} edits / 7d</span>
+            </div>
+            <div
+              className={styles.tableWrap}
+              style={{ '--table-grid': '1fr auto auto auto' } as CSSProperties}
+            >
+              <div className={styles.tableHead}>
+                <span className={styles.thLeft}>File</span>
+                <span className={styles.th}>By</span>
+                <span className={styles.th}>Lines</span>
+                <span className={styles.th}>When</span>
+              </div>
+              <div className={styles.tableBody}>
+                {edits.map((edit, i) => (
+                  <div
+                    key={edit.id}
+                    className={styles.tableRow}
+                    style={{ '--row-index': i } as CSSProperties}
+                  >
+                    <span className={styles.tdLeft} title={edit.file_path}>
+                      {edit.file_path.split('/').slice(-2).join('/')}
+                    </span>
+                    <span className={styles.td}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <ToolIcon tool={edit.host_tool} size={12} />
+                        {edit.handle}
+                      </span>
+                    </span>
+                    <span className={styles.td}>
+                      {edit.lines_added > 0 || edit.lines_removed > 0
+                        ? `+${edit.lines_added}/\u2212${edit.lines_removed}`
+                        : '\u2014'}
+                    </span>
+                    <span className={styles.td}>
+                      {formatRelativeTime(edit.created_at) || '\u2014'}
                     </span>
                   </div>
                 ))}

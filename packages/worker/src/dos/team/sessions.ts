@@ -1,4 +1,4 @@
-// Session tracking (observability) -- startSession, endSession, recordEdit, getSessionHistory.
+// Session tracking (observability) -- startSession, endSession, recordEdit, getSessionHistory, getEditHistory.
 // Each function takes `sql` as the first parameter.
 
 import type { DOResult, SessionInfo } from '../../types.js';
@@ -167,10 +167,10 @@ export function recordEdit(
 ): { ok: true; skipped?: boolean } {
   const normalized = normalizePath(filePath);
 
-  // Find the active session for this agent (or resolved session)
+  // Find the active session for this agent (includes handle/host_tool for edit log)
   const sessions = sql
     .exec(
-      'SELECT id, files_touched FROM sessions WHERE agent_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1',
+      'SELECT id, files_touched, handle, host_tool FROM sessions WHERE agent_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1',
       resolvedAgentId,
     )
     .toArray();
@@ -178,9 +178,10 @@ export function recordEdit(
   if (sessions.length === 0) return { ok: true, skipped: true }; // No active session
 
   const session = sessions[0] as Record<string, unknown>;
+  const sessionId = session.id as string;
   let files = safeParse(
     (session.files_touched as string) || '[]',
-    `recordEdit session=${session.id} files_touched`,
+    `recordEdit session=${sessionId} files_touched`,
     [] as string[],
     log,
   );
@@ -189,13 +190,29 @@ export function recordEdit(
     if (files.length > ACTIVITY_MAX_FILES) files = files.slice(-ACTIVITY_MAX_FILES);
   }
 
+  // Accumulate into session counters (existing behavior)
   sql.exec(
     `UPDATE sessions SET edit_count = edit_count + 1, lines_added = lines_added + ?, lines_removed = lines_removed + ?, files_touched = ? WHERE id = ?`,
     linesAdded,
     linesRemoved,
     JSON.stringify(files),
-    session.id as string,
+    sessionId,
   );
+
+  // Append to per-edit audit log
+  sql.exec(
+    `INSERT INTO edits (id, session_id, agent_id, handle, host_tool, file_path, lines_added, lines_removed)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    crypto.randomUUID(),
+    sessionId,
+    resolvedAgentId,
+    (session.handle as string) || 'unknown',
+    (session.host_tool as string) || 'unknown',
+    normalized,
+    linesAdded,
+    linesRemoved,
+  );
+
   return { ok: true };
 }
 
@@ -232,4 +249,50 @@ export function getSessionHistory(
       } as unknown as SessionInfo;
     }),
   };
+}
+
+export interface EditEntry {
+  id: string;
+  session_id: string;
+  handle: string;
+  host_tool: string;
+  file_path: string;
+  lines_added: number;
+  lines_removed: number;
+  created_at: string;
+}
+
+export function getEditHistory(
+  sql: SqlStorage,
+  days: number,
+  filePath: string | null = null,
+  handle: string | null = null,
+  limit = 200,
+): { ok: true; edits: EditEntry[] } {
+  const conditions = ["created_at > datetime('now', '-' || ? || ' days')"];
+  const params: (string | number)[] = [days];
+
+  if (filePath) {
+    conditions.push('file_path = ?');
+    params.push(normalizePath(filePath));
+  }
+  if (handle) {
+    conditions.push('handle = ?');
+    params.push(handle);
+  }
+
+  params.push(Math.min(limit, 500));
+
+  const edits = sql
+    .exec(
+      `SELECT id, session_id, handle, host_tool, file_path, lines_added, lines_removed, created_at
+       FROM edits
+       WHERE ${conditions.join(' AND ')}
+       ORDER BY created_at DESC
+       LIMIT ?`,
+      ...params,
+    )
+    .toArray() as unknown as EditEntry[];
+
+  return { ok: true, edits };
 }

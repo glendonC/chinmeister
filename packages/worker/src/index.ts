@@ -23,6 +23,7 @@ import {
   handleClearStatus,
   handleCreateTeam,
   handleDashboardSummary,
+  handleUserAnalytics,
   handleGetUserTeams,
   handleHeartbeat,
   handleRefreshToken,
@@ -63,6 +64,7 @@ import {
   handleTeamGetMessages,
   handleTeamHeartbeat,
   handleTeamHistory,
+  handleTeamEditHistory,
   handleTeamJoin,
   handleTeamLeave,
   handleTeamReleaseFiles,
@@ -201,6 +203,7 @@ const routeDefinitions: RouteDefinition[] = [
   },
   { method: 'GET', path: '/me/teams', handler: handleGetUserTeams },
   { method: 'GET', path: '/me/dashboard', handler: handleDashboardSummary },
+  { method: 'GET', path: '/me/analytics', handler: handleUserAnalytics },
   { method: 'PUT', path: '/me/handle', handler: handleUpdateHandle },
   { method: 'PUT', path: '/me/color', handler: handleUpdateColor },
   { method: 'PUT', path: '/me/github', handler: handleUnlinkGithub },
@@ -246,6 +249,7 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'POST', path: `/teams/${TID}/sessionedit`, handler: handleTeamSessionEdit },
   { method: 'PUT', path: `/teams/${TID}/sessionoutcome`, handler: handleTeamReportOutcome },
   { method: 'GET', path: `/teams/${TID}/history`, handler: handleTeamHistory },
+  { method: 'GET', path: `/teams/${TID}/edits`, handler: handleTeamEditHistory },
   { method: 'GET', path: `/teams/${TID}/analytics`, handler: handleTeamAnalytics },
 ];
 

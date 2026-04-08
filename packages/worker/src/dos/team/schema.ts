@@ -65,6 +65,10 @@ function addColumnIfMissing(
 
 // -- Migrations --
 
+// -- Edit log retention --
+// Edits follow the same retention as sessions (30 days).
+// Cleanup runs in cleanup.ts alongside session pruning.
+
 const migrations: Migration[] = [
   {
     name: '001_initial_schema',
@@ -300,6 +304,27 @@ const migrations: Migration[] = [
         )
       `);
       sql.exec('CREATE INDEX IF NOT EXISTS idx_daily_metrics_date ON daily_metrics(date)');
+    },
+  },
+  {
+    name: '006_edit_log',
+    up(sql) {
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS edits (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          agent_id TEXT NOT NULL,
+          handle TEXT NOT NULL,
+          host_tool TEXT DEFAULT 'unknown',
+          file_path TEXT NOT NULL,
+          lines_added INTEGER DEFAULT 0,
+          lines_removed INTEGER DEFAULT 0,
+          created_at TEXT DEFAULT (datetime('now'))
+        )
+      `);
+      sql.exec('CREATE INDEX IF NOT EXISTS idx_edits_session ON edits(session_id)');
+      sql.exec('CREATE INDEX IF NOT EXISTS idx_edits_file ON edits(file_path, created_at)');
+      sql.exec('CREATE INDEX IF NOT EXISTS idx_edits_created ON edits(created_at)');
     },
   },
 ];

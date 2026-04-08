@@ -347,6 +347,70 @@ export function createEmptyAnalytics(): TeamAnalytics {
   };
 }
 
+// ── Edit history (per-edit audit log) ──────────────────
+
+const editEntrySchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  handle: z.string(),
+  host_tool: z.string().default('unknown'),
+  file_path: z.string(),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  created_at: z.string(),
+});
+
+export const editHistorySchema = z.object({
+  ok: z.literal(true),
+  edits: z.array(editEntrySchema).default([]),
+});
+
+export type EditEntry = z.infer<typeof editEntrySchema>;
+export type EditHistory = z.infer<typeof editHistorySchema>;
+
+export function createEmptyEditHistory(): EditHistory {
+  return { ok: true, edits: [] };
+}
+
+// ── User analytics (cross-project aggregate) ─────────
+
+const hourlyBucketSchema = z.object({
+  hour: z.number(),
+  dow: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+});
+
+const modelOutcomeSchema = z.object({
+  agent_model: z.string(),
+  outcome: z.string(),
+  count: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  total_edits: z.number().default(0),
+});
+
+export const userAnalyticsSchema = teamAnalyticsSchema.extend({
+  hourly_distribution: z.array(hourlyBucketSchema).default([]),
+  model_outcomes: z.array(modelOutcomeSchema).default([]),
+  teams_included: z.number().default(0),
+  degraded: z.boolean().default(false),
+});
+
+export type UserAnalytics = z.infer<typeof userAnalyticsSchema>;
+export type HourlyBucket = z.infer<typeof hourlyBucketSchema>;
+export type ModelOutcome = z.infer<typeof modelOutcomeSchema>;
+
+export function createEmptyUserAnalytics(): UserAnalytics {
+  return {
+    ...createEmptyAnalytics(),
+    period_days: 30,
+    hourly_distribution: [],
+    model_outcomes: [],
+    teams_included: 0,
+    degraded: false,
+  };
+}
+
 export function createEmptyTeamContext(): TeamContext {
   return {
     members: [],

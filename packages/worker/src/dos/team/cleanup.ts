@@ -102,6 +102,13 @@ export function runCleanup(
       ),
     );
 
+    step('delete old edits', () =>
+      sql.exec(
+        `DELETE FROM edits WHERE created_at < datetime('now', '-' || ? || ' days')`,
+        SESSION_RETENTION_DAYS,
+      ),
+    );
+
     step('expire stale commands', () => expireCommandsFn(sql));
 
     step('delete old telemetry', () =>
