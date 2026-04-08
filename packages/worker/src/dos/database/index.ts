@@ -17,7 +17,6 @@ import type {
   UserTeam,
   AgentProfile,
 } from '../../types.js';
-import { seedEvaluations } from '../../lib/seed-evaluations.js';
 import { toSQLDateTime } from '../../lib/text-utils.js';
 import { VALID_COLORS, WEB_SESSION_DURATION_MS } from '../../lib/constants.js';
 import { ensureSchema as ensureSchemaFn, cleanup as schemaCleanup } from './schema.js';
@@ -27,7 +26,6 @@ import {
   listEvaluations as listEvalsFn,
   searchEvaluations as searchEvalsFn,
   deleteEvaluation as deleteEvalFn,
-  hasEvaluations as hasEvalsFn,
 } from './evaluations.js';
 
 const ADJECTIVES = [
@@ -167,7 +165,6 @@ const NOUNS = [
 export class DatabaseDO extends DurableObject<Env> {
   sql: SqlStorage;
   #schemaReady = false;
-  #evaluationsSeeded = false;
 
   #transact: <T>(fn: () => T) => T;
 
@@ -512,46 +509,31 @@ export class DatabaseDO extends DurableObject<Env> {
 
   // -- Tool evaluations (logic in evaluations.ts) --
 
-  async #ensureEvaluationsSeeded(): Promise<void> {
-    if (this.#evaluationsSeeded) return;
-    this.#ensureSchema();
-    const { count } = hasEvalsFn(this.sql);
-    if (count === 0) {
-      await seedEvaluations(this);
-    }
-    this.#evaluationsSeeded = true;
-  }
-
   async saveEvaluation(evaluation: Record<string, unknown>): Promise<{ ok: true }> {
     this.#ensureSchema();
     return saveEvalFn(this.sql, evaluation as any);
   }
 
   async getEvaluation(toolId: string): Promise<ReturnType<typeof getEvalFn>> {
-    await this.#ensureEvaluationsSeeded();
+    this.#ensureSchema();
     return getEvalFn(this.sql, toolId);
   }
 
   async listEvaluations(
     filters: Record<string, unknown> = {},
   ): Promise<ReturnType<typeof listEvalsFn>> {
-    await this.#ensureEvaluationsSeeded();
+    this.#ensureSchema();
     return listEvalsFn(this.sql, filters as any);
   }
 
   async searchEvaluations(query: string, limit = 20): Promise<ReturnType<typeof searchEvalsFn>> {
-    await this.#ensureEvaluationsSeeded();
+    this.#ensureSchema();
     return searchEvalsFn(this.sql, query, limit);
   }
 
   async deleteEvaluation(toolId: string): Promise<ReturnType<typeof deleteEvalFn>> {
     this.#ensureSchema();
     return deleteEvalFn(this.sql, toolId);
-  }
-
-  async hasEvaluations(): Promise<ReturnType<typeof hasEvalsFn>> {
-    this.#ensureSchema();
-    return hasEvalsFn(this.sql);
   }
 
   // -- User teams --

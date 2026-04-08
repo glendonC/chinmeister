@@ -391,9 +391,7 @@ export interface Env {
   MODERATION_MODE?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
-  EXA_API_KEY?: string;
-  GITHUB_TOKEN?: string;
-  PH_TOKEN?: string;
+  ADMIN_KEY?: string;
 }
 
 // ── Parsed request body (from parseBody) ──

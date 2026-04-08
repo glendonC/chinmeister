@@ -47,8 +47,8 @@ class_name = "TeamDO"
 [ai]
 binding = "AI"
 
-# Exa API key for web search in tool evaluation pipeline
-# Set via: npx wrangler secret put EXA_API_KEY
+# Admin key for directory management endpoints (import, delete, promote)
+# Set via: npx wrangler secret put ADMIN_KEY
 
 # KV namespace for token-to-user-id auth lookups
 [[kv_namespaces]]
