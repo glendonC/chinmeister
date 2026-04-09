@@ -114,9 +114,8 @@ export const handleGetDirectoryEntry = publicRoute(async ({ env, params }) => {
   return json({ evaluation: result.evaluation }, 200, CACHE_HEADERS);
 });
 
-// Admin-only delete — remove duplicate/stale evaluations.
-// Admin-only import — save pre-evaluated tools directly (no Exa calls).
-// Used to mirror data between environments.
+// Admin-only import/delete — manage tool evaluations directly.
+// Secured by ADMIN_KEY, rate-limited per IP.
 export const handleAdminImport = publicRoute(async ({ request, env }) => {
   return withIpRateLimit(request, env, 'admin-import', RATE_LIMIT_ADMIN_BATCH_PER_IP, async () => {
     const body = await parseBody(request);

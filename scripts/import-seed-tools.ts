@@ -2011,11 +2011,9 @@ async function main() {
   console.log(`  Errors: ${errors}`);
   console.log('');
   console.log('Next steps:');
-  console.log('  1. Top up Exa credits at dashboard.exa.ai');
-  console.log('  2. Run enrichment: POST /tools/batch-enrich { admin_key, limit: 50 }');
-  console.log('  3. Run icon resolution: POST /tools/batch-resolve-icons { admin_key, limit: 50 }');
+  console.log('  1. Run icon resolution: POST /tools/batch-resolve-icons { admin_key, limit: 50 }');
   console.log(
-    '  4. Run color extraction: POST /tools/batch-extract-colors { admin_key, limit: 50 }',
+    '  2. Run color extraction: POST /tools/batch-extract-colors { admin_key, limit: 50 }',
   );
 }
 
