@@ -395,7 +395,7 @@ const migrations: Migration[] = [
           tags,
           content=memories,
           content_rowid=rowid,
-          tokenize='unicode61 tokenchars _.'
+          tokenize="unicode61 tokenchars '_.'"
         )
       `);
 
