@@ -14,6 +14,7 @@ import { authActions } from './auth.js';
 import { teamActions, clearJoinedCache } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
 import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
+import { navigate } from '../router.js';
 import { type PollingState, type DataStatus, buildContextReadyPatch } from './pollingTypes.js';
 
 /**
@@ -210,6 +211,7 @@ async function poll(): Promise<void> {
       const { consecutiveFailures } = pollingStore.getState();
       if (consecutiveFailures >= 2) {
         teamActions.selectTeam(null);
+        navigate('overview');
         stopPolling();
         await teamActions.loadTeams(false);
         startPolling();
