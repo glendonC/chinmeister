@@ -1,4 +1,6 @@
 .sidebar {
+  --sidebar-label-max-width: 140px;
+  --sidebar-label-line-height: 1.25;
   width: var(--sidebar-width);
   height: 100vh;
   display: flex;
@@ -101,10 +103,15 @@
 }
 
 .navLabel {
+  display: block;
+  min-width: 0;
+  max-width: var(--sidebar-label-max-width);
+  overflow: hidden;
+  white-space: nowrap;
   font-size: 0.83rem;
   font-weight: 500;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: var(--sidebar-label-line-height);
 }
 
 .sidebarSection {
@@ -148,12 +155,15 @@
 }
 
 .projectName {
+  display: block;
+  min-width: 0;
+  max-width: var(--sidebar-label-max-width);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 0.8rem;
   font-weight: 500;
-  line-height: 1.2;
+  line-height: var(--sidebar-label-line-height);
 }
 
 .sidebarSpacer {
