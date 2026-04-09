@@ -166,6 +166,36 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       tool_hourly: [],
       tool_daily: [],
       model_outcomes: [],
+      tool_outcomes: [],
+      completion_summary: {
+        total_sessions: 0,
+        completed: 0,
+        abandoned: 0,
+        failed: 0,
+        unknown: 0,
+        completion_rate: 0,
+        prev_completion_rate: null,
+      },
+      tool_comparison: [],
+      work_type_distribution: [],
+      tool_work_type: [],
+      file_churn: [],
+      duration_distribution: [],
+      concurrent_edits: [],
+      member_analytics: [],
+      retry_patterns: [],
+      conflict_correlation: [],
+      edit_velocity: [],
+      memory_usage: {
+        total_memories: 0,
+        searches: 0,
+        searches_with_results: 0,
+        search_hit_rate: 0,
+        memories_created_period: 0,
+        memories_updated_period: 0,
+        stale_memories: 0,
+        avg_memory_age_days: 0,
+      },
       teams_included: 0,
       degraded: false,
     });
@@ -202,11 +232,25 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       lines_removed: number;
       duration_sum: number;
       duration_count: number;
+      completed: number;
+      abandoned: number;
+      failed: number;
     }
   >();
   const outcomes = new Map<string, number>();
   const tools = new Map<string, { sessions: number; edits: number }>();
-  const heatmap = new Map<string, number>();
+  const toolOutcomes = new Map<string, number>();
+  const heatmap = new Map<
+    string,
+    {
+      touch_count: number;
+      work_type: string;
+      outcome_sum: number;
+      outcome_count: number;
+      lines_added: number;
+      lines_removed: number;
+    }
+  >();
   const hourly = new Map<string, { sessions: number; edits: number }>();
   const toolHourly = new Map<string, { sessions: number; edits: number }>();
   const toolDaily = new Map<
@@ -222,6 +266,79 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
   >();
   const models = new Map<string, { count: number; total_edits: number; duration_sum: number }>();
   const dailyMetrics = new Map<string, number>();
+
+  // New analytics merge accumulators
+  const completionAcc = {
+    total_sessions: 0,
+    completed: 0,
+    abandoned: 0,
+    failed: 0,
+    unknown: 0,
+    prev_total: 0,
+    prev_completed: 0,
+  };
+  const toolComp = new Map<
+    string,
+    {
+      sessions: number;
+      completed: number;
+      abandoned: number;
+      failed: number;
+      duration_sum: number;
+      duration_count: number;
+      total_edits: number;
+      total_lines_added: number;
+      total_lines_removed: number;
+    }
+  >();
+  const workTypes = new Map<
+    string,
+    {
+      sessions: number;
+      edits: number;
+      lines_added: number;
+      lines_removed: number;
+      files: Set<string>;
+    }
+  >();
+  const toolWorkTypes = new Map<string, { sessions: number; edits: number }>();
+  const fileChurn = new Map<
+    string,
+    { session_count: number; total_edits: number; total_lines: number }
+  >();
+  const durationBuckets = new Map<string, number>();
+  const concurrentEdits = new Map<string, { agents: Set<string>; edit_count: number }>();
+  const memberAcc = new Map<
+    string,
+    {
+      sessions: number;
+      completed: number;
+      abandoned: number;
+      failed: number;
+      duration_sum: number;
+      duration_count: number;
+      total_edits: number;
+      total_lines_added: number;
+      total_lines_removed: number;
+      tools: Map<string, number>;
+    }
+  >();
+  const retryAcc = new Map<
+    string,
+    { attempts: number; final_outcome: string | null; resolved: boolean }
+  >();
+  const conflictAcc = new Map<string, { sessions: number; completed: number }>();
+  const velocityAcc = new Map<string, { edits: number; lines: number; hours: number }>();
+  const memoryAcc = {
+    total_memories: 0,
+    searches: 0,
+    searches_with_results: 0,
+    memories_created_period: 0,
+    memories_updated_period: 0,
+    stale_memories: 0,
+    age_sum: 0,
+    age_count: 0,
+  };
 
   let included = 0;
   let failed = 0;
@@ -247,6 +364,9 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
         lines_removed: 0,
         duration_sum: 0,
         duration_count: 0,
+        completed: 0,
+        abandoned: 0,
+        failed: 0,
       };
       existing.sessions += (t.sessions as number) || 0;
       existing.edits += (t.edits as number) || 0;
@@ -256,6 +376,9 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       const sess = (t.sessions as number) || 0;
       existing.duration_sum += avg * sess;
       existing.duration_count += sess;
+      existing.completed += (t.completed as number) || 0;
+      existing.abandoned += (t.abandoned as number) || 0;
+      existing.failed += (t.failed as number) || 0;
       dailyTrends.set(key, existing);
     }
 
@@ -274,7 +397,22 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
     for (const f of (data.file_heatmap as Array<Record<string, unknown>>) || []) {
       const key = f.file as string;
-      heatmap.set(key, (heatmap.get(key) || 0) + ((f.touch_count as number) || 0));
+      const tc = (f.touch_count as number) || 0;
+      const existing = heatmap.get(key) || {
+        touch_count: 0,
+        work_type: (f.work_type as string) || 'other',
+        outcome_sum: 0,
+        outcome_count: 0,
+        lines_added: 0,
+        lines_removed: 0,
+      };
+      existing.touch_count += tc;
+      const rate = (f.outcome_rate as number) || 0;
+      existing.outcome_sum += rate * tc;
+      existing.outcome_count += tc;
+      existing.lines_added += (f.total_lines_added as number) || 0;
+      existing.lines_removed += (f.total_lines_removed as number) || 0;
+      heatmap.set(key, existing);
     }
 
     for (const h of (data.hourly_distribution as Array<Record<string, unknown>>) || []) {
@@ -323,9 +461,191 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       models.set(key, existing);
     }
 
+    for (const to of (data.tool_outcomes as Array<Record<string, unknown>>) || []) {
+      const key = `${to.host_tool}:${to.outcome}`;
+      toolOutcomes.set(key, (toolOutcomes.get(key) || 0) + ((to.count as number) || 0));
+    }
+
     for (const dm of (data.daily_metrics as Array<Record<string, unknown>>) || []) {
       const key = `${dm.date}:${dm.metric}`;
       dailyMetrics.set(key, (dailyMetrics.get(key) || 0) + ((dm.count as number) || 0));
+    }
+
+    // Merge completion summary
+    const cs = data.completion_summary as Record<string, unknown> | undefined;
+    if (cs) {
+      completionAcc.total_sessions += (cs.total_sessions as number) || 0;
+      completionAcc.completed += (cs.completed as number) || 0;
+      completionAcc.abandoned += (cs.abandoned as number) || 0;
+      completionAcc.failed += (cs.failed as number) || 0;
+      completionAcc.unknown += (cs.unknown as number) || 0;
+      // Track previous period across teams for weighted average
+      if (cs.prev_completion_rate != null) {
+        const prevTotal = (cs.total_sessions as number) || 0; // approximate
+        completionAcc.prev_total += prevTotal;
+        completionAcc.prev_completed += Math.round(
+          ((cs.prev_completion_rate as number) / 100) * prevTotal,
+        );
+      }
+    }
+
+    // Merge tool comparison
+    for (const tc of (data.tool_comparison as Array<Record<string, unknown>>) || []) {
+      const key = tc.host_tool as string;
+      const existing = toolComp.get(key) || {
+        sessions: 0,
+        completed: 0,
+        abandoned: 0,
+        failed: 0,
+        duration_sum: 0,
+        duration_count: 0,
+        total_edits: 0,
+        total_lines_added: 0,
+        total_lines_removed: 0,
+      };
+      const sess = (tc.sessions as number) || 0;
+      existing.sessions += sess;
+      existing.completed += (tc.completed as number) || 0;
+      existing.abandoned += (tc.abandoned as number) || 0;
+      existing.failed += (tc.failed as number) || 0;
+      existing.duration_sum += ((tc.avg_duration_min as number) || 0) * sess;
+      existing.duration_count += sess;
+      existing.total_edits += (tc.total_edits as number) || 0;
+      existing.total_lines_added += (tc.total_lines_added as number) || 0;
+      existing.total_lines_removed += (tc.total_lines_removed as number) || 0;
+      toolComp.set(key, existing);
+    }
+
+    // Merge work type distribution
+    for (const wt of (data.work_type_distribution as Array<Record<string, unknown>>) || []) {
+      const key = wt.work_type as string;
+      const existing = workTypes.get(key) || {
+        sessions: 0,
+        edits: 0,
+        lines_added: 0,
+        lines_removed: 0,
+        files: new Set<string>(),
+      };
+      existing.sessions += (wt.sessions as number) || 0;
+      existing.edits += (wt.edits as number) || 0;
+      existing.lines_added += (wt.lines_added as number) || 0;
+      existing.lines_removed += (wt.lines_removed as number) || 0;
+      // files count is approximate across teams (can't dedupe without file names)
+      existing.files.add(`${key}:${included}`);
+      workTypes.set(key, existing);
+    }
+
+    // Merge tool work type
+    for (const tw of (data.tool_work_type as Array<Record<string, unknown>>) || []) {
+      const key = `${tw.host_tool}:${tw.work_type}`;
+      const existing = toolWorkTypes.get(key) || { sessions: 0, edits: 0 };
+      existing.sessions += (tw.sessions as number) || 0;
+      existing.edits += (tw.edits as number) || 0;
+      toolWorkTypes.set(key, existing);
+    }
+
+    // Merge file churn
+    for (const fc of (data.file_churn as Array<Record<string, unknown>>) || []) {
+      const key = fc.file as string;
+      const existing = fileChurn.get(key) || { session_count: 0, total_edits: 0, total_lines: 0 };
+      existing.session_count += (fc.session_count as number) || 0;
+      existing.total_edits += (fc.total_edits as number) || 0;
+      existing.total_lines += (fc.total_lines as number) || 0;
+      fileChurn.set(key, existing);
+    }
+
+    // Merge duration distribution
+    for (const db of (data.duration_distribution as Array<Record<string, unknown>>) || []) {
+      const key = db.bucket as string;
+      durationBuckets.set(key, (durationBuckets.get(key) || 0) + ((db.count as number) || 0));
+    }
+
+    // Merge concurrent edits
+    for (const ce of (data.concurrent_edits as Array<Record<string, unknown>>) || []) {
+      const key = ce.file as string;
+      const existing = concurrentEdits.get(key) || { agents: new Set<string>(), edit_count: 0 };
+      // agents count is per-team, so take the max across teams
+      const agentCount = (ce.agents as number) || 0;
+      for (let i = 0; i < agentCount; i++) existing.agents.add(`${key}:${included}:${i}`);
+      existing.edit_count += (ce.edit_count as number) || 0;
+      concurrentEdits.set(key, existing);
+    }
+
+    // Merge member analytics
+    for (const ma of (data.member_analytics as Array<Record<string, unknown>>) || []) {
+      const key = ma.handle as string;
+      const existing = memberAcc.get(key) || {
+        sessions: 0,
+        completed: 0,
+        abandoned: 0,
+        failed: 0,
+        duration_sum: 0,
+        duration_count: 0,
+        total_edits: 0,
+        total_lines_added: 0,
+        total_lines_removed: 0,
+        tools: new Map<string, number>(),
+      };
+      const sess = (ma.sessions as number) || 0;
+      existing.sessions += sess;
+      existing.completed += (ma.completed as number) || 0;
+      existing.abandoned += (ma.abandoned as number) || 0;
+      existing.failed += (ma.failed as number) || 0;
+      existing.duration_sum += ((ma.avg_duration_min as number) || 0) * sess;
+      existing.duration_count += sess;
+      existing.total_edits += (ma.total_edits as number) || 0;
+      existing.total_lines_added += (ma.total_lines_added as number) || 0;
+      existing.total_lines_removed += (ma.total_lines_removed as number) || 0;
+      const tool = ma.primary_tool as string | null;
+      if (tool) existing.tools.set(tool, (existing.tools.get(tool) || 0) + sess);
+      memberAcc.set(key, existing);
+    }
+
+    // Merge retry patterns
+    for (const rp of (data.retry_patterns as Array<Record<string, unknown>>) || []) {
+      const key = `${rp.handle}:${rp.file}`;
+      const existing = retryAcc.get(key) || { attempts: 0, final_outcome: null, resolved: false };
+      existing.attempts += (rp.attempts as number) || 0;
+      existing.final_outcome = (rp.final_outcome as string) || existing.final_outcome;
+      existing.resolved = existing.final_outcome === 'completed';
+      retryAcc.set(key, existing);
+    }
+
+    // Merge conflict correlation
+    for (const cc of (data.conflict_correlation as Array<Record<string, unknown>>) || []) {
+      const key = cc.bucket as string;
+      const existing = conflictAcc.get(key) || { sessions: 0, completed: 0 };
+      existing.sessions += (cc.sessions as number) || 0;
+      existing.completed += (cc.completed as number) || 0;
+      conflictAcc.set(key, existing);
+    }
+
+    // Merge edit velocity
+    for (const ev of (data.edit_velocity as Array<Record<string, unknown>>) || []) {
+      const key = ev.day as string;
+      const existing = velocityAcc.get(key) || { edits: 0, lines: 0, hours: 0 };
+      const hours = (ev.total_session_hours as number) || 0;
+      existing.edits += ((ev.edits_per_hour as number) || 0) * hours;
+      existing.lines += ((ev.lines_per_hour as number) || 0) * hours;
+      existing.hours += hours;
+      velocityAcc.set(key, existing);
+    }
+
+    // Merge memory usage
+    const mu = data.memory_usage as Record<string, unknown> | undefined;
+    if (mu) {
+      memoryAcc.total_memories += (mu.total_memories as number) || 0;
+      memoryAcc.searches += (mu.searches as number) || 0;
+      memoryAcc.searches_with_results += (mu.searches_with_results as number) || 0;
+      memoryAcc.memories_created_period += (mu.memories_created_period as number) || 0;
+      memoryAcc.memories_updated_period += (mu.memories_updated_period as number) || 0;
+      memoryAcc.stale_memories += (mu.stale_memories as number) || 0;
+      const avgAge = (mu.avg_memory_age_days as number) || 0;
+      const totalMem = (mu.total_memories as number) || 0;
+      if (totalMem > 0) {
+        memoryAcc.age_sum += avgAge * totalMem;
+        memoryAcc.age_count += totalMem;
+      }
     }
   }
 
@@ -342,6 +662,9 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
         lines_removed: v.lines_removed,
         avg_duration_min:
           v.duration_count > 0 ? Math.round((v.duration_sum / v.duration_count) * 10) / 10 : 0,
+        completed: v.completed,
+        abandoned: v.abandoned,
+        failed: v.failed,
       })),
     outcome_distribution: [...outcomes.entries()]
       .sort(([, a], [, b]) => b - a)
@@ -350,9 +673,17 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       .sort(([, a], [, b]) => b.sessions - a.sessions)
       .map(([host_tool, v]) => ({ host_tool, sessions: v.sessions, edits: v.edits })),
     file_heatmap: [...heatmap.entries()]
-      .sort(([, a], [, b]) => b - a)
+      .sort(([, a], [, b]) => b.touch_count - a.touch_count)
       .slice(0, 50)
-      .map(([file, touch_count]) => ({ file, touch_count })),
+      .map(([file, v]) => ({
+        file,
+        touch_count: v.touch_count,
+        work_type: v.work_type,
+        outcome_rate:
+          v.outcome_count > 0 ? Math.round((v.outcome_sum / v.outcome_count) * 10) / 10 : 0,
+        total_lines_added: v.lines_added,
+        total_lines_removed: v.lines_removed,
+      })),
     hourly_distribution: [...hourly.entries()].map(([key, v]) => {
       const [hour, dow] = key.split('-').map(Number);
       return { hour, dow, sessions: v.sessions, edits: v.edits };
@@ -392,12 +723,162 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
           total_edits: v.total_edits,
         };
       }),
+    tool_outcomes: [...toolOutcomes.entries()]
+      .sort(([, a], [, b]) => b - a)
+      .map(([key, count]) => {
+        const sep = key.indexOf(':');
+        return { host_tool: key.slice(0, sep), outcome: key.slice(sep + 1), count };
+      }),
     daily_metrics: [...dailyMetrics.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([key, count]) => {
         const idx = key.indexOf(':');
         return { date: key.slice(0, idx), metric: key.slice(idx + 1), count };
       }),
+    completion_summary: {
+      total_sessions: completionAcc.total_sessions,
+      completed: completionAcc.completed,
+      abandoned: completionAcc.abandoned,
+      failed: completionAcc.failed,
+      unknown: completionAcc.unknown,
+      completion_rate:
+        completionAcc.total_sessions > 0
+          ? Math.round((completionAcc.completed / completionAcc.total_sessions) * 1000) / 10
+          : 0,
+      prev_completion_rate:
+        completionAcc.prev_total > 0
+          ? Math.round((completionAcc.prev_completed / completionAcc.prev_total) * 1000) / 10
+          : null,
+    },
+    tool_comparison: [...toolComp.entries()]
+      .sort(([, a], [, b]) => b.sessions - a.sessions)
+      .map(([host_tool, v]) => ({
+        host_tool,
+        sessions: v.sessions,
+        completed: v.completed,
+        abandoned: v.abandoned,
+        failed: v.failed,
+        completion_rate: v.sessions > 0 ? Math.round((v.completed / v.sessions) * 1000) / 10 : 0,
+        avg_duration_min:
+          v.duration_count > 0 ? Math.round((v.duration_sum / v.duration_count) * 10) / 10 : 0,
+        total_edits: v.total_edits,
+        total_lines_added: v.total_lines_added,
+        total_lines_removed: v.total_lines_removed,
+      })),
+    work_type_distribution: [...workTypes.entries()]
+      .sort(([, a], [, b]) => b.sessions - a.sessions)
+      .map(([work_type, v]) => ({
+        work_type,
+        sessions: v.sessions,
+        edits: v.edits,
+        lines_added: v.lines_added,
+        lines_removed: v.lines_removed,
+        files: v.files.size,
+      })),
+    tool_work_type: [...toolWorkTypes.entries()]
+      .sort(([, a], [, b]) => b.sessions - a.sessions)
+      .map(([key, v]) => {
+        const sep = key.indexOf(':');
+        return {
+          host_tool: key.slice(0, sep),
+          work_type: key.slice(sep + 1),
+          sessions: v.sessions,
+          edits: v.edits,
+        };
+      }),
+    file_churn: [...fileChurn.entries()]
+      .sort(([, a], [, b]) => b.session_count - a.session_count)
+      .slice(0, 30)
+      .map(([file, v]) => ({
+        file,
+        session_count: v.session_count,
+        total_edits: v.total_edits,
+        total_lines: v.total_lines,
+      })),
+    duration_distribution: ['0-5m', '5-15m', '15-30m', '30-60m', '60m+'].map((bucket) => ({
+      bucket,
+      count: durationBuckets.get(bucket) || 0,
+    })),
+    concurrent_edits: [...concurrentEdits.entries()]
+      .sort(([, a], [, b]) => b.agents.size - a.agents.size)
+      .slice(0, 20)
+      .map(([file, v]) => ({
+        file,
+        agents: v.agents.size,
+        edit_count: v.edit_count,
+      })),
+    member_analytics: [...memberAcc.entries()]
+      .sort(([, a], [, b]) => b.sessions - a.sessions)
+      .slice(0, 50)
+      .map(([handle, v]) => {
+        let primaryTool: string | null = null;
+        let maxCount = 0;
+        for (const [tool, count] of v.tools) {
+          if (count > maxCount) {
+            primaryTool = tool;
+            maxCount = count;
+          }
+        }
+        return {
+          handle,
+          sessions: v.sessions,
+          completed: v.completed,
+          abandoned: v.abandoned,
+          failed: v.failed,
+          completion_rate: v.sessions > 0 ? Math.round((v.completed / v.sessions) * 1000) / 10 : 0,
+          avg_duration_min:
+            v.duration_count > 0 ? Math.round((v.duration_sum / v.duration_count) * 10) / 10 : 0,
+          total_edits: v.total_edits,
+          total_lines_added: v.total_lines_added,
+          total_lines_removed: v.total_lines_removed,
+          primary_tool: primaryTool,
+        };
+      }),
+    retry_patterns: [...retryAcc.entries()]
+      .sort(([, a], [, b]) => b.attempts - a.attempts)
+      .slice(0, 30)
+      .map(([key, v]) => {
+        const sep = key.indexOf(':');
+        return {
+          handle: key.slice(0, sep),
+          file: key.slice(sep + 1),
+          attempts: v.attempts,
+          final_outcome: v.final_outcome,
+          resolved: v.resolved,
+        };
+      }),
+    conflict_correlation: [...conflictAcc.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([bucket, v]) => ({
+        bucket,
+        sessions: v.sessions,
+        completed: v.completed,
+        completion_rate: v.sessions > 0 ? Math.round((v.completed / v.sessions) * 1000) / 10 : 0,
+      })),
+    edit_velocity: [...velocityAcc.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([day, v]) => ({
+        day,
+        edits_per_hour: v.hours > 0 ? Math.round((v.edits / v.hours) * 10) / 10 : 0,
+        lines_per_hour: v.hours > 0 ? Math.round((v.lines / v.hours) * 10) / 10 : 0,
+        total_session_hours: Math.round(v.hours * 100) / 100,
+      })),
+    memory_usage: {
+      total_memories: memoryAcc.total_memories,
+      searches: memoryAcc.searches,
+      searches_with_results: memoryAcc.searches_with_results,
+      search_hit_rate:
+        memoryAcc.searches > 0
+          ? Math.round((memoryAcc.searches_with_results / memoryAcc.searches) * 1000) / 10
+          : 0,
+      memories_created_period: memoryAcc.memories_created_period,
+      memories_updated_period: memoryAcc.memories_updated_period,
+      stale_memories: memoryAcc.stale_memories,
+      avg_memory_age_days:
+        memoryAcc.age_count > 0
+          ? Math.round((memoryAcc.age_sum / memoryAcc.age_count) * 10) / 10
+          : 0,
+    },
     teams_included: included,
     degraded: failed > 0,
   });

@@ -79,6 +79,7 @@ import {
   CONTEXT_CACHE_TTL_MS,
   CLEANUP_INTERVAL_MS,
   HEARTBEAT_BROADCAST_DEBOUNCE_MS,
+  METRIC_KEYS,
 } from '../../lib/constants.js';
 
 export class TeamDO extends DurableObject<Env> {
@@ -780,8 +781,13 @@ export class TeamDO extends DurableObject<Env> {
     agentId: string,
     days: number,
     ownerId: string | null = null,
-  ): Promise<ReturnType<typeof getAnalyticsFn> | DOError> {
-    return this.#withMember(agentId, ownerId, () => getAnalyticsFn(this.sql, days));
+    extended = false,
+  ): Promise<
+    ReturnType<typeof getAnalyticsFn> | ReturnType<typeof getExtendedAnalyticsFn> | DOError
+  > {
+    return this.#withMember(agentId, ownerId, () =>
+      extended ? getExtendedAnalyticsFn(this.sql, days) : getAnalyticsFn(this.sql, days),
+    );
   }
 
   async enrichModel(
@@ -837,9 +843,14 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
     filters: Omit<SearchFilters, 'query' | 'tags' | 'categories' | 'limit'> = {},
   ): Promise<ReturnType<typeof searchMemoriesFn> | DOError> {
-    return this.#withMember(agentId, ownerId, () =>
-      searchMemoriesFn(this.sql, { query, tags, categories, limit, ...filters }),
-    );
+    return this.#withMember(agentId, ownerId, () => {
+      const result = searchMemoriesFn(this.sql, { query, tags, categories, limit, ...filters });
+      this.#recordMetric(METRIC_KEYS.MEMORIES_SEARCHED);
+      if ('ok' in result && result.memories && result.memories.length > 0) {
+        this.#recordMetric(METRIC_KEYS.MEMORIES_SEARCH_HITS);
+      }
+      return result;
+    });
   }
 
   async updateMemory(

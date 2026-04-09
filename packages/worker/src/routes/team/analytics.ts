@@ -12,6 +12,7 @@ export const handleTeamAnalytics = teamRoute(async ({ request, agentId, team, us
     1,
     Math.min(isNaN(parsed) ? ANALYTICS_DEFAULT_DAYS : parsed, ANALYTICS_MAX_DAYS),
   );
+  const extended = url.searchParams.get('extended') === '1';
 
-  return doResult(team.getAnalytics(agentId, days, user.id), 'getAnalytics');
+  return doResult(team.getAnalytics(agentId, days, user.id, extended), 'getAnalytics');
 });

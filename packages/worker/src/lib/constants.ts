@@ -147,6 +147,8 @@ export const METRIC_KEYS = {
   TOOL_PREFIX: 'tool:',
   MESSAGES_SENT: 'messages_sent',
   MEMORIES_SAVED: 'memories_saved',
+  MEMORIES_SEARCHED: 'memories_searched',
+  MEMORIES_SEARCH_HITS: 'memories_search_hits',
   CONFLICT_CHECKS: 'conflict_checks',
   CONFLICTS_FOUND: 'conflicts_found',
   COMMANDS_SUBMITTED: 'commands_submitted',

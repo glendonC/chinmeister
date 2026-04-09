@@ -147,6 +147,10 @@ export interface TeamSession extends AgentMetadata {
 export interface FileHeatmapEntry {
   file: string;
   touch_count: number;
+  work_type?: string;
+  outcome_rate?: number;
+  total_lines_added?: number;
+  total_lines_removed?: number;
 }
 
 export interface DailyTrend {
@@ -227,12 +231,130 @@ export interface ToolOutcome {
   count: number;
 }
 
+// ── Workflow intelligence types ─────────────────────
+
+export interface CompletionSummary {
+  total_sessions: number;
+  completed: number;
+  abandoned: number;
+  failed: number;
+  unknown: number;
+  completion_rate: number;
+  prev_completion_rate: number | null;
+}
+
+export interface ToolComparison {
+  host_tool: string;
+  sessions: number;
+  completed: number;
+  abandoned: number;
+  failed: number;
+  completion_rate: number;
+  avg_duration_min: number;
+  total_edits: number;
+  total_lines_added: number;
+  total_lines_removed: number;
+}
+
+export interface WorkTypeDistribution {
+  work_type: string;
+  sessions: number;
+  edits: number;
+  lines_added: number;
+  lines_removed: number;
+  files: number;
+}
+
+export interface ToolWorkTypeBreakdown {
+  host_tool: string;
+  work_type: string;
+  sessions: number;
+  edits: number;
+}
+
+export interface FileChurnEntry {
+  file: string;
+  session_count: number;
+  total_edits: number;
+  total_lines: number;
+}
+
+export interface DurationBucket {
+  bucket: string;
+  count: number;
+}
+
+export interface ConcurrentEditEntry {
+  file: string;
+  agents: number;
+  edit_count: number;
+}
+
+export interface MemberAnalytics {
+  handle: string;
+  sessions: number;
+  completed: number;
+  abandoned: number;
+  failed: number;
+  completion_rate: number;
+  avg_duration_min: number;
+  total_edits: number;
+  total_lines_added: number;
+  total_lines_removed: number;
+  primary_tool: string | null;
+}
+
+export interface RetryPattern {
+  handle: string;
+  file: string;
+  attempts: number;
+  final_outcome: string | null;
+  resolved: boolean;
+}
+
+export interface ConflictCorrelation {
+  bucket: string;
+  sessions: number;
+  completed: number;
+  completion_rate: number;
+}
+
+export interface EditVelocityTrend {
+  day: string;
+  edits_per_hour: number;
+  lines_per_hour: number;
+  total_session_hours: number;
+}
+
+export interface MemoryUsageStats {
+  total_memories: number;
+  searches: number;
+  searches_with_results: number;
+  search_hit_rate: number;
+  memories_created_period: number;
+  memories_updated_period: number;
+  stale_memories: number;
+  avg_memory_age_days: number;
+}
+
 export interface UserAnalytics extends TeamAnalytics {
   hourly_distribution: HourlyBucket[];
   tool_hourly: ToolHourlyBucket[];
   tool_daily: ToolDailyTrend[];
   model_outcomes: ModelOutcome[];
   tool_outcomes: ToolOutcome[];
+  completion_summary: CompletionSummary;
+  tool_comparison: ToolComparison[];
+  work_type_distribution: WorkTypeDistribution[];
+  tool_work_type: ToolWorkTypeBreakdown[];
+  file_churn: FileChurnEntry[];
+  duration_distribution: DurationBucket[];
+  concurrent_edits: ConcurrentEditEntry[];
+  member_analytics: MemberAnalytics[];
+  retry_patterns: RetryPattern[];
+  conflict_correlation: ConflictCorrelation[];
+  edit_velocity: EditVelocityTrend[];
+  memory_usage: MemoryUsageStats;
   teams_included: number;
   degraded: boolean;
 }

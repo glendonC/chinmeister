@@ -303,6 +303,10 @@ export type ToolDirectory = z.infer<typeof toolDirectorySchema>;
 const fileHeatmapEntrySchema = z.object({
   file: z.string(),
   touch_count: z.number(),
+  work_type: z.string().optional(),
+  outcome_rate: z.number().optional(),
+  total_lines_added: z.number().optional(),
+  total_lines_removed: z.number().optional(),
 });
 
 const dailyTrendSchema = z.object({
@@ -411,25 +415,224 @@ const toolOutcomeSchema = z.object({
   count: z.number().default(0),
 });
 
+const toolHourlyBucketSchema = z.object({
+  host_tool: z.string(),
+  hour: z.number(),
+  dow: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+});
+
+const toolDailyTrendSchema = z.object({
+  host_tool: z.string(),
+  day: z.string(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+});
+
+const completionSummarySchema = z.object({
+  total_sessions: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
+  unknown: z.number().default(0),
+  completion_rate: z.number().default(0),
+  prev_completion_rate: z.number().nullable().default(null),
+});
+
+const toolComparisonSchema = z.object({
+  host_tool: z.string(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
+  completion_rate: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_lines_added: z.number().default(0),
+  total_lines_removed: z.number().default(0),
+});
+
+const workTypeDistributionSchema = z.object({
+  work_type: z.string(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  files: z.number().default(0),
+});
+
+const toolWorkTypeBreakdownSchema = z.object({
+  host_tool: z.string(),
+  work_type: z.string(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+});
+
+const fileChurnEntrySchema = z.object({
+  file: z.string(),
+  session_count: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_lines: z.number().default(0),
+});
+
+const durationBucketSchema = z.object({
+  bucket: z.string(),
+  count: z.number().default(0),
+});
+
+const concurrentEditEntrySchema = z.object({
+  file: z.string(),
+  agents: z.number().default(0),
+  edit_count: z.number().default(0),
+});
+
+const memberAnalyticsSchema = z.object({
+  handle: z.string(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
+  completion_rate: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_lines_added: z.number().default(0),
+  total_lines_removed: z.number().default(0),
+  primary_tool: z.string().nullable().default(null),
+});
+
+const retryPatternSchema = z.object({
+  handle: z.string(),
+  file: z.string(),
+  attempts: z.number().default(0),
+  final_outcome: z.string().nullable().default(null),
+  resolved: z.boolean().default(false),
+});
+
+const conflictCorrelationSchema = z.object({
+  bucket: z.string(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
+});
+
+const editVelocityTrendSchema = z.object({
+  day: z.string(),
+  edits_per_hour: z.number().default(0),
+  lines_per_hour: z.number().default(0),
+  total_session_hours: z.number().default(0),
+});
+
+const memoryUsageStatsSchema = z.object({
+  total_memories: z.number().default(0),
+  searches: z.number().default(0),
+  searches_with_results: z.number().default(0),
+  search_hit_rate: z.number().default(0),
+  memories_created_period: z.number().default(0),
+  memories_updated_period: z.number().default(0),
+  stale_memories: z.number().default(0),
+  avg_memory_age_days: z.number().default(0),
+});
+
 export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   hourly_distribution: z.array(hourlyBucketSchema).default([]),
+  tool_hourly: z.array(toolHourlyBucketSchema).default([]),
+  tool_daily: z.array(toolDailyTrendSchema).default([]),
   model_outcomes: z.array(modelOutcomeSchema).default([]),
   tool_outcomes: z.array(toolOutcomeSchema).default([]),
+  completion_summary: completionSummarySchema.default({
+    total_sessions: 0,
+    completed: 0,
+    abandoned: 0,
+    failed: 0,
+    unknown: 0,
+    completion_rate: 0,
+    prev_completion_rate: null,
+  }),
+  tool_comparison: z.array(toolComparisonSchema).default([]),
+  work_type_distribution: z.array(workTypeDistributionSchema).default([]),
+  tool_work_type: z.array(toolWorkTypeBreakdownSchema).default([]),
+  file_churn: z.array(fileChurnEntrySchema).default([]),
+  duration_distribution: z.array(durationBucketSchema).default([]),
+  concurrent_edits: z.array(concurrentEditEntrySchema).default([]),
+  member_analytics: z.array(memberAnalyticsSchema).default([]),
+  retry_patterns: z.array(retryPatternSchema).default([]),
+  conflict_correlation: z.array(conflictCorrelationSchema).default([]),
+  edit_velocity: z.array(editVelocityTrendSchema).default([]),
+  memory_usage: memoryUsageStatsSchema.default({
+    total_memories: 0,
+    searches: 0,
+    searches_with_results: 0,
+    search_hit_rate: 0,
+    memories_created_period: 0,
+    memories_updated_period: 0,
+    stale_memories: 0,
+    avg_memory_age_days: 0,
+  }),
   teams_included: z.number().default(0),
   degraded: z.boolean().default(false),
 });
 
 export type UserAnalytics = z.infer<typeof userAnalyticsSchema>;
 export type HourlyBucket = z.infer<typeof hourlyBucketSchema>;
+export type ToolHourlyBucket = z.infer<typeof toolHourlyBucketSchema>;
+export type ToolDailyTrend = z.infer<typeof toolDailyTrendSchema>;
 export type ModelOutcome = z.infer<typeof modelOutcomeSchema>;
+export type ToolOutcome = z.infer<typeof toolOutcomeSchema>;
+export type CompletionSummary = z.infer<typeof completionSummarySchema>;
+export type ToolComparison = z.infer<typeof toolComparisonSchema>;
+export type WorkTypeDistribution = z.infer<typeof workTypeDistributionSchema>;
+export type ToolWorkTypeBreakdown = z.infer<typeof toolWorkTypeBreakdownSchema>;
+export type FileChurnEntry = z.infer<typeof fileChurnEntrySchema>;
+export type DurationBucket = z.infer<typeof durationBucketSchema>;
+export type ConcurrentEditEntry = z.infer<typeof concurrentEditEntrySchema>;
+export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
+export type RetryPattern = z.infer<typeof retryPatternSchema>;
+export type ConflictCorrelation = z.infer<typeof conflictCorrelationSchema>;
+export type EditVelocityTrend = z.infer<typeof editVelocityTrendSchema>;
+export type MemoryUsageStats = z.infer<typeof memoryUsageStatsSchema>;
 
 export function createEmptyUserAnalytics(): UserAnalytics {
   return {
     ...createEmptyAnalytics(),
     period_days: 30,
     hourly_distribution: [],
+    tool_hourly: [],
+    tool_daily: [],
     model_outcomes: [],
     tool_outcomes: [],
+    completion_summary: {
+      total_sessions: 0,
+      completed: 0,
+      abandoned: 0,
+      failed: 0,
+      unknown: 0,
+      completion_rate: 0,
+      prev_completion_rate: null,
+    },
+    tool_comparison: [],
+    work_type_distribution: [],
+    tool_work_type: [],
+    file_churn: [],
+    duration_distribution: [],
+    concurrent_edits: [],
+    member_analytics: [],
+    retry_patterns: [],
+    conflict_correlation: [],
+    edit_velocity: [],
+    memory_usage: {
+      total_memories: 0,
+      searches: 0,
+      searches_with_results: 0,
+      search_hit_rate: 0,
+      memories_created_period: 0,
+      memories_updated_period: 0,
+      stale_memories: 0,
+      avg_memory_age_days: 0,
+    },
     teams_included: 0,
     degraded: false,
   };
