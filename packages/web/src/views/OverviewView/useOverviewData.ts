@@ -48,11 +48,7 @@ export function useOverviewData(summaries: TeamSummary[]): UseOverviewDataReturn
     [summaries],
   );
   const totalSessions = useMemo(
-    () =>
-      summaries.reduce(
-        (s, t) => s + (((t as Record<string, unknown>).recent_sessions_24h as number) || 0),
-        0,
-      ),
+    () => summaries.reduce((s, t) => s + (t.recent_sessions_24h || 0), 0),
     [summaries],
   );
   const totalMemories = useMemo(
@@ -80,8 +76,8 @@ export function useOverviewData(summaries: TeamSummary[]): UseOverviewDataReturn
     return [...summaries].sort((a, b) => {
       const aAgents = a.active_agents || 0;
       const bAgents = b.active_agents || 0;
-      const aSessions = ((a as Record<string, unknown>).recent_sessions_24h as number) || 0;
-      const bSessions = ((b as Record<string, unknown>).recent_sessions_24h as number) || 0;
+      const aSessions = a.recent_sessions_24h || 0;
+      const bSessions = b.recent_sessions_24h || 0;
       const aIdle = aAgents === 0 && aSessions === 0;
       const bIdle = bAgents === 0 && bSessions === 0;
       if (aIdle !== bIdle) return aIdle ? 1 : -1;

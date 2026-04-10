@@ -10,6 +10,8 @@ export interface GlobalStats {
 }
 
 const POLL_MS = 60_000;
+/** Avoids strict-mode double-mount race on initial render. */
+const INITIAL_DELAY_MS = 500;
 const EMPTY: GlobalStats = { online: 0, chatUsers: 0, activeRooms: 0, countries: {} };
 
 export function useGlobalStats(): GlobalStats {
@@ -45,8 +47,7 @@ export function useGlobalStats(): GlobalStats {
       }
     }
 
-    // Small delay avoids strict-mode double-mount race
-    const initialDelay = setTimeout(tick, 500);
+    const initialDelay = setTimeout(tick, INITIAL_DELAY_MS);
     timer = setInterval(tick, POLL_MS);
 
     return () => {

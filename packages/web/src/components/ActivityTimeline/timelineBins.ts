@@ -3,6 +3,11 @@ export const BIN_COUNT = 18;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
 
+/** Edits needed for one additional unit of visual weight (caps at +2). */
+const EDITS_PER_WEIGHT_UNIT = 8;
+/** Scale factor for live agents in the latest bin (slightly below 1 to avoid overstating). */
+const LIVE_WEIGHT_FACTOR = 0.9;
+
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
@@ -73,7 +78,7 @@ export function buildTimelineBins(
 
     const firstBin = clamp(Math.floor((sessionStart - start) / binSize), 0, BIN_COUNT - 1);
     const lastBin = clamp(Math.floor((sessionEnd - start) / binSize), 0, BIN_COUNT - 1);
-    const weight = 1 + Math.min(2, (session.edit_count || 0) / 8);
+    const weight = 1 + Math.min(2, (session.edit_count || 0) / EDITS_PER_WEIGHT_UNIT);
 
     const spanCount = lastBin - firstBin + 1;
     const editsPerBin = Math.round((session.edit_count || 0) / spanCount);
@@ -88,7 +93,7 @@ export function buildTimelineBins(
   });
 
   if (liveCount > 0) {
-    bins[BIN_COUNT - 1].value += liveCount * 0.9;
+    bins[BIN_COUNT - 1].value += liveCount * LIVE_WEIGHT_FACTOR;
     bins[BIN_COUNT - 1].sessions += liveCount;
   }
   return bins;

@@ -47,12 +47,18 @@ export default function ProjectOverviewTab({
   toolSummaries,
   lineStats,
 }: ProjectOverviewTabProps) {
+  const STUCK_AGENT_THRESHOLD_MIN = 15;
+  const STALE_LOCK_THRESHOLD_MIN = 30;
+
   const stuckAgents = useMemo(
-    () => activeAgents.filter((a) => (a.minutes_since_update || 0) >= 15),
+    () => activeAgents.filter((a) => (a.minutes_since_update || 0) >= STUCK_AGENT_THRESHOLD_MIN),
     [activeAgents],
   );
 
-  const staleLocks = useMemo(() => locks.filter((l) => (l.minutes_held || 0) >= 30), [locks]);
+  const staleLocks = useMemo(
+    () => locks.filter((l) => (l.minutes_held || 0) >= STALE_LOCK_THRESHOLD_MIN),
+    [locks],
+  );
 
   const teamRoster = useMemo((): RosterEntry[] => {
     const byHandle = new Map<string, RosterEntry>();

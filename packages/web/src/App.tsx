@@ -10,7 +10,6 @@ import {
   forceRefresh,
   injectDemoData,
 } from './lib/stores/polling.js';
-import { formatRelativeTime } from './lib/relativeTime.js';
 import { getErrorMessage } from './lib/errorHelpers.js';
 import { useRoute, parseLocation, type Route } from './lib/router.js';
 import { isDemoMode } from './lib/demoData.js';
@@ -110,8 +109,6 @@ export default function App(): ReactNode {
     !errorDismissed &&
     consecutiveFailures >= 2 &&
     (hasOverviewSnapshot || hasProjectSnapshot);
-  const _lastSynced = formatRelativeTime(lastUpdate);
-
   // Derive boot state — no effect sync needed
   const demo = isDemoMode();
   const bootState: BootState = !bootCompleted
