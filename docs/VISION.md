@@ -34,14 +34,13 @@ Cross-vendor, cross-developer, real-time agent coordination.
 
 ### Workflow Intelligence
 
-Understand and improve how you develop with AI.
+Three levels of visibility into how you develop with AI — from individual agent sessions to your personal workflow to your entire team.
 
-- **Session analytics.** Every agent session tracked — duration, edit velocity, file scope, outcome. See patterns evolve over time: not just what happened, but whether your workflow is improving.
-- **Conversation intelligence.** For managed agents, chinwag captures the full interaction — message counts, character length trends, sentiment shifts, topic classification. Correlate how you communicate with agents to how sessions turn out. Discover that your sessions degrade when your messages get shorter and more frustrated, or that certain topics consistently lead to abandoned sessions. The deeper the integration, the richer the signal.
-- **Codebase heatmaps.** Where does AI touch your project most? Where do agents struggle, where are the blind spots? Your codebase through the lens of how AI interacts with it.
-- **Project lenses.** View your project through different perspectives — security posture, test health, architecture quality, documentation freshness — each with actions to spawn an agent and address what you see.
-- **Multi-project dashboard.** Your full AI workflow across all repos. Which projects are actively agent-developed, session distribution across tools, cross-project trends.
-- **Proactive insights.** chinwag surfaces what you'd miss: a module where agents consistently struggle, an area that hasn't been audited since a major change, retry patterns that suggest a task needs different scoping.
+**Agent-level: observe, measure, control.** Every agent session tracked — duration, edits, files touched, outcome, cost. For managed agents, chinwag captures the full conversation: how you communicate with agents, where sessions go sideways, what patterns lead to success or failure. Drill into any session to see the timeline. Control managed agents directly — start, stop, restart. Conflict prevention enforced in real time.
+
+**Developer-level: your personal AI performance.** Your workflow across all projects and tools in one view. Are your sessions improving over time? Which tools and models work best for which types of work? Where does your codebase need attention? chinwag gives you a feedback loop that individual tools can't — because it sees across all of them.
+
+**Team-level: manage your team's AI workflow.** See how your team develops with AI. Per-member performance, agent utilization across the team, coordination health, shared knowledge lifecycle. Understand where the team is effective and where agents struggle — not as surveillance, but as the same kind of visibility any engineering team has into their development process.
 
 ## How it works
 

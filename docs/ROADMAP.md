@@ -48,14 +48,15 @@ Managed CLI agents with full lifecycle control, connected IDE agents with coordi
 - **Dashboard unified agent list:** Managed agents show stop/restart controls, connected agents show activity only
 - **Process exit handling:** Cleanup on crash, report session end, surface exit status
 
-### Session Intelligence (foundation)
+### Session Intelligence
 
-The data layer for workflow intelligence is in place. Not yet surfaced as analytics, but captured and queryable.
+The analytics backbone is shipped and wired into the web dashboard.
 
-- **Per-session tracking:** duration, edit count, files touched, conflicts hit, model used, host tool
-- **Stuckness detection:** 15-min heartbeat gap triggers alerts via channel
+- **Per-session tracking:** duration, edit count, files touched, conflicts hit, model used, host tool, token consumption, outcome (completed/abandoned/failed), conversation events with sentiment and topic classification
+- **Computed analytics:** 36+ metrics across sessions, conversations, memory, coordination, and cost — completion rates, edit velocity, work type distribution, tool comparison, model performance, stuckness detection, retry patterns, file churn, directory heatmaps, scope complexity, hourly effectiveness, prompt efficiency, period-over-period comparison
+- **Cost estimation:** Approximate session cost from token usage and model pricing
 - **Claude Code hooks:** automatic edit capture (PostToolUse), enforced conflict checks (PreToolUse), context injection (SessionStart)
-- **Session history API:** `GET /teams/:id/sessions` returns recent sessions with full metadata
+- **Web dashboard:** Cross-project analytics view, per-project analytics tab, per-member breakdowns
 
 ### Tests and CI
 
@@ -77,18 +78,32 @@ The core works. Before adding surface area, make it bulletproof.
 - [ ] Publish `chinwag` CLI and `chinwag-mcp` packages to npm
 - [ ] End-to-end test: `npm install -g chinwag` → `npx chinwag init` → agent connection
 
-### Phase 2 — Workflow Intelligence: surface what we capture
+### Phase 2 — Workflow Intelligence: from data to action
 
-The session data foundation is shipped. Now make it visible and actionable.
+The analytics backbone is shipped. Now close the loop — insights should drive actions, not just display numbers.
 
-- [ ] Session analytics views in web dashboard and TUI: duration trends, edit velocity, file scope, retry patterns over time
-- [ ] Session outcome tracking: `chinwag_report_outcome` MCP tool (completed/abandoned/failed) + inference from session signals (stuckness → end = likely failed, normal end = likely completed)
-- [ ] Edit diff stats via Claude Code hooks: lines added/removed per edit (not content — privacy-safe size metrics)
-- [ ] File edit heatmaps: aggregate files_touched across sessions into codebase visualization showing AI activity density
-- [ ] Git attribution: link commits to agent sessions by correlating `git log --since` with session windows — direct measure of agent output
-- [ ] Project lenses (foundation): structured result types in memory (typed reports, not just text) so lenses can query "last security audit score" or "test coverage trend"
-- [ ] Project lenses (UI): security, test, architecture, documentation views with action buttons to spawn agents
-- [ ] Proactive insights: surface stuckness hotspots, retry-heavy areas, audit staleness based on accumulated session data
+**Agent-level:**
+
+- [ ] Session detail view: click into any session to see conversation, edit timeline, files, outcome, cost
+- [ ] Git attribution: link commits to agent sessions by correlating `git log --since` with session windows
+
+**Developer-level:**
+
+- [ ] Personal trend tracking: are my sessions improving over time? completion rate, edit velocity, cost trends with period comparison
+- [ ] Tool and model recommendations: surface which tools/models perform best for which work types based on your data
+- [ ] Goal-setting: set targets (e.g. completion rate) and track progress
+
+**Team-level:**
+
+- [ ] Team management view: per-member performance dashboard with drill-down into their agent sessions
+- [ ] Anomaly detection: surface statistically significant changes ("completion rate dropped 25% this week")
+- [ ] Coordination health metrics: file claim coverage, conflict prevention rate, handoff smoothness
+
+**Cross-cutting:**
+
+- [ ] Actionable insights: every analytics section connects to something you can do — spawn an agent, switch a model, prune stale memories
+- [ ] Project lenses: security, test, architecture, documentation views with action buttons
+- [ ] Proactive alerts: threshold-based notifications for metric changes
 
 ### Phase 3 — Advanced control
 
@@ -106,7 +121,7 @@ Revisit once intelligence foundation is solid and adoption signals are clear.
 
 - **Multi-project memory:** User-level preferences and patterns that span projects
 - **Deeper tool hooks:** As tools beyond Claude Code add hook-like capabilities, deepen integration and analytics coverage
-- **Cost/token estimation:** Proxy session cost from duration + model tier; explore provider API integrations if available
+- **Weekly digest:** Auto-generated summary of key metrics, changes, and recommendations — delivered as an MCP tool response or notification
 
 ## Non-goals
 
