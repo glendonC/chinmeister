@@ -77,7 +77,7 @@ export const RATE_LIMIT_SUGGESTIONS = 5;
 export const RATE_LIMIT_WS_TICKETS = 100;
 
 // --- Rate limits (per IP per 24h window, public/unauthenticated endpoints) ---
-export const RATE_LIMIT_STATS_PER_IP = 200;
+export const RATE_LIMIT_STATS_PER_IP = 2000;
 export const RATE_LIMIT_CATALOG_PER_IP = 200;
 export const RATE_LIMIT_ADMIN_BATCH_PER_IP = 20;
 

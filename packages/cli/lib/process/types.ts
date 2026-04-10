@@ -22,6 +22,10 @@ export interface ManagedProcess {
   exitCode: number | null;
   _lastNewline: boolean;
   _killTimer: ReturnType<typeof setTimeout> | null;
+  /** Team ID for conversation collection after session ends. */
+  teamId?: string | null;
+  /** Session ID for conversation collection (resolved from backend). */
+  sessionId?: string | null;
 }
 
 export interface AgentInfo {

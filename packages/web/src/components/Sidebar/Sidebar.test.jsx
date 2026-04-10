@@ -162,7 +162,7 @@ describe('Sidebar', () => {
     const Sidebar = await loadSidebar();
     const { container, unmount } = renderComponent(Sidebar, { activeView: 'overview' });
 
-    const toggleBtn = container.querySelector('[aria-label="Toggle sidebar"]');
+    const toggleBtn = container.querySelector('[aria-label="Open sidebar"]');
     expect(toggleBtn).not.toBeNull();
 
     unmount();
@@ -172,7 +172,7 @@ describe('Sidebar', () => {
     const Sidebar = await loadSidebar();
     const { container, unmount } = renderComponent(Sidebar, { activeView: 'overview' });
 
-    const toggleBtn = container.querySelector('[aria-label="Toggle sidebar"]');
+    const toggleBtn = container.querySelector('[aria-label="Open sidebar"]');
 
     // Open
     act(() => {
@@ -190,6 +190,24 @@ describe('Sidebar', () => {
 
     // Backdrop should be gone
     expect(container.querySelector('[aria-hidden="true"]')).toBeNull();
+
+    unmount();
+  });
+
+  it('calls the desktop rail toggle callback', async () => {
+    const Sidebar = await loadSidebar();
+    const onToggleCollapse = vi.fn();
+    const { container, unmount } = renderComponent(Sidebar, {
+      activeView: 'overview',
+      onToggleCollapse,
+    });
+
+    const toggleBtn = container.querySelector('[aria-label="Collapse sidebar"]');
+    act(() => {
+      toggleBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+
+    expect(onToggleCollapse).toHaveBeenCalledTimes(1);
 
     unmount();
   });
@@ -286,7 +304,7 @@ describe('Sidebar', () => {
     const { container, unmount } = renderComponent(Sidebar, { activeView: 'overview' });
 
     // Open mobile sidebar
-    const toggleBtn = container.querySelector('[aria-label="Toggle sidebar"]');
+    const toggleBtn = container.querySelector('[aria-label="Open sidebar"]');
     act(() => {
       toggleBtn.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     });

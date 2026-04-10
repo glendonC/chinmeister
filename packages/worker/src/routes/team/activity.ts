@@ -166,7 +166,7 @@ export const handleTeamSessionEdit = teamJsonRoute(async ({ body, user, db, agen
 
 export const handleTeamReportOutcome = teamJsonRoute(
   async ({ body, user, env, db, agentId, team }) => {
-    const { outcome, summary } = body;
+    const { outcome, summary, outcome_tags } = body;
     if (typeof outcome !== 'string' || !['completed', 'abandoned', 'failed'].includes(outcome)) {
       return json({ error: 'outcome must be completed, abandoned, or failed' }, 400);
     }
@@ -177,13 +177,20 @@ export const handleTeamReportOutcome = teamJsonRoute(
       if (modResult.blocked) return json({ error: 'Content blocked' }, 400);
     }
 
+    const tags = Array.isArray(outcome_tags)
+      ? outcome_tags.filter((t): t is string => typeof t === 'string').slice(0, 10)
+      : null;
+
     return withRateLimit(
       db,
       `session:${user.id}`,
       RATE_LIMIT_SESSIONS,
       'Session operation limit reached. Try again tomorrow.',
       async () => {
-        return doResult(team.reportOutcome(agentId, outcome, summaryStr, user.id), 'reportOutcome');
+        return doResult(
+          team.reportOutcome(agentId, outcome, summaryStr, user.id, tags),
+          'reportOutcome',
+        );
       },
     );
   },
@@ -238,4 +245,32 @@ export const handleTeamEnrichModel = teamJsonRoute(async ({ body, agentId, team,
   }
 
   return doResult(team.enrichModel(agentId, (model as string).trim(), user.id), 'enrichModel');
+});
+
+const MAX_TOKEN_VALUE = 100_000_000;
+
+export const handleTeamRecordTokens = teamJsonRoute(async ({ body, user, db, agentId, team }) => {
+  const { session_id, input_tokens, output_tokens } = body;
+  if (typeof session_id !== 'string' || !session_id.trim()) {
+    return json({ error: 'session_id is required' }, 400);
+  }
+  if (typeof input_tokens !== 'number' || input_tokens < 0 || input_tokens > MAX_TOKEN_VALUE) {
+    return json({ error: 'input_tokens must be a non-negative number' }, 400);
+  }
+  if (typeof output_tokens !== 'number' || output_tokens < 0 || output_tokens > MAX_TOKEN_VALUE) {
+    return json({ error: 'output_tokens must be a non-negative number' }, 400);
+  }
+
+  return withRateLimit(
+    db,
+    `session:${user.id}`,
+    RATE_LIMIT_SESSIONS,
+    'Session operation limit reached. Try again tomorrow.',
+    async () => {
+      return doResult(
+        team.recordTokenUsage(agentId, session_id as string, input_tokens, output_tokens, user.id),
+        'recordTokenUsage',
+      );
+    },
+  );
 });

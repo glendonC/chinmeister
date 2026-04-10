@@ -61,6 +61,36 @@ async function loadOverviewView({
     useTeamStore: (selector) => selector(teamState),
   }));
 
+  vi.doMock('../../hooks/useSessionTimeline.js', () => ({
+    useSessionTimeline: () => ({
+      sessions: [],
+      totals: { sessions: 0, edits: 0, lines_added: 0, lines_removed: 0, tools: [] },
+      isLoading: false,
+      error: null,
+    }),
+  }));
+
+  vi.doMock('../../hooks/useUserAnalytics.js', () => ({
+    useUserAnalytics: () => ({
+      analytics: {
+        ok: true,
+        period_days: 30,
+        file_heatmap: [],
+        daily_trends: [],
+        tool_distribution: [],
+        outcome_distribution: [],
+        daily_metrics: [],
+        hourly_distribution: [],
+        model_outcomes: [],
+        tool_outcomes: [],
+        teams_included: 0,
+        degraded: false,
+      },
+      isLoading: false,
+      error: null,
+    }),
+  }));
+
   vi.doMock('../../components/EmptyState/EmptyState.js', () => ({
     default: function MockEmptyState({ title }) {
       return <div data-testid="empty-state">{title}</div>;

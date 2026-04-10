@@ -115,17 +115,18 @@ chinwag follows the Docker Desktop model: agents appear in the dashboard regardl
 
 ### Control mechanisms by tier
 
-| Mechanism            | Managed (CLI)            | Connected (IDE)          |
-| -------------------- | ------------------------ | ------------------------ |
-| Start/stop           | Process control          | N/A (IDE owns lifecycle) |
-| Pause/resume         | Hook-based (Claude Code) | Advisory message         |
-| Messaging            | Enforced delivery        | Via MCP context          |
-| File locks           | Full                     | Full                     |
-| Memory               | Full                     | Full                     |
-| Conflict detection   | Full                     | Full                     |
-| Dashboard visibility | Full                     | Full                     |
+| Mechanism              | Managed (CLI)            | Connected (IDE)          |
+| ---------------------- | ------------------------ | ------------------------ |
+| Start/stop             | Process control          | N/A (IDE owns lifecycle) |
+| Pause/resume           | Hook-based (Claude Code) | Advisory message         |
+| Messaging              | Enforced delivery        | Via MCP context          |
+| File locks             | Full                     | Full                     |
+| Memory                 | Full                     | Full                     |
+| Conflict detection     | Full                     | Full                     |
+| Dashboard visibility   | Full                     | Full                     |
+| Conversation analytics | Full (parsed from logs)  | Coordination data only   |
 
-The dashboard shows both tiers in one unified list. Managed agents get stop/restart controls. Connected agents show activity and coordination data. The user does not need to understand the distinction for coordination to work.
+The dashboard shows both tiers in one unified list. Managed agents get stop/restart controls and full conversation analytics. Connected agents show activity and coordination data. The user does not need to understand the distinction for coordination to work.
 
 ## How agents connect
 
@@ -218,21 +219,22 @@ The monorepo has five packages:
 
 ### Worker (`packages/worker/src/`)
 
-| File                     | Responsibility                                                                                                                                                                                      |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `index.js`               | HTTP router. Matches request paths to handlers. Runs Bearer token auth on protected routes via KV lookup. Bridges HTTP/WebSocket to Durable Objects. Hosts the tool catalog (`GET /tools/catalog`). |
-| `db.js`                  | `DatabaseDO`: single instance holding all persistent data. Users, agent profiles, rate limits (`checkRateLimit`). SQLite storage.                                                                   |
-| `dos/team/index.js`      | `TeamDO`: one instance per team. Class shell, schema, cleanup, identity resolution, and composite queries (`getContext`, `getSummary`).                                                             |
-| `dos/team/membership.js` | Team join, leave, and heartbeat logic.                                                                                                                                                              |
-| `dos/team/activity.js`   | Agent activity tracking, file conflict detection, single-file edit reporting.                                                                                                                       |
-| `dos/team/memory.js`     | Shared project memory: save, search, update, delete. Free-form tags, 500-memory cap with LRU pruning.                                                                                               |
-| `dos/team/locks.js`      | File lock claim, release, and query.                                                                                                                                                                |
-| `dos/team/sessions.js`   | Session start, end, edit recording, and history queries.                                                                                                                                            |
-| `dos/team/messages.js`   | Inter-agent messaging: send and retrieve.                                                                                                                                                           |
-| `dos/team/runtime.js`    | Runtime metadata normalization for agent identity tracking.                                                                                                                                         |
-| `lobby.js`               | `LobbyDO`: single instance managing chat room assignment and global presence. Tracks active rooms and their sizes. Heartbeat-based presence with 60s TTL.                                           |
-| `room.js`                | `RoomDO`: one instance per chat room. Holds WebSocket connections, broadcasts messages, maintains last 50 messages as history.                                                                      |
-| `moderation.js`          | Two-layer content filter. Layer 1: synchronous regex blocklist (under 1 ms). Layer 2: async AI moderation via Llama Guard 3. Used for chat and status text.                                         |
+| File                        | Responsibility                                                                                                                                                                                      |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `index.js`                  | HTTP router. Matches request paths to handlers. Runs Bearer token auth on protected routes via KV lookup. Bridges HTTP/WebSocket to Durable Objects. Hosts the tool catalog (`GET /tools/catalog`). |
+| `db.js`                     | `DatabaseDO`: single instance holding all persistent data. Users, agent profiles, rate limits (`checkRateLimit`). SQLite storage.                                                                   |
+| `dos/team/index.js`         | `TeamDO`: one instance per team. Class shell, schema, cleanup, identity resolution, and composite queries (`getContext`, `getSummary`).                                                             |
+| `dos/team/membership.js`    | Team join, leave, and heartbeat logic.                                                                                                                                                              |
+| `dos/team/activity.js`      | Agent activity tracking, file conflict detection, single-file edit reporting.                                                                                                                       |
+| `dos/team/memory.js`        | Shared project memory: save, search, update, delete. Free-form tags, 500-memory cap with LRU pruning.                                                                                               |
+| `dos/team/locks.js`         | File lock claim, release, and query.                                                                                                                                                                |
+| `dos/team/sessions.js`      | Session start, end, edit recording, and history queries.                                                                                                                                            |
+| `dos/team/conversations.ts` | Conversation intelligence: store and query parsed messages from managed sessions. Sentiment tracking, topic classification, message length trends, sentiment-outcome correlation.                   |
+| `dos/team/messages.js`      | Inter-agent messaging: send and retrieve.                                                                                                                                                           |
+| `dos/team/runtime.js`       | Runtime metadata normalization for agent identity tracking.                                                                                                                                         |
+| `lobby.js`                  | `LobbyDO`: single instance managing chat room assignment and global presence. Tracks active rooms and their sizes. Heartbeat-based presence with 60s TTL.                                           |
+| `room.js`                   | `RoomDO`: one instance per chat room. Holds WebSocket connections, broadcasts messages, maintains last 50 messages as history.                                                                      |
+| `moderation.js`             | Two-layer content filter. Layer 1: synchronous regex blocklist (under 1 ms). Layer 2: async AI moderation via Llama Guard 3. Used for chat and status text.                                         |
 
 ### MCP Server (`packages/mcp/`)
 
@@ -264,20 +266,21 @@ The monorepo has five packages:
 
 ### CLI (`packages/cli/`)
 
-| File                     | Responsibility                                                                                                                                                                                                                                                      |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cli.jsx`                | App shell with error boundary. Screen state machine: loading → welcome → {dashboard, chat, customize, discover}. Loads/validates config on startup. Also handles pre-TUI commands (`init`, `add`, `run`).                                                           |
-| `lib/dashboard.jsx`      | Agent activity dashboard. Shows configured tools, active/offline agents (managed + connected), file conflicts, recent sessions, and team knowledge. Real-time updates via WebSocket with adaptive polling fallback (5s→60s). Managed agent controls (stop/restart). |
-| `lib/process-manager.js` | Spawns CLI agents via node-pty, tracks PIDs, handles kill/restart. Provides lifecycle events for dashboard integration.                                                                                                                                             |
-| `lib/discover.jsx`       | Tool discovery screen. Shows your configured tools, recommends new tools from the catalog, browse by category, one-key add.                                                                                                                                         |
-| `lib/init-command.js`    | `chinwag init`: account setup, team creation/join, tool detection via registry, MCP config + hooks writing.                                                                                                                                                         |
-| `lib/add-command.js`     | `chinwag add <tool>`: adds a specific tool's MCP config. Fetches discovery catalog from API.                                                                                                                                                                        |
-| `lib/tools.js`           | CLI re-export of the shared MCP tool registry. Discovery catalog lives in the worker API (`GET /tools/catalog`).                                                                                                                                                    |
-| `lib/chat.jsx`           | Live chat. WebSocket connection with exponential backoff reconnect (1s→15s cap).                                                                                                                                                                                    |
-| `lib/customize.jsx`      | Profile editor. Change handle, cycle through 12-color palette, set status.                                                                                                                                                                                          |
-| `lib/api.js`             | HTTP client. Wraps fetch with Bearer token auth, 10s timeout, retry with exponential backoff on 5xx/network errors.                                                                                                                                                 |
-| `lib/colors.js`          | Maps chinwag's 12 colors to ANSI terminal colors for Ink rendering.                                                                                                                                                                                                 |
-| `lib/config.js`          | Reads/writes the active profile config. Production uses `~/.chinwag/config.json`; local dev uses `~/.chinwag/local/config.json`.                                                                                                                                    |
+| File                                    | Responsibility                                                                                                                                                                                                                                                      |
+| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cli.jsx`                               | App shell with error boundary. Screen state machine: loading → welcome → {dashboard, chat, customize, discover}. Loads/validates config on startup. Also handles pre-TUI commands (`init`, `add`, `run`).                                                           |
+| `lib/dashboard.jsx`                     | Agent activity dashboard. Shows configured tools, active/offline agents (managed + connected), file conflicts, recent sessions, and team knowledge. Real-time updates via WebSocket with adaptive polling fallback (5s→60s). Managed agent controls (stop/restart). |
+| `lib/process-manager.js`                | Spawns CLI agents via node-pty, tracks PIDs, handles kill/restart. Provides lifecycle events for dashboard integration.                                                                                                                                             |
+| `lib/process/conversation-collector.ts` | Post-session conversation collector. Parses conversation logs from managed agent sessions (tool-specific parsers behind a generic interface) and uploads normalized events for conversation analytics.                                                              |
+| `lib/discover.jsx`                      | Tool discovery screen. Shows your configured tools, recommends new tools from the catalog, browse by category, one-key add.                                                                                                                                         |
+| `lib/init-command.js`                   | `chinwag init`: account setup, team creation/join, tool detection via registry, MCP config + hooks writing.                                                                                                                                                         |
+| `lib/add-command.js`                    | `chinwag add <tool>`: adds a specific tool's MCP config. Fetches discovery catalog from API.                                                                                                                                                                        |
+| `lib/tools.js`                          | CLI re-export of the shared MCP tool registry. Discovery catalog lives in the worker API (`GET /tools/catalog`).                                                                                                                                                    |
+| `lib/chat.jsx`                          | Live chat. WebSocket connection with exponential backoff reconnect (1s→15s cap).                                                                                                                                                                                    |
+| `lib/customize.jsx`                     | Profile editor. Change handle, cycle through 12-color palette, set status.                                                                                                                                                                                          |
+| `lib/api.js`                            | HTTP client. Wraps fetch with Bearer token auth, 10s timeout, retry with exponential backoff on 5xx/network errors.                                                                                                                                                 |
+| `lib/colors.js`                         | Maps chinwag's 12 colors to ANSI terminal colors for Ink rendering.                                                                                                                                                                                                 |
+| `lib/config.js`                         | Reads/writes the active profile config. Production uses `~/.chinwag/config.json`; local dev uses `~/.chinwag/local/config.json`.                                                                                                                                    |
 
 ### Shared (`packages/shared/`)
 
@@ -336,7 +339,8 @@ chinwag captures session-level data that powers workflow analytics and long-term
 2. **Voluntary reporting (all MCP tools).** Agents report activity, check conflicts, and manage memory through MCP tool calls. Each call updates the session's last-activity timestamp.
 3. **Session record.** Each session stores: `edit_count`, `files_touched`, `conflicts_hit`, `memories_saved`, `duration_minutes`, `agent_model`, `host_tool`, `transport`, `framework`. This is the raw material for analytics.
 4. **Derived metrics.** From raw session data, chinwag derives edit velocity (edits/minute), codebase heatmaps (aggregate files_touched), stuckness patterns (correlate stuck sessions with file areas), and retry detection (multiple sessions on same files in short windows).
-5. **Integration depth determines data richness.** Hook-enabled tools provide granular, automatic data on every edit. MCP-only tools provide coordination data and voluntary reporting. The intelligence layer works with both, surfacing richer insights where richer data is available.
+5. **Conversation intelligence (managed agents).** After a managed session ends, chinwag parses the agent's conversation logs and uploads normalized events — user and assistant messages with sequence, timestamps, and character counts. The backend stores these in `conversation_events` and runs analytics: sentiment distribution, topic classification, message length trends, and crucially, correlation between conversation patterns and session outcomes. Tool-specific parsers (isolated behind a generic `ConversationEvent[]` interface) handle each tool's log format; the analytics layer is tool-agnostic.
+6. **Integration depth determines data richness.** Hook-enabled tools provide granular, automatic data on every edit. MCP-only tools provide coordination data and voluntary reporting. Managed tools get the deepest tier: conversation-level analytics. The intelligence layer works with all, surfacing richer insights where richer data is available.
 
 ### Chat (Secondary)
 

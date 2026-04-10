@@ -65,7 +65,13 @@
 .layout {
   height: 100vh;
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  position: relative;
+  grid-template-columns: calc(var(--sidebar-width-expanded) + var(--sidebar-margin)) 1fr;
+  transition: grid-template-columns var(--motion-slow) var(--motion);
+}
+
+.layoutCollapsed {
+  grid-template-columns: calc(var(--sidebar-width-collapsed) + var(--sidebar-margin)) 1fr;
 }
 
 /* ── Main ── */
@@ -76,10 +82,8 @@
 }
 
 .content {
-  width: min(100%, var(--content-max-width));
-  margin: 0 auto;
-  padding: 28px 56px 88px;
   max-width: var(--content-max-width);
+  padding: 28px 56px 88px;
 }
 
 /* Banner slot — centers the Banner component at the top of .main */
@@ -89,7 +93,8 @@
 
 /* ── Sidebar fallback ── */
 .sidebarFallback {
-  width: var(--sidebar-width, 216px);
+  width: 100%;
+  min-width: 0;
   padding: 18px 0 24px;
   display: flex;
   flex-direction: column;
@@ -114,11 +119,12 @@
 
 /* Mobile */
 @media (max-width: 768px) {
-  .layout {
+  .layout,
+  .layoutCollapsed {
     grid-template-columns: 1fr;
   }
   .content {
-    padding: 20px 20px 64px;
+    padding: 56px 20px 64px;
   }
   .bannerSlot {
     padding: 12px 20px 0;

@@ -27,6 +27,17 @@ import RenderErrorBoundary from './components/RenderErrorBoundary/RenderErrorBou
 import styles from './App.module.css';
 
 type BootState = 'loading' | 'ready' | 'unauthenticated';
+const SIDEBAR_COLLAPSE_STORAGE_KEY = 'chinwag:sidebar-collapsed-v1';
+
+function readSidebarCollapsed(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    // Default to collapsed (stored '0' means explicitly expanded)
+    return localStorage.getItem(SIDEBAR_COLLAPSE_STORAGE_KEY) !== '0';
+  } catch {
+    return true;
+  }
+}
 
 interface SidebarFallbackProps {
   reset: () => void;
@@ -52,6 +63,7 @@ export default function App(): ReactNode {
   const [bootCompleted, setBootCompleted] = useState<boolean>(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [dismissedError, setDismissedError] = useState<string | null>(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => readSidebarCollapsed());
   const route = useRoute();
 
   const { token, user } = useAuthStore(
@@ -112,6 +124,19 @@ export default function App(): ReactNode {
   useEffect(() => {
     if (bootCompleted && !isAuthenticated && !demo) resetPollingState();
   }, [bootCompleted, isAuthenticated, demo]);
+
+  useEffect(() => {
+    try {
+      // Store '0' for expanded (collapsed is the default)
+      if (sidebarCollapsed) {
+        localStorage.removeItem(SIDEBAR_COLLAPSE_STORAGE_KEY);
+      } else {
+        localStorage.setItem(SIDEBAR_COLLAPSE_STORAGE_KEY, '0');
+      }
+    } catch {
+      // Ignore storage failures; collapse state still works for this session.
+    }
+  }, [sidebarCollapsed]);
 
   useEffect(() => {
     if (bootState === 'ready' && isAuthenticated && !demo) {
@@ -202,9 +227,15 @@ export default function App(): ReactNode {
   }
 
   return (
-    <div className={styles.layout}>
+    <div
+      className={sidebarCollapsed ? `${styles.layout} ${styles.layoutCollapsed}` : styles.layout}
+    >
       <RenderErrorBoundary label="Sidebar" fallback={SidebarFallback}>
-        <Sidebar activeView={activeView} />
+        <Sidebar
+          activeView={activeView}
+          collapsed={sidebarCollapsed}
+          onToggle={() => setSidebarCollapsed((c) => !c)}
+        />
       </RenderErrorBoundary>
 
       <div className={styles.main}>

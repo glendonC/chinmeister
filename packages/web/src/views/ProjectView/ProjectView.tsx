@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback } from 'react';
+import { type CSSProperties, useCallback, useState } from 'react';
 import clsx from 'clsx';
 import { forceRefresh } from '../../lib/stores/polling.js';
 import { teamActions } from '../../lib/stores/teams.js';
@@ -13,16 +13,17 @@ import {
 } from '../../components/Skeleton/Skeleton.jsx';
 import KeyboardHint from '../../components/KeyboardHint/KeyboardHint.jsx';
 import { useTabs } from '../../hooks/useTabs.js';
-import { useTeamAnalytics } from '../../hooks/useTeamAnalytics.js';
+import { useTeamAnalytics, useTeamExtendedAnalytics } from '../../hooks/useTeamAnalytics.js';
 import { useEditHistory } from '../../hooks/useEditHistory.js';
 import ProjectOverviewTab from './ProjectOverviewTab.jsx';
 import ProjectLiveTab from './ProjectLiveTab.jsx';
 import ProjectSessionsTab from './ProjectSessionsTab.jsx';
 import ProjectMemoryTab from './ProjectMemoryTab.jsx';
+import ProjectAnalyticsTab from './ProjectAnalyticsTab.jsx';
 import { useProjectData } from './useProjectData.js';
 import styles from './ProjectView.module.css';
 
-const PROJECT_TABS = ['overview', 'agents', 'sessions', 'memory'] as const;
+const PROJECT_TABS = ['overview', 'agents', 'sessions', 'analytics', 'memory'] as const;
 type ProjectTab = (typeof PROJECT_TABS)[number];
 
 interface StatEntry {
@@ -65,6 +66,7 @@ export default function ProjectView(_props: Props) {
     lineStats,
   } = useProjectData();
 
+  const [analyticsRange, setAnalyticsRange] = useState<7 | 30 | 90>(30);
   const { analytics, isLoading: analyticsLoading } = useTeamAnalytics(activeTeamId, 30);
   const { editHistory } = useEditHistory(activeTeamId, 7);
 
@@ -83,6 +85,12 @@ export default function ProjectView(_props: Props) {
     ref: statsRef,
   } = useTabs(PROJECT_TABS);
 
+  const { analytics: extendedAnalytics, isLoading: extendedLoading } = useTeamExtendedAnalytics(
+    activeTeamId,
+    analyticsRange,
+    activeViz === 'analytics',
+  );
+
   const stats: StatEntry[] = [
     { id: 'overview', label: 'Overview', value: '\u2014', tone: '' },
     {
@@ -97,6 +105,7 @@ export default function ProjectView(_props: Props) {
       value: allSessions.length,
       tone: liveSessionCount > 0 ? 'accent' : '',
     },
+    { id: 'analytics', label: 'Analytics', value: '\u2014', tone: '' },
     { id: 'memory', label: 'Memory', value: memories.length, tone: '' },
   ];
 
@@ -240,6 +249,17 @@ export default function ProjectView(_props: Props) {
               analytics={analytics}
               analyticsLoading={analyticsLoading}
               edits={editHistory.edits}
+            />
+          </div>
+        )}
+
+        {activeViz === 'analytics' && (
+          <div className={styles.vizPanel} role="tabpanel" id="panel-analytics">
+            <ProjectAnalyticsTab
+              analytics={extendedAnalytics}
+              isLoading={extendedLoading}
+              rangeDays={analyticsRange}
+              onRangeChange={setAnalyticsRange}
             />
           </div>
         )}

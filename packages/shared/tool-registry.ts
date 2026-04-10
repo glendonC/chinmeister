@@ -44,6 +44,18 @@ export interface ToolCatalog {
   featured?: boolean;
 }
 
+/**
+ * Declares what data a tool can provide beyond basic session/edit tracking.
+ * Each flag indicates a specific data extraction capability.
+ * Adding a new capability = one field here + one parser in the registry.
+ */
+export interface DataCapabilities {
+  /** Tool writes conversation logs that chinwag can parse for message-level analytics. */
+  conversationLogs?: boolean;
+  /** Tool exposes token/usage data (input tokens, output tokens) in its logs. */
+  tokenUsage?: boolean;
+}
+
 export interface McpTool {
   id: string;
   name: string;
@@ -62,6 +74,12 @@ export interface McpTool {
   availabilityCheck?: ToolAvailabilityCheck;
   failurePatterns?: ToolFailurePattern[];
   tier?: 'managed' | 'connected';
+  /**
+   * What data this tool can provide beyond basic session/edit tracking.
+   * Drives parser selection and coverage reporting — never branch on tool ID,
+   * branch on capabilities instead.
+   */
+  dataCapabilities?: DataCapabilities;
   catalog: ToolCatalog;
 }
 
@@ -125,6 +143,7 @@ export const MCP_TOOLS: McpTool[] = [
         recoveryCommand: CLAUDE_AUTH_LOGIN,
       },
     ],
+    dataCapabilities: { conversationLogs: true, tokenUsage: true },
     catalog: {
       description: 'Terminal AI coding agent with hooks, channels, and agent teams',
       category: 'coding-agent',
@@ -241,6 +260,7 @@ export const MCP_TOOLS: McpTool[] = [
     clientInfoNames: ['aider', 'aider-chat'],
     mcpConfig: '.mcp.json',
     spawn: { cmd: 'aider', args: ['--message'] },
+    dataCapabilities: { conversationLogs: true },
     catalog: {
       description: 'Terminal pair programmer that edits code in your repo',
       category: 'coding-agent',
@@ -317,4 +337,35 @@ export const MCP_TOOLS: McpTool[] = [
 
 export function getMcpToolById(toolId: string): McpTool | null {
   return MCP_TOOLS.find((tool) => tool.id === toolId) || null;
+}
+
+/**
+ * Get the full data capabilities for a tool.
+ * Returns empty object if tool not found or has no data capabilities.
+ */
+export function getDataCapabilities(toolId: string): DataCapabilities {
+  return getMcpToolById(toolId)?.dataCapabilities || {};
+}
+
+/**
+ * Get all tool IDs that have a specific data capability.
+ * Used for coverage computation — never hardcode tool IDs, query capabilities instead.
+ */
+export function getToolsWithCapability(capability: keyof DataCapabilities): string[] {
+  return MCP_TOOLS.filter((t) => t.dataCapabilities?.[capability]).map((t) => t.id);
+}
+
+/** Check if a tool supports conversation-level analytics. */
+export function toolSupportsConversationLogs(toolId: string): boolean {
+  return getDataCapabilities(toolId).conversationLogs === true;
+}
+
+/** List tool IDs that support conversation analytics. */
+export function getConversationCapableTools(): string[] {
+  return getToolsWithCapability('conversationLogs');
+}
+
+/** Check if a tool exposes token/usage data. */
+export function toolSupportsTokenUsage(toolId: string): boolean {
+  return getDataCapabilities(toolId).tokenUsage === true;
 }

@@ -79,7 +79,11 @@ import {
   handleTeamUpdateMemory,
   handleTeamDeleteMemoryBatch,
   handleTeamEnrichModel,
+  handleTeamRecordTokens,
   handleTeamAnalytics,
+  handleTeamRecordConversation,
+  handleTeamGetConversation,
+  handleTeamConversationAnalytics,
   handleTeamWebSocket,
   handleTeamCreateCategory,
   handleTeamListCategories,
@@ -268,9 +272,17 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'PUT', path: `/teams/${TID}/sessionmodel`, handler: handleTeamEnrichModel },
   { method: 'POST', path: `/teams/${TID}/sessionedit`, handler: handleTeamSessionEdit },
   { method: 'PUT', path: `/teams/${TID}/sessionoutcome`, handler: handleTeamReportOutcome },
+  { method: 'POST', path: `/teams/${TID}/sessiontokens`, handler: handleTeamRecordTokens },
   { method: 'GET', path: `/teams/${TID}/history`, handler: handleTeamHistory },
   { method: 'GET', path: `/teams/${TID}/edits`, handler: handleTeamEditHistory },
   { method: 'GET', path: `/teams/${TID}/analytics`, handler: handleTeamAnalytics },
+  { method: 'POST', path: `/teams/${TID}/conversations`, handler: handleTeamRecordConversation },
+  { method: 'GET', path: `/teams/${TID}/conversations`, handler: handleTeamGetConversation },
+  {
+    method: 'GET',
+    path: `/teams/${TID}/conversations/analytics`,
+    handler: handleTeamConversationAnalytics,
+  },
 ];
 
 const routes = buildRoutes(routeDefinitions);

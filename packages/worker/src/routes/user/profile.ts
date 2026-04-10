@@ -105,8 +105,9 @@ export const handleClearStatus = authedRoute(async ({ user, env }) => {
   return json({ ok: true });
 });
 
-export const handleHeartbeat = authedRoute(async ({ user, env }) => {
-  const result = rpc(await getLobby(env).heartbeat(user.handle));
+export const handleHeartbeat = authedRoute(async ({ request, user, env }) => {
+  const country = request.headers.get('CF-IPCountry') || null;
+  const result = rpc(await getLobby(env).heartbeat(user.handle, country));
   if (result && typeof result === 'object' && 'error' in result) {
     log.warn(`heartbeat failed: ${result.error}`);
     return json({ error: result.error }, 500);

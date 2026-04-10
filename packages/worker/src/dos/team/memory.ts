@@ -286,7 +286,7 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
     const placeholders = idsToTouch.map(() => '?').join(',');
     try {
       sql.exec(
-        `UPDATE memories SET last_accessed_at = datetime('now') WHERE id IN (${placeholders})`,
+        `UPDATE memories SET last_accessed_at = datetime('now'), access_count = access_count + 1 WHERE id IN (${placeholders})`,
         ...idsToTouch,
       );
     } catch (e) {

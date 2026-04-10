@@ -18,6 +18,7 @@ export {
   handleTeamHistory,
   handleTeamEditHistory,
   handleTeamEnrichModel,
+  handleTeamRecordTokens,
 } from './activity.js';
 export {
   handleTeamSaveMemory,
@@ -38,3 +39,8 @@ export { handleTeamClaimFiles, handleTeamReleaseFiles, handleTeamGetLocks } from
 export { handleTeamSendMessage, handleTeamGetMessages } from './messages.js';
 export { handleTeamSubmitCommand, handleTeamGetCommands } from './commands.js';
 export { handleTeamAnalytics } from './analytics.js';
+export {
+  handleTeamRecordConversation,
+  handleTeamGetConversation,
+  handleTeamConversationAnalytics,
+} from './conversations.js';

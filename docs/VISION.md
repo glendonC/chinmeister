@@ -37,6 +37,7 @@ Cross-vendor, cross-developer, real-time agent coordination.
 Understand and improve how you develop with AI.
 
 - **Session analytics.** Every agent session tracked — duration, edit velocity, file scope, outcome. See patterns evolve over time: not just what happened, but whether your workflow is improving.
+- **Conversation intelligence.** For managed agents, chinwag captures the full interaction — message counts, character length trends, sentiment shifts, topic classification. Correlate how you communicate with agents to how sessions turn out. Discover that your sessions degrade when your messages get shorter and more frustrated, or that certain topics consistently lead to abandoned sessions. The deeper the integration, the richer the signal.
 - **Codebase heatmaps.** Where does AI touch your project most? Where do agents struggle, where are the blind spots? Your codebase through the lens of how AI interacts with it.
 - **Project lenses.** View your project through different perspectives — security posture, test health, architecture quality, documentation freshness — each with actions to spawn an agent and address what you see.
 - **Multi-project dashboard.** Your full AI workflow across all repos. Which projects are actively agent-developed, session distribution across tools, cross-project trends.
@@ -52,7 +53,7 @@ Understand and improve how you develop with AI.
 
 **One team per project, one account across projects.** The `.chinwag` file (committed to git) scopes a team to a repo. `~/.chinwag/config.json` gives each developer a cross-project identity. Teammates auto-join when they run `chinwag init` in a project that already has a `.chinwag` file.
 
-**Integration depth scales with the tool.** Tools that support hooks (like Claude Code) get the richest experience: enforced conflict prevention, automatic edit tracking, and full session analytics. Tools connected via MCP get coordination, shared memory, and activity awareness. Every tool benefits; deeper integration unlocks deeper intelligence.
+**Integration depth scales with the tool.** Tools that support hooks (like Claude Code) get the richest experience: enforced conflict prevention, automatic edit tracking, and full session analytics. Managed agents (spawned through chinwag) unlock the deepest tier: conversation-level analytics including message sentiment, topic classification, interaction patterns, and correlations between communication style and session outcomes. Tools connected via MCP get coordination, shared memory, and activity awareness. Every tool benefits; deeper integration unlocks deeper intelligence.
 
 **Expand your stack as you go.** `chinwag add <tool>` integrates any supported AI tool — MCP config, hooks where supported, done.
 

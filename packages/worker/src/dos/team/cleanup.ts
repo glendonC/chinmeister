@@ -88,9 +88,13 @@ export function runCleanup(
       ),
     );
 
+    // Mark orphaned sessions as stuck. These are sessions where the agent's heartbeat
+    // expired (15+ min without activity) while the session was still open — strong signal
+    // the agent was genuinely stuck or crashed, not a graceful disconnect (which would
+    // have called endSession before the heartbeat window expired).
     step('close orphaned sessions', () =>
       sql.exec(
-        `UPDATE sessions SET ended_at = datetime('now')
+        `UPDATE sessions SET ended_at = datetime('now'), got_stuck = 1
            WHERE ended_at IS NULL
            AND agent_id NOT IN (
              SELECT agent_id FROM members

@@ -36,12 +36,18 @@ const lobbyMigrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '002_presence_country',
+    up(sql) {
+      sql.exec(`ALTER TABLE presence ADD COLUMN country TEXT`);
+    },
+  },
 ];
 
 export class LobbyDO extends DurableObject<Env> {
   sql: SqlStorage;
   rooms: Map<string, RoomInfo>;
-  presence: Map<string, number>;
+  presence: Map<string, { lastSeen: number; country: string | null }>;
   #schemaReady = false;
   #lastPresenceCleanup = 0;
 
@@ -53,7 +59,7 @@ export class LobbyDO extends DurableObject<Env> {
     this.#transact = <T>(fn: () => T): T => ctx.storage.transactionSync(fn);
     // roomId -> { count, lastUpdate }
     this.rooms = new Map();
-    // handle -> lastSeen timestamp
+    // handle -> { lastSeen, country }
     this.presence = new Map();
   }
 
@@ -71,9 +77,9 @@ export class LobbyDO extends DurableObject<Env> {
       });
     }
 
-    for (const row of this.sql.exec('SELECT handle, last_seen FROM presence')) {
-      const r = row as { handle: string; last_seen: number };
-      this.presence.set(r.handle, r.last_seen);
+    for (const row of this.sql.exec('SELECT handle, last_seen, country FROM presence')) {
+      const r = row as { handle: string; last_seen: number; country: string | null };
+      this.presence.set(r.handle, { lastSeen: r.last_seen, country: r.country });
     }
 
     this.#schemaReady = true;
@@ -86,8 +92,8 @@ export class LobbyDO extends DurableObject<Env> {
     this.#lastPresenceCleanup = now;
 
     const staleHandles: string[] = [];
-    for (const [handle, lastSeen] of this.presence) {
-      if (now - lastSeen > PRESENCE_TTL_MS) {
+    for (const [handle, entry] of this.presence) {
+      if (now - entry.lastSeen > PRESENCE_TTL_MS) {
         this.presence.delete(handle);
         staleHandles.push(handle);
       }
@@ -98,14 +104,16 @@ export class LobbyDO extends DurableObject<Env> {
     }
   }
 
-  async heartbeat(handle: string): Promise<{ ok: true }> {
+  async heartbeat(handle: string, country?: string | null): Promise<{ ok: true }> {
     this.#ensureSchema();
     const now = Date.now();
-    this.presence.set(handle, now);
+    const cc = country || null;
+    this.presence.set(handle, { lastSeen: now, country: cc });
     this.sql.exec(
-      'INSERT INTO presence (handle, last_seen) VALUES (?, ?) ON CONFLICT(handle) DO UPDATE SET last_seen = excluded.last_seen',
+      'INSERT INTO presence (handle, last_seen, country) VALUES (?, ?, ?) ON CONFLICT(handle) DO UPDATE SET last_seen = excluded.last_seen, country = excluded.country',
       handle,
       now,
+      cc,
     );
     this.#maybeCleanupPresence();
     return { ok: true };
@@ -159,7 +167,13 @@ export class LobbyDO extends DurableObject<Env> {
     return { ok: true };
   }
 
-  async getStats(): Promise<{ ok: true; online: number; chatUsers: number; activeRooms: number }> {
+  async getStats(): Promise<{
+    ok: true;
+    online: number;
+    chatUsers: number;
+    activeRooms: number;
+    countries: Record<string, number>;
+  }> {
     this.#ensureSchema();
     this.#maybeCleanupPresence();
 
@@ -170,6 +184,12 @@ export class LobbyDO extends DurableObject<Env> {
       activeRooms++;
     }
 
-    return { ok: true, online: this.presence.size, chatUsers, activeRooms };
+    const countries: Record<string, number> = {};
+    for (const [, entry] of this.presence) {
+      const cc = entry.country || 'XX';
+      countries[cc] = (countries[cc] || 0) + 1;
+    }
+
+    return { ok: true, online: this.presence.size, chatUsers, activeRooms, countries };
   }
 }

@@ -57,6 +57,7 @@ import {
   endSession as endSessionFn,
   recordEdit as recordEditFn,
   reportOutcome as reportOutcomeFn,
+  recordTokenUsage as recordTokenUsageFn,
   getSessionHistory,
   getSessionsInRange as getSessionsInRangeFn,
   getEditHistory as getEditHistoryFn,
@@ -68,6 +69,14 @@ import {
   getExtendedAnalytics as getExtendedAnalyticsFn,
 } from './analytics.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
+import {
+  batchRecordConversationEvents as batchRecordConversationEventsFn,
+  getConversationForSession as getConversationForSessionFn,
+  getConversationAnalytics as getConversationAnalyticsFn,
+  getSessionConversationStats as getSessionConversationStatsFn,
+  type ConversationEventInput,
+} from './conversations.js';
+import type { ConversationAnalytics, SessionConversationStats } from '@chinwag/shared/contracts.js';
 import {
   submitCommand as submitCommandFn,
   claimCommand as claimCommandFn,
@@ -750,9 +759,10 @@ export class TeamDO extends DurableObject<Env> {
     outcome: string,
     summary: string | null = null,
     ownerId: string | null = null,
+    outcomeTags?: string[] | null,
   ): Promise<DOResult<{ ok: true }> | DOError> {
     return this.#withMember(agentId, ownerId, (resolved) =>
-      reportOutcomeFn(this.sql, resolved, outcome, summary),
+      reportOutcomeFn(this.sql, resolved, outcome, summary, outcomeTags),
     );
   }
 
@@ -800,6 +810,72 @@ export class TeamDO extends DurableObject<Env> {
     );
   }
 
+  async recordTokenUsage(
+    agentId: string,
+    sessionId: string,
+    inputTokens: number,
+    outputTokens: number,
+    ownerId: string | null = null,
+  ): Promise<{ ok: true } | DOError> {
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      recordTokenUsageFn(this.sql, resolved, sessionId, inputTokens, outputTokens),
+    );
+  }
+
+  // -- Conversation intelligence --
+
+  async recordConversationEvents(
+    agentId: string,
+    sessionId: string,
+    handle: string,
+    hostTool: string,
+    events: ConversationEventInput[],
+    ownerId: string | null = null,
+  ): Promise<{ ok: true; count: number } | DOError> {
+    return this.#withMember(agentId, ownerId, () => {
+      const result = batchRecordConversationEventsFn(
+        this.sql,
+        sessionId,
+        agentId,
+        handle,
+        hostTool,
+        events,
+        this.#transact,
+      );
+      this.#recordMetric('conversation_events_recorded');
+      return result;
+    });
+  }
+
+  async getConversation(
+    agentId: string,
+    sessionId: string,
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof getConversationForSessionFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () =>
+      getConversationForSessionFn(this.sql, sessionId),
+    );
+  }
+
+  async getConversationAnalytics(
+    agentId: string,
+    days: number,
+    ownerId: string | null = null,
+  ): Promise<ConversationAnalytics | DOError> {
+    return this.#withMember(agentId, ownerId, () => getConversationAnalyticsFn(this.sql, days));
+  }
+
+  async getSessionConversationStats(
+    agentId: string,
+    sessionIds: string[],
+    ownerId: string | null = null,
+  ): Promise<{ ok: true; stats: SessionConversationStats[] } | DOError> {
+    return this.#withMember(agentId, ownerId, () => ({
+      ok: true as const,
+      stats: getSessionConversationStatsFn(this.sql, sessionIds),
+    }));
+  }
+
   // -- Memory --
 
   async saveMemory(
@@ -843,9 +919,14 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
     filters: Omit<SearchFilters, 'query' | 'tags' | 'categories' | 'limit'> = {},
   ): Promise<ReturnType<typeof searchMemoriesFn> | DOError> {
-    return this.#withMember(agentId, ownerId, () => {
+    return this.#withMember(agentId, ownerId, (resolved) => {
       const result = searchMemoriesFn(this.sql, { query, tags, categories, limit, ...filters });
       this.#recordMetric(METRIC_KEYS.MEMORIES_SEARCHED);
+      // Increment per-session memory search counter
+      this.sql.exec(
+        `UPDATE sessions SET memories_searched = memories_searched + 1 WHERE agent_id = ? AND ended_at IS NULL`,
+        resolved,
+      );
       if ('ok' in result && result.memories && result.memories.length > 0) {
         this.#recordMetric(METRIC_KEYS.MEMORIES_SEARCH_HITS);
       }

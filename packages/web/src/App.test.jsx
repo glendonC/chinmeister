@@ -176,7 +176,7 @@ async function loadAppModule(options = {}) {
   }));
 
   vi.doMock('./components/Sidebar/Sidebar.js', () => ({
-    default: function MockSidebar({ activeView }) {
+    default: function MockSidebar({ activeView, collapsed }) {
       return (
         <div data-testid="sidebar">
           <button data-testid="show-settings" onClick={() => navigateFn('settings')}>
@@ -189,6 +189,7 @@ async function loadAppModule(options = {}) {
             show tools
           </button>
           <span data-testid="sidebar-state">{String(activeView)}</span>
+          <span data-testid="sidebar-collapsed">{String(collapsed)}</span>
         </div>
       );
     },
@@ -496,6 +497,32 @@ describe('App boot and view switching', () => {
     });
 
     expect(container.querySelector('[data-testid="overview-view"]')).not.toBeNull();
+
+    unmount();
+    stopPolling();
+  });
+
+  it('toggles and persists the shell collapse control', async () => {
+    const { App, stopPolling, react, createRoot } = await loadAppModule({
+      storedToken: 'tok_sidebar',
+      teams: [{ team_id: 't_one' }, { team_id: 't_two' }],
+    });
+    const { container, unmount } = renderApp(App, react, createRoot);
+
+    await flushEffects();
+
+    const toggle = container.querySelector('[aria-label="Collapse sidebar"]');
+    expect(toggle).not.toBeNull();
+    expect(container.querySelector('[data-testid="sidebar-collapsed"]')?.textContent).toBe('false');
+
+    await act(async () => {
+      toggle?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await flushEffects();
+
+    expect(container.querySelector('[aria-label="Expand sidebar"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="sidebar-collapsed"]')?.textContent).toBe('true');
+    expect(localStorage.getItem('chinwag:sidebar-collapsed-v1')).toBe('1');
 
     unmount();
     stopPolling();
