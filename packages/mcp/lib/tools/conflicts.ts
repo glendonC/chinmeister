@@ -6,14 +6,14 @@ import { getHttpStatus, safeArray, withTimeout } from '../utils/responses.js';
 import { formatConflictsList, type ConflictInfo, type LockedFileInfo } from '../utils/display.js';
 import { formatWho } from '../utils/formatting.js';
 import { normalizePath, normalizeFiles } from '../utils/paths.js';
-import { FILE_PATH_MAX_LENGTH, FILE_LIST_MAX, API_TIMEOUT_MS } from '../constants.js';
+import { MAX_FILE_PATH_LENGTH, FILE_LIST_MAX, API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 import type { McpToolResult } from '../utils/responses.js';
 
 const checkConflictsSchema = z.object({
   files: z
-    .array(z.string().max(FILE_PATH_MAX_LENGTH))
+    .array(z.string().max(MAX_FILE_PATH_LENGTH))
     .max(FILE_LIST_MAX)
     .describe('File paths you plan to modify'),
 });

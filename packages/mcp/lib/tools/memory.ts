@@ -5,11 +5,11 @@ import * as z from 'zod/v4';
 import { safeArray, withTimeout } from '../utils/responses.js';
 import type { MemoryInfo } from '../utils/display.js';
 import {
-  MEMORY_TEXT_MAX_LENGTH,
-  TAG_MAX_LENGTH,
-  TAG_LIST_MAX,
+  MAX_MEMORY_TEXT_LENGTH,
+  MAX_TAG_LENGTH,
+  MAX_TAGS_PER_MEMORY,
   SEARCH_QUERY_MAX_LENGTH,
-  SEARCH_LIMIT_MAX,
+  MEMORY_SEARCH_MAX_LIMIT,
   API_TIMEOUT_MS,
 } from '../constants.js';
 import { withTeam } from './middleware.js';
@@ -18,11 +18,11 @@ import type { AddToolFn, ToolDeps } from './types.js';
 const saveMemorySchema = z.object({
   text: z
     .string()
-    .max(MEMORY_TEXT_MAX_LENGTH)
+    .max(MAX_MEMORY_TEXT_LENGTH)
     .describe('The knowledge to save. Be specific and actionable.'),
   tags: z
-    .array(z.string().max(TAG_MAX_LENGTH))
-    .max(TAG_LIST_MAX)
+    .array(z.string().max(MAX_TAG_LENGTH))
+    .max(MAX_TAGS_PER_MEMORY)
     .optional()
     .describe(
       'Optional tags for organization (e.g. ["setup", "redis", "testing"]). Use whatever labels make sense.',
@@ -32,10 +32,10 @@ type SaveMemoryArgs = z.infer<typeof saveMemorySchema>;
 
 const updateMemorySchema = z.object({
   id: z.string().describe('Memory ID to update (UUID format, get from chinwag_search_memory)'),
-  text: z.string().max(MEMORY_TEXT_MAX_LENGTH).optional().describe('Updated text content'),
+  text: z.string().max(MAX_MEMORY_TEXT_LENGTH).optional().describe('Updated text content'),
   tags: z
-    .array(z.string().max(TAG_MAX_LENGTH))
-    .max(TAG_LIST_MAX)
+    .array(z.string().max(MAX_TAG_LENGTH))
+    .max(MAX_TAGS_PER_MEMORY)
     .optional()
     .describe('Updated tags'),
 });
@@ -48,8 +48,8 @@ const searchMemorySchema = z.object({
     .optional()
     .describe('Search text (matches against memory content)'),
   tags: z
-    .array(z.string().max(TAG_MAX_LENGTH))
-    .max(TAG_LIST_MAX)
+    .array(z.string().max(MAX_TAG_LENGTH))
+    .max(MAX_TAGS_PER_MEMORY)
     .optional()
     .describe('Filter by tags (returns memories matching ANY of the listed tags)'),
   session_id: z.string().optional().describe('Filter by session ID'),
@@ -57,7 +57,12 @@ const searchMemorySchema = z.object({
   handle: z.string().optional().describe('Filter by author handle'),
   after: z.string().optional().describe('Only memories created after this ISO date'),
   before: z.string().optional().describe('Only memories created before this ISO date'),
-  limit: z.number().min(1).max(SEARCH_LIMIT_MAX).optional().describe('Max results (default 20)'),
+  limit: z
+    .number()
+    .min(1)
+    .max(MEMORY_SEARCH_MAX_LIMIT)
+    .optional()
+    .describe('Max results (default 20)'),
 });
 type SearchMemoryArgs = z.infer<typeof searchMemorySchema>;
 

@@ -93,6 +93,10 @@
     "./error-utils.js": {
       "types": "./dist/error-utils.d.ts",
       "import": "./dist/error-utils.js"
+    },
+    "./constants.js": {
+      "types": "./dist/constants.d.ts",
+      "import": "./dist/constants.js"
     }
   },
   "scripts": {

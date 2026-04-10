@@ -1,8 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { formatError } from './error-utils.js';
 import { createLogger } from './logger.js';
-
-const EXEC_TIMEOUT_MS = 5000;
+import { EXEC_TIMEOUT_MS } from './constants.js';
 const log = createLogger('process-utils');
 
 /** Log process-utils errors at debug level. */

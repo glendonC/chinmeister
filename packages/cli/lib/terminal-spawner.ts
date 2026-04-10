@@ -5,12 +5,11 @@ import { homedir } from 'os';
 import { safeAgentId, isProcessAlive } from '@chinwag/shared/session-registry.js';
 import { escapeAppleScriptString } from './utils/shell.js';
 import { formatError, createLogger } from '@chinwag/shared';
+import { EXEC_TIMEOUT_MS, KILL_GRACE_MS } from '@chinwag/shared/constants.js';
 
 const log = createLogger('terminal-spawner');
 
-const EXEC_TIMEOUT_MS = 10000;
 const PIDS_DIR = join(homedir(), '.chinwag', 'pids');
-const KILL_GRACE_MS = 5000;
 
 // ── Terminal environment detection ────────────────────
 // Detects terminal CAPABILITY, not brand. Grouped by how we spawn into them.

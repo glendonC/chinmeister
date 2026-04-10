@@ -2,8 +2,7 @@ import { existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { join } from 'node:path';
 import { HOST_INTEGRATIONS, type HostIntegration } from './integration-model.js';
-
-const EXEC_TIMEOUT_MS = 5000;
+import { EXEC_TIMEOUT_MS } from './constants.js';
 
 export function commandExists(cmd: string): boolean {
   try {

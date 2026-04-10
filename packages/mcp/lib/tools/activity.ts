@@ -6,9 +6,9 @@ import { normalizeFiles } from '../utils/paths.js';
 import { withTimeout } from '../utils/responses.js';
 import {
   TITLE_MAX_LENGTH,
-  FILE_PATH_MAX_LENGTH,
+  MAX_FILE_PATH_LENGTH,
   FILE_LIST_MAX,
-  SUMMARY_MAX_LENGTH,
+  MAX_SUMMARY_LENGTH,
   API_TIMEOUT_MS,
 } from '../constants.js';
 import { withTeam } from './middleware.js';
@@ -16,12 +16,12 @@ import type { AddToolFn, ToolDeps } from './types.js';
 
 const updateActivitySchema = z.object({
   files: z
-    .array(z.string().max(FILE_PATH_MAX_LENGTH))
+    .array(z.string().max(MAX_FILE_PATH_LENGTH))
     .max(FILE_LIST_MAX)
     .describe('File paths being modified'),
   summary: z
     .string()
-    .max(SUMMARY_MAX_LENGTH)
+    .max(MAX_SUMMARY_LENGTH)
     .describe('Brief description, e.g. "Refactoring auth middleware"'),
 });
 type UpdateActivityArgs = z.infer<typeof updateActivitySchema>;

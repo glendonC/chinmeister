@@ -4,22 +4,22 @@ import * as z from 'zod/v4';
 import { safeArray, withTimeout } from '../utils/responses.js';
 import { normalizeFiles } from '../utils/paths.js';
 import { formatWho } from '../utils/formatting.js';
-import { FILE_PATH_MAX_LENGTH, LOCK_FILE_LIST_MAX, API_TIMEOUT_MS } from '../constants.js';
+import { MAX_FILE_PATH_LENGTH, LOCK_CLAIM_MAX_FILES, API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const claimFilesSchema = z.object({
   files: z
-    .array(z.string().max(FILE_PATH_MAX_LENGTH))
-    .max(LOCK_FILE_LIST_MAX)
+    .array(z.string().max(MAX_FILE_PATH_LENGTH))
+    .max(LOCK_CLAIM_MAX_FILES)
     .describe('File paths to claim'),
 });
 type ClaimFilesArgs = z.infer<typeof claimFilesSchema>;
 
 const releaseFilesSchema = z.object({
   files: z
-    .array(z.string().max(FILE_PATH_MAX_LENGTH))
-    .max(LOCK_FILE_LIST_MAX)
+    .array(z.string().max(MAX_FILE_PATH_LENGTH))
+    .max(LOCK_CLAIM_MAX_FILES)
     .optional()
     .describe('File paths to release (omit to release all your locks)'),
 });

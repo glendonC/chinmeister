@@ -6,7 +6,7 @@ import { createLogger } from '../utils/logger.js';
 import { getErrorMessage, safeArray, withTimeout } from '../utils/responses.js';
 import { formatToolTag, formatWho, type TeamMember } from '../utils/formatting.js';
 import type { LockContextInfo, MessageInfo, MemoryInfo } from '../utils/display.js';
-import { MODEL_MAX_LENGTH, API_TIMEOUT_MS } from '../constants.js';
+import { MAX_MODEL_LENGTH, API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
@@ -15,7 +15,7 @@ const log = createLogger('tools');
 const getTeamContextSchema = z.object({
   model: z
     .string()
-    .max(MODEL_MAX_LENGTH)
+    .max(MAX_MODEL_LENGTH)
     .optional()
     .describe('Your model identifier (e.g. "claude-opus-4-6", "gpt-4o"). Include on first call.'),
 });

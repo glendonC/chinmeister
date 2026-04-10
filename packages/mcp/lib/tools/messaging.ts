@@ -2,16 +2,12 @@
 
 import * as z from 'zod/v4';
 import { withTimeout } from '../utils/responses.js';
-import {
-  MESSAGE_TEXT_MAX_LENGTH,
-  MESSAGE_TARGET_MAX_LENGTH,
-  API_TIMEOUT_MS,
-} from '../constants.js';
+import { MAX_MESSAGE_LENGTH, MESSAGE_TARGET_MAX_LENGTH, API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
 
 const sendMessageSchema = z.object({
-  text: z.string().max(MESSAGE_TEXT_MAX_LENGTH).describe('Message text'),
+  text: z.string().max(MAX_MESSAGE_LENGTH).describe('Message text'),
   target: z
     .string()
     .max(MESSAGE_TARGET_MAX_LENGTH)

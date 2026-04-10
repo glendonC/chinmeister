@@ -1,8 +1,10 @@
 // Tag validation for memory entries.
-// Matches worker backend limits: MAX_TAG_LENGTH = 50, MAX_TAGS_PER_MEMORY = 10.
+// Uses shared constants — single source of truth across all packages.
 
-export const MAX_TAG_LENGTH = 50;
-export const MAX_TAGS_COUNT = 10;
+import { MAX_TAG_LENGTH, MAX_TAGS_PER_MEMORY } from '@chinwag/shared/constants.js';
+
+export { MAX_TAG_LENGTH };
+export const MAX_TAGS_COUNT = MAX_TAGS_PER_MEMORY;
 
 const TAG_CHAR_RE = /[^a-z0-9\-_]/g;
 

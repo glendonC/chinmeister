@@ -34,6 +34,21 @@ export const CONTEXT_MEMBERS_LIMIT = 100;
 export const CONTEXT_LOCKS_LIMIT = 100;
 export const MESSAGE_EXPIRY_HOURS = 1;
 
+// --- Shared constants (re-exported from @chinwag/shared) ---
+export {
+  MAX_SUMMARY_LENGTH,
+  MAX_MEMORY_TEXT_LENGTH,
+  MAX_FILE_PATH_LENGTH,
+  MAX_HANDLE_LENGTH,
+  MAX_TAG_LENGTH,
+  MAX_TAGS_PER_MEMORY,
+  MAX_MESSAGE_LENGTH,
+  MAX_MODEL_LENGTH,
+  LOCK_CLAIM_MAX_FILES,
+  MEMORY_SEARCH_MAX_LIMIT,
+  MEMORY_SEARCH_DEFAULT_LIMIT,
+} from '@chinwag/shared/constants.js';
+
 // --- Capacity caps ---
 export const ACTIVITY_MAX_FILES = 50;
 export const MEMORY_MAX_COUNT = 2000;
@@ -42,19 +57,10 @@ export const MAX_CATEGORY_NAME_LENGTH = 50;
 export const MAX_CATEGORY_DESCRIPTION_LENGTH = 500;
 export const TAG_PROMOTION_THRESHOLD = 10;
 export const LAST_ACCESSED_THROTTLE_MS = 3600_000; // 1 hour — writes cost 20x reads
-export const LOCK_CLAIM_MAX_FILES = 20;
 
-// --- String length limits ---
-export const MAX_SUMMARY_LENGTH = 280;
+// --- String length limits (worker-specific) ---
 export const MAX_STATUS_LENGTH = 280;
-export const MAX_MESSAGE_LENGTH = 500;
-export const MAX_MEMORY_TEXT_LENGTH = 2000;
-export const MAX_FILE_PATH_LENGTH = 500;
-export const MAX_HANDLE_LENGTH = 20;
-export const MAX_MODEL_LENGTH = 50;
 export const MAX_FRAMEWORK_LENGTH = 50;
-export const MAX_TAG_LENGTH = 50;
-export const MAX_TAGS_PER_MEMORY = 10;
 export const MAX_NAME_LENGTH = 100;
 export const MAX_COMMAND_PAYLOAD_LENGTH = 2000;
 
@@ -160,8 +166,6 @@ export const MAX_WS_MESSAGE_SIZE = 50_000;
 export const CLEANUP_INTERVAL_MS = 60_000;
 export const HEARTBEAT_BROADCAST_DEBOUNCE_MS = 3000;
 export const MAX_DASHBOARD_TEAMS = 25;
-export const MEMORY_SEARCH_DEFAULT_LIMIT = 20;
-export const MEMORY_SEARCH_MAX_LIMIT = 50;
 export const MEMORY_SEARCH_MAX_TAGS = 10;
 export const MEMORY_SEARCH_MAX_QUERY_LENGTH = 200;
 export const HISTORY_DEFAULT_DAYS = 7;

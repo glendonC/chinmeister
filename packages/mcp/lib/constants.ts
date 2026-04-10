@@ -21,8 +21,6 @@ export const INITIAL_RECONNECT_DELAY_MS = 1_000;
 export const MAX_RECONNECT_DELAY_MS = 60_000;
 
 // --- Channel reconciliation ---
-/** Polling interval when WebSocket is connected (safety net) */
-export const RECONCILE_INTERVAL_MS = 60_000;
 /** Polling interval when WebSocket is disconnected (fallback) */
 export const FALLBACK_POLL_MS = 10_000;
 
@@ -59,33 +57,28 @@ export function nextReconnectDelay(
   return { jitteredDelay, nextDelay };
 }
 
-// --- String length limits ---
+// --- Shared constants (re-exported from @chinwag/shared) ---
+export {
+  MAX_SUMMARY_LENGTH,
+  MAX_MEMORY_TEXT_LENGTH,
+  MAX_FILE_PATH_LENGTH,
+  MAX_TAG_LENGTH,
+  MAX_TAGS_PER_MEMORY,
+  MAX_MESSAGE_LENGTH,
+  MAX_MODEL_LENGTH,
+  FILE_LIST_MAX,
+  LOCK_CLAIM_MAX_FILES,
+  MEMORY_SEARCH_MAX_LIMIT,
+  RECONCILE_INTERVAL_MS,
+} from '@chinwag/shared/constants.js';
+
+// --- String length limits (MCP-specific) ---
 /** Max length for terminal tab title labels */
 export const TITLE_MAX_LENGTH = 40;
-/** Max length for a single file path in tool input */
-export const FILE_PATH_MAX_LENGTH = 500;
-/** Max number of files in activity/conflict checks */
-export const FILE_LIST_MAX = 100;
-/** Max number of files in lock claim/release */
-export const LOCK_FILE_LIST_MAX = 20;
-/** Max length for activity summary */
-export const SUMMARY_MAX_LENGTH = 280;
-/** Max length for memory text */
-export const MEMORY_TEXT_MAX_LENGTH = 2000;
-/** Max length for a single memory tag */
-export const TAG_MAX_LENGTH = 50;
-/** Max number of tags per memory */
-export const TAG_LIST_MAX = 10;
 /** Max length for memory search query */
 export const SEARCH_QUERY_MAX_LENGTH = 200;
-/** Max results for memory search */
-export const SEARCH_LIMIT_MAX = 50;
-/** Max length for chat message text */
-export const MESSAGE_TEXT_MAX_LENGTH = 500;
 /** Max length for message target agent ID */
 export const MESSAGE_TARGET_MAX_LENGTH = 60;
-/** Max length for model identifier */
-export const MODEL_MAX_LENGTH = 100;
 /** Max length for integration host/surface IDs */
 export const INTEGRATION_ID_MAX_LENGTH = 50;
 /** Max length for team ID */
