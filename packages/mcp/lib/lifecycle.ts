@@ -110,6 +110,8 @@ export interface McpState {
   teamJoinError: string | null;
   /** Set when heartbeat exhausts all retries — tools should tell the user to rejoin. */
   heartbeatDead: boolean;
+  /** Accumulated tool call metadata flushed to the backend on session end. */
+  toolCalls: Array<{ tool: string; at: number }>;
 }
 
 // ── Shutdown ──
@@ -195,6 +197,13 @@ export async function cleanupProcessSession(
     }
 
   if (state.sessionId && state.teamId) {
+    if (state.toolCalls.length > 0) {
+      await team
+        .flushToolCalls(state.teamId, state.sessionId, state.toolCalls)
+        .catch((err: Error) => {
+          log.error('Failed to flush tool calls: ' + err.message);
+        });
+    }
     await team.endSession(state.teamId, state.sessionId).catch((err: Error) => {
       log.error('Failed to end session: ' + err.message);
     });

@@ -3,7 +3,7 @@
 import { checkContent } from '../../moderation.js';
 import { rpc } from '../../lib/env.js';
 import { json } from '../../lib/http.js';
-import { teamErrorStatus } from '../../lib/request-utils.js';
+import { teamErrorStatus, getAgentRuntime } from '../../lib/request-utils.js';
 import { teamJsonRoute, teamRoute, doResult } from '../../lib/middleware.js';
 import { validateFileArray, withRateLimit } from '../../lib/validation.js';
 import { createLogger } from '../../lib/logger.js';
@@ -274,3 +274,44 @@ export const handleTeamRecordTokens = teamJsonRoute(async ({ body, user, db, age
     },
   );
 });
+
+const MAX_TOOL_CALLS_BATCH = 500;
+
+export const handleTeamToolCalls = teamJsonRoute(
+  async ({ body, request, user, db, agentId, team }) => {
+    const { session_id, calls } = body;
+    if (typeof session_id !== 'string' || !session_id.trim()) {
+      return json({ error: 'session_id is required' }, 400);
+    }
+    if (!Array.isArray(calls) || calls.length === 0) {
+      return json({ error: 'calls must be a non-empty array' }, 400);
+    }
+    if (calls.length > MAX_TOOL_CALLS_BATCH) {
+      return json({ error: `calls limited to ${MAX_TOOL_CALLS_BATCH} per batch` }, 400);
+    }
+
+    const runtime = getAgentRuntime(request, user);
+    const handle = user.handle;
+    const hostTool = (typeof runtime === 'object' ? runtime?.hostTool : runtime) || 'unknown';
+
+    return withRateLimit(
+      db,
+      `session:${user.id}`,
+      RATE_LIMIT_SESSIONS,
+      'Session operation limit reached. Try again tomorrow.',
+      async () => {
+        return doResult(
+          team.recordToolCalls(
+            agentId,
+            session_id as string,
+            handle,
+            hostTool as string,
+            calls,
+            user.id,
+          ),
+          'recordToolCalls',
+        );
+      },
+    );
+  },
+);

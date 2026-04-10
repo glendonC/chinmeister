@@ -25,7 +25,9 @@ export { withTeam } from './middleware.js';
 function wrapWithActivity(addTool: AddToolFn, { state }: Pick<ToolDeps, 'state'>): AddToolFn {
   return (name, schema, handler) => {
     const wrappedHandler = async (args: Record<string, unknown>) => {
-      state.lastActivity = Date.now();
+      const now = Date.now();
+      state.lastActivity = now;
+      state.toolCalls.push({ tool: name, at: now });
       return handler(args);
     };
     return addTool(name, schema, wrappedHandler);

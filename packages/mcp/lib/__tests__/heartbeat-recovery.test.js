@@ -82,6 +82,7 @@ describe('heartbeat recovery', () => {
       sessionId: null,
       teamJoinError: null,
       shuttingDown: false,
+      toolCalls: [],
     };
     profile = {
       framework: 'unknown',

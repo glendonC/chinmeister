@@ -227,6 +227,15 @@ export function writeHooksConfig(
           },
         ],
       },
+      {
+        matcher: 'Read',
+        hooks: [
+          {
+            type: 'command',
+            command: buildChinwagHookCommand('report-read', { hostId, surfaceId }),
+          },
+        ],
+      },
     ],
     SessionStart: [
       {

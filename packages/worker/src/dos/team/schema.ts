@@ -516,6 +516,31 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    name: '014_tool_calls',
+    up(sql) {
+      try {
+        sql.exec(`
+          CREATE TABLE IF NOT EXISTS tool_calls (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            handle TEXT NOT NULL,
+            host_tool TEXT DEFAULT 'unknown',
+            tool TEXT NOT NULL,
+            called_at TEXT NOT NULL,
+            created_at TEXT DEFAULT (datetime('now'))
+          )
+        `);
+        sql.exec(
+          'CREATE INDEX IF NOT EXISTS idx_tool_calls_session ON tool_calls(session_id, called_at)',
+        );
+        sql.exec('CREATE INDEX IF NOT EXISTS idx_tool_calls_tool ON tool_calls(tool, created_at)');
+      } catch (error) {
+        logMigrationError('014_tool_calls', error);
+      }
+    },
+  },
 ];
 
 export function ensureSchema(

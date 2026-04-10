@@ -58,6 +58,7 @@ import {
   recordEdit as recordEditFn,
   reportOutcome as reportOutcomeFn,
   recordTokenUsage as recordTokenUsageFn,
+  recordToolCalls as recordToolCallsFn,
   getSessionHistory,
   getSessionsInRange as getSessionsInRangeFn,
   getEditHistory as getEditHistoryFn,
@@ -822,6 +823,19 @@ export class TeamDO extends DurableObject<Env> {
   ): Promise<{ ok: true } | DOError> {
     return this.#withMember(agentId, ownerId, (resolved) =>
       recordTokenUsageFn(this.sql, resolved, sessionId, inputTokens, outputTokens),
+    );
+  }
+
+  async recordToolCalls(
+    agentId: string,
+    sessionId: string,
+    handle: string,
+    hostTool: string,
+    calls: Array<{ tool: string; at: number }>,
+    ownerId: string | null = null,
+  ): Promise<{ ok: true; recorded: number } | DOError> {
+    return this.#withMember(agentId, ownerId, (resolved) =>
+      recordToolCallsFn(this.sql, resolved, sessionId, handle, hostTool, calls),
     );
   }
 

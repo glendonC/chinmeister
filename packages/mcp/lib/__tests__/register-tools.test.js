@@ -102,6 +102,7 @@ describe('registerTools', () => {
       heartbeatInterval: null,
       heartbeatRecoveryTimeout: null,
       sessionId: null,
+      toolCalls: [],
     };
     profile = {
       framework: 'unknown',

@@ -97,6 +97,11 @@ export interface TeamCoordinationHandlers {
   ): Promise<OkResult>;
   reportOutcome(teamId: string, outcome: string, summary?: string | null): Promise<OkResult>;
   reportModel(teamId: string, model: string): Promise<OkResult>;
+  flushToolCalls(
+    teamId: string,
+    sessionId: string,
+    calls: Array<{ tool: string; at: number }>,
+  ): Promise<OkResult>;
 }
 
 /** All team handler methods available to tools. */
@@ -239,6 +244,11 @@ export function teamHandlers(client: ApiClient): TeamHandlers {
     async reportModel(teamId, model) {
       validateTeam(teamId);
       return client.put(`/teams/${teamId}/sessionmodel`, { model });
+    },
+
+    async flushToolCalls(teamId, sessionId, calls) {
+      validateTeam(teamId);
+      return client.post(`/teams/${teamId}/tool-calls`, { session_id: sessionId, calls });
     },
   };
 }

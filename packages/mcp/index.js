@@ -87,6 +87,7 @@ async function main() {
     shuttingDown: false,
     teamJoinError: null,
     heartbeatDead: false,
+    toolCalls: [],
   });
 
   const projectName = basename(process.cwd());

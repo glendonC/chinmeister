@@ -304,6 +304,36 @@ export function recordTokenUsage(
   return { ok: true };
 }
 
+const MAX_TOOL_CALLS_BATCH = 500;
+
+export function recordToolCalls(
+  sql: SqlStorage,
+  resolvedAgentId: string,
+  sessionId: string,
+  handle: string,
+  hostTool: string,
+  calls: Array<{ tool: string; at: number }>,
+): { ok: true; recorded: number } {
+  const capped = calls.slice(0, MAX_TOOL_CALLS_BATCH);
+  let recorded = 0;
+  for (const call of capped) {
+    if (typeof call.tool !== 'string' || !call.tool) continue;
+    const calledAt = new Date(call.at).toISOString().replace('T', ' ').replace('Z', '');
+    sql.exec(
+      `INSERT INTO tool_calls (session_id, agent_id, handle, host_tool, tool, called_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      sessionId,
+      resolvedAgentId,
+      handle,
+      hostTool,
+      call.tool.slice(0, 100),
+      calledAt,
+    );
+    recorded++;
+  }
+  return { ok: true, recorded };
+}
+
 export function getSessionsInRange(
   sql: SqlStorage,
   fromDate: string,

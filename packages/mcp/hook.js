@@ -43,6 +43,9 @@ async function main() {
     case 'report-edit':
       await reportEdit(team, teamId, input);
       break;
+    case 'report-read':
+      await reportRead(team, teamId, input);
+      break;
     case 'session-start':
       await sessionStart(team, teamId, hasExactSession);
       break;
@@ -119,6 +122,19 @@ async function reportEdit(team, teamId, input) {
     ]);
   } catch (err) {
     log.warn(`Activity report failed: ${err.message}`);
+  }
+
+  process.exit(0);
+}
+
+async function reportRead(team, teamId, input) {
+  const filePath = input?.tool_input?.file_path;
+  if (!filePath) process.exit(0);
+
+  try {
+    await team.reportFile(teamId, filePath);
+  } catch (err) {
+    log.warn(`Read report failed: ${err.message}`);
   }
 
   process.exit(0);

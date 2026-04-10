@@ -62,7 +62,9 @@ describe('registerProcessSession', () => {
       createdAt: 123,
       commandMarker: 'chinwag-mcp',
     });
-    expect(writeSessionRecordFn).toHaveBeenCalledWith('cursor:abc123:def456', record, { homeDir: '/tmp/home' });
+    expect(writeSessionRecordFn).toHaveBeenCalledWith('cursor:abc123:def456', record, {
+      homeDir: '/tmp/home',
+    });
   });
 
   it('looks up the parent tty when one is not provided', () => {
@@ -87,19 +89,26 @@ describe('cleanupProcessSession', () => {
     const team = {
       endSession: vi.fn().mockResolvedValue({ ok: true }),
       leaveTeam: vi.fn().mockResolvedValue({ ok: true }),
+      flushToolCalls: vi.fn().mockResolvedValue({ ok: true }),
     };
     const clearIntervalFn = vi.fn();
     const deleteRecord = vi.fn();
     const heartbeat = Symbol('heartbeat');
 
-    await cleanupProcessSession('cursor:abc123:def456', {
-      heartbeatInterval: heartbeat,
-      sessionId: 'sess_1',
-      teamId: 't_team',
-    }, team, {
-      clearIntervalFn,
-      deleteRecord,
-    });
+    await cleanupProcessSession(
+      'cursor:abc123:def456',
+      {
+        heartbeatInterval: heartbeat,
+        sessionId: 'sess_1',
+        teamId: 't_team',
+        toolCalls: [],
+      },
+      team,
+      {
+        clearIntervalFn,
+        deleteRecord,
+      },
+    );
 
     expect(deleteRecord).toHaveBeenCalledWith('cursor:abc123:def456', {});
     expect(clearIntervalFn).toHaveBeenCalledWith(heartbeat);
@@ -113,13 +122,19 @@ describe('cleanupProcessSession', () => {
       leaveTeam: vi.fn().mockResolvedValue({ ok: true }),
     };
 
-    await cleanupProcessSession('cursor:abc123:def456', {
-      heartbeatInterval: null,
-      sessionId: null,
-      teamId: 't_team',
-    }, team, {
-      deleteRecord: vi.fn(),
-    });
+    await cleanupProcessSession(
+      'cursor:abc123:def456',
+      {
+        heartbeatInterval: null,
+        sessionId: null,
+        teamId: 't_team',
+        toolCalls: [],
+      },
+      team,
+      {
+        deleteRecord: vi.fn(),
+      },
+    );
 
     expect(team.endSession).not.toHaveBeenCalled();
     expect(team.leaveTeam).toHaveBeenCalledWith('t_team');

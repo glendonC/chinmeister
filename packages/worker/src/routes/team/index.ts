@@ -19,6 +19,7 @@ export {
   handleTeamEditHistory,
   handleTeamEnrichModel,
   handleTeamRecordTokens,
+  handleTeamToolCalls,
 } from './activity.js';
 export {
   handleTeamSaveMemory,
