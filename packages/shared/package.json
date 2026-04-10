@@ -1,6 +1,7 @@
 {
   "name": "@chinwag/shared",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "files": [
