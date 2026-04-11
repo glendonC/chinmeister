@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { navigate, type Route } from '../../lib/router.js';
 import { projectGradient } from '../../lib/projectGradient.js';
+import { useTheme } from '../../lib/useTheme.js';
 import styles from './Sidebar.module.css';
 
 interface Props {
@@ -16,8 +17,10 @@ export default function Sidebar({ activeView, collapsed = false, onToggle }: Pro
   const activeTeamId = useTeamStore((s) => s.activeTeamId);
   const overviewActive = activeView === 'overview';
   const toolsActive = activeView === 'tools';
+  const globalActive = activeView === 'global';
   const settingsActive = activeView === 'settings';
 
+  const { resolved, setTheme } = useTheme();
   const [mobileOpen, setMobileOpen] = useState<boolean>(false);
 
   const go = (view: Route['view'], teamId?: string) => () => {
@@ -209,6 +212,27 @@ export default function Sidebar({ activeView, collapsed = false, onToggle }: Pro
             </button>
             <button
               type="button"
+              className={clsx(styles.navItem, globalActive && styles.navItemActive)}
+              onClick={go('global')}
+              aria-current={globalActive ? 'page' : undefined}
+              aria-label="Global"
+              title="Global"
+            >
+              <svg
+                className={styles.navIcon}
+                width="16"
+                height="16"
+                viewBox="0 0 16 16"
+                fill="none"
+              >
+                <circle cx="8" cy="8" r="6.5" stroke="currentColor" strokeWidth="1.2" />
+                <ellipse cx="8" cy="8" rx="2.8" ry="6.5" stroke="currentColor" strokeWidth="1.2" />
+                <path d="M1.5 8h13" stroke="currentColor" strokeWidth="1.2" />
+              </svg>
+              <span className={styles.navLabel}>Global</span>
+            </button>
+            <button
+              type="button"
               className={clsx(styles.navItem, settingsActive && styles.navItemActive)}
               onClick={go('settings')}
               aria-current={settingsActive ? 'page' : undefined}
@@ -219,16 +243,16 @@ export default function Sidebar({ activeView, collapsed = false, onToggle }: Pro
                 className={styles.navIcon}
                 width="16"
                 height="16"
-                viewBox="-1 -1 18 18"
+                viewBox="0 0 16 16"
                 fill="none"
               >
-                <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
                 <path
-                  d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"
+                  d="M6.7 1.6 9.3 1.6 8.9 3.6 11.3 5 12.8 3.6 14.2 6 12.3 6.6 12.3 9.4 14.2 10 12.8 12.4 11.3 11 8.9 12.4 9.3 14.4 6.7 14.4 7.1 12.4 4.7 11 3.2 12.4 1.8 10 3.7 9.4 3.7 6.6 1.8 6 3.2 3.6 4.7 5 7.1 3.6Z"
                   stroke="currentColor"
                   strokeWidth="1.2"
-                  strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
+                <circle cx="8" cy="8" r="2" stroke="currentColor" strokeWidth="1.2" />
               </svg>
               <span className={styles.navLabel}>Settings</span>
             </button>
@@ -270,6 +294,39 @@ export default function Sidebar({ activeView, collapsed = false, onToggle }: Pro
           </div>
 
           <div className={styles.sidebarSpacer} />
+
+          <button
+            type="button"
+            className={styles.navItem}
+            onClick={() => setTheme(resolved === 'dark' ? 'light' : 'dark')}
+            aria-label={resolved === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            title={resolved === 'dark' ? 'Light mode' : 'Dark mode'}
+          >
+            <svg className={styles.navIcon} width="16" height="16" viewBox="0 0 16 16" fill="none">
+              {resolved === 'dark' ? (
+                <>
+                  <circle cx="8" cy="8" r="2.5" stroke="currentColor" strokeWidth="1.2" />
+                  <path
+                    d="M8 1v2M8 13v2M1 8h2M13 8h2M2.9 2.9l1.4 1.4M11.7 11.7l1.4 1.4M13.1 2.9l-1.4 1.4M4.3 11.7l-1.4 1.4"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                  />
+                </>
+              ) : (
+                <path
+                  d="M14 8.5A6 6 0 1 1 7.5 2A4.7 4.7 0 0 0 14 8.5z"
+                  stroke="currentColor"
+                  strokeWidth="1.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              )}
+            </svg>
+            <span className={styles.navLabel}>
+              {resolved === 'dark' ? 'Light mode' : 'Dark mode'}
+            </span>
+          </button>
         </aside>
       </div>
     </>

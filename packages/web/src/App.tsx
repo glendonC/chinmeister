@@ -19,6 +19,7 @@ import OverviewView from './views/OverviewView/OverviewView.js';
 import ProjectView from './views/ProjectView/ProjectView.js';
 import SettingsView from './views/SettingsView/SettingsView.js';
 import ToolsView from './views/ToolsView/ToolsView.js';
+import GlobalView from './views/GlobalView/GlobalView.js';
 import Sidebar from './components/Sidebar/Sidebar.js';
 import Banner from './components/Banner/Banner.js';
 import RenderErrorBoundary from './components/RenderErrorBoundary/RenderErrorBoundary.js';
@@ -262,6 +263,11 @@ export default function App(): ReactNode {
           {activeView === 'project' && (
             <RenderErrorBoundary label="ProjectView" resetKey={`project-${activeTeamId}`}>
               <ProjectView />
+            </RenderErrorBoundary>
+          )}
+          {activeView === 'global' && (
+            <RenderErrorBoundary label="GlobalView" resetKey={activeView}>
+              <GlobalView />
             </RenderErrorBoundary>
           )}
           {activeView === 'settings' && (
