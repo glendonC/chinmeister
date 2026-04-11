@@ -63,6 +63,10 @@ export interface WidgetDef {
   minW?: number;
   /** Minimum height */
   minH?: number;
+  /** Maximum width */
+  maxW?: number;
+  /** Maximum height */
+  maxH?: number;
   /** Data keys on UserAnalytics or ConversationAnalytics */
   dataKeys: string[];
 }
@@ -657,9 +661,41 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 ];
 
+// ── Size constraints by viz type ─────────────────
+// Applied as defaults — explicit maxW/maxH on a widget override these.
+
+const VIZ_MAX_CONSTRAINTS: Record<WidgetViz, { maxW: number; maxH: number }> = {
+  stat: { maxW: 4, maxH: 2 },
+  'stat-row': { maxW: 12, maxH: 2 },
+  sparkline: { maxW: 12, maxH: 4 },
+  heatmap: { maxW: 12, maxH: 6 },
+  'bar-chart': { maxW: 12, maxH: 6 },
+  'proportional-bar': { maxW: 8, maxH: 3 },
+  'data-list': { maxW: 12, maxH: 8 },
+  'outcome-bar': { maxW: 6, maxH: 4 },
+  'factual-grid': { maxW: 12, maxH: 4 },
+  'sentiment-bars': { maxW: 8, maxH: 5 },
+  'topic-bars': { maxW: 8, maxH: 5 },
+  'project-list': { maxW: 12, maxH: 6 },
+  'delta-row': { maxW: 12, maxH: 2 },
+  'bucket-chart': { maxW: 12, maxH: 5 },
+};
+
 // ── Lookup ───────────────────────────────────────
 
-export const WIDGET_MAP = new Map(WIDGET_CATALOG.map((w) => [w.id, w]));
+export const WIDGET_MAP = new Map(
+  WIDGET_CATALOG.map((w) => {
+    const vizMax = VIZ_MAX_CONSTRAINTS[w.viz];
+    return [
+      w.id,
+      {
+        ...w,
+        maxW: w.maxW ?? vizMax?.maxW,
+        maxH: w.maxH ?? vizMax?.maxH,
+      },
+    ];
+  }),
+);
 
 export function getWidget(id: string): WidgetDef | undefined {
   return WIDGET_MAP.get(id);

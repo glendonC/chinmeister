@@ -37,7 +37,7 @@ import { useOverviewData, type LiveAgent } from './useOverviewData.js';
 import { RANGES, type RangeDays, summarizeNames } from './overview-utils.js';
 import { useOverviewLayout } from './useOverviewLayout.js';
 import { useProjectFilter } from './useProjectFilter.js';
-import { getWidget, DEFAULT_LAYOUT } from './widget-catalog.js';
+import { getWidget } from './widget-catalog.js';
 import { WidgetRenderer } from './WidgetRenderer.js';
 import { WidgetCatalog } from './WidgetCatalog.js';
 import { LiveAgentsBar } from './sections/ProjectSections.js';
@@ -294,20 +294,21 @@ export default function OverviewView() {
     projectFilter.selectedIds,
   );
 
-  const { widgetIds, toggleWidget, removeWidget, resetToDefault } = useOverviewLayout();
+  const {
+    widgetIds,
+    gridLayout: storedGridLayout,
+    toggleWidget,
+    removeWidget,
+    updatePositions,
+    resetToDefault,
+  } = useOverviewLayout();
 
-  // ── Layout state ────────────────────────────────
-  const [layouts, setLayouts] = useState<RGLLayouts>(() => {
-    // Build layout from widgetIds + defaults
-    const stored = loadLayoutPositions();
-    if (stored) return { lg: stored };
-    return { lg: buildLayoutFromIds(widgetIds) };
-  });
-
-  const handleLayoutChange = useCallback((currentLayout: RGLLayout[], allLayouts: RGLLayouts) => {
-    setLayouts(allLayouts);
-    saveLayoutPositions(currentLayout);
-  }, []);
+  const handleLayoutChange = useCallback(
+    (currentLayout: RGLLayout[], _allLayouts: RGLLayouts) => {
+      updatePositions(currentLayout);
+    },
+    [updatePositions],
+  );
 
   // ── Guards ──────────────────────────────────────
   const isLoading = !dashboardData && (dashboardStatus === 'idle' || dashboardStatus === 'loading');
@@ -382,10 +383,8 @@ export default function OverviewView() {
   // Active widgets with valid definitions
   const activeWidgets = widgetIds.filter((id) => getWidget(id));
 
-  // Build grid layout items — use stored positions or defaults
-  const gridLayout = layouts.lg?.length
-    ? layouts.lg.filter((l) => activeWidgets.includes(l.i))
-    : buildLayoutFromIds(activeWidgets);
+  // Grid layout from unified store (already has constraints applied)
+  const gridLayout = storedGridLayout.filter((l) => activeWidgets.includes(l.i));
 
   return (
     <div className={styles.overview}>
@@ -499,55 +498,4 @@ export default function OverviewView() {
       />
     </div>
   );
-}
-
-// ── Layout persistence helpers ──────────────────
-
-const LAYOUT_POS_KEY = 'chinwag:overview-positions';
-
-function saveLayoutPositions(layout: RGLLayout[]) {
-  try {
-    localStorage.setItem(LAYOUT_POS_KEY, JSON.stringify(layout));
-  } catch {
-    // Ignore
-  }
-}
-
-function loadLayoutPositions(): RGLLayout[] | null {
-  try {
-    const raw = localStorage.getItem(LAYOUT_POS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {
-    // Ignore
-  }
-  return null;
-}
-
-function buildLayoutFromIds(ids: string[]): RGLLayout[] {
-  const result: RGLLayout[] = [];
-  for (const id of ids) {
-    // Check if there's a default position
-    const defaultPos = DEFAULT_LAYOUT.find((l) => l.i === id);
-    if (defaultPos) {
-      result.push({ ...defaultPos });
-    } else {
-      const def = getWidget(id);
-      if (def) {
-        // Auto-place: x=0, y=Infinity lets react-grid-layout auto-position
-        result.push({
-          i: id,
-          x: 0,
-          y: Infinity,
-          w: def.w,
-          h: def.h,
-          minW: def.minW,
-          minH: def.minH,
-        });
-      }
-    }
-  }
-  return result;
 }
