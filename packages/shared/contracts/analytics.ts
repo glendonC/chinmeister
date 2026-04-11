@@ -188,6 +188,7 @@ export const memberAnalyticsSchema = z.object({
   total_edits: z.number(),
   total_lines_added: z.number(),
   total_lines_removed: z.number(),
+  total_commits: z.number().optional(),
   primary_tool: z.string().nullable(),
 });
 export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
@@ -404,6 +405,51 @@ export const toolCallStatsSchema = z.object({
 });
 export type ToolCallStats = z.infer<typeof toolCallStatsSchema>;
 
+// ── Commit analytics ──────────────────────────────
+
+export const commitToolBreakdownSchema = z.object({
+  host_tool: z.string(),
+  commits: z.number(),
+  avg_files_changed: z.number(),
+  avg_lines: z.number(),
+});
+export type CommitToolBreakdown = z.infer<typeof commitToolBreakdownSchema>;
+
+export const dailyCommitSchema = z.object({
+  day: z.string(),
+  commits: z.number(),
+});
+export type DailyCommit = z.infer<typeof dailyCommitSchema>;
+
+export const commitOutcomeCorrelationSchema = z.object({
+  bucket: z.string(),
+  sessions: z.number(),
+  completed: z.number(),
+  completion_rate: z.number(),
+});
+export type CommitOutcomeCorrelation = z.infer<typeof commitOutcomeCorrelationSchema>;
+
+export const commitEditRatioBucketSchema = z.object({
+  bucket: z.string(),
+  sessions: z.number(),
+  completion_rate: z.number(),
+  avg_edits: z.number(),
+  avg_commits: z.number(),
+});
+export type CommitEditRatioBucket = z.infer<typeof commitEditRatioBucketSchema>;
+
+export const commitStatsSchema = z.object({
+  total_commits: z.number(),
+  commits_per_session: z.number(),
+  sessions_with_commits: z.number(),
+  avg_time_to_first_commit_min: z.number().nullable(),
+  by_tool: z.array(commitToolBreakdownSchema),
+  daily_commits: z.array(dailyCommitSchema),
+  outcome_correlation: z.array(commitOutcomeCorrelationSchema),
+  commit_edit_ratio: z.array(commitEditRatioBucketSchema),
+});
+export type CommitStats = z.infer<typeof commitStatsSchema>;
+
 // ── Period-over-period comparison ────────────────
 
 export const periodMetricsSchema = z.object({
@@ -511,6 +557,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   period_comparison: periodComparisonSchema,
   token_usage: tokenUsageStatsSchema,
   tool_call_stats: toolCallStatsSchema,
+  commit_stats: commitStatsSchema,
   teams_included: z.number(),
   degraded: z.boolean(),
   data_coverage: dataCoverageSchema.optional(),

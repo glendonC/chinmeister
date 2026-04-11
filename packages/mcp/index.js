@@ -213,7 +213,8 @@ CRITICAL WORKFLOW — follow these steps every session:
 2. BEFORE editing any file, call chinwag_check_conflicts with the files you plan to modify. If a file is locked or another agent is editing it, coordinate first — use chinwag_send_message to notify them.
 3. AFTER you start editing, call chinwag_claim_files to lock the files you're working on, then call chinwag_update_activity with your file list and a brief summary.
 4. When you discover something important about the project (setup requirements, gotchas, conventions, decisions), call chinwag_save_memory so every future agent session starts with that knowledge.
-5. When done with files, call chinwag_release_files so other agents can work on them.
+5. AFTER running git commit, call chinwag_report_commits with the commit SHA(s), branch name, and commit message. This links your commits to this session for git attribution analytics.
+6. When done with files, call chinwag_release_files so other agents can work on them.
 
 This coordination prevents merge conflicts across tools and builds shared project intelligence.`,
   });

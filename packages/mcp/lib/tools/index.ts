@@ -9,6 +9,7 @@ import { registerMemoryTools } from './memory.js';
 import { registerLockTools } from './locks.js';
 import { registerMessagingTool } from './messaging.js';
 import { registerOutcomeTool } from './outcome.js';
+import { registerCommitsTool } from './commits.js';
 import { registerIntegrationTools } from './integrations.js';
 import type { ToolDeps, AddToolFn } from './types.js';
 import type { EnvironmentProfile } from '../profile.js';
@@ -51,6 +52,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   registerLockTools(wrappedAddTool, deps);
   registerMessagingTool(wrappedAddTool, deps);
   registerOutcomeTool(wrappedAddTool, deps);
+  registerCommitsTool(wrappedAddTool, deps);
   registerIntegrationTools(wrappedAddTool, deps);
 }
 

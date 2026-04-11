@@ -289,6 +289,55 @@ export const handleTeamRecordTokens = teamJsonRoute(async ({ body, user, db, age
   );
 });
 
+const MAX_COMMITS_BATCH = 50;
+const SHA_PATTERN = /^[0-9a-f]{7,40}$/;
+
+export const handleTeamRecordCommits = teamJsonRoute(
+  async ({ body, request, user, db, agentId, team }) => {
+    const { session_id, commits } = body;
+    // session_id is optional — if omitted, the backend resolves the active session
+    const resolvedSessionId =
+      typeof session_id === 'string' && session_id.trim() ? session_id : null;
+    if (!Array.isArray(commits) || commits.length === 0) {
+      return json({ error: 'commits must be a non-empty array' }, 400);
+    }
+    if (commits.length > MAX_COMMITS_BATCH) {
+      return json({ error: `commits limited to ${MAX_COMMITS_BATCH} per batch` }, 400);
+    }
+
+    // Validate each commit SHA
+    for (const c of commits) {
+      if (typeof c.sha !== 'string' || !SHA_PATTERN.test(c.sha.toLowerCase())) {
+        return json({ error: `Invalid commit SHA: ${String(c.sha).slice(0, 50)}` }, 400);
+      }
+    }
+
+    const runtime = getAgentRuntime(request, user);
+    const handle = user.handle;
+    const hostTool = (typeof runtime === 'object' ? runtime?.hostTool : runtime) || 'unknown';
+
+    return withRateLimit(
+      db,
+      `session:${user.id}`,
+      RATE_LIMIT_SESSIONS,
+      'Session operation limit reached. Try again tomorrow.',
+      async () => {
+        return doResult(
+          team.recordCommits(
+            agentId,
+            resolvedSessionId,
+            handle,
+            hostTool as string,
+            commits,
+            user.id,
+          ),
+          'recordCommits',
+        );
+      },
+    );
+  },
+);
+
 const MAX_TOOL_CALLS_BATCH = 500;
 
 export const handleTeamToolCalls = teamJsonRoute(

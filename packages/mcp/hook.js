@@ -20,7 +20,17 @@ const log = createLogger('hook');
 const subcommand = process.argv[2];
 
 async function main() {
-  const input = await readStdin();
+  // Read raw stdin first — enables fast rejection for report-commit.
+  // The Bash PostToolUse hook fires on every Bash tool call (~hundreds/session).
+  // For non-commit calls, we exit in <2ms by checking the raw string before
+  // any JSON parsing or bootstrap (which costs ~200-300ms).
+  const { raw, parsed: input } = await readStdinWithRaw();
+
+  // Fast rejection: report-commit only cares about git commits.
+  // Cost for non-commit Bash calls: ~2ms (stdin read + string check).
+  if (subcommand === 'report-commit' && !raw.includes('git commit')) {
+    process.exit(0);
+  }
 
   // Bootstrap: graceful degradation — exit(0) on missing config/token/team
   const ctx = await bootstrap({
@@ -45,6 +55,9 @@ async function main() {
       break;
     case 'report-read':
       await reportRead(team, teamId, input);
+      break;
+    case 'report-commit':
+      await reportCommit(team, teamId, input);
       break;
     case 'session-start':
       await sessionStart(team, teamId, hasExactSession);
@@ -140,6 +153,97 @@ async function reportRead(team, teamId, input) {
   process.exit(0);
 }
 
+async function reportCommit(team, teamId, input) {
+  // Extract commit SHA from the Bash tool result.
+  // git commit outputs a line like: "[main abc1234] commit message"
+  // The tool_result.stdout contains the command output.
+  const command = input?.tool_input?.command || '';
+  const result = input?.tool_result?.stdout || input?.tool_result || '';
+  const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+
+  // Verify the command was actually a git commit (not just mentioned in output)
+  if (!command.includes('git commit')) {
+    process.exit(0);
+  }
+
+  // Parse SHA from git output: "[branch SHA] message" or "SHA" on its own line
+  // git commit typically outputs: [branch abc1234] message
+  const shaMatch =
+    resultStr.match(/\[[\w/.-]+\s+([0-9a-f]{7,40})\]/) ||
+    resultStr.match(/\b([0-9a-f]{40})\b/) ||
+    resultStr.match(/\b([0-9a-f]{7,12})\b/);
+
+  if (!shaMatch) {
+    // No SHA found — commit might have failed or was dry-run
+    process.exit(0);
+  }
+
+  const shortSha = shaMatch[1];
+
+  // Extract richer commit metadata via git commands (best-effort)
+  let sha = shortSha;
+  let branch = null;
+  let message = null;
+  let filesChanged = 0;
+  let linesAdded = 0;
+  let linesRemoved = 0;
+  let committedAt = null;
+
+  try {
+    const { execSync } = await import('child_process');
+    const opts = { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] };
+
+    // Get full SHA + branch + message + timestamp in one call
+    const info = execSync(`git log -1 --format="%H%n%D%n%s%n%aI" ${shortSha}`, opts)
+      .trim()
+      .split('\n');
+
+    if (info[0] && /^[0-9a-f]{40}$/.test(info[0])) sha = info[0];
+    // Parse branch from ref names (e.g. "HEAD -> main, origin/main")
+    const refs = info[1] || '';
+    const branchMatch = refs.match(/HEAD -> ([^,]+)/);
+    if (branchMatch) branch = branchMatch[1].trim();
+    if (info[2]) message = info[2].slice(0, 200);
+    if (info[3]) committedAt = info[3];
+
+    // Get diff stats
+    const stats = execSync(`git diff-tree --no-commit-id --numstat ${sha}`, opts).trim();
+    if (stats) {
+      for (const line of stats.split('\n')) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const added = parseInt(parts[0], 10);
+          const removed = parseInt(parts[1], 10);
+          if (!isNaN(added)) linesAdded += added;
+          if (!isNaN(removed)) linesRemoved += removed;
+          filesChanged++;
+        }
+      }
+    }
+  } catch (err) {
+    // Best-effort: if git commands fail, still report what we have
+    log.warn(`Git metadata extraction failed: ${err.message}`);
+  }
+
+  try {
+    await team.recordCommits(teamId, null, [
+      {
+        sha,
+        branch,
+        message,
+        files_changed: filesChanged,
+        lines_added: linesAdded,
+        lines_removed: linesRemoved,
+        committed_at: committedAt,
+      },
+    ]);
+  } catch (err) {
+    log.warn(`Commit report failed: ${err.message}`);
+  }
+
+  process.exit(0);
+}
+
 async function sessionStart(team, teamId, hasExactSession) {
   try {
     // Avoid creating duplicate base-ID memberships when the exact MCP session
@@ -167,21 +271,26 @@ async function sessionStart(team, teamId, hasExactSession) {
 
 // --- Helpers ---
 
-function readStdin() {
+/**
+ * Read stdin and return both raw string and parsed JSON.
+ * Raw string enables fast-path rejection (e.g. checking for "git commit")
+ * before expensive JSON parsing or bootstrap.
+ */
+function readStdinWithRaw() {
   return new Promise((resolve) => {
     let data = '';
     let resolved = false;
-    const done = (value) => {
+    const done = (raw, parsed) => {
       if (!resolved) {
         resolved = true;
-        resolve(value);
+        resolve({ raw, parsed });
       }
     };
 
     const timeout = setTimeout(() => {
       process.stdin.removeAllListeners('data');
       process.stdin.removeAllListeners('end');
-      done({});
+      done(data, {});
     }, STDIN_TIMEOUT_MS);
 
     process.stdin.setEncoding('utf-8');
@@ -191,20 +300,19 @@ function readStdin() {
         clearTimeout(timeout);
         process.stdin.removeAllListeners('data');
         process.stdin.removeAllListeners('end');
-        done({});
+        done(data, {});
       }
     });
     process.stdin.on('end', () => {
       clearTimeout(timeout);
       try {
-        done(JSON.parse(data));
+        done(data, JSON.parse(data));
       } catch (err) {
-        // Log with context so parse failures are diagnosable — include truncated raw data
         const preview = data.length > 200 ? data.slice(0, 200) + '...' : data;
         log.warn(
           `stdin parse failed (${data.length} bytes, subcommand=${subcommand}): ${err?.message || 'unknown error'} — data: ${preview}`,
         );
-        done({});
+        done(data, {});
       }
     });
   });

@@ -96,6 +96,19 @@ export interface TeamCoordinationHandlers {
     linesRemoved?: number,
   ): Promise<OkResult>;
   reportOutcome(teamId: string, outcome: string, summary?: string | null): Promise<OkResult>;
+  recordCommits(
+    teamId: string,
+    sessionId: string,
+    commits: Array<{
+      sha: string;
+      branch?: string;
+      message?: string;
+      files_changed?: number;
+      lines_added?: number;
+      lines_removed?: number;
+      committed_at?: string;
+    }>,
+  ): Promise<OkResult>;
   reportModel(teamId: string, model: string): Promise<OkResult>;
   flushToolCalls(
     teamId: string,
@@ -239,6 +252,13 @@ export function teamHandlers(client: ApiClient): TeamHandlers {
       const body: Record<string, unknown> = { outcome };
       if (summary) body.summary = summary;
       return client.put(`/teams/${teamId}/sessionoutcome`, body);
+    },
+
+    async recordCommits(teamId, sessionId, commits) {
+      validateTeam(teamId);
+      const body: Record<string, unknown> = { commits };
+      if (sessionId) body.session_id = sessionId;
+      return client.post(`/teams/${teamId}/commits`, body);
     },
 
     async reportModel(teamId, model) {

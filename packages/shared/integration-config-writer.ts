@@ -236,6 +236,15 @@ export function writeHooksConfig(
           },
         ],
       },
+      {
+        matcher: 'Bash',
+        hooks: [
+          {
+            type: 'command',
+            command: buildChinwagHookCommand('report-commit', { hostId, surfaceId }),
+          },
+        ],
+      },
     ],
     SessionStart: [
       {

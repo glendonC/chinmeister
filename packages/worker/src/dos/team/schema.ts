@@ -554,6 +554,42 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    name: '016_commits',
+    up(sql) {
+      try {
+        sql.exec(`
+          CREATE TABLE IF NOT EXISTS commits (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            agent_id TEXT NOT NULL,
+            handle TEXT NOT NULL,
+            host_tool TEXT DEFAULT 'unknown',
+            sha TEXT NOT NULL,
+            branch TEXT DEFAULT NULL,
+            message_preview TEXT DEFAULT NULL,
+            files_changed INTEGER DEFAULT 0,
+            lines_added INTEGER DEFAULT 0,
+            lines_removed INTEGER DEFAULT 0,
+            committed_at TEXT DEFAULT (datetime('now')),
+            created_at TEXT DEFAULT (datetime('now')),
+            UNIQUE(session_id, sha)
+          )
+        `);
+        sql.exec('CREATE INDEX IF NOT EXISTS idx_commits_session ON commits(session_id)');
+        sql.exec('CREATE INDEX IF NOT EXISTS idx_commits_sha ON commits(sha)');
+        sql.exec('CREATE INDEX IF NOT EXISTS idx_commits_created ON commits(created_at)');
+      } catch (error) {
+        logMigrationError('016_commits', error);
+      }
+
+      // Per-session commit count for fast aggregation (mirrors edit_count)
+      addColumnIfMissing(sql, 'sessions', 'commit_count INTEGER DEFAULT 0');
+
+      // Time-to-first-commit for analytics (mirrors first_edit_at)
+      addColumnIfMissing(sql, 'sessions', 'first_commit_at TEXT DEFAULT NULL');
+    },
+  },
 ];
 
 export function ensureSchema(

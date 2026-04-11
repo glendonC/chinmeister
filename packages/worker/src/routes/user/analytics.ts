@@ -102,6 +102,16 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
         by_model: [],
         by_tool: [],
       },
+      commit_stats: {
+        total_commits: 0,
+        commits_per_session: 0,
+        sessions_with_commits: 0,
+        avg_time_to_first_commit_min: null,
+        by_tool: [],
+        daily_commits: [],
+        outcome_correlation: [],
+        commit_edit_ratio: [],
+      },
       teams_included: 0,
       degraded: false,
     });
@@ -235,6 +245,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       total_edits: number;
       total_lines_added: number;
       total_lines_removed: number;
+      total_commits: number;
       tools: Map<string, number>;
     }
   >();
@@ -346,6 +357,21 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
     { file_count: number; completed: number; total: number }
   >();
   const outcomePredictorsAcc = new Map<string, { first_edit_sum: number; sessions: number }>();
+
+  // Commit stats accumulators
+  const commitAcc = {
+    total_commits: 0,
+    sessions_with_commits: 0,
+    ttfc_sum: 0,
+    ttfc_count: 0,
+  };
+  const commitByTool = new Map<string, { commits: number; files_sum: number; lines_sum: number }>();
+  const commitDaily = new Map<string, number>();
+  const commitOutcomeAcc = new Map<string, { sessions: number; completed: number }>();
+  const commitEditRatioAcc = new Map<
+    string,
+    { sessions: number; completed: number; edits_sum: number; commits_sum: number }
+  >();
 
   // Active tools tracker for data_coverage computation
   const activeToolsSet = new Set<string>();
@@ -602,6 +628,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
         total_edits: 0,
         total_lines_added: 0,
         total_lines_removed: 0,
+        total_commits: 0,
         tools: new Map<string, number>(),
       };
       const sess = (ma.sessions as number) || 0;
@@ -614,6 +641,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       existing.total_edits += (ma.total_edits as number) || 0;
       existing.total_lines_added += (ma.total_lines_added as number) || 0;
       existing.total_lines_removed += (ma.total_lines_removed as number) || 0;
+      existing.total_commits += (ma.total_commits as number) || 0;
       const tool = ma.primary_tool as string | null;
       if (tool) existing.tools.set(tool, (existing.tools.get(tool) || 0) + sess);
       memberAcc.set(key, existing);
@@ -934,6 +962,54 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       outcomePredictorsAcc.set(key, existing);
     }
 
+    // Merge commit stats
+    const cs_ = data.commit_stats as Record<string, unknown> | undefined;
+    if (cs_) {
+      commitAcc.total_commits += (cs_.total_commits as number) || 0;
+      commitAcc.sessions_with_commits += (cs_.sessions_with_commits as number) || 0;
+      const ttfc = cs_.avg_time_to_first_commit_min as number | null;
+      const swc = (cs_.sessions_with_commits as number) || 0;
+      if (ttfc != null && swc > 0) {
+        commitAcc.ttfc_sum += ttfc * swc;
+        commitAcc.ttfc_count += swc;
+      }
+      for (const bt of (cs_.by_tool as Array<Record<string, unknown>>) || []) {
+        const key = bt.host_tool as string;
+        const c = (bt.commits as number) || 0;
+        const existing = commitByTool.get(key) || { commits: 0, files_sum: 0, lines_sum: 0 };
+        existing.commits += c;
+        existing.files_sum += ((bt.avg_files_changed as number) || 0) * c;
+        existing.lines_sum += ((bt.avg_lines as number) || 0) * c;
+        commitByTool.set(key, existing);
+      }
+      for (const dc of (cs_.daily_commits as Array<Record<string, unknown>>) || []) {
+        const key = dc.day as string;
+        commitDaily.set(key, (commitDaily.get(key) || 0) + ((dc.commits as number) || 0));
+      }
+      for (const oc of (cs_.outcome_correlation as Array<Record<string, unknown>>) || []) {
+        const key = oc.bucket as string;
+        const existing = commitOutcomeAcc.get(key) || { sessions: 0, completed: 0 };
+        existing.sessions += (oc.sessions as number) || 0;
+        existing.completed += (oc.completed as number) || 0;
+        commitOutcomeAcc.set(key, existing);
+      }
+      for (const cr of (cs_.commit_edit_ratio as Array<Record<string, unknown>>) || []) {
+        const key = cr.bucket as string;
+        const sess = (cr.sessions as number) || 0;
+        const existing = commitEditRatioAcc.get(key) || {
+          sessions: 0,
+          completed: 0,
+          edits_sum: 0,
+          commits_sum: 0,
+        };
+        existing.sessions += sess;
+        existing.completed += Math.round((((cr.completion_rate as number) || 0) / 100) * sess);
+        existing.edits_sum += ((cr.avg_edits as number) || 0) * sess;
+        existing.commits_sum += ((cr.avg_commits as number) || 0) * sess;
+        commitEditRatioAcc.set(key, existing);
+      }
+    }
+
     // Track active tools for data_coverage
     for (const t of (data.tool_distribution as Array<Record<string, unknown>>) || []) {
       const tool = t.host_tool as string;
@@ -1125,6 +1201,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
           total_edits: v.total_edits,
           total_lines_added: v.total_lines_added,
           total_lines_removed: v.total_lines_removed,
+          total_commits: v.total_commits,
           primary_tool: primaryTool,
         };
       }),
@@ -1404,6 +1481,46 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
           v.sessions > 0 ? Math.round((v.first_edit_sum / v.sessions) * 10) / 10 : 0,
         sessions: v.sessions,
       })),
+    commit_stats: (() => {
+      const totalSessions = completionAcc.total_sessions || 1;
+      return {
+        total_commits: commitAcc.total_commits,
+        commits_per_session:
+          totalSessions > 0 ? Math.round((commitAcc.total_commits / totalSessions) * 100) / 100 : 0,
+        sessions_with_commits: commitAcc.sessions_with_commits,
+        avg_time_to_first_commit_min:
+          commitAcc.ttfc_count > 0
+            ? Math.round((commitAcc.ttfc_sum / commitAcc.ttfc_count) * 10) / 10
+            : null,
+        by_tool: [...commitByTool.entries()]
+          .sort(([, a], [, b]) => b.commits - a.commits)
+          .map(([host_tool, v]) => ({
+            host_tool,
+            commits: v.commits,
+            avg_files_changed: v.commits > 0 ? Math.round((v.files_sum / v.commits) * 10) / 10 : 0,
+            avg_lines: v.commits > 0 ? Math.round((v.lines_sum / v.commits) * 10) / 10 : 0,
+          })),
+        daily_commits: [...commitDaily.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([day, commits]) => ({ day, commits })),
+        outcome_correlation: [...commitOutcomeAcc.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([bucket, v]) => ({
+            bucket,
+            sessions: v.sessions,
+            completed: v.completed,
+            completion_rate:
+              v.sessions > 0 ? Math.round((v.completed / v.sessions) * 1000) / 10 : 0,
+          })),
+        commit_edit_ratio: [...commitEditRatioAcc.entries()].map(([bucket, v]) => ({
+          bucket,
+          sessions: v.sessions,
+          completion_rate: v.sessions > 0 ? Math.round((v.completed / v.sessions) * 1000) / 10 : 0,
+          avg_edits: v.sessions > 0 ? Math.round((v.edits_sum / v.sessions) * 10) / 10 : 0,
+          avg_commits: v.sessions > 0 ? Math.round((v.commits_sum / v.sessions) * 10) / 10 : 0,
+        })),
+      };
+    })(),
     data_coverage: (() => {
       const allTools = [...activeToolsSet];
       const capConversation = new Set(getToolsWithCapability('conversationLogs'));

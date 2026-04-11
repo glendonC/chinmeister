@@ -298,6 +298,8 @@ export interface SessionRecord {
   memories_searched: number;
   input_tokens: number | null;
   output_tokens: number | null;
+  commit_count: number;
+  first_commit_at: string | null;
 }
 
 export function recordTokenUsage(
@@ -372,7 +374,7 @@ export function getSessionsInRange(
               started_at, ended_at, edit_count, files_touched, conflicts_hit,
               memories_saved, outcome, outcome_summary, outcome_tags,
               lines_added, lines_removed, first_edit_at, got_stuck, memories_searched,
-              input_tokens, output_tokens,
+              input_tokens, output_tokens, commit_count, first_commit_at,
               ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60) as duration_minutes
        FROM sessions
        WHERE started_at >= ? AND started_at < datetime(?, '+1 day')
@@ -419,6 +421,8 @@ export function getSessionsInRange(
       memories_searched: (r.memories_searched as number) || 0,
       input_tokens: (r.input_tokens as number) ?? null,
       output_tokens: (r.output_tokens as number) ?? null,
+      commit_count: (r.commit_count as number) || 0,
+      first_commit_at: (r.first_commit_at as string) || null,
     };
   });
 }
@@ -467,4 +471,89 @@ export function getEditHistory(
     .toArray() as unknown as EditEntry[];
 
   return { ok: true, edits };
+}
+
+// -- Commit recording --
+
+const MAX_COMMITS_BATCH = 50;
+const MAX_SHA_LENGTH = 40;
+const MAX_BRANCH_LENGTH = 200;
+const MAX_MESSAGE_PREVIEW_LENGTH = 200;
+
+export interface CommitInput {
+  sha: string;
+  branch?: string | null;
+  message?: string | null;
+  files_changed?: number;
+  lines_added?: number;
+  lines_removed?: number;
+  committed_at?: string | null;
+}
+
+export function recordCommits(
+  sql: SqlStorage,
+  resolvedAgentId: string,
+  sessionId: string | null,
+  handle: string,
+  hostTool: string,
+  commits: CommitInput[],
+): { ok: true; recorded: number } {
+  // Resolve session: use provided sessionId or find the active session (like recordEdit)
+  let resolvedSessionId = sessionId;
+  let resolvedHandle = handle;
+  let resolvedHostTool = hostTool;
+
+  if (!resolvedSessionId) {
+    const sessions = sql
+      .exec(
+        'SELECT id, handle, host_tool FROM sessions WHERE agent_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1',
+        resolvedAgentId,
+      )
+      .toArray();
+    if (sessions.length === 0) return { ok: true, recorded: 0 };
+    const session = sessions[0] as Record<string, unknown>;
+    resolvedSessionId = session.id as string;
+    resolvedHandle = (session.handle as string) || handle;
+    resolvedHostTool = (session.host_tool as string) || hostTool;
+  }
+
+  const capped = commits.slice(0, MAX_COMMITS_BATCH);
+  let recorded = 0;
+  for (const commit of capped) {
+    if (typeof commit.sha !== 'string' || !commit.sha) continue;
+    const sha = commit.sha.slice(0, MAX_SHA_LENGTH).toLowerCase();
+    if (!/^[0-9a-f]{7,40}$/.test(sha)) continue;
+
+    // INSERT OR IGNORE: idempotent on (session_id, sha) unique constraint
+    sql.exec(
+      `INSERT OR IGNORE INTO commits (id, session_id, agent_id, handle, host_tool, sha, branch, message_preview, files_changed, lines_added, lines_removed, committed_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`,
+      crypto.randomUUID(),
+      resolvedSessionId,
+      resolvedAgentId,
+      resolvedHandle,
+      resolvedHostTool,
+      sha,
+      commit.branch ? String(commit.branch).slice(0, MAX_BRANCH_LENGTH) : null,
+      commit.message ? String(commit.message).slice(0, MAX_MESSAGE_PREVIEW_LENGTH) : null,
+      Math.max(0, Number(commit.files_changed) || 0),
+      Math.max(0, Number(commit.lines_added) || 0),
+      Math.max(0, Number(commit.lines_removed) || 0),
+      commit.committed_at || null,
+    );
+
+    if (sqlChanges(sql) > 0) recorded++;
+  }
+
+  // Update session counters
+  if (recorded > 0) {
+    sql.exec(
+      `UPDATE sessions SET commit_count = commit_count + ?, first_commit_at = COALESCE(first_commit_at, datetime('now')) WHERE id = ? AND agent_id = ?`,
+      recorded,
+      resolvedSessionId,
+      resolvedAgentId,
+    );
+  }
+
+  return { ok: true, recorded };
 }
