@@ -42,7 +42,7 @@ export function WidgetRenderer({
   if (!def) return null;
 
   return (
-    <div className={styles.widget}>
+    <>
       <span className={styles.sectionLabel}>{def.name}</span>
       <WidgetBody
         def={def}
@@ -52,7 +52,7 @@ export function WidgetRenderer({
         liveAgents={liveAgents}
         selectTeam={selectTeam}
       />
-    </div>
+    </>
   );
 }
 
