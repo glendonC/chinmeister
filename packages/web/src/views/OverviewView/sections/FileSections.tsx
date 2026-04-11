@@ -13,14 +13,11 @@ import styles from '../OverviewView.module.css';
 export function FileHeatmapSection({ files }: { files: FileHeatmapEntry[] }) {
   if (files.length === 0) return null;
 
-  const maxTouches = Math.max(...files.map((f) => f.touch_count), 1);
-
   return (
     <div className={styles.section}>
       <span className={styles.sectionLabel}>File heatmap</span>
       <div className={styles.dataList}>
         {files.slice(0, 20).map((f, i) => {
-          const pct = (f.touch_count / maxTouches) * 100;
           return (
             <div
               key={f.file}
@@ -91,6 +88,8 @@ export function DirectoryHeatmapSection({ dirs }: { dirs: DirectoryHeatmapEntry[
                 <div className={styles.metricBarFill} style={{ width: `${pct}%` }} />
               </div>
               <span className={styles.metricValue}>{d.touch_count}</span>
+              <span className={styles.metricValue}>{d.file_count}</span>
+              <span className={styles.metricValue}>{d.total_lines.toLocaleString()}</span>
               <span
                 className={clsx(
                   styles.metricValue,

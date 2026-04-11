@@ -56,6 +56,21 @@ export function MemberSection({ members }: { members: MemberAnalytics[] }) {
                   </span>{' '}
                   lines
                 </span>
+                {m.completed > 0 && (
+                  <span className={styles.dataStat}>
+                    <span className={styles.dataStatSuccess}>{m.completed}</span> done
+                  </span>
+                )}
+                {m.abandoned > 0 && (
+                  <span className={styles.dataStat}>
+                    <span className={styles.dataStatWarn}>{m.abandoned}</span> left
+                  </span>
+                )}
+                {m.failed > 0 && (
+                  <span className={styles.dataStat}>
+                    <span className={styles.dataStatDanger}>{m.failed}</span> failed
+                  </span>
+                )}
               </div>
             </div>
           );

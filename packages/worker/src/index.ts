@@ -34,6 +34,7 @@ import {
   handleUnlinkGithub,
   handleGetWsTicket,
   handleUpdateHandle,
+  handleGlobalRank,
 } from './routes/user/index.js';
 import {
   handleListDirectory,
@@ -222,6 +223,7 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'GET', path: '/me/dashboard', handler: handleDashboardSummary },
   { method: 'GET', path: '/me/analytics', handler: handleUserAnalytics },
   { method: 'GET', path: '/me/sessions', handler: handleUserSessions },
+  { method: 'GET', path: '/me/global-rank', handler: handleGlobalRank },
   { method: 'PUT', path: '/me/handle', handler: handleUpdateHandle },
   { method: 'PUT', path: '/me/color', handler: handleUpdateColor },
   { method: 'PUT', path: '/me/github', handler: handleUnlinkGithub },

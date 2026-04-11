@@ -125,7 +125,6 @@ const migrations: Migration[] = [
 
       // Backfill existing evaluations based on data heuristics.
       // All existing tools have at least core data (name, category, verdict exist).
-      const now = new Date().toISOString();
       sql.exec(
         `UPDATE tool_evaluations
          SET data_passes = json_object('core', json_object('completed_at', evaluated_at, 'success', json('true')))
@@ -173,6 +172,44 @@ const migrations: Migration[] = [
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_suggestions_status ON tool_suggestions(status);
+      `);
+    },
+  },
+  {
+    name: '005_global_user_metrics',
+    up(sql) {
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS user_metrics (
+          handle TEXT PRIMARY KEY,
+          total_sessions INTEGER DEFAULT 0,
+          completed_sessions INTEGER DEFAULT 0,
+          abandoned_sessions INTEGER DEFAULT 0,
+          failed_sessions INTEGER DEFAULT 0,
+          total_edits INTEGER DEFAULT 0,
+          total_lines_added INTEGER DEFAULT 0,
+          total_lines_removed INTEGER DEFAULT 0,
+          total_duration_min REAL DEFAULT 0,
+          total_input_tokens INTEGER DEFAULT 0,
+          total_output_tokens INTEGER DEFAULT 0,
+          total_stuck INTEGER DEFAULT 0,
+          total_memories_saved INTEGER DEFAULT 0,
+          total_memories_searched INTEGER DEFAULT 0,
+          total_first_edit_s REAL DEFAULT 0,
+          sessions_with_first_edit INTEGER DEFAULT 0,
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS user_tools (
+          handle TEXT NOT NULL,
+          tool TEXT NOT NULL,
+          PRIMARY KEY (handle, tool)
+        );
+
+        CREATE TABLE IF NOT EXISTS user_models (
+          handle TEXT NOT NULL,
+          model TEXT NOT NULL,
+          PRIMARY KEY (handle, model)
+        );
       `);
     },
   },

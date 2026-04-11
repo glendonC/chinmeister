@@ -17,11 +17,18 @@ interface UseUserAnalyticsReturn {
   error: string | null;
 }
 
-export function useUserAnalytics(days = 30, enabled = true): UseUserAnalyticsReturn {
+export function useUserAnalytics(
+  days = 30,
+  enabled = true,
+  teamIds?: string[],
+): UseUserAnalyticsReturn {
   const [analytics, setAnalytics] = useState<UserAnalytics>(createEmptyUserAnalytics);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Stable dep key so effect doesn't re-fire on array reference changes
+  const teamKey = teamIds?.slice().sort().join(',') ?? '';
 
   useEffect(() => {
     if (!enabled) return;
@@ -37,7 +44,9 @@ export function useUserAnalytics(days = 30, enabled = true): UseUserAnalyticsRet
       setError(null);
       try {
         const token = authActions.getState().token;
-        const raw = await api('GET', `/me/analytics?days=${days}`, null, token, {
+        let url = `/me/analytics?days=${days}`;
+        if (teamKey) url += `&team_ids=${teamKey}`;
+        const raw = await api('GET', url, null, token, {
           signal: controller.signal,
         });
         if (cancelled) return;
@@ -61,7 +70,7 @@ export function useUserAnalytics(days = 30, enabled = true): UseUserAnalyticsRet
       cancelled = true;
       controller.abort();
     };
-  }, [days, enabled]);
+  }, [days, enabled, teamKey]);
 
   return { analytics, isLoading, error };
 }

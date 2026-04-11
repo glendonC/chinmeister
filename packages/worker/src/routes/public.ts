@@ -1,4 +1,4 @@
-import type { Env, User } from '../types.js';
+import type { Env } from '../types.js';
 import { resolveRuntimeTargets } from '@chinwag/shared/runtime-profile.js';
 import { TOOL_CATALOG } from '../catalog.js';
 import { getCategoryNames } from '../lib/categories.js';
@@ -109,11 +109,12 @@ export const handleInit = publicRoute(async ({ request, env }) => {
 
 export const handleStats = publicRoute(async ({ request, env }) => {
   return withIpRateLimit(request, env, 'stats', RATE_LIMIT_STATS_PER_IP, async () => {
-    const [lobbyStats, dbStats] = await Promise.all([
+    const [lobbyStats, dbStatsRaw] = await Promise.all([
       getLobby(env).getStats().then(rpc),
-      getDB(env).getStats().then(rpc),
+      getDB(env).getStats() as Promise<Record<string, unknown>>,
     ]);
     const { ok: _ok1, ...lobby } = lobbyStats;
+    const dbStats = rpc(dbStatsRaw);
     const { ok: _ok2, ...dbData } = dbStats;
     return json({ ok: true, ...dbData, ...lobby });
   });

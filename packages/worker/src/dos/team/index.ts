@@ -738,7 +738,10 @@ export class TeamDO extends DurableObject<Env> {
     agentId: string,
     sessionId: string,
     ownerId: string | null = null,
-  ): Promise<DOResult<{ ok: true; outcome?: string | null }> | DOError> {
+  ): Promise<
+    | DOResult<{ ok: true; outcome?: string | null; summary?: Record<string, unknown> | null }>
+    | DOError
+  > {
     return this.#withMember(agentId, ownerId, (resolved) => {
       const result = endSessionFn(this.sql, resolved, sessionId);
       if (!isDOError(result) && result.outcome) {

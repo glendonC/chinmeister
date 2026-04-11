@@ -19,9 +19,23 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
   const parsed = parseInt(url.searchParams.get('days') || '30', 10);
   const days = Math.max(1, Math.min(isNaN(parsed) ? 30 : parsed, ANALYTICS_MAX_DAYS));
 
+  // Optional project filter: comma-separated team IDs
+  const teamIdsParam = url.searchParams.get('team_ids');
+  const teamIdsFilter = teamIdsParam
+    ? new Set(
+        teamIdsParam
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      )
+    : null;
+
   const db = getDB(env);
   const teamsResult = rpc(await db.getUserTeams(user.id));
-  const teams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
+  const allTeams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
+
+  // Filter to requested subset (intersection with user's actual teams)
+  const teams = teamIdsFilter ? allTeams.filter((t) => teamIdsFilter.has(t.team_id)) : allTeams;
 
   if (teams.length === 0) {
     return json({

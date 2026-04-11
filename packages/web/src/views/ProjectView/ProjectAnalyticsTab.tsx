@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import type { CSSProperties } from 'react';
 import clsx from 'clsx';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import { formatDuration } from '../../lib/utils.js';
@@ -208,6 +208,164 @@ export default function ProjectAnalyticsTab({
           </div>
         </div>
       )}
+
+      {/* ── Tool outcomes ── */}
+      {a.tool_outcomes.length > 0 &&
+        (() => {
+          const byTool = new Map<
+            string,
+            { completed: number; abandoned: number; failed: number }
+          >();
+          for (const d of a.tool_outcomes) {
+            const entry = byTool.get(d.host_tool) || { completed: 0, abandoned: 0, failed: 0 };
+            if (d.outcome === 'completed') entry.completed = d.count;
+            else if (d.outcome === 'abandoned') entry.abandoned = d.count;
+            else if (d.outcome === 'failed') entry.failed = d.count;
+            byTool.set(d.host_tool, entry);
+          }
+          return (
+            <div className={styles.section}>
+              <span className={styles.sectionLabel}>Tool outcome breakdown</span>
+              <div className={styles.dataList}>
+                {[...byTool.entries()].map(([tool, counts], i) => {
+                  const meta = getToolMeta(tool);
+                  const total = counts.completed + counts.abandoned + counts.failed;
+                  return (
+                    <div
+                      key={tool}
+                      className={styles.dataRow}
+                      style={{ '--row-index': i } as CSSProperties}
+                    >
+                      <span className={styles.dataName}>{meta.label}</span>
+                      <div className={styles.dataMeta}>
+                        <span className={styles.dataStat}>
+                          <span className={styles.dataStatValue}>{total}</span> total
+                        </span>
+                        {counts.completed > 0 && (
+                          <span className={styles.dataStat}>
+                            <span className={styles.dataStatSuccess}>{counts.completed}</span> done
+                          </span>
+                        )}
+                        {counts.abandoned > 0 && (
+                          <span className={styles.dataStat}>
+                            <span className={styles.dataStatWarn}>{counts.abandoned}</span> left
+                          </span>
+                        )}
+                        {counts.failed > 0 && (
+                          <span className={styles.dataStat}>
+                            <span className={styles.dataStatDanger}>{counts.failed}</span> failed
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+      {/* ── Tool call analytics ── */}
+      {a.tool_call_stats.total_calls > 0 &&
+        (() => {
+          const tcs = a.tool_call_stats;
+          const fmtMs = (ms: number) =>
+            ms < 1000 ? `${Math.round(ms)}ms` : `${(ms / 1000).toFixed(1)}s`;
+          return (
+            <>
+              <div className={styles.section}>
+                <span className={styles.sectionLabel}>Tool call activity</span>
+                <div className={styles.statRow}>
+                  <div className={styles.statBlock}>
+                    <span className={styles.statBlockValue}>
+                      {tcs.total_calls.toLocaleString()}
+                    </span>
+                    <span className={styles.statBlockLabel}>total calls</span>
+                  </div>
+                  <div className={styles.statBlock}>
+                    <span className={styles.statBlockValue}>{tcs.error_rate}%</span>
+                    <span className={styles.statBlockLabel}>error rate</span>
+                  </div>
+                  <div className={styles.statBlock}>
+                    <span className={styles.statBlockValue}>{fmtMs(tcs.avg_duration_ms)}</span>
+                    <span className={styles.statBlockLabel}>avg duration</span>
+                  </div>
+                  <div className={styles.statBlock}>
+                    <span className={styles.statBlockValue}>
+                      {tcs.calls_per_session.toFixed(1)}
+                    </span>
+                    <span className={styles.statBlockLabel}>calls / session</span>
+                  </div>
+                  <div className={styles.statBlock}>
+                    <span className={styles.statBlockValue}>
+                      {tcs.research_to_edit_ratio.toFixed(1)}:1
+                    </span>
+                    <span className={styles.statBlockLabel}>research : edit</span>
+                  </div>
+                </div>
+              </div>
+              {tcs.frequency.length > 0 && (
+                <div className={styles.section}>
+                  <span className={styles.sectionLabel}>Tool call breakdown</span>
+                  <div className={styles.metricBars}>
+                    {tcs.frequency.map((f) => {
+                      const max = Math.max(...tcs.frequency.map((x) => x.calls), 1);
+                      const pct = (f.calls / max) * 100;
+                      return (
+                        <div key={f.tool} className={styles.metricRow}>
+                          <span className={styles.metricLabel}>{f.tool}</span>
+                          <div className={styles.metricBarTrack}>
+                            <div
+                              className={clsx(
+                                styles.metricBarFill,
+                                f.error_rate > 40 && styles.metricBarDanger,
+                                f.error_rate > 20 && f.error_rate <= 40 && styles.metricBarWarn,
+                              )}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                          <span className={styles.metricValue}>{f.calls}</span>
+                          {f.error_rate > 0 && (
+                            <span className={styles.metricValue}>{f.error_rate}% err</span>
+                          )}
+                          {f.avg_duration_ms > 0 && (
+                            <span className={styles.metricValue}>{fmtMs(f.avg_duration_ms)}</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              {tcs.error_patterns.length > 0 && (
+                <div className={styles.section}>
+                  <span className={styles.sectionLabel}>Common tool errors</span>
+                  <div className={styles.dataList}>
+                    {tcs.error_patterns.map((e, i) => (
+                      <div
+                        key={`${e.tool}-${i}`}
+                        className={styles.dataRow}
+                        style={{ '--row-index': i } as CSSProperties}
+                      >
+                        <span className={styles.dataName} title={e.error_preview}>
+                          <span style={{ fontWeight: 600 }}>{e.tool}</span>{' '}
+                          {e.error_preview.length > 80
+                            ? e.error_preview.slice(0, 80) + '...'
+                            : e.error_preview}
+                        </span>
+                        <div className={styles.dataMeta}>
+                          <span className={styles.dataStat}>
+                            <span className={styles.dataStatDanger}>{e.count}</span> occurrences
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          );
+        })()}
 
       {/* ── Work type outcomes ── */}
       {a.work_type_outcomes.length > 0 && (
@@ -467,6 +625,21 @@ export default function ProjectAnalyticsTab({
                       </span>{' '}
                       lines
                     </span>
+                    {m.completed > 0 && (
+                      <span className={styles.dataStat}>
+                        <span className={styles.dataStatSuccess}>{m.completed}</span> done
+                      </span>
+                    )}
+                    {m.abandoned > 0 && (
+                      <span className={styles.dataStat}>
+                        <span className={styles.dataStatWarn}>{m.abandoned}</span> left
+                      </span>
+                    )}
+                    {m.failed > 0 && (
+                      <span className={styles.dataStat}>
+                        <span className={styles.dataStatDanger}>{m.failed}</span> failed
+                      </span>
+                    )}
                   </div>
                 </div>
               );

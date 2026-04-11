@@ -20,14 +20,23 @@ interface UseConversationAnalyticsReturn {
 export function useConversationAnalytics(
   days = 30,
   enabled = true,
+  teamIds?: string[],
 ): UseConversationAnalyticsReturn {
   const [data, setData] = useState<ConversationAnalytics>(createEmptyConversationAnalytics);
   const [isLoading, setIsLoading] = useState(false);
   const teams = useTeamStore((s) => s.teams);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Stable dep key so effect doesn't re-fire on array reference changes
+  const teamKey = teamIds?.slice().sort().join(',') ?? '';
+
   useEffect(() => {
     if (!enabled || teams.length === 0) return;
+
+    // Filter to requested subset (or all teams if no filter)
+    const filterSet = teamKey ? new Set(teamKey.split(',')) : null;
+    const targetTeams = filterSet ? teams.filter((t) => filterSet.has(t.team_id)) : teams;
+    if (targetTeams.length === 0) return;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -39,7 +48,7 @@ export function useConversationAnalytics(
       try {
         const token = authActions.getState().token;
         const results = await Promise.allSettled(
-          teams.map((t) =>
+          targetTeams.map((t) =>
             api('GET', `/teams/${t.team_id}/conversations/analytics?days=${days}`, null, token, {
               signal: controller.signal,
             }),
@@ -145,7 +154,7 @@ export function useConversationAnalytics(
       cancelled = true;
       controller.abort();
     };
-  }, [days, enabled, teams]);
+  }, [days, enabled, teams, teamKey]);
 
   return { data, isLoading };
 }

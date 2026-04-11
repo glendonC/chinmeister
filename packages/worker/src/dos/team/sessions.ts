@@ -85,7 +85,7 @@ export function endSession(
   sql: SqlStorage,
   resolvedAgentId: string,
   sessionId: string,
-): DOResult<{ ok: true; outcome?: string | null }> {
+): DOResult<{ ok: true; outcome?: string | null; summary?: Record<string, unknown> | null }> {
   // Read session state for outcome inference before closing
   const rows = sql
     .exec(
@@ -135,7 +135,21 @@ export function endSession(
   );
   if (sqlChanges(sql) === 0)
     return { error: 'Session not found or not owned by this agent', code: 'NOT_FOUND' };
-  return { ok: true, outcome: finalOutcome };
+
+  // Read closed session for global metrics write-through
+  const closedRows = sql
+    .exec(
+      `SELECT host_tool, agent_model, edit_count, lines_added, lines_removed,
+        input_tokens, output_tokens, got_stuck, memories_saved, memories_searched,
+        first_edit_at, started_at, ended_at,
+        ROUND((julianday(ended_at) - julianday(started_at)) * 24 * 60, 2) AS duration_min
+      FROM sessions WHERE id = ?`,
+      sessionId,
+    )
+    .toArray();
+  const summary = closedRows.length > 0 ? (closedRows[0] as Record<string, unknown>) : null;
+
+  return { ok: true, outcome: finalOutcome, summary };
 }
 
 const VALID_OUTCOMES = new Set(['completed', 'abandoned', 'failed']);

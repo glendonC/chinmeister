@@ -1,0 +1,500 @@
+/* ── Command strip (fixed bottom, dark background) ── */
+
+.strip {
+  position: fixed;
+  bottom: 12px;
+  right: 24px;
+  height: 40px;
+  background: var(--page-bg);
+  border: 1px solid var(--ghost);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg), var(--shadow-xs);
+  z-index: 200;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
+  animation: stripIn 0.2s ease both;
+}
+
+@keyframes stripIn {
+  from {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stripAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: none;
+  background: none;
+  padding: 5px 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
+  white-space: nowrap;
+}
+
+.stripAction:hover {
+  color: var(--ink);
+  background: var(--ghost);
+}
+
+.stripActionActive {
+  color: var(--ink);
+}
+
+.stripDivider {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--ghost);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  background: var(--ghost);
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--soft);
+  line-height: 1;
+}
+
+/* ── Search bar (appears above panel when invoked) ── */
+
+.searchBar {
+  position: fixed;
+  z-index: 203;
+  right: 24px;
+  width: 440px;
+  background: var(--page-bg);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg), var(--shadow-xs);
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  animation: searchIn 0.12s ease both;
+}
+
+@keyframes searchIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.searchIcon {
+  width: 14px;
+  height: 14px;
+  color: var(--soft);
+  flex-shrink: 0;
+}
+
+.searchInput {
+  flex: 1;
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  outline: none;
+  letter-spacing: var(--tracking-stat);
+}
+
+.searchInput::placeholder {
+  color: var(--soft);
+}
+
+.searchHint {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  flex-shrink: 0;
+}
+
+/* ── Widget panel (floating, bottom-right) ── */
+
+.panel {
+  position: fixed;
+  bottom: 64px;
+  right: 24px;
+  width: 440px;
+  height: 420px;
+  background: var(--page-bg);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg), var(--shadow-xs);
+  z-index: 201;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+  animation: panelIn 0.2s ease both;
+  animation-delay: 0.05s;
+}
+
+@keyframes panelIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Category icon strip ── */
+
+.panelCats {
+  display: flex;
+  align-items: center;
+  justify-content: space-evenly;
+  padding: 14px 0 10px;
+  flex-shrink: 0;
+}
+
+.panelCat {
+  width: 34px;
+  height: 34px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--soft);
+  transition:
+    color 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease,
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+  position: relative;
+}
+
+.panelCat:hover {
+  color: var(--ink);
+  background: var(--ghost);
+}
+
+.panelCatActive {
+  color: var(--ink);
+  background: var(--ghost);
+  border-color: var(--ghost);
+  transform: scale(1.1);
+  box-shadow: 0 0 0 2px var(--ghost);
+}
+
+.panelCatIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.panelCatArrow {
+  width: 28px;
+  height: 34px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  color: var(--soft);
+  transition:
+    color 0.12s ease,
+    background 0.12s ease;
+  flex-shrink: 0;
+}
+
+.panelCatArrow:hover {
+  color: var(--ink);
+  background: var(--ghost);
+}
+
+/* Tooltip on hover */
+.panelCat::after {
+  content: attr(data-label);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  background: var(--ink);
+  color: var(--page-bg);
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: var(--tracking-stat);
+  border-radius: 4px;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+
+.panelCat:hover::after {
+  opacity: 1;
+}
+
+/* ── Widget list ── */
+
+.panelList {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 8px 12px;
+  overflow-x: hidden;
+  min-height: 0;
+}
+
+.panelList::-webkit-scrollbar {
+  width: 4px;
+}
+
+.panelList::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.panelList::-webkit-scrollbar-thumb {
+  background: var(--ghost);
+  border-radius: 2px;
+}
+
+/* ── Widget row ── */
+
+.panelRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border-radius: var(--radius-xs);
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+
+.panelRow:hover {
+  background: var(--ghost);
+}
+
+.panelRowInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.panelRowName {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.panelRowDesc {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1.3;
+}
+
+/* ── Toggle switch ── */
+
+.toggle {
+  width: 32px;
+  height: 18px;
+  border-radius: 9px;
+  border: none;
+  background: var(--ghost);
+  position: relative;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.toggle::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--soft);
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.toggleOn {
+  background: var(--ink);
+}
+
+.toggleOn::after {
+  transform: translateX(14px);
+  background: var(--page-bg);
+}
+
+/* ── Hover tooltip (left of panel) ── */
+
+.tooltip {
+  position: fixed;
+  z-index: 202;
+  width: 320px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  background: var(--page-bg);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg), var(--shadow-xs);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(8px);
+  transition:
+    opacity 0.1s ease,
+    transform 0.1s ease;
+}
+
+.tooltipVisible {
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity 0.12s ease 0.15s,
+    transform 0.12s ease 0.15s;
+}
+
+.tooltipName {
+  font-family: var(--display);
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.tooltipDesc {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+.tooltipMeta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 14px;
+  margin-bottom: 12px;
+}
+
+.tooltipMetaLabel {
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-stat);
+  color: var(--soft);
+}
+
+.tooltipMetaValue {
+  font-size: 12px;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.tooltipIllustration {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 10px;
+}
+
+.tooltipStatus {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: var(--tracking-stat);
+  color: var(--muted);
+  padding-top: 10px;
+  border-top: 1px solid var(--ghost);
+}
+
+.tooltipStatusActive {
+  color: var(--ink);
+}
+
+/* ── Empty state ── */
+
+.emptyState {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 16px;
+}
+
+.emptyText {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+}
+
+/* ── Reduced motion ── */
+
+@media (prefers-reduced-motion: reduce) {
+  .strip,
+  .panel,
+  .searchBar {
+    animation: none;
+  }
+
+  .tooltip,
+  .tooltipVisible {
+    transition: none;
+  }
+}
+
+/* ── Responsive ── */
+
+@media (max-width: 640px) {
+  .strip {
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+
+  .panel,
+  .searchBar {
+    right: 8px;
+    left: 8px;
+    width: auto;
+  }
+
+  .panel {
+    height: 340px;
+    bottom: 60px;
+  }
+
+  .tooltip {
+    display: none;
+  }
+}

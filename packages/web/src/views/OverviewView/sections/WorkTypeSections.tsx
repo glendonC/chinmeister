@@ -46,7 +46,9 @@ export function WorkTypeSection({ workTypes }: { workTypes: WorkTypeDistribution
                 style={{ background: WORK_TYPE_COLORS[w.work_type] || WORK_TYPE_COLORS.other }}
               />
               <span className={styles.workLegendLabel}>{w.work_type}</span>
-              <span className={styles.workLegendValue}>{pct}%</span>
+              <span className={styles.workLegendValue}>
+                {pct}% · {w.sessions}
+              </span>
             </div>
           );
         })}
@@ -83,6 +85,7 @@ export function WorkTypeOutcomesSection({ outcomes }: { outcomes: WorkTypeOutcom
                 />
               </div>
               <span className={styles.metricValue}>{o.completion_rate}%</span>
+              <span className={styles.metricValue}>{o.sessions}</span>
             </div>
           );
         })}

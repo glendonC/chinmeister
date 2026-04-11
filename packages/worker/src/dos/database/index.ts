@@ -504,10 +504,444 @@ export class DatabaseDO extends DurableObject<Env> {
 
   // -- Stats --
 
-  async getStats(): Promise<{ ok: true; totalUsers: number }> {
+  async getStats(): Promise<{
+    ok: true;
+    totalUsers: number;
+    totalSessions: number;
+    totalEdits: number;
+    totalLinesAdded: number;
+    totalLinesRemoved: number;
+    topTools: string;
+    topModels: string;
+    globalAverages: Record<string, number>;
+    toolEffectiveness: Array<Record<string, unknown>>;
+    modelEffectiveness: Array<Record<string, unknown>>;
+    toolCombinations: Array<Record<string, unknown>>;
+    completionDistribution: Array<Record<string, unknown>>;
+    toolCountDistribution: Array<Record<string, unknown>>;
+  }> {
     this.#ensureSchema();
     const users = this.sql.exec('SELECT COUNT(*) as count FROM users').toArray();
-    return { ok: true, totalUsers: ((users[0] as Record<string, unknown>)?.count as number) || 0 };
+    const totalUsers = ((users[0] as Record<string, unknown>)?.count as number) || 0;
+
+    // Global aggregates from user_metrics
+    const agg = this.sql
+      .exec(
+        `SELECT
+          COALESCE(SUM(total_sessions), 0) AS total_sessions,
+          COALESCE(SUM(total_edits), 0) AS total_edits,
+          COALESCE(SUM(total_lines_added), 0) AS total_lines_added,
+          COALESCE(SUM(total_lines_removed), 0) AS total_lines_removed,
+          COALESCE(SUM(total_input_tokens), 0) AS total_input_tokens,
+          COALESCE(SUM(total_output_tokens), 0) AS total_output_tokens
+        FROM user_metrics`,
+      )
+      .toArray();
+    const ga = (agg[0] as Record<string, unknown>) || {};
+
+    // Top tools across all users
+    const tools = this.sql
+      .exec(
+        `SELECT tool, COUNT(*) AS users FROM user_tools GROUP BY tool ORDER BY users DESC LIMIT 10`,
+      )
+      .toArray() as Array<Record<string, unknown>>;
+
+    // Top models across all users
+    const models = this.sql
+      .exec(
+        `SELECT model, COUNT(*) AS users FROM user_models GROUP BY model ORDER BY users DESC LIMIT 10`,
+      )
+      .toArray() as Array<Record<string, unknown>>;
+
+    // ── Community intelligence ──────────────────────────
+
+    // Global averages across active developers
+    let globalAverages: Record<string, number> = {};
+    try {
+      const avgRow = this.sql
+        .exec(
+          `SELECT
+            ROUND(AVG(CAST(completed_sessions AS REAL) / NULLIF(total_sessions, 0) * 100), 1) AS avg_completion_rate,
+            ROUND(AVG(CAST(total_edits AS REAL) / NULLIF(total_duration_min, 0)), 2) AS avg_edit_velocity,
+            ROUND(AVG(CAST(total_stuck AS REAL) / NULLIF(total_sessions, 0) * 100), 1) AS avg_stuck_rate,
+            ROUND(AVG(total_first_edit_s / NULLIF(sessions_with_first_edit, 0)), 1) AS avg_first_edit_s,
+            ROUND(AVG(CAST(total_lines_added AS REAL) / NULLIF(total_sessions, 0)), 0) AS avg_lines_per_session,
+            ROUND(AVG(total_duration_min / 60.0), 1) AS avg_focus_hours,
+            ROUND(AVG(total_edits), 0) AS avg_total_edits,
+            ROUND(AVG(total_sessions), 0) AS avg_total_sessions
+          FROM user_metrics WHERE total_sessions >= 1`,
+        )
+        .toArray()[0] as Record<string, unknown> | undefined;
+      if (avgRow) {
+        globalAverages = {
+          completion_rate: (avgRow.avg_completion_rate as number) || 0,
+          edit_velocity: (avgRow.avg_edit_velocity as number) || 0,
+          stuck_rate: (avgRow.avg_stuck_rate as number) || 0,
+          first_edit_s: (avgRow.avg_first_edit_s as number) || 0,
+          lines_per_session: (avgRow.avg_lines_per_session as number) || 0,
+          focus_hours: (avgRow.avg_focus_hours as number) || 0,
+          total_edits: (avgRow.avg_total_edits as number) || 0,
+          total_sessions: (avgRow.avg_total_sessions as number) || 0,
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+
+    // Tool effectiveness: per-tool avg completion rate + velocity
+    let toolEffectiveness: Array<Record<string, unknown>> = [];
+    try {
+      toolEffectiveness = this.sql
+        .exec(
+          `SELECT ut.tool,
+            COUNT(*) AS users,
+            ROUND(AVG(CAST(um.completed_sessions AS REAL) / NULLIF(um.total_sessions, 0) * 100), 1) AS avg_completion_rate,
+            ROUND(AVG(CAST(um.total_edits AS REAL) / NULLIF(um.total_duration_min, 0)), 2) AS avg_edit_velocity,
+            ROUND(AVG(um.total_first_edit_s / NULLIF(um.sessions_with_first_edit, 0)), 1) AS avg_first_edit_s
+          FROM user_tools ut
+          JOIN user_metrics um ON ut.handle = um.handle
+          WHERE um.total_sessions >= 3
+          GROUP BY ut.tool
+          HAVING users >= 2
+          ORDER BY avg_completion_rate DESC
+          LIMIT 15`,
+        )
+        .toArray() as Array<Record<string, unknown>>;
+    } catch {
+      /* ignore */
+    }
+
+    // Model effectiveness: per-model avg completion rate
+    let modelEffectiveness: Array<Record<string, unknown>> = [];
+    try {
+      modelEffectiveness = this.sql
+        .exec(
+          `SELECT umod.model,
+            COUNT(*) AS users,
+            ROUND(AVG(CAST(um.completed_sessions AS REAL) / NULLIF(um.total_sessions, 0) * 100), 1) AS avg_completion_rate,
+            ROUND(AVG(CAST(um.total_edits AS REAL) / NULLIF(um.total_duration_min, 0)), 2) AS avg_edit_velocity
+          FROM user_models umod
+          JOIN user_metrics um ON umod.handle = um.handle
+          WHERE um.total_sessions >= 3
+          GROUP BY umod.model
+          HAVING users >= 2
+          ORDER BY avg_completion_rate DESC
+          LIMIT 15`,
+        )
+        .toArray() as Array<Record<string, unknown>>;
+    } catch {
+      /* ignore */
+    }
+
+    // Tool combinations: most popular tool pairs
+    let toolCombinations: Array<Record<string, unknown>> = [];
+    try {
+      toolCombinations = this.sql
+        .exec(
+          `SELECT t1.tool AS tool_a, t2.tool AS tool_b, COUNT(*) AS users
+          FROM user_tools t1
+          JOIN user_tools t2 ON t1.handle = t2.handle AND t1.tool < t2.tool
+          GROUP BY t1.tool, t2.tool
+          HAVING users >= 2
+          ORDER BY users DESC
+          LIMIT 10`,
+        )
+        .toArray() as Array<Record<string, unknown>>;
+    } catch {
+      /* ignore */
+    }
+
+    // Completion rate distribution: what brackets do users fall in
+    let completionDistribution: Array<Record<string, unknown>> = [];
+    try {
+      completionDistribution = this.sql
+        .exec(
+          `SELECT
+            CASE
+              WHEN CAST(completed_sessions AS REAL) / total_sessions >= 0.9 THEN '90-100'
+              WHEN CAST(completed_sessions AS REAL) / total_sessions >= 0.8 THEN '80-89'
+              WHEN CAST(completed_sessions AS REAL) / total_sessions >= 0.7 THEN '70-79'
+              WHEN CAST(completed_sessions AS REAL) / total_sessions >= 0.6 THEN '60-69'
+              WHEN CAST(completed_sessions AS REAL) / total_sessions >= 0.5 THEN '50-59'
+              ELSE '0-49'
+            END AS bracket,
+            COUNT(*) AS users
+          FROM user_metrics
+          WHERE total_sessions >= 1
+          GROUP BY bracket
+          ORDER BY bracket DESC`,
+        )
+        .toArray() as Array<Record<string, unknown>>;
+    } catch {
+      /* ignore */
+    }
+
+    // Tool count distribution: how many tools do developers use
+    let toolCountDistribution: Array<Record<string, unknown>> = [];
+    try {
+      toolCountDistribution = this.sql
+        .exec(
+          `SELECT tool_count, COUNT(*) AS users
+          FROM (SELECT handle, COUNT(*) AS tool_count FROM user_tools GROUP BY handle)
+          GROUP BY tool_count
+          ORDER BY tool_count`,
+        )
+        .toArray() as Array<Record<string, unknown>>;
+    } catch {
+      /* ignore */
+    }
+
+    return {
+      ok: true as const,
+      totalUsers,
+      totalSessions: (ga.total_sessions as number) || 0,
+      totalEdits: (ga.total_edits as number) || 0,
+      totalLinesAdded: (ga.total_lines_added as number) || 0,
+      totalLinesRemoved: (ga.total_lines_removed as number) || 0,
+      topTools: JSON.stringify(tools.map((t) => ({ tool: t.tool, users: t.users }))),
+      topModels: JSON.stringify(models.map((m) => ({ model: m.model, users: m.users }))),
+      globalAverages,
+      toolEffectiveness: toolEffectiveness.map((t) => ({
+        tool: t.tool,
+        users: t.users,
+        completionRate: t.avg_completion_rate,
+        editVelocity: t.avg_edit_velocity,
+        firstEditS: t.avg_first_edit_s,
+      })),
+      modelEffectiveness: modelEffectiveness.map((m) => ({
+        model: m.model,
+        users: m.users,
+        completionRate: m.avg_completion_rate,
+        editVelocity: m.avg_edit_velocity,
+      })),
+      toolCombinations: toolCombinations.map((c) => ({
+        toolA: c.tool_a,
+        toolB: c.tool_b,
+        users: c.users,
+      })),
+      completionDistribution: completionDistribution.map((d) => ({
+        bracket: d.bracket,
+        users: d.users,
+      })),
+      toolCountDistribution: toolCountDistribution.map((d) => ({
+        count: d.tool_count,
+        users: d.users,
+      })),
+    };
+  }
+
+  // -- Global user metrics --
+
+  async updateUserMetrics(
+    handle: string,
+    summary: Record<string, unknown>,
+  ): Promise<{ ok: true } | DOError> {
+    this.#ensureSchema();
+    const outcome = (summary.outcome as string) || null;
+    const editCount = Number(summary.edit_count) || 0;
+    const linesAdded = Number(summary.lines_added) || 0;
+    const linesRemoved = Number(summary.lines_removed) || 0;
+    const durationMin = Number(summary.duration_min) || 0;
+    const inputTokens = Number(summary.input_tokens) || 0;
+    const outputTokens = Number(summary.output_tokens) || 0;
+    const gotStuck = Number(summary.got_stuck) || 0;
+    const memoriesSaved = Number(summary.memories_saved) || 0;
+    const memoriesSearched = Number(summary.memories_searched) || 0;
+    const hostTool = (summary.host_tool as string) || null;
+    const agentModel = (summary.agent_model as string) || null;
+
+    // Compute first-edit latency in seconds (if first_edit_at exists)
+    let firstEditS = 0;
+    let hasFirstEdit = 0;
+    const firstEditAt = summary.first_edit_at as string | null;
+    const startedAt = summary.started_at as string | null;
+    if (firstEditAt && startedAt) {
+      const diff =
+        (new Date(String(firstEditAt).replace(' ', 'T') + 'Z').getTime() -
+          new Date(String(startedAt).replace(' ', 'T') + 'Z').getTime()) /
+        1000;
+      if (diff >= 0) {
+        firstEditS = diff;
+        hasFirstEdit = 1;
+      }
+    }
+
+    const completed = outcome === 'completed' ? 1 : 0;
+    const abandoned = outcome === 'abandoned' ? 1 : 0;
+    const failed = outcome === 'failed' ? 1 : 0;
+
+    this.sql.exec(
+      `INSERT INTO user_metrics (handle, total_sessions, completed_sessions, abandoned_sessions, failed_sessions,
+        total_edits, total_lines_added, total_lines_removed, total_duration_min,
+        total_input_tokens, total_output_tokens, total_stuck, total_memories_saved, total_memories_searched,
+        total_first_edit_s, sessions_with_first_edit)
+      VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(handle) DO UPDATE SET
+        total_sessions = total_sessions + 1,
+        completed_sessions = completed_sessions + excluded.completed_sessions,
+        abandoned_sessions = abandoned_sessions + excluded.abandoned_sessions,
+        failed_sessions = failed_sessions + excluded.failed_sessions,
+        total_edits = total_edits + excluded.total_edits,
+        total_lines_added = total_lines_added + excluded.total_lines_added,
+        total_lines_removed = total_lines_removed + excluded.total_lines_removed,
+        total_duration_min = total_duration_min + excluded.total_duration_min,
+        total_input_tokens = total_input_tokens + excluded.total_input_tokens,
+        total_output_tokens = total_output_tokens + excluded.total_output_tokens,
+        total_stuck = total_stuck + excluded.total_stuck,
+        total_memories_saved = total_memories_saved + excluded.total_memories_saved,
+        total_memories_searched = total_memories_searched + excluded.total_memories_searched,
+        total_first_edit_s = total_first_edit_s + excluded.total_first_edit_s,
+        sessions_with_first_edit = sessions_with_first_edit + excluded.sessions_with_first_edit,
+        updated_at = datetime('now')`,
+      handle,
+      completed,
+      abandoned,
+      failed,
+      editCount,
+      linesAdded,
+      linesRemoved,
+      durationMin,
+      inputTokens,
+      outputTokens,
+      gotStuck,
+      memoriesSaved,
+      memoriesSearched,
+      firstEditS,
+      hasFirstEdit,
+    );
+
+    if (hostTool && hostTool !== 'unknown') {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO user_tools (handle, tool) VALUES (?, ?)',
+        handle,
+        hostTool,
+      );
+    }
+    if (agentModel) {
+      this.sql.exec(
+        'INSERT OR IGNORE INTO user_models (handle, model) VALUES (?, ?)',
+        handle,
+        agentModel,
+      );
+    }
+
+    return { ok: true };
+  }
+
+  async getUserGlobalRank(
+    handle: string,
+  ): Promise<{ ok: true; rank: Record<string, unknown> | null; total_developers: number }> {
+    this.#ensureSchema();
+
+    const countRow = this.sql
+      .exec('SELECT COUNT(*) AS cnt FROM user_metrics WHERE total_sessions >= 1')
+      .toArray();
+    const totalDevelopers = ((countRow[0] as Record<string, unknown>)?.cnt as number) || 0;
+
+    if (totalDevelopers === 0) {
+      return { ok: true, rank: null, total_developers: 0 };
+    }
+
+    // Check if user exists in metrics
+    const userRow = this.sql.exec('SELECT 1 FROM user_metrics WHERE handle = ?', handle).toArray();
+    if (userRow.length === 0) {
+      return { ok: true, rank: null, total_developers: totalDevelopers };
+    }
+
+    const rows = this.sql
+      .exec(
+        `WITH base AS (
+          SELECT
+            um.handle,
+            um.total_sessions,
+            um.completed_sessions,
+            um.total_edits,
+            um.total_lines_added,
+            um.total_lines_removed,
+            um.total_duration_min,
+            um.total_stuck,
+            um.total_memories_saved,
+            um.total_memories_searched,
+            um.total_first_edit_s,
+            um.sessions_with_first_edit,
+            um.total_input_tokens,
+            um.total_output_tokens,
+            CAST(um.completed_sessions AS REAL) / NULLIF(um.total_sessions, 0) * 100 AS completion_rate,
+            CAST(um.total_edits AS REAL) / NULLIF(um.total_duration_min, 0) AS edit_velocity,
+            (SELECT COUNT(*) FROM user_tools ut WHERE ut.handle = um.handle) AS tool_count,
+            CASE WHEN um.sessions_with_first_edit > 0
+              THEN um.total_first_edit_s / um.sessions_with_first_edit ELSE NULL END AS avg_first_edit_s,
+            CAST(um.total_stuck AS REAL) / NULLIF(um.total_sessions, 0) * 100 AS stuck_rate,
+            CAST(um.total_lines_added AS REAL) / NULLIF(um.total_sessions, 0) AS lines_per_session,
+            um.total_lines_added AS total_lines,
+            ROUND(um.total_duration_min / 60.0, 1) AS focus_hours
+          FROM user_metrics um
+          WHERE um.total_sessions >= 1
+        ),
+        ranked AS (
+          SELECT *,
+            ROUND(PERCENT_RANK() OVER (ORDER BY completion_rate) * 100) AS completion_rate_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY edit_velocity) * 100) AS edit_velocity_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY tool_count) * 100) AS tool_diversity_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY avg_first_edit_s DESC) * 100) AS first_edit_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY stuck_rate DESC) * 100) AS stuck_rate_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY lines_per_session) * 100) AS lines_per_session_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY total_lines) * 100) AS total_lines_pct,
+            ROUND(PERCENT_RANK() OVER (ORDER BY focus_hours) * 100) AS focus_hours_pct
+          FROM base
+        )
+        SELECT * FROM ranked WHERE handle = ?`,
+        handle,
+      )
+      .toArray();
+
+    if (rows.length === 0) {
+      return { ok: true, rank: null, total_developers: totalDevelopers };
+    }
+
+    const rank = rows[0] as Record<string, unknown>;
+
+    // ── Developer Effectiveness Score ──────────────────
+    // Weighted geometric mean of 8 percentile dimensions.
+    // Weights derived from composite indicator methodology:
+    //   Session Quality (55%): completion 25%, stuck 18%, velocity 12%
+    //   Efficiency (25%): lines/session 15%, first-edit 10%
+    //   Engagement (20%): total lines 8%, focus hours 7%, tool diversity 5%
+    // Geometric mean prevents full compensation (high volume can't mask low quality).
+    // Floor at 1 prevents zero-collapse.
+
+    const weights = [
+      { key: 'completion_rate_pct', w: 0.25 },
+      { key: 'stuck_rate_pct', w: 0.18 },
+      { key: 'edit_velocity_pct', w: 0.12 },
+      { key: 'lines_per_session_pct', w: 0.15 },
+      { key: 'first_edit_pct', w: 0.1 },
+      { key: 'total_lines_pct', w: 0.08 },
+      { key: 'focus_hours_pct', w: 0.07 },
+      { key: 'tool_diversity_pct', w: 0.05 },
+    ];
+
+    let logScore = 0;
+    for (const { key, w } of weights) {
+      const pct = Math.max((rank[key] as number) || 0, 1); // floor at 1
+      logScore += w * Math.log(pct);
+    }
+    const score = Math.round(Math.exp(logScore));
+
+    // Tier assignment — min 10 sessions for real tier
+    const sessions = (rank.total_sessions as number) || 0;
+    let tier: string;
+    if (sessions < 10) tier = 'New';
+    else if (score >= 80) tier = 'Elite';
+    else if (score >= 60) tier = 'Strong';
+    else if (score >= 40) tier = 'Solid';
+    else if (score >= 20) tier = 'Developing';
+    else tier = 'New';
+
+    rank.effectiveness_score = score;
+    rank.effectiveness_tier = tier;
+
+    return { ok: true, rank, total_developers: totalDevelopers };
   }
 
   // -- Tool evaluations (logic in evaluations.ts) --

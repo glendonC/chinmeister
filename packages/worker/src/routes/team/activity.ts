@@ -116,24 +116,38 @@ export const handleTeamStartSession = teamJsonRoute(
   },
 );
 
-export const handleTeamEndSession = teamJsonRoute(async ({ body, user, agentId, team, teamId }) => {
-  const { session_id } = body;
-  if (typeof session_id !== 'string') {
-    return json({ error: 'session_id is required' }, 400);
-  }
+export const handleTeamEndSession = teamJsonRoute(
+  async ({ body, user, agentId, team, teamId, db }) => {
+    const { session_id } = body;
+    if (typeof session_id !== 'string') {
+      return json({ error: 'session_id is required' }, 400);
+    }
 
-  const result = rpc(await team.endSession(agentId, session_id as string, user.id));
-  if ('error' in result) {
-    log.warn(`endSession failed: ${result.error}`);
-    return json({ error: result.error }, teamErrorStatus(result));
-  }
-  auditLog('session.end', {
-    actor: user.handle,
-    outcome: 'success',
-    meta: { team_id: teamId, session_id: session_id as string },
-  });
-  return json(result);
-});
+    const raw = await team.endSession(agentId, session_id as string, user.id);
+    const result = rpc(raw) as unknown as Record<string, unknown>;
+    if ('error' in result) {
+      log.warn(`endSession failed: ${result.error}`);
+      return json(
+        { error: result.error },
+        teamErrorStatus(result as { error: string; code?: string }),
+      );
+    }
+
+    // Write-through to global user metrics (fire-and-forget)
+    const summary = result.summary as Record<string, unknown> | null;
+    if (summary) {
+      summary.outcome = result.outcome as string | null;
+      db.updateUserMetrics(user.handle, summary).catch(() => {});
+    }
+
+    auditLog('session.end', {
+      actor: user.handle,
+      outcome: 'success',
+      meta: { team_id: teamId, session_id: session_id as string },
+    });
+    return json({ ok: true, outcome: result.outcome });
+  },
+);
 
 const MAX_DIFF_LINES = 100000;
 

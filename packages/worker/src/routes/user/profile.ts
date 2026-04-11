@@ -114,3 +114,7 @@ export const handleUpdateAgentProfile = authedJsonRoute(async ({ user, env, body
 
   return doResult(getDB(env).updateAgentProfile(user.id, profile), 'updateAgentProfile');
 });
+
+export const handleGlobalRank = authedRoute(async ({ user, env }) => {
+  return doResult(getDB(env).getUserGlobalRank(user.handle), 'getUserGlobalRank');
+});
