@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { DEFAULT_WIDGET_IDS, DEFAULT_LAYOUT, getWidget } from './widget-catalog.js';
 
 // ── Unified layout store ─────────────────────────
@@ -7,6 +7,7 @@ import { DEFAULT_WIDGET_IDS, DEFAULT_LAYOUT, getWidget } from './widget-catalog.
 
 const STORAGE_KEY = 'chinwag:overview-dashboard';
 const STORAGE_VERSION = 1;
+const UNDO_STACK_LIMIT = 25;
 
 // Migrate from legacy dual stores if they exist
 const LEGACY_IDS_KEY = 'chinwag:overview-layout';
@@ -185,13 +186,36 @@ function fromRGLLayout(rgl: RGLLayout[]): WidgetPosition[] {
 export function useOverviewLayout() {
   const [dashboard, setDashboardInner] = useState<DashboardLayout>(loadDashboard);
 
-  const setDashboard = useCallback((fn: (prev: DashboardLayout) => DashboardLayout) => {
-    setDashboardInner((prev) => {
-      const next = fn(prev);
-      saveDashboard(next);
-      return next;
-    });
+  // Latest dashboard state, kept in a ref so commit/undo can flush without re-renders.
+  const dashboardRef = useRef(dashboard);
+  useEffect(() => {
+    dashboardRef.current = dashboard;
+  }, [dashboard]);
+
+  // Undo stack: snapshots taken before mutating actions.
+  const undoStackRef = useRef<DashboardLayout[]>([]);
+
+  // Snapshot the current state into the undo stack. Caps at UNDO_STACK_LIMIT.
+  const pushUndoSnapshot = useCallback(() => {
+    const snap = dashboardRef.current;
+    if (!snap) return;
+    const stack = undoStackRef.current;
+    stack.push(snap);
+    if (stack.length > UNDO_STACK_LIMIT) stack.shift();
   }, []);
+
+  // Discrete user actions: snapshot for undo + setState + persist immediately.
+  const setAndSave = useCallback(
+    (fn: (prev: DashboardLayout) => DashboardLayout) => {
+      pushUndoSnapshot();
+      setDashboardInner((prev) => {
+        const next = fn(prev);
+        saveDashboard(next);
+        return next;
+      });
+    },
+    [pushUndoSnapshot],
+  );
 
   // Derived: ordered widget IDs
   const widgetIds = dashboard.widgets.map((w) => w.id);
@@ -199,25 +223,25 @@ export function useOverviewLayout() {
   // Derived: RGL layout with constraints
   const gridLayout = toRGLLayout(dashboard.widgets);
 
-  // Toggle a widget on/off
+  // Toggle a widget on/off. New widgets are placed at y:0 so RGL's vertical
+  // compactor pushes them into the first available row at the TOP of the
+  // viewport (where the user is looking), not at the bottom (off-screen).
   const toggleWidget = useCallback(
     (id: string) => {
-      setDashboard((prev) => {
+      setAndSave((prev) => {
         const exists = prev.widgets.some((w) => w.id === id);
         if (exists) {
           return { ...prev, widgets: prev.widgets.filter((w) => w.id !== id) };
         }
-        // Add with auto-placement
         const def = getWidget(id);
-        const defaultPos = DEFAULT_LAYOUT.find((l) => l.i === id);
         return {
           ...prev,
           widgets: [
             ...prev.widgets,
             {
               id,
-              x: defaultPos?.x ?? 0,
-              y: defaultPos?.y ?? Infinity,
+              x: 0,
+              y: 0,
               w: def?.w ?? 6,
               h: def?.h ?? 3,
             },
@@ -225,36 +249,45 @@ export function useOverviewLayout() {
         };
       });
     },
-    [setDashboard],
+    [setAndSave],
   );
 
   // Remove a widget
   const removeWidget = useCallback(
     (id: string) => {
-      setDashboard((prev) => ({
+      setAndSave((prev) => ({
         ...prev,
         widgets: prev.widgets.filter((w) => w.id !== id),
       }));
     },
-    [setDashboard],
+    [setAndSave],
   );
 
-  // Update positions from RGL drag/resize callback
-  const updatePositions = useCallback(
-    (rglLayout: RGLLayout[]) => {
-      setDashboard((prev) => {
-        // Only update positions for widgets that exist in our store
-        const idSet = new Set(prev.widgets.map((w) => w.id));
-        const updated = fromRGLLayout(rglLayout.filter((l) => idSet.has(l.i)));
-        // Preserve ordering from RGL
-        return { ...prev, widgets: updated };
-      });
-    },
-    [setDashboard],
-  );
+  // Update positions from RGL drag/resize callback. Fires many times per
+  // second mid-drag — update in-memory state ONLY, never write to
+  // localStorage here. Persistence is deferred to commitLayout (called from
+  // onDragStop/onResizeStop in the consumer).
+  const updatePositions = useCallback((rglLayout: RGLLayout[]) => {
+    setDashboardInner((prev) => {
+      const idSet = new Set(prev.widgets.map((w) => w.id));
+      const updated = fromRGLLayout(rglLayout.filter((l) => idSet.has(l.i)));
+      return { ...prev, widgets: updated };
+    });
+  }, []);
+
+  // Called from onDragStart/onResizeStart: snapshot for undo before mutation.
+  const beginInteraction = useCallback(() => {
+    pushUndoSnapshot();
+  }, [pushUndoSnapshot]);
+
+  // Called from onDragStop/onResizeStop: persist final layout to localStorage.
+  const commitLayout = useCallback(() => {
+    saveDashboard(dashboardRef.current);
+  }, []);
 
   // Reset to default — clear everything and rebuild
   const resetToDefault = useCallback(() => {
+    pushUndoSnapshot();
     try {
       localStorage.removeItem(LEGACY_IDS_KEY);
       localStorage.removeItem(LEGACY_POS_KEY);
@@ -264,6 +297,15 @@ export function useOverviewLayout() {
     const def = buildDefaultLayout();
     saveDashboard(def);
     setDashboardInner(def);
+  }, [pushUndoSnapshot]);
+
+  // Pop the latest snapshot and restore. Returns true if undo happened.
+  const undo = useCallback((): boolean => {
+    const snap = undoStackRef.current.pop();
+    if (!snap) return false;
+    saveDashboard(snap);
+    setDashboardInner(snap);
+    return true;
   }, []);
 
   return {
@@ -272,6 +314,9 @@ export function useOverviewLayout() {
     toggleWidget,
     removeWidget,
     updatePositions,
+    beginInteraction,
+    commitLayout,
     resetToDefault,
+    undo,
   };
 }

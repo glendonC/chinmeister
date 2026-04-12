@@ -1,10 +1,11 @@
-import { useMemo, type CSSProperties } from 'react';
+import { memo, useMemo, useState, type CSSProperties } from 'react';
 import { getWidget, type WidgetDef } from './widget-catalog.js';
 import {
   DAY_LABELS,
   buildHeatmapData,
   WORK_TYPE_COLORS,
   aggregateModels,
+  formatDuration,
 } from './overview-utils.js';
 import { Sparkline } from './overview-charts.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
@@ -30,7 +31,7 @@ interface WidgetProps {
   selectTeam: (teamId: string) => void;
 }
 
-export function WidgetRenderer({
+function WidgetRendererInner({
   widgetId,
   analytics,
   conversationData,
@@ -56,6 +57,8 @@ export function WidgetRenderer({
   );
 }
 
+export const WidgetRenderer = memo(WidgetRendererInner);
+
 // ── Inner body renderer by viz type ─────────────
 
 function WidgetBody({
@@ -73,6 +76,10 @@ function WidgetBody({
   liveAgents: LiveAgent[];
   selectTeam: (teamId: string) => void;
 }) {
+  // Captured once per widget instance so relative-time math in render stays
+  // pure. Accepted staleness: if the dashboard stays mounted across a day
+  // boundary the "Xd ago" label may lag by a day until the next remount.
+  const [nowMs] = useState(() => Date.now());
   switch (def.id) {
     // ── Stat widgets ──────────────────────
     case 'sessions': {
@@ -213,6 +220,12 @@ function WidgetBody({
             <div className={styles.statBlock}>
               <span className={styles.statBlockValue}>{m.stale_memories}</span>
               <span className={styles.statBlockLabel}>stale</span>
+            </div>
+          )}
+          {m.avg_memory_age_days > 0 && (
+            <div className={styles.statBlock}>
+              <span className={styles.statBlockValue}>{Math.round(m.avg_memory_age_days)}d</span>
+              <span className={styles.statBlockLabel}>avg age</span>
             </div>
           )}
         </div>
@@ -719,6 +732,7 @@ function WidgetBody({
               <span className={styles.metricValue}>
                 {f.calls}
                 {f.errors > 0 ? ` · ${f.error_rate}% err` : ''}
+                {f.avg_duration_ms > 0 ? ` · ${formatDuration(f.avg_duration_ms)}` : ''}
               </span>
             </div>
           ))}
@@ -936,22 +950,38 @@ function WidgetBody({
       if (tm.length === 0) return <span className={styles.sectionEmpty}>No memories accessed</span>;
       return (
         <div className={styles.dataList}>
-          {tm.slice(0, 8).map((m, i) => (
-            <div
-              key={m.id}
-              className={styles.dataRow}
-              style={{ '--row-index': i } as CSSProperties}
-            >
-              <span className={styles.dataName} style={{ fontSize: 'var(--text-2xs)' }}>
-                {m.text_preview}
-              </span>
-              <div className={styles.dataMeta}>
-                <span className={styles.dataStat}>
-                  <span className={styles.dataStatValue}>{m.access_count}</span> hits
+          {tm.slice(0, 8).map((m, i) => {
+            const daysAgo = m.last_accessed_at
+              ? Math.max(
+                  0,
+                  Math.floor((nowMs - new Date(m.last_accessed_at).getTime()) / 86_400_000),
+                )
+              : null;
+            return (
+              <div
+                key={m.id}
+                className={styles.dataRow}
+                style={{ '--row-index': i } as CSSProperties}
+              >
+                <span className={styles.dataName} style={{ fontSize: 'var(--text-2xs)' }}>
+                  {m.text_preview}
                 </span>
+                <div className={styles.dataMeta}>
+                  <span className={styles.dataStat}>
+                    <span className={styles.dataStatValue}>{m.access_count}</span> hits
+                  </span>
+                  {daysAgo !== null && (
+                    <span className={styles.dataStat}>
+                      <span className={styles.dataStatValue}>
+                        {daysAgo === 0 ? 'today' : `${daysAgo}d`}
+                      </span>
+                      {daysAgo > 0 ? ' ago' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       );
     }
@@ -1453,6 +1483,18 @@ function ModelsWidget({ modelOutcomes }: { modelOutcomes: UserAnalytics['model_o
             <span className={styles.dataStat}>
               <span className={styles.dataStatValue}>{m.edits.toLocaleString()}</span> edits
             </span>
+            {(m.linesAdded > 0 || m.linesRemoved > 0) && (
+              <span className={styles.dataStat}>
+                <span className={styles.dataStatValue}>
+                  +{m.linesAdded.toLocaleString()}/-{m.linesRemoved.toLocaleString()}
+                </span>
+              </span>
+            )}
+            {m.avgMin > 0 && (
+              <span className={styles.dataStat}>
+                <span className={styles.dataStatValue}>{m.avgMin.toFixed(1)}m</span> avg
+              </span>
+            )}
             {m.rate > 0 && (
               <span className={styles.dataStat}>
                 <span className={styles.dataStatValue}>{m.rate}%</span>
@@ -1610,6 +1652,8 @@ function ProjectWidget({
         const teamId = (s.team_id as string) || '';
         const teamName = (s.team_name as string) || teamId;
         const sessions24 = (s.recent_sessions_24h as number) || 0;
+        const conflictCount = (s.conflict_count as number) || 0;
+        const memoryCount = (s.memory_count as number) || 0;
         const liveCount = liveAgents.filter((a) => a.teamId === teamId).length;
         return (
           <button
@@ -1629,6 +1673,16 @@ function ProjectWidget({
               )}
               {sessions24 > 0 && (
                 <span className={styles.projectStat}>{sessions24} sessions today</span>
+              )}
+              {conflictCount > 0 && (
+                <span className={styles.projectStat} style={{ color: 'var(--warn)' }}>
+                  {conflictCount} {conflictCount === 1 ? 'conflict' : 'conflicts'}
+                </span>
+              )}
+              {memoryCount > 0 && (
+                <span className={styles.projectStat}>
+                  {memoryCount.toLocaleString()} {memoryCount === 1 ? 'memory' : 'memories'}
+                </span>
               )}
             </div>
           </button>

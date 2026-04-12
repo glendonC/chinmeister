@@ -1257,66 +1257,180 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  transition: outline 0.15s ease;
+  transition:
+    outline 0.15s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
 }
 
-/* Edit mode: dashed outline + grab cursor */
+/*
+ * Edit mode: the whole widget is the grab target (not a tiny handle).
+ * Dashed outline + grab cursor are the affordances. `cancel` rules in
+ * dragConfig keep clicks on the Remove pill and any interactive widget
+ * children from initiating drag.
+ */
 .widgetEditing .widget {
-  outline: 1px dashed rgba(255, 255, 255, 0.12);
+  outline: 1px dashed var(--soft);
   outline-offset: -1px;
   cursor: grab;
+  touch-action: none;
 }
 
 .widgetEditing .widget:active {
   cursor: grabbing;
 }
 
+/*
+ * Remove pill — restrained 2-stop vertical gradient. The depth comes
+ * from the gradient blend itself, not from inset highlights or ambient
+ * glows. Sits at top-right of the widget in edit mode, well clear of
+ * the section label.
+ */
 .widgetRemove {
   position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 20px;
-  height: 20px;
-  border: none;
-  border-radius: 50%;
-  background: var(--danger, #ff3b30);
-  color: white;
-  font-size: 12px;
-  line-height: 1;
-  cursor: pointer;
-  display: flex;
+  top: 12px;
+  right: 12px;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  height: 24px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 88%, white) 0%,
+    var(--danger) 100%
+  );
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  cursor: pointer;
   opacity: 0;
-  transition: opacity 0.15s ease;
-  z-index: 5;
+  transform: translateY(-2px);
+  transition:
+    opacity 180ms ease,
+    transform 180ms ease,
+    background 180ms ease,
+    box-shadow 180ms ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+  z-index: 6;
 }
 
 .widgetEditing .widgetRemove {
-  opacity: 0.7;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .widgetRemove:hover {
-  opacity: 1;
+  background: linear-gradient(
+    180deg,
+    var(--danger) 0%,
+    color-mix(in srgb, var(--danger) 80%, black) 100%
+  );
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
 }
 
-/* Drag handle indicator (top-left grip dots) */
-.widgetDragHandle {
+.widgetRemove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/*
+ * Visually hidden but available to assistive tech. Used by the layout
+ * change live region.
+ */
+.srOnly {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  width: 12px;
-  height: 12px;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-  color: var(--soft);
-  font-size: 10px;
-  line-height: 1;
-  pointer-events: none;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-.widgetEditing .widgetDragHandle {
-  opacity: 0.4;
+/*
+ * react-grid-layout customization. RGL emits global class names; CSS
+ * Modules would hash them and break the selectors, so we wrap them in
+ * :global(...) and qualify with the parent .widgetEditing scope so the
+ * polish only applies inside our grid.
+ */
+
+/* Replace RGL's default red placeholder with a calm dashed accent box. */
+:global(.react-grid-item.react-grid-placeholder) {
+  background: var(--accent-bg) !important;
+  border: 1.5px dashed var(--accent);
+  border-radius: 8px;
+  opacity: 1 !important;
+  transition-duration: 120ms;
+  box-shadow: 0 0 0 1px var(--accent-bg);
+  z-index: 2;
+}
+
+/*
+ * Soften RGL's reflow easing on non-dragged items. The dragged item
+ * already has `transition: none` from RGL's default stylesheet (via the
+ * .react-draggable-dragging class), so this only affects the neighbours
+ * being pushed out of the way.
+ */
+:global(.react-grid-item.cssTransforms):not(:global(.react-draggable-dragging)):not(
+    :global(.resizing)
+  ) {
+  transition-property: transform, width, height;
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/*
+ * Promote items to their own GPU layers only while a drag is in progress.
+ * Avoids leaving 50 always-on layers in memory at rest.
+ */
+.widgetEditing[data-dragging] :global(.react-grid-item) {
+  will-change: transform;
+}
+
+/*
+ * Ghost the dragged widget itself: subtle opacity drop + lifted shadow on
+ * the inner .widget child (NOT on the outer grid item — that one carries
+ * RGL's translate transform and any rotate would clobber it).
+ */
+:global(.react-draggable-dragging) .widget {
+  opacity: 0.92;
+  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.35);
+}
+
+/*
+ * Forced colors / Windows High Contrast: tinted fills are erased, so use
+ * system semantic colors for the placeholder and outline.
+ */
+@media (forced-colors: active) {
+  .widgetEditing .widget {
+    outline-color: CanvasText;
+  }
+  :global(.react-grid-item.react-grid-placeholder) {
+    background: Highlight !important;
+    border-color: HighlightText;
+  }
+}
+
+/*
+ * Reduced motion: disable the bumped easing and ghost transitions; the
+ * dashboard still works, just without the polish.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .widget,
+  :global(.react-grid-item.cssTransforms):not(:global(.react-draggable-dragging)) {
+    transition: none !important;
+  }
+  :global(.react-draggable-dragging) .widget {
+    box-shadow: none;
+  }
 }
 
 /* ── Customize button ── */

@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef, useEffect } from 'react';
+import { useMemo, useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
 import clsx from 'clsx';
 import { useShallow } from 'zustand/react/shallow';
 import { Responsive } from 'react-grid-layout';
@@ -18,6 +18,55 @@ interface RGLLayout {
 }
 
 type RGLLayouts = { [breakpoint: string]: RGLLayout[] };
+
+// Stable global class so RGL's `dragConfig.handle` (a raw CSS selector
+// passed to react-draggable) can find its target. CSS Modules would hash
+// the name and break the selector, so we hard-code a non-module class.
+// We use the entire widget surface as the grab area — `cancel` excludes
+// the interactive children so clicks on the Remove pill, links, or chart
+// buttons don't initiate drag.
+const GRAB_AREA_CLASS = 'widget-grab-area';
+
+// Mobile breakpoint: below this, hide the customize/edit affordances.
+// Drag-and-drop with handles is desktop-only because the touch handle
+// hit areas + auto-scroll story aren't ready for phones.
+const MOBILE_QUERY = '(max-width: 767px)';
+
+function useMediaQuery(query: string): boolean {
+  const subscribe = useCallback(
+    (onChange: () => void) => {
+      if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return () => {};
+      const mq = window.matchMedia(query);
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    },
+    [query],
+  );
+  const getSnapshot = useCallback(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+    return window.matchMedia(query).matches;
+  }, [query]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
+
+// Derive a stacked single-column layout from the lg layout. Sort widgets by
+// (y, x) so the stacked order matches what the user sees on desktop, then
+// place each at x:0, w:cols, y stacked sequentially.
+function deriveStackedLayout(layout: RGLLayout[], cols: number): RGLLayout[] {
+  const sorted = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
+  let y = 0;
+  return sorted.map((item) => {
+    const stacked: RGLLayout = {
+      ...item,
+      x: 0,
+      w: Math.min(item.w, cols),
+      y,
+    };
+    y += item.h;
+    return stacked;
+  });
+}
+
 import { usePollingStore, forceRefresh } from '../../lib/stores/polling.js';
 import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
@@ -57,6 +106,8 @@ function GridContainer({
   editing,
   gridLayout,
   onLayoutChange,
+  onInteractionStart,
+  onInteractionStop,
   activeWidgets,
   analytics,
   conversationData,
@@ -69,6 +120,8 @@ function GridContainer({
   gridLayout: RGLLayout[];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onLayoutChange: (current: any, all: any) => void;
+  onInteractionStart: () => void;
+  onInteractionStop: () => void;
   activeWidgets: string[];
   analytics: UserAnalytics;
   conversationData: ConversationAnalytics;
@@ -92,6 +145,38 @@ function GridContainer({
     return () => obs.disconnect();
   }, []);
 
+  // Per-breakpoint layouts. lg/md keep the stored 12-col layout. sm/xs/xxs
+  // are derived single-column stacks so the dashboard is readable on
+  // tablets and phones (the stored layout was previously fed into a 2-col
+  // mobile grid and clamped, producing a horizontally-scrolling mess).
+  const layouts = useMemo(
+    () => ({
+      lg: gridLayout,
+      md: gridLayout,
+      sm: deriveStackedLayout(gridLayout, GRID_COLS.sm),
+      xs: deriveStackedLayout(gridLayout, GRID_COLS.xs),
+      xxs: deriveStackedLayout(gridLayout, GRID_COLS.xxs),
+    }),
+    [gridLayout],
+  );
+
+  // Toggle a `data-dragging` attribute on the grid container directly via
+  // ref — never via React state. RGL fires drag callbacks at ~60Hz, and a
+  // setState here would re-render all 50 widgets every frame.
+  const handleDragStart = useCallback(() => {
+    if (containerRef.current) {
+      containerRef.current.dataset.dragging = 'true';
+    }
+    onInteractionStart();
+  }, [onInteractionStart]);
+
+  const handleDragStop = useCallback(() => {
+    if (containerRef.current) {
+      delete containerRef.current.dataset.dragging;
+    }
+    onInteractionStop();
+  }, [onInteractionStop]);
+
   return (
     <div ref={containerRef} className={clsx(editing && styles.widgetEditing)}>
       {width > 0 && (
@@ -99,7 +184,7 @@ function GridContainer({
           {...({
             className: 'overview-grid',
             width,
-            layouts: { lg: gridLayout, md: gridLayout },
+            layouts,
             breakpoints: GRID_BREAKPOINTS,
             cols: GRID_COLS,
             margin: GRID_MARGIN,
@@ -107,25 +192,35 @@ function GridContainer({
             isDraggable: editing,
             isResizable: editing,
             onLayoutChange,
-            useCSSTransforms: true,
+            onDragStart: handleDragStart,
+            onDragStop: handleDragStop,
+            onResizeStart: handleDragStart,
+            onResizeStop: handleDragStop,
             compactType: 'vertical',
+            // Whole widget is the grab area; cancel excludes any
+            // interactive child so clicks on the Remove pill, links, or
+            // chart buttons don't initiate drag. The handle uses a
+            // stable global class because react-draggable receives the
+            // selector raw — CSS-Module hashing would silently break it.
+            dragConfig: {
+              handle: `.${GRAB_AREA_CLASS}`,
+              cancel: 'button, a, input, select, textarea, [role="button"]',
+              threshold: 5,
+            },
           } as any)}
         >
           {activeWidgets.map((id) => (
             <div key={id}>
-              <div className={styles.widget}>
+              <div className={clsx(styles.widget, GRAB_AREA_CLASS)}>
                 {editing && (
-                  <>
-                    <span className={styles.widgetDragHandle}>&#x2630;</span>
-                    <button
-                      type="button"
-                      className={styles.widgetRemove}
-                      onClick={() => removeWidget(id)}
-                      title="Remove"
-                    >
-                      &times;
-                    </button>
-                  </>
+                  <button
+                    type="button"
+                    className={styles.widgetRemove}
+                    onClick={() => removeWidget(id)}
+                    aria-label={`Remove ${getWidget(id)?.name ?? 'widget'}`}
+                  >
+                    Remove
+                  </button>
                 )}
                 <WidgetRenderer
                   widgetId={id}
@@ -349,13 +444,48 @@ export default function OverviewView() {
   const {
     widgetIds,
     gridLayout: storedGridLayout,
-    toggleWidget,
-    removeWidget,
+    toggleWidget: toggleWidgetRaw,
+    removeWidget: removeWidgetRaw,
     updatePositions,
+    beginInteraction,
+    commitLayout,
     resetToDefault,
+    undo,
   } = useOverviewLayout();
 
   const singleProjectHint = useDismissible(SINGLE_PROJECT_HINT_KEY);
+  const isMobile = useMediaQuery(MOBILE_QUERY);
+
+  // Visually-hidden live region for screen-reader announcements when
+  // widgets are added/removed/restored. Using state (not a ref) so React
+  // re-renders the message into the DOM where the live region picks it up.
+  const [announcement, setAnnouncement] = useState('');
+  const announce = useCallback((text: string) => {
+    // Reset to empty first so identical messages get re-announced.
+    setAnnouncement('');
+    requestAnimationFrame(() => setAnnouncement(text));
+  }, []);
+
+  const toggleWidget = useCallback(
+    (id: string) => {
+      const def = getWidget(id);
+      const wasActive = widgetIds.includes(id);
+      toggleWidgetRaw(id);
+      if (def) {
+        announce(wasActive ? `Removed ${def.name}` : `Added ${def.name}`);
+      }
+    },
+    [toggleWidgetRaw, widgetIds, announce],
+  );
+
+  const removeWidget = useCallback(
+    (id: string) => {
+      const def = getWidget(id);
+      removeWidgetRaw(id);
+      if (def) announce(`Removed ${def.name}`);
+    },
+    [removeWidgetRaw, announce],
+  );
 
   const handleLayoutChange = useCallback(
     (currentLayout: RGLLayout[], _allLayouts: RGLLayouts) => {
@@ -363,6 +493,28 @@ export default function OverviewView() {
     },
     [updatePositions],
   );
+
+  // Cmd/Ctrl-Z to undo layout changes (drag, resize, add, remove, reset).
+  // Skips when typing in inputs or contenteditable elements so it doesn't
+  // hijack form-field undo.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey) || e.key !== 'z' || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (target.isContentEditable) return;
+      }
+      const undone = undo();
+      if (undone) {
+        e.preventDefault();
+        announce('Undid last layout change');
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [undo, announce]);
 
   // ── Guards ──────────────────────────────────────
   const isLoading = !dashboardData && (dashboardStatus === 'idle' || dashboardStatus === 'loading');
@@ -470,33 +622,35 @@ export default function OverviewView() {
         <div className={styles.rangeRow}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <ProjectFilter teams={teams} projectFilter={projectFilter} selectTeam={selectTeam} />
-            <button
-              type="button"
-              className={clsx(styles.customizeBtn, catalogOpen && styles.customizeBtnActive)}
-              onClick={() => setCatalogOpen(!catalogOpen)}
-            >
-              Customize
-              <svg
-                className={styles.customizeIcon}
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
+            {!isMobile && (
+              <button
+                type="button"
+                className={clsx(styles.customizeBtn, catalogOpen && styles.customizeBtnActive)}
+                onClick={() => setCatalogOpen(!catalogOpen)}
               >
-                <path
-                  d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
-                  stroke="none"
-                />
-                <path d="M20 3v4" fill="none" />
-                <path d="M22 5h-4" fill="none" />
-                <path d="M4 17v2" fill="none" />
-                <path d="M5 18H3" fill="none" />
-              </svg>
-            </button>
+                Customize
+                <svg
+                  className={styles.customizeIcon}
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path
+                    d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
+                    stroke="none"
+                  />
+                  <path d="M20 3v4" fill="none" />
+                  <path d="M22 5h-4" fill="none" />
+                  <path d="M4 17v2" fill="none" />
+                  <path d="M5 18H3" fill="none" />
+                </svg>
+              </button>
+            )}
           </div>
           <div className={styles.rangeSelector} role="group" aria-label="Time range">
             {RANGES.map((r) => (
@@ -528,9 +682,11 @@ export default function OverviewView() {
 
       {/* ── Widget Grid ── */}
       <GridContainer
-        editing={editing}
+        editing={editing && !isMobile}
         gridLayout={gridLayout}
         onLayoutChange={handleLayoutChange}
+        onInteractionStart={beginInteraction}
+        onInteractionStop={commitLayout}
         activeWidgets={activeWidgets}
         analytics={analytics}
         conversationData={conversationData}
@@ -539,6 +695,11 @@ export default function OverviewView() {
         selectTeam={selectTeam}
         removeWidget={removeWidget}
       />
+
+      {/* Visually-hidden live region for layout-change announcements. */}
+      <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
+        {announcement}
+      </div>
 
       {/* ── Single-project hint (floating, bottom-center of content column) ── */}
       {teams.length === 1 &&
