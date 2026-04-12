@@ -1,0 +1,304 @@
+import type { CSSProperties } from 'react';
+import { getToolMeta } from '../../../lib/toolMeta.js';
+import { WORK_TYPE_COLORS } from '../overview-utils.js';
+import type { UserAnalytics } from '../../../lib/apiSchemas.js';
+import styles from '../OverviewView.module.css';
+import type { WidgetBodyProps, WidgetRegistry } from './types.js';
+import { DeltaStat, GhostBars, GhostStatRow } from './shared.js';
+
+function OutcomesWidget({ analytics }: WidgetBodyProps) {
+  return <OutcomeBar cs={analytics.completion_summary} />;
+}
+
+function OutcomeBar({ cs }: { cs: UserAnalytics['completion_summary'] }) {
+  if (cs.total_sessions === 0) {
+    return (
+      <>
+        <div className={styles.outcomeBar}>
+          <div
+            className={styles.outcomeSegment}
+            style={{ width: '100%', background: 'var(--ghost)' }}
+          />
+        </div>
+        <div
+          className={styles.outcomeLegend}
+          style={{ flexDirection: 'column', gap: 8, marginTop: 12, opacity: 0.3 }}
+        >
+          {['finished', 'abandoned', 'failed'].map((l) => (
+            <div key={l} className={styles.outcomeItem}>
+              <span className={styles.outcomeDot} style={{ background: 'var(--ghost)' }} />
+              <span className={styles.outcomeValue}>—</span>
+              <span className={styles.outcomeLabel}>{l}</span>
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+  const items = [
+    { key: 'completed', count: cs.completed, color: 'var(--success)', label: 'finished' },
+    { key: 'abandoned', count: cs.abandoned, color: 'var(--warn)', label: 'abandoned' },
+    { key: 'failed', count: cs.failed, color: 'var(--danger)', label: 'failed' },
+    { key: 'unknown', count: cs.unknown, color: 'var(--ghost)', label: 'unknown' },
+  ].filter((i) => i.count > 0);
+
+  return (
+    <>
+      <div className={styles.outcomeBar}>
+        {items.map((i) => (
+          <div
+            key={i.key}
+            className={styles.outcomeSegment}
+            style={{
+              width: `${(i.count / cs.total_sessions) * 100}%`,
+              background: i.color,
+              opacity: i.key === 'unknown' ? 1 : 0.6,
+            }}
+          />
+        ))}
+      </div>
+      <div
+        className={styles.outcomeLegend}
+        style={{ flexDirection: 'column', gap: 8, marginTop: 12 }}
+      >
+        {items.map((i) => (
+          <div key={i.key} className={styles.outcomeItem}>
+            <span className={styles.outcomeDot} style={{ background: i.color }} />
+            <span className={styles.outcomeValue}>{i.count}</span>
+            <span className={styles.outcomeLabel}>{i.label}</span>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function StucknessWidget({ analytics }: WidgetBodyProps) {
+  const s = analytics.stuckness;
+  if (s.total_sessions === 0) return <GhostStatRow labels={['stuck rate', 'stuck sessions']} />;
+  return (
+    <div className={styles.statRow}>
+      <div className={styles.statBlock}>
+        <span className={styles.statBlockValue}>{s.stuckness_rate}%</span>
+        <span className={styles.statBlockLabel}>stuck rate</span>
+      </div>
+      <div className={styles.statBlock}>
+        <span className={styles.statBlockValue}>{s.stuck_sessions}</span>
+        <span className={styles.statBlockLabel}>stuck sessions</span>
+      </div>
+      {s.stuck_sessions > 0 && (
+        <div className={styles.statBlock}>
+          <span className={styles.statBlockValue}>{s.stuck_completion_rate}%</span>
+          <span className={styles.statBlockLabel}>stuck completed</span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function OutcomePredictorsWidget({ analytics }: WidgetBodyProps) {
+  const op = analytics.outcome_predictors;
+  if (op.length === 0) return <GhostBars count={3} />;
+  return (
+    <div className={styles.dataList}>
+      {op.map((p, i) => (
+        <div
+          key={p.outcome}
+          className={styles.dataRow}
+          style={{ '--row-index': i } as CSSProperties}
+        >
+          <span className={styles.dataName}>{p.outcome}</span>
+          <div className={styles.dataMeta}>
+            <span className={styles.dataStat}>
+              <span className={styles.dataStatValue}>{p.avg_first_edit_min.toFixed(1)}m</span> avg
+              first edit
+            </span>
+            <span className={styles.dataStat}>
+              <span className={styles.dataStatValue}>{p.sessions}</span> sessions
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PeriodDeltaWidget({ analytics }: WidgetBodyProps) {
+  const pc = analytics.period_comparison;
+  if (!pc || !pc.previous)
+    return <GhostStatRow labels={['completion', 'velocity', 'stuck rate']} />;
+  return (
+    <div className={styles.statRow}>
+      <DeltaStat
+        label="completion"
+        current={pc.current.completion_rate}
+        prev={pc.previous.completion_rate}
+        suffix="%"
+      />
+      <DeltaStat
+        label="velocity"
+        current={pc.current.edit_velocity}
+        prev={pc.previous.edit_velocity}
+        suffix="/hr"
+      />
+      <DeltaStat
+        label="stuck rate"
+        current={pc.current.stuckness_rate}
+        prev={pc.previous.stuckness_rate}
+        suffix="%"
+        invert
+      />
+      <DeltaStat
+        label="sessions"
+        current={pc.current.total_sessions}
+        prev={pc.previous.total_sessions}
+        suffix=""
+      />
+    </div>
+  );
+}
+
+function WorkTypeOutcomesWidget({ analytics }: WidgetBodyProps) {
+  const wto = analytics.work_type_outcomes;
+  if (wto.length === 0) return <GhostBars count={4} />;
+  return (
+    <div className={styles.metricBars}>
+      {wto.map((w) => (
+        <div key={w.work_type} className={styles.metricRow}>
+          <span className={styles.metricLabel}>{w.work_type}</span>
+          <div className={styles.metricBarTrack}>
+            <div
+              className={styles.metricBarFill}
+              style={{
+                width: `${w.completion_rate}%`,
+                background: WORK_TYPE_COLORS[w.work_type] || WORK_TYPE_COLORS.other,
+                opacity: 0.6,
+              }}
+            />
+          </div>
+          <span className={styles.metricValue}>
+            {w.completion_rate}% · {w.sessions}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
+  const to = analytics.tool_outcomes;
+  if (to.length === 0) return <GhostBars count={3} />;
+  const byTool = new Map<string, { completed: number; abandoned: number; failed: number }>();
+  for (const t of to) {
+    const entry = byTool.get(t.host_tool) || { completed: 0, abandoned: 0, failed: 0 };
+    if (t.outcome === 'completed') entry.completed = t.count;
+    else if (t.outcome === 'abandoned') entry.abandoned = t.count;
+    else if (t.outcome === 'failed') entry.failed = t.count;
+    byTool.set(t.host_tool, entry);
+  }
+  const tools = [...byTool.entries()]
+    .map(([tool, counts]) => ({
+      tool,
+      ...counts,
+      total: counts.completed + counts.abandoned + counts.failed,
+    }))
+    .sort((a, b) => b.total - a.total);
+  const maxT = Math.max(...tools.map((t) => t.total), 1);
+  return (
+    <div className={styles.metricBars}>
+      {tools.map((t) => (
+        <div key={t.tool} className={styles.metricRow}>
+          <span className={styles.metricLabel}>{getToolMeta(t.tool).label}</span>
+          <div className={styles.metricBarTrack}>
+            <div
+              className={styles.metricBarFill}
+              style={{
+                width: `${(t.completed / maxT) * 100}%`,
+                background: 'var(--success)',
+                opacity: 0.6,
+              }}
+            />
+            <div
+              className={styles.metricBarFill}
+              style={{
+                width: `${(t.abandoned / maxT) * 100}%`,
+                background: 'var(--warn)',
+                opacity: 0.6,
+              }}
+            />
+            <div
+              className={styles.metricBarFill}
+              style={{
+                width: `${(t.failed / maxT) * 100}%`,
+                background: 'var(--danger)',
+                opacity: 0.6,
+              }}
+            />
+          </div>
+          <span className={styles.metricValue}>
+            {t.completed}/{t.abandoned}/{t.failed}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ConflictImpactWidget({ analytics }: WidgetBodyProps) {
+  const cc = analytics.conflict_correlation;
+  if (cc.length === 0) return <GhostStatRow labels={['with conflicts', 'without']} />;
+  return (
+    <div className={styles.statRow}>
+      {cc.map((c) => (
+        <div key={c.bucket} className={styles.statBlock}>
+          <span className={styles.statBlockValue}>{c.completion_rate}%</span>
+          <span className={styles.statBlockLabel}>
+            {c.bucket} ({c.sessions})
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function RetryPatternsWidget({ analytics }: WidgetBodyProps) {
+  const rp = analytics.retry_patterns;
+  if (rp.length === 0) return <span className={styles.sectionEmpty}>No retry patterns</span>;
+  return (
+    <div className={styles.dataList}>
+      {rp.slice(0, 10).map((r, i) => (
+        <div
+          key={`${r.handle}-${r.file}`}
+          className={styles.dataRow}
+          style={{ '--row-index': i } as CSSProperties}
+        >
+          <span className={styles.dataName} title={r.file}>
+            {r.file.split('/').slice(-2).join('/')}
+          </span>
+          <div className={styles.dataMeta}>
+            <span className={styles.dataStat}>
+              <span className={styles.dataStatValue}>{r.attempts}</span> attempts
+            </span>
+            <span
+              className={styles.dataStat}
+              style={{ color: r.resolved ? 'var(--success)' : 'var(--danger)' }}
+            >
+              {r.resolved ? 'resolved' : r.final_outcome}
+            </span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export const outcomeWidgets: WidgetRegistry = {
+  outcomes: OutcomesWidget,
+  stuckness: StucknessWidget,
+  'outcome-predictors': OutcomePredictorsWidget,
+  'period-delta': PeriodDeltaWidget,
+  'work-type-outcomes': WorkTypeOutcomesWidget,
+  'tool-outcomes': ToolOutcomesWidget,
+  'conflict-impact': ConflictImpactWidget,
+  'retry-patterns': RetryPatternsWidget,
+};

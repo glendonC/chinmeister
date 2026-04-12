@@ -1,0 +1,113 @@
+import type { CSSProperties } from 'react';
+import { getToolMeta } from '../../../lib/toolMeta.js';
+import styles from '../OverviewView.module.css';
+import type { WidgetBodyProps, WidgetRegistry } from './types.js';
+
+function TeamMembersWidget({ analytics }: WidgetBodyProps) {
+  const members = analytics.member_analytics;
+  if (members.length <= 1) {
+    return (
+      <div className={styles.dataList}>
+        {[1, 2].map((i) => (
+          <div key={i} className={styles.ghostRow}>
+            <span className={styles.ghostLabel} style={{ width: 'auto' }}>
+              —
+            </span>
+            <span className={styles.ghostValue}>— sessions</span>
+            <span className={styles.ghostValue}>— edits</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className={styles.dataList}>
+      {members.map((m, i) => {
+        const meta = m.primary_tool ? getToolMeta(m.primary_tool) : null;
+        return (
+          <div
+            key={m.handle}
+            className={styles.dataRow}
+            style={{ '--row-index': i } as CSSProperties}
+          >
+            <span className={styles.dataName}>
+              {m.handle}
+              {meta && (
+                <span className={styles.dataStat} style={{ marginLeft: 8 }}>
+                  {meta.label}
+                </span>
+              )}
+            </span>
+            <div className={styles.dataMeta}>
+              <span className={styles.dataStat}>
+                <span className={styles.dataStatValue}>{m.sessions}</span> sessions
+              </span>
+              <span className={styles.dataStat}>
+                <span className={styles.dataStatValue}>{m.total_edits.toLocaleString()}</span> edits
+              </span>
+              {m.completion_rate > 0 && (
+                <span className={styles.dataStat}>
+                  <span className={styles.dataStatValue}>{m.completion_rate}%</span>
+                </span>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ProjectsWidget({ summaries, liveAgents, selectTeam }: WidgetBodyProps) {
+  if (summaries.length === 0) return <span className={styles.sectionEmpty}>No projects</span>;
+
+  return (
+    <div className={styles.projectList}>
+      {summaries.map((s, i) => {
+        const teamId = (s.team_id as string) || '';
+        const teamName = (s.team_name as string) || teamId;
+        const sessions24 = (s.recent_sessions_24h as number) || 0;
+        const conflictCount = (s.conflict_count as number) || 0;
+        const memoryCount = (s.memory_count as number) || 0;
+        const liveCount = liveAgents.filter((a) => a.teamId === teamId).length;
+        return (
+          <button
+            key={teamId}
+            type="button"
+            className={styles.projectRow}
+            style={{ '--row-index': i } as CSSProperties}
+            onClick={() => selectTeam(teamId)}
+          >
+            <span className={styles.projectName}>{teamName}</span>
+            <div className={styles.projectMeta}>
+              {liveCount > 0 && (
+                <span className={styles.projectLive}>
+                  <span className={styles.liveDot} style={{ background: 'var(--accent)' }} />
+                  {liveCount} live
+                </span>
+              )}
+              {sessions24 > 0 && (
+                <span className={styles.projectStat}>{sessions24} sessions today</span>
+              )}
+              {conflictCount > 0 && (
+                <span className={styles.projectStat} style={{ color: 'var(--warn)' }}>
+                  {conflictCount} {conflictCount === 1 ? 'conflict' : 'conflicts'}
+                </span>
+              )}
+              {memoryCount > 0 && (
+                <span className={styles.projectStat}>
+                  {memoryCount.toLocaleString()} {memoryCount === 1 ? 'memory' : 'memories'}
+                </span>
+              )}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export const teamWidgets: WidgetRegistry = {
+  'team-members': TeamMembersWidget,
+  projects: ProjectsWidget,
+};
