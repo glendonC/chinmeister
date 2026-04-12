@@ -1,17 +1,18 @@
 import { useState } from 'react';
+import { useDismissible } from '../../hooks/useDismissible.js';
 import styles from './KeyboardHint.module.css';
 
 const STORAGE_KEY = 'chinwag:hint:arrow-nav-v2';
-const alreadySeen = (): boolean => !!localStorage.getItem(STORAGE_KEY);
 
 interface Props {
+  dismissed: boolean;
   open: boolean;
   onOpen: () => void;
   onDismiss: () => void;
 }
 
-export default function KeyboardHint({ open, onOpen, onDismiss }: Props) {
-  if (alreadySeen()) return null;
+export default function KeyboardHint({ dismissed, open, onOpen, onDismiss }: Props) {
+  if (dismissed) return null;
 
   return (
     <span className={styles.wrapper}>
@@ -51,6 +52,7 @@ export default function KeyboardHint({ open, onOpen, onDismiss }: Props) {
 }
 
 interface KeyboardHintState {
+  dismissed: boolean;
   open: boolean;
   onOpen: () => void;
   onDismiss: () => void;
@@ -58,11 +60,13 @@ interface KeyboardHintState {
 
 export function useKeyboardHint(): KeyboardHintState {
   const [open, setOpen] = useState(false);
+  const { isDismissed, dismiss } = useDismissible(STORAGE_KEY);
   return {
+    dismissed: isDismissed(),
     open,
     onOpen: () => setOpen(true),
     onDismiss: () => {
-      localStorage.setItem(STORAGE_KEY, '1');
+      dismiss();
       setOpen(false);
     },
   };

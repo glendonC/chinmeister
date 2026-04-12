@@ -23,9 +23,11 @@ import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { getColorHex } from '../../lib/utils.js';
 import { navigate } from '../../lib/router.js';
+import { projectGradient } from '../../lib/projectGradient.js';
 import type { UserAnalytics, ConversationAnalytics } from '../../lib/apiSchemas.js';
 import { useUserAnalytics } from '../../hooks/useUserAnalytics.js';
 import { useConversationAnalytics } from '../../hooks/useConversationAnalytics.js';
+import { useDismissible } from '../../hooks/useDismissible.js';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
 import StatusState from '../../components/StatusState/StatusState.jsx';
 import {
@@ -157,7 +159,22 @@ function ProjectFilter({
   const { isAllSelected, isSingleProject, selectedIds, toggle, selectAll, isSelected } =
     projectFilter;
 
-  if (teams.length <= 1) return null;
+  if (teams.length === 0) return null;
+
+  if (teams.length === 1) {
+    const only = teams[0];
+    const label = only.team_name || only.team_id;
+    return (
+      <span className={styles.projectFilterStatic} title={label}>
+        <span
+          className={styles.projectFilterStaticSwatch}
+          style={{ background: projectGradient(only.team_id) }}
+          aria-hidden="true"
+        />
+        <span className={styles.projectFilterStaticLabel}>{label}</span>
+      </span>
+    );
+  }
 
   const selectedCount = isAllSelected ? teams.length : (selectedIds?.length ?? 0);
   const label = isAllSelected
@@ -250,6 +267,41 @@ function ProjectFilter({
   );
 }
 
+// ── Single-project hint (floating pill, bottom-center of content column) ──
+
+const SINGLE_PROJECT_HINT_KEY = 'chinwag:single-project-hint-dismissed';
+
+function SingleProjectHint({ onOpen, onDismiss }: { onOpen: () => void; onDismiss: () => void }) {
+  return (
+    <div className={styles.singleProjectHint} role="status" aria-live="polite">
+      <div className={styles.singleProjectHintBody}>
+        <span className={styles.singleProjectHintEyebrow}>Tip</span>
+        <span className={styles.singleProjectHintText}>
+          For a single project, the project dashboard has deeper detail.
+        </span>
+      </div>
+      <button type="button" className={styles.singleProjectHintAction} onClick={onOpen}>
+        Open dashboard
+      </button>
+      <button
+        type="button"
+        className={styles.singleProjectHintDismiss}
+        onClick={onDismiss}
+        aria-label="Dismiss"
+      >
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+          <path
+            d="M3 3l8 8M11 3l-8 8"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 // ── Main Component ────────────────────────────────
 
 export default function OverviewView() {
@@ -302,6 +354,8 @@ export default function OverviewView() {
     updatePositions,
     resetToDefault,
   } = useOverviewLayout();
+
+  const singleProjectHint = useDismissible(SINGLE_PROJECT_HINT_KEY);
 
   const handleLayoutChange = useCallback(
     (currentLayout: RGLLayout[], _allLayouts: RGLLayouts) => {
@@ -485,6 +539,20 @@ export default function OverviewView() {
         selectTeam={selectTeam}
         removeWidget={removeWidget}
       />
+
+      {/* ── Single-project hint (floating, bottom-center of content column) ── */}
+      {teams.length === 1 &&
+        !catalogOpen &&
+        !editing &&
+        !singleProjectHint.isDismissed(teams[0].team_id) && (
+          <SingleProjectHint
+            onOpen={() => {
+              selectTeam(teams[0].team_id);
+              navigate('project', teams[0].team_id);
+            }}
+            onDismiss={() => singleProjectHint.dismiss(teams[0].team_id)}
+          />
+        )}
 
       {/* ── Widget catalog ── */}
       <WidgetCatalog

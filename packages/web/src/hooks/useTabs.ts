@@ -5,7 +5,7 @@ import { useTabKeyboard } from '../lib/useTabKeyboard.js';
 interface UseTabsResult<T extends string> {
   activeTab: T;
   setActiveTab: Dispatch<SetStateAction<T>>;
-  hint: { open: boolean; onOpen: () => void; onDismiss: () => void };
+  hint: { dismissed: boolean; open: boolean; onOpen: () => void; onDismiss: () => void };
   ref: RefObject<HTMLDivElement | null>;
 }
 
