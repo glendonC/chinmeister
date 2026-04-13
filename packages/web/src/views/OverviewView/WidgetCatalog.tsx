@@ -35,6 +35,7 @@ const VIZ_LABELS: Record<WidgetViz, string> = {
   'project-list': 'Project list',
   'delta-row': 'Period delta',
   'bucket-chart': 'Bucket chart',
+  'live-list': 'Live presence',
 };
 
 const SIZE_LABELS: Record<number, string> = {
@@ -156,6 +157,15 @@ function VizIllustration({ viz }: { viz: WidgetViz }) {
           <rect x="68" y="12" width="26" height="24" rx="4" fill={fill} />
         </svg>
       );
+    case 'live-list':
+      return (
+        <svg width="100" height="48" viewBox="0 0 100 48" fill="none">
+          <circle cx="14" cy="24" r="3" fill={fill} />
+          <rect x="22" y="21" width="24" height="6" rx="2" fill={fill} />
+          <circle cx="58" cy="24" r="3" fill={fill} />
+          <rect x="66" y="21" width="20" height="6" rx="2" fill={fill} />
+        </svg>
+      );
     default:
       return (
         <svg width="100" height="48" viewBox="0 0 100 48" fill="none">
@@ -190,6 +200,20 @@ const CAT_ICONS: Record<string, React.ReactNode> = {
       <rect x="11" y="2" width="5" height="5" rx="1" />
       <rect x="2" y="11" width="5" height="5" rx="1" />
       <rect x="11" y="11" width="5" height="5" rx="1" />
+    </svg>
+  ),
+  live: (
+    <svg
+      viewBox="0 0 18 18"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="9" cy="9" r="2" fill="currentColor" stroke="none" />
+      <circle cx="9" cy="9" r="5" opacity="0.5" />
+      <circle cx="9" cy="9" r="8" opacity="0.25" />
     </svg>
   ),
   usage: (

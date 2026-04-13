@@ -83,11 +83,14 @@
 
 .content {
   max-width: var(--content-max-width);
+  margin: 0 auto;
   padding: 28px 56px 88px;
 }
 
 /* Banner slot — centers the Banner component at the top of .main */
 .bannerSlot {
+  max-width: var(--content-max-width);
+  margin: 0 auto;
   padding: 14px 56px 0;
 }
 

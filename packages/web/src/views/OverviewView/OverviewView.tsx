@@ -95,7 +95,6 @@ import { useProjectFilter } from './useProjectFilter.js';
 import { getWidget } from './widget-catalog.js';
 import { WidgetRenderer } from './WidgetRenderer.js';
 import { WidgetCatalog } from './WidgetCatalog.js';
-import { LiveAgentsBar } from './sections/ProjectSections.js';
 
 import styles from './OverviewView.module.css';
 
@@ -671,8 +670,8 @@ export default function OverviewView() {
             {!isMobile && (
               <CustomizeButton active={catalogOpen} onClick={() => setCatalogOpen(!catalogOpen)} />
             )}
+            <RangePills value={rangeDays} onChange={setRangeDays} options={RANGES} />
           </div>
-          <RangePills value={rangeDays} onChange={setRangeDays} options={RANGES} />
         </div>
       </section>
 
@@ -685,9 +684,6 @@ export default function OverviewView() {
           </span>
         </div>
       )}
-
-      {/* ── Live Agents ── */}
-      {liveAgents.length > 0 && <LiveAgentsBar liveAgents={liveAgents} selectTeam={selectTeam} />}
 
       {/* ── Widget Grid ── */}
       <div className={styles.gridBleed}>

@@ -1,4 +1,5 @@
 import type { WidgetRegistry } from './types.js';
+import { liveWidgets } from './LiveWidgets.js';
 import { usageWidgets } from './UsageWidgets.js';
 import { outcomeWidgets } from './OutcomeWidgets.js';
 import { trendWidgets } from './TrendWidgets.js';
@@ -11,6 +12,7 @@ import { teamWidgets } from './TeamWidgets.js';
 import { dataCoverageWidgets } from './DataCoverageWidget.js';
 
 export const widgetBodies: WidgetRegistry = {
+  ...liveWidgets,
   ...usageWidgets,
   ...outcomeWidgets,
   ...trendWidgets,

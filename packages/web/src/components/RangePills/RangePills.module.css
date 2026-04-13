@@ -1,34 +1,47 @@
 .rangeSelector {
-  display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--radius-sm);
-  background: var(--ghost);
+  display: inline-flex;
+  align-items: stretch;
+  height: 28px;
+  border: 1px solid var(--muted);
+  border-radius: 6px;
+  background: transparent;
+  transition: border-color 0.15s ease;
+}
+
+.rangeSelector:hover {
+  border-color: var(--ink);
 }
 
 .rangeButton {
-  padding: var(--space-xs) var(--space-md);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
   border: none;
-  border-radius: var(--radius-xs);
   background: transparent;
   font-family: var(--mono);
-  font-size: var(--text-2xs);
-  font-weight: 500;
+  font-size: 11px;
   color: var(--soft);
   letter-spacing: var(--tracking-stat);
   cursor: pointer;
   transition:
-    background var(--motion-fast) ease,
-    color var(--motion-fast) ease;
+    color 0.15s ease,
+    background 0.15s ease;
+}
+
+.rangeButton:first-child {
+  border-radius: 5px 0 0 5px;
+}
+
+.rangeButton:last-child {
+  border-radius: 0 5px 5px 0;
 }
 
 .rangeButton:hover {
-  background: var(--hover-bg);
   color: var(--ink);
 }
 
 .rangeActive {
-  background: var(--surface);
   color: var(--ink);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  background: var(--ghost);
 }

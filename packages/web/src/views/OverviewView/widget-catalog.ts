@@ -38,9 +38,11 @@ export type WidgetViz =
   | 'topic-bars'
   | 'project-list'
   | 'delta-row'
-  | 'bucket-chart';
+  | 'bucket-chart'
+  | 'live-list';
 
 export type WidgetCategory =
+  | 'live'
   | 'usage'
   | 'outcomes'
   | 'activity'
@@ -75,6 +77,20 @@ export interface WidgetDef {
 // ── The catalog ──────────────────────────────────
 
 export const WIDGET_CATALOG: WidgetDef[] = [
+  // ── Live (presence / coordination) ────
+  {
+    id: 'live-agents',
+    name: 'Live now',
+    description: 'Agents working across your projects right now',
+    category: 'live',
+    viz: 'live-list',
+    w: 12,
+    h: 2,
+    minW: 4,
+    minH: 2,
+    dataKeys: ['dashboard'],
+  },
+
   // ── Usage (KPI stats) ─────────────────
   {
     id: 'sessions',
@@ -753,6 +769,7 @@ const VIZ_MAX_CONSTRAINTS: Record<WidgetViz, { maxW: number; maxH: number }> = {
   'project-list': { maxW: 12, maxH: 6 },
   'delta-row': { maxW: 12, maxH: 2 },
   'bucket-chart': { maxW: 12, maxH: 5 },
+  'live-list': { maxW: 12, maxH: 3 },
 };
 
 // ── Lookup ───────────────────────────────────────
@@ -778,6 +795,7 @@ export function getWidget(id: string): WidgetDef | undefined {
 // ── Category metadata ───────────────────────────
 
 export const CATEGORIES: Array<{ id: WidgetCategory; label: string }> = [
+  { id: 'live', label: 'Live' },
   { id: 'usage', label: 'Usage' },
   { id: 'outcomes', label: 'Outcomes' },
   { id: 'activity', label: 'Activity' },
@@ -792,33 +810,36 @@ export const CATEGORIES: Array<{ id: WidgetCategory; label: string }> = [
 // x/y positions on the 12-column grid
 
 export const DEFAULT_LAYOUT: RGLLayout[] = [
-  // Row 0: KPI stats across the top (4 × 3-col)
-  { i: 'sessions', x: 0, y: 0, w: 3, h: 2 },
-  { i: 'edits', x: 3, y: 0, w: 3, h: 2 },
-  { i: 'lines-added', x: 6, y: 0, w: 3, h: 2 },
-  { i: 'files-touched', x: 9, y: 0, w: 3, h: 2 },
+  // Row 0: Live presence strip (full width)
+  { i: 'live-agents', x: 0, y: 0, w: 12, h: 2 },
 
-  // Row 2: Trend chart (wide) + Outcomes (narrow)
-  { i: 'session-trend', x: 0, y: 2, w: 8, h: 3 },
-  { i: 'outcomes', x: 8, y: 2, w: 4, h: 3 },
+  // Row 2: KPI stats across the top (4 × 3-col)
+  { i: 'sessions', x: 0, y: 2, w: 3, h: 2 },
+  { i: 'edits', x: 3, y: 2, w: 3, h: 2 },
+  { i: 'lines-added', x: 6, y: 2, w: 3, h: 2 },
+  { i: 'files-touched', x: 9, y: 2, w: 3, h: 2 },
 
-  // Row 5: Heatmap (wide) + Work types (narrow)
-  { i: 'heatmap', x: 0, y: 5, w: 8, h: 4 },
-  { i: 'work-types', x: 8, y: 5, w: 4, h: 3 },
+  // Row 4: Trend chart (wide) + Outcomes (narrow)
+  { i: 'session-trend', x: 0, y: 4, w: 8, h: 3 },
+  { i: 'outcomes', x: 8, y: 4, w: 4, h: 3 },
 
-  // Row 9: Codebase — dirs + files side by side
-  { i: 'directories', x: 0, y: 9, w: 6, h: 4 },
-  { i: 'files', x: 6, y: 9, w: 6, h: 4 },
+  // Row 7: Heatmap (wide) + Work types (narrow)
+  { i: 'heatmap', x: 0, y: 7, w: 8, h: 4 },
+  { i: 'work-types', x: 8, y: 7, w: 4, h: 3 },
 
-  // Row 13: Tools + Models side by side
-  { i: 'tools', x: 0, y: 13, w: 6, h: 3 },
-  { i: 'models', x: 6, y: 13, w: 6, h: 3 },
+  // Row 11: Codebase — dirs + files side by side
+  { i: 'directories', x: 0, y: 11, w: 6, h: 4 },
+  { i: 'files', x: 6, y: 11, w: 6, h: 4 },
 
-  // Row 16: Memory
-  { i: 'memory-stats', x: 0, y: 16, w: 6, h: 2 },
+  // Row 15: Tools + Models side by side
+  { i: 'tools', x: 0, y: 15, w: 6, h: 3 },
+  { i: 'models', x: 6, y: 15, w: 6, h: 3 },
 
-  // Row 18: Projects (full width)
-  { i: 'projects', x: 0, y: 18, w: 12, h: 3 },
+  // Row 18: Memory
+  { i: 'memory-stats', x: 0, y: 18, w: 12, h: 2 },
+
+  // Row 20: Projects (full width)
+  { i: 'projects', x: 0, y: 20, w: 12, h: 3 },
 ];
 
 export const DEFAULT_WIDGET_IDS = DEFAULT_LAYOUT.map((l) => l.i);
