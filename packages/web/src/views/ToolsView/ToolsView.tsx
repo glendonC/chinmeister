@@ -15,16 +15,22 @@ import { SkeletonRows } from '../../components/Skeleton/Skeleton.jsx';
 import { useDismissible } from '../../hooks/useDismissible.js';
 import StackToolDetail from './StackToolDetail.js';
 import Sparkline from './Sparkline.js';
+import StackAdoptionTimeline from './StackAdoptionTimeline.js';
+import StackWorkTypeMatrix from './StackWorkTypeMatrix.js';
+import ToolRhythm from './ToolRhythm.js';
+import HandoffFlow from './HandoffFlow.js';
+import CompareTools from './CompareTools.js';
 import { useScoredStackData, type ScoredToolRow } from './useScoredStackData.js';
 import { useToolsViewData, arcPath, CX, CY, R, SW } from './useToolsViewData.js';
 import styles from './ToolsView.module.css';
 
-type StackSortKey = 'name' | 'sessions' | 'completion' | 'firstEdit' | 'tokens';
+type StackSortKey = 'name' | 'sessions' | 'completion' | 'firstEdit';
 
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
+function formatAdoption(day: string | null): string | null {
+  if (!day) return null;
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
 function compareRows(a: ScoredToolRow, b: ScoredToolRow, key: StackSortKey): number {
@@ -40,8 +46,6 @@ function compareRows(a: ScoredToolRow, b: ScoredToolRow, key: StackSortKey): num
       const bv = b.avgFirstEditMin ?? Number.POSITIVE_INFINITY;
       return av - bv;
     }
-    case 'tokens':
-      return b.inputTokens + b.outputTokens - (a.inputTokens + a.outputTokens);
   }
 }
 
@@ -49,7 +53,7 @@ const DIRECTORY_HINT_KEY = 'chinwag:tools-directory-hint-dismissed';
 
 export default function ToolsView() {
   const stackToolParam = useQueryParam('stack');
-  const { rows: scoredRows, getDrillIn, isLoading } = useScoredStackData(30);
+  const { rows: scoredRows, getDrillIn, isLoading, analytics } = useScoredStackData(30);
   const { arcs, uniqueTools, toolShare, evaluations } = useToolsViewData();
   const directoryHint = useDismissible(DIRECTORY_HINT_KEY);
 
@@ -250,6 +254,9 @@ export default function ToolsView() {
             )}
 
             <div className={styles.tableColumn}>
+              <div className={styles.tableToolbar}>
+                <CompareTools rows={sortedRows} getDrillIn={getDrillIn} />
+              </div>
               <div className={styles.scoredTable}>
                 <div className={styles.scoredHeader}>
                   <button
@@ -295,17 +302,6 @@ export default function ToolsView() {
                   >
                     First edit
                   </button>
-                  <button
-                    type="button"
-                    className={clsx(
-                      styles.scoredHeaderCell,
-                      styles.scoredHeaderRight,
-                      sortKey === 'tokens' && styles.scoredHeaderActive,
-                    )}
-                    onClick={() => setSortKey('tokens')}
-                  >
-                    Tokens
-                  </button>
                   <span className={styles.scoredHeaderCell}>Trend</span>
                   <span aria-hidden="true" />
                 </div>
@@ -318,7 +314,7 @@ export default function ToolsView() {
                 ) : (
                   sortedRows.map((row, i) => {
                     const meta = getToolMeta(row.toolId);
-                    const totalTokens = row.inputTokens + row.outputTokens;
+                    const adoption = formatAdoption(row.firstSeen);
                     const dimmed =
                       hoveredTool && normalizeToolId(hoveredTool) !== normalizeToolId(row.toolId);
                     return (
@@ -333,7 +329,12 @@ export default function ToolsView() {
                       >
                         <div className={styles.scoredIdentity}>
                           <ToolIcon tool={row.toolId} size={20} />
-                          <span className={styles.scoredName}>{meta.label}</span>
+                          <div className={styles.scoredNameColumn}>
+                            <span className={styles.scoredName}>{meta.label}</span>
+                            {adoption && (
+                              <span className={styles.scoredAdoption}>since {adoption}</span>
+                            )}
+                          </div>
                         </div>
                         <span className={styles.scoredNum}>{row.sessions}</span>
                         <span className={styles.scoredNum}>
@@ -343,9 +344,6 @@ export default function ToolsView() {
                           {row.avgFirstEditMin != null
                             ? formatDuration(row.avgFirstEditMin)
                             : '\u2014'}
-                        </span>
-                        <span className={styles.scoredNum}>
-                          {totalTokens > 0 ? formatTokens(totalTokens) : '\u2014'}
                         </span>
                         <span className={styles.scoredSpark}>
                           <Sparkline
@@ -364,6 +362,18 @@ export default function ToolsView() {
               </div>
             </div>
           </section>
+
+          {scoredRows.length > 0 && (
+            <div className={styles.followUpSections}>
+              <StackAdoptionTimeline />
+              <StackWorkTypeMatrix
+                breakdown={analytics.tool_work_type}
+                onToolClick={openStackTool}
+              />
+              <HandoffFlow handoffs={analytics.tool_handoffs} onToolClick={openStackTool} />
+              <ToolRhythm />
+            </div>
+          )}
         </div>
 
         <div className={styles.detailPanel}>

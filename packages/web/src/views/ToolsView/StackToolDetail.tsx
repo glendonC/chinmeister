@@ -7,6 +7,12 @@ import { formatDuration } from '../../lib/utils.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import BackLink from '../../components/BackLink/BackLink.js';
 import Sparkline from './Sparkline.js';
+import {
+  InternalUsageSection,
+  SessionShapeSection,
+  ModelPairingsSection,
+  ScopeComplexitySection,
+} from './DrillSections.js';
 import type { ToolDrillIn } from './useScoredStackData.js';
 import styles from './StackToolDetail.module.css';
 
@@ -35,6 +41,12 @@ function formatTokens(n: number): string {
 export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
   const meta = getToolMeta(drill.toolId);
   const c = drill.comparison;
+
+  // Internal tool usage, session shape, and model pairings all depend on
+  // the JSONL post-session parser, which currently only covers Claude Code.
+  // For any other tool we hide these sections entirely rather than show an
+  // empty shell — better to say nothing than to imply coverage we don't have.
+  const hasDeepIntegration = meta.id === 'claude';
 
   const sparkData = useMemo(() => {
     // Build a uniform-length sparkline from drill.daily for the period
@@ -160,6 +172,18 @@ export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
         </section>
       )}
 
+      {/* ── Behavior sections (Claude Code only; other tools don't expose this data) ── */}
+      {hasDeepIntegration && (
+        <>
+          <InternalUsageSection toolId={drill.toolId} />
+          <SessionShapeSection toolId={drill.toolId} />
+          <ModelPairingsSection toolId={drill.toolId} />
+        </>
+      )}
+
+      {/* ── Scope complexity (works for all tools via files_touched) ── */}
+      <ScopeComplexitySection toolId={drill.toolId} />
+
       {/* ── Errors ── */}
       {drill.errors.length > 0 && (
         <section className={styles.section}>
@@ -179,14 +203,16 @@ export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
         </section>
       )}
 
-      {/* ── Handoffs ── */}
+      {/* ── Cross-tool file overlap ── */}
       {(drill.handoffsOut.length > 0 || drill.handoffsIn.length > 0) && (
         <section className={styles.section}>
-          <span className={styles.sectionLabel}>Cross-tool handoffs</span>
+          <span className={styles.sectionLabel}>Files also touched by another tool</span>
           <div className={styles.handoffGrid}>
             {drill.handoffsOut.length > 0 && (
               <div>
-                <span className={styles.handoffSubLabel}>{meta.label} hands off to</span>
+                <span className={styles.handoffSubLabel}>
+                  After {meta.label}, these tools edited the same files
+                </span>
                 <ul className={styles.handoffList}>
                   {drill.handoffsOut.map((h) => {
                     const target = getToolMeta(h.to_tool);
@@ -204,7 +230,9 @@ export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
             )}
             {drill.handoffsIn.length > 0 && (
               <div>
-                <span className={styles.handoffSubLabel}>Hands off to {meta.label}</span>
+                <span className={styles.handoffSubLabel}>
+                  Before {meta.label}, these tools edited the same files
+                </span>
                 <ul className={styles.handoffList}>
                   {drill.handoffsIn.map((h) => {
                     const source = getToolMeta(h.from_tool);

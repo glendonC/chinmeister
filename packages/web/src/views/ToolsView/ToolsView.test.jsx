@@ -290,7 +290,6 @@ describe('ToolsView', () => {
     expect(container.textContent).toContain('Sessions');
     expect(container.textContent).toContain('Completion');
     expect(container.textContent).toContain('First edit');
-    expect(container.textContent).toContain('Tokens');
     expect(container.textContent).toContain('Trend');
 
     unmount();

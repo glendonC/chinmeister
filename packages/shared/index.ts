@@ -174,3 +174,13 @@ export { TEAM_ID_PATTERN, isValidTeamId, findTeamFile, type TeamFileInfo } from 
 
 // tool-registry (types like McpTool, ToolDetect, etc. are re-exported via integration-model)
 export { MCP_TOOLS, getMcpToolById, type AvailabilityCheckResult } from './tool-registry.js';
+
+// tool-call-categories (shared classifier for research/edit/exec/memory)
+export {
+  TOOL_CALL_CATEGORIES,
+  RESEARCH_TOOLS,
+  EDIT_TOOLS,
+  classifyToolCall,
+  sqlInList,
+  type ToolCallCategory,
+} from './tool-call-categories.js';

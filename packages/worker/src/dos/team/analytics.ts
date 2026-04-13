@@ -57,6 +57,7 @@ import type {
   CommitOutcomeCorrelation,
   CommitEditRatioBucket,
 } from '@chinwag/shared/contracts/analytics.js';
+import { RESEARCH_TOOLS, EDIT_TOOLS, sqlInList } from '@chinwag/shared/tool-call-categories.js';
 
 const log = createLogger('TeamDO.analytics');
 
@@ -2039,12 +2040,15 @@ function queryToolCallStats(sql: SqlStorage, days: number): ToolCallStats {
     const totalErrors = (totalsRow.total_errors as number) || 0;
     const distinctSessions = (totalsRow.distinct_sessions as number) || 1;
 
-    // Research-to-edit ratio
+    // Research-to-edit ratio. Tool lists come from the shared classifier
+    // in packages/shared/tool-call-categories.ts — do not hardcode here.
+    const researchList = sqlInList(RESEARCH_TOOLS);
+    const editList = sqlInList(EDIT_TOOLS);
     const ratioRow = sql
       .exec(
         `SELECT
-           SUM(CASE WHEN tool IN ('Read', 'Grep', 'Glob', 'WebSearch', 'WebFetch', 'Agent') THEN 1 ELSE 0 END) AS research,
-           SUM(CASE WHEN tool IN ('Edit', 'Write', 'NotebookEdit') THEN 1 ELSE 0 END) AS edits
+           SUM(CASE WHEN tool IN (${researchList}) THEN 1 ELSE 0 END) AS research,
+           SUM(CASE WHEN tool IN (${editList}) THEN 1 ELSE 0 END) AS edits
          FROM tool_calls
          WHERE called_at > datetime('now', '-' || ? || ' days')`,
         days,

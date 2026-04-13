@@ -23,10 +23,12 @@ export interface ScoredToolRow {
   failed: number;
   completionRate: number;
   avgFirstEditMin: number | null;
-  inputTokens: number;
-  outputTokens: number;
   reporting: 'reporting' | 'silent' | 'unknown';
   sparkline: number[];
+  // First day we saw any session from this tool within the window.
+  // Null when we have no daily data for the tool.
+  firstSeen: string | null;
+  lastSeen: string | null;
 }
 
 export interface ToolDrillIn {
@@ -61,7 +63,6 @@ export function useScoredStackData(rangeDays = 30): UseScoredStackData {
   const rows = useMemo<ScoredToolRow[]>(() => {
     const comparison = analytics.tool_comparison ?? [];
     const firstEditByTool = analytics.first_edit_stats?.by_tool ?? [];
-    const tokensByTool = analytics.token_usage?.by_tool ?? [];
     const daily = analytics.tool_daily ?? [];
     const reporting = new Set(
       (analytics.data_coverage?.tools_reporting ?? []).map((t) => normalizeToolId(t)),
@@ -94,13 +95,25 @@ export function useScoredStackData(rangeDays = 30): UseScoredStackData {
       .map((c) => {
         const key = normalizeToolId(c.host_tool);
         const fe = firstEditByTool.find((f) => matches(f.host_tool, c.host_tool));
-        const tk = tokensByTool.find((t) => matches(t.host_tool, c.host_tool));
         const bucket = sparkBuckets.get(key);
         const sparkline = bucket ? days.map((d) => bucket.get(d) ?? 0) : days.map(() => 0);
 
         let report: ScoredToolRow['reporting'] = 'unknown';
         if (reporting.has(key)) report = 'reporting';
         else if (silent.has(key)) report = 'silent';
+
+        let firstSeen: string | null = null;
+        let lastSeen: string | null = null;
+        if (bucket) {
+          const active = [...bucket.entries()]
+            .filter(([, count]) => count > 0)
+            .map(([day]) => day)
+            .sort();
+          if (active.length > 0) {
+            firstSeen = active[0];
+            lastSeen = active[active.length - 1];
+          }
+        }
 
         return {
           toolId: c.host_tool,
@@ -110,10 +123,10 @@ export function useScoredStackData(rangeDays = 30): UseScoredStackData {
           failed: c.failed,
           completionRate: c.completion_rate,
           avgFirstEditMin: fe ? fe.avg_minutes : null,
-          inputTokens: tk?.input_tokens ?? 0,
-          outputTokens: tk?.output_tokens ?? 0,
           reporting: report,
           sparkline,
+          firstSeen,
+          lastSeen,
         };
       })
       .sort((a, b) => b.sessions - a.sessions);

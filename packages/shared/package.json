@@ -86,6 +86,10 @@
       "types": "./dist/tool-registry.d.ts",
       "import": "./dist/tool-registry.js"
     },
+    "./tool-call-categories.js": {
+      "types": "./dist/tool-call-categories.d.ts",
+      "import": "./dist/tool-call-categories.js"
+    },
     "./logger.js": {
       "types": "./dist/logger.d.ts",
       "import": "./dist/logger.js"

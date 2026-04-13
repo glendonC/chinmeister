@@ -21,6 +21,13 @@
   transition: opacity var(--motion-slow) var(--motion);
 }
 
+.followUpSections {
+  display: flex;
+  flex-direction: column;
+  gap: 56px;
+  margin-top: 56px;
+}
+
 .trackShifted .listPanel {
   opacity: 0.3;
   pointer-events: none;
@@ -81,18 +88,39 @@
 
 /*
   Grid columns:
-  tool name · sessions · completion · first edit · tokens · trend · view
+  tool name · sessions · completion · first edit · trend · view
 */
 .scoredHeader,
 .scoredRow {
   display: grid;
-  grid-template-columns: minmax(140px, 1.4fr) 70px 90px 80px 80px 100px 56px;
+  grid-template-columns: minmax(140px, 1.4fr) 70px 90px 80px 100px 56px;
   gap: var(--space-md);
   align-items: center;
 }
 
+.tableToolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0 14px 12px;
+}
+
+.scoredNameColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.scoredAdoption {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--soft);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
 .scoredHeader {
-  padding: 0 4px 12px;
+  padding: 0 14px 12px;
   border-bottom: 1px solid var(--ghost);
 }
 
@@ -123,10 +151,10 @@
 }
 
 .scoredRow {
-  padding: 12px 4px;
+  padding: 12px 14px;
   background: none;
   border: none;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md);
   text-align: left;
   font-family: var(--sans);
   cursor: pointer;
@@ -216,7 +244,7 @@
 }
 
 .scoredEmpty {
-  padding: 48px 4px;
+  padding: 48px 14px;
   font-size: var(--text-sm);
   color: var(--soft);
   line-height: 1.6;
@@ -257,11 +285,12 @@
 
   .scoredHeader,
   .scoredRow {
-    grid-template-columns: minmax(120px, 1.4fr) 60px 80px 70px 80px 56px;
+    grid-template-columns: minmax(120px, 1.4fr) 60px 80px 70px 56px;
   }
 
-  .scoredHeader > :nth-child(6),
-  .scoredRow > :nth-child(6) {
+  /* Hide Trend column (nth 5) */
+  .scoredHeader > :nth-child(5),
+  .scoredRow > :nth-child(5) {
     display: none;
   }
 }
@@ -269,13 +298,12 @@
 @media (max-width: 900px) {
   .scoredHeader,
   .scoredRow {
-    grid-template-columns: minmax(120px, 1.4fr) 60px 80px 80px 56px;
+    grid-template-columns: minmax(120px, 1.4fr) 60px 80px 56px;
   }
 
+  /* Hide First edit (4) */
   .scoredHeader > :nth-child(4),
-  .scoredHeader > :nth-child(5),
-  .scoredRow > :nth-child(4),
-  .scoredRow > :nth-child(5) {
+  .scoredRow > :nth-child(4) {
     display: none;
   }
 }
