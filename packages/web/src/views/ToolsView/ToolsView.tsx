@@ -45,12 +45,6 @@ function compareRows(a: ScoredToolRow, b: ScoredToolRow, key: StackSortKey): num
   }
 }
 
-const STATUS_DOT_LABEL: Record<ScoredToolRow['reporting'], string> = {
-  reporting: 'Reporting data',
-  silent: 'No recent data',
-  unknown: 'No coverage signal',
-};
-
 const DIRECTORY_HINT_KEY = 'chinwag:tools-directory-hint-dismissed';
 
 export default function ToolsView() {
@@ -258,7 +252,6 @@ export default function ToolsView() {
             <div className={styles.tableColumn}>
               <div className={styles.scoredTable}>
                 <div className={styles.scoredHeader}>
-                  <span aria-hidden="true" />
                   <button
                     type="button"
                     className={clsx(
@@ -314,6 +307,7 @@ export default function ToolsView() {
                     Tokens
                   </button>
                   <span className={styles.scoredHeaderCell}>Trend</span>
+                  <span aria-hidden="true" />
                 </div>
 
                 {sortedRows.length === 0 ? (
@@ -337,11 +331,6 @@ export default function ToolsView() {
                         onMouseEnter={() => setHoveredTool(row.toolId)}
                         onMouseLeave={() => setHoveredTool(null)}
                       >
-                        <span
-                          className={clsx(styles.statusDot, styles[`statusDot_${row.reporting}`])}
-                          aria-label={STATUS_DOT_LABEL[row.reporting]}
-                          title={STATUS_DOT_LABEL[row.reporting]}
-                        />
                         <div className={styles.scoredIdentity}>
                           <ToolIcon tool={row.toolId} size={20} />
                           <span className={styles.scoredName}>{meta.label}</span>
@@ -367,6 +356,7 @@ export default function ToolsView() {
                             ariaLabel={`${meta.label} 30 day session trend`}
                           />
                         </span>
+                        <span className={styles.viewButton}>View</span>
                       </button>
                     );
                   })

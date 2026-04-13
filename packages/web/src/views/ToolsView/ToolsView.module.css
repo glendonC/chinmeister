@@ -81,12 +81,12 @@
 
 /*
   Grid columns:
-  status dot · tool name · sessions · completion · first edit · tokens · trend
+  tool name · sessions · completion · first edit · tokens · trend · view
 */
 .scoredHeader,
 .scoredRow {
   display: grid;
-  grid-template-columns: 14px minmax(140px, 1.4fr) 70px 90px 80px 80px 100px;
+  grid-template-columns: minmax(140px, 1.4fr) 70px 90px 80px 80px 100px 56px;
   gap: var(--space-md);
   align-items: center;
 }
@@ -156,32 +156,6 @@
   }
 }
 
-/* ── Status dot (leftmost column) ── */
-
-.statusDot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--soft);
-  justify-self: center;
-}
-
-.statusDot_reporting {
-  background: var(--success);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--success) 18%, transparent);
-}
-
-.statusDot_silent {
-  background: var(--warn);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--warn) 18%, transparent);
-}
-
-.statusDot_unknown {
-  background: var(--ghost);
-  border: 1px solid var(--soft);
-}
-
 /* ── Row content ── */
 
 .scoredIdentity {
@@ -214,6 +188,31 @@
   align-items: center;
   justify-content: flex-start;
   color: currentColor;
+}
+
+.viewButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: var(--text-11);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--ink);
+  color: var(--page-bg);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease,
+    transform 0.12s ease;
+}
+
+.scoredRow:hover .viewButton {
+  background: var(--accent);
+  color: white;
+  transform: scale(1.04);
 }
 
 .scoredEmpty {
@@ -258,11 +257,11 @@
 
   .scoredHeader,
   .scoredRow {
-    grid-template-columns: 14px minmax(120px, 1.4fr) 60px 80px 70px 80px;
+    grid-template-columns: minmax(120px, 1.4fr) 60px 80px 70px 80px 56px;
   }
 
-  .scoredHeader > :last-child,
-  .scoredRow > :last-child {
+  .scoredHeader > :nth-child(6),
+  .scoredRow > :nth-child(6) {
     display: none;
   }
 }
@@ -270,13 +269,13 @@
 @media (max-width: 900px) {
   .scoredHeader,
   .scoredRow {
-    grid-template-columns: 14px minmax(120px, 1.4fr) 60px 80px 80px;
+    grid-template-columns: minmax(120px, 1.4fr) 60px 80px 80px 56px;
   }
 
+  .scoredHeader > :nth-child(4),
   .scoredHeader > :nth-child(5),
-  .scoredHeader > :nth-child(6),
-  .scoredRow > :nth-child(5),
-  .scoredRow > :nth-child(6) {
+  .scoredRow > :nth-child(4),
+  .scoredRow > :nth-child(5) {
     display: none;
   }
 }
@@ -284,11 +283,11 @@
 @media (max-width: 640px) {
   .scoredHeader,
   .scoredRow {
-    grid-template-columns: 14px minmax(0, 1fr) 60px 80px;
+    grid-template-columns: minmax(0, 1fr) 60px 80px;
   }
 
-  .scoredHeader > :nth-child(n + 5),
-  .scoredRow > :nth-child(n + 5) {
+  .scoredHeader > :nth-child(n + 4),
+  .scoredRow > :nth-child(n + 4) {
     display: none;
   }
 }

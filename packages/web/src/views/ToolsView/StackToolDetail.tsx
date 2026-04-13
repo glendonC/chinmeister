@@ -5,6 +5,7 @@ import { type CSSProperties, useMemo } from 'react';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { formatDuration } from '../../lib/utils.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
+import BackLink from '../../components/BackLink/BackLink.js';
 import Sparkline from './Sparkline.js';
 import type { ToolDrillIn } from './useScoredStackData.js';
 import styles from './StackToolDetail.module.css';
@@ -54,35 +55,21 @@ export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
   const totalWorkSessions = drill.workTypes.reduce((s, w) => s + w.sessions, 0);
   const sortedWork = [...drill.workTypes].sort((a, b) => b.sessions - a.sessions);
 
+  const subtitleParts = [`${c?.sessions ?? 0} sessions`, `last ${rangeDays} days`];
+  if (drill.reporting === 'silent') subtitleParts.push('no recent data');
+  else if (drill.reporting === 'unknown') subtitleParts.push('no coverage signal');
+
   return (
     <div className={styles.detail}>
-      <button className={styles.back} onClick={onBack} type="button">
-        {'\u2190'} Your tools
-      </button>
-
       <header className={styles.header}>
-        <ToolIcon tool={drill.toolId} size={36} />
-        <div>
-          <h1 className={styles.title}>{meta.label}</h1>
-          <span className={styles.subtitle}>
-            {c?.sessions ?? 0} sessions · last {rangeDays} days
-          </span>
+        <BackLink label="Tools" onClick={onBack} />
+        <div className={styles.titleRow}>
+          <ToolIcon tool={drill.toolId} size={36} />
+          <div className={styles.titleCopy}>
+            <h1 className={styles.title}>{meta.label}</h1>
+            <span className={styles.subtitle}>{subtitleParts.join(' · ')}</span>
+          </div>
         </div>
-        <span
-          className={
-            drill.reporting === 'reporting'
-              ? styles.statusReporting
-              : drill.reporting === 'silent'
-                ? styles.statusSilent
-                : styles.statusUnknown
-          }
-        >
-          {drill.reporting === 'reporting'
-            ? 'Reporting'
-            : drill.reporting === 'silent'
-              ? 'Silent'
-              : 'No coverage data'}
-        </span>
       </header>
 
       {/* ── Headline stats ── */}
