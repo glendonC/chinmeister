@@ -53,6 +53,7 @@ import {
   handleReportStale,
 } from './routes/directory.js';
 import { runPulseCheck } from './lib/pulse.js';
+import { runRefreshModelPrices } from './lib/refresh-model-prices.js';
 import {
   handleTeamActivity,
   handleTeamClaimFiles,
@@ -303,8 +304,22 @@ function isWebSocketRoute(path: string): boolean {
 }
 
 export default {
-  async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext) {
-    ctx.waitUntil(runPulseCheck(env));
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext) {
+    // Dispatch on the exact cron expression from wrangler.toml. Every configured
+    // cron must have an explicit case here; unknown expressions are logged and
+    // no-op'd so adding a cron without wiring its handler fails visibly instead
+    // of silently running the wrong job.
+    switch (controller.cron) {
+      case '0 3 * * 1':
+        ctx.waitUntil(runPulseCheck(env));
+        break;
+      case '0 */6 * * *':
+        ctx.waitUntil(runRefreshModelPrices(env));
+        break;
+      default:
+        createLogger('scheduled').warn(`unhandled cron expression: ${controller.cron}`);
+        break;
+    }
   },
 
   async fetch(request: Request, env: Env, _ctx: ExecutionContext): Promise<Response> {

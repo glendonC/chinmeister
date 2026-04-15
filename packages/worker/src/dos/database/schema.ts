@@ -213,6 +213,64 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '006_model_pricing',
+    up(sql) {
+      // Canonical model pricing snapshot, refreshed every 6h from LiteLLM.
+      // Keyed by LiteLLM canonical name (e.g. `claude-sonnet-4-5-20250929`,
+      // `gpt-5`, `xai/grok-4`) — the resolver in lib/litellm-resolver.ts
+      // maps raw agent_model strings to these keys.
+      //
+      // Prices are per 1,000,000 tokens (display convention). Cache fields
+      // are nullable because not every model supports prompt caching, and
+      // `raw` stores the full LiteLLM entry as JSON so future price tiers
+      // (above_500k, audio, image) can be read without a schema migration.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS model_prices (
+          canonical_name TEXT PRIMARY KEY,
+          input_per_1m REAL NOT NULL,
+          output_per_1m REAL NOT NULL,
+          cache_creation_per_1m REAL,
+          cache_read_per_1m REAL,
+          input_per_1m_above_200k REAL,
+          output_per_1m_above_200k REAL,
+          max_input_tokens INTEGER,
+          max_output_tokens INTEGER,
+          raw TEXT,
+          updated_at TEXT DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS pricing_metadata (
+          id INTEGER PRIMARY KEY CHECK (id = 1),
+          source TEXT NOT NULL,
+          source_sha TEXT,
+          etag TEXT,
+          fetched_at TEXT NOT NULL,
+          models_count INTEGER NOT NULL,
+          last_attempt_at TEXT,
+          last_failure_at TEXT,
+          last_failure_reason TEXT
+        );
+      `);
+
+      // Extend user_metrics with lifetime cache token counters. Anthropic
+      // prompt caching can account for 10x+ the uncached input volume, so
+      // omitting these would permanently undercount total tokens for every
+      // Claude Code user.
+      try {
+        sql.exec('ALTER TABLE user_metrics ADD COLUMN total_cache_read_tokens INTEGER DEFAULT 0');
+      } catch (err) {
+        if (!getErrorMessage(err).toLowerCase().includes('duplicate column name')) throw err;
+      }
+      try {
+        sql.exec(
+          'ALTER TABLE user_metrics ADD COLUMN total_cache_creation_tokens INTEGER DEFAULT 0',
+        );
+      } catch (err) {
+        if (!getErrorMessage(err).toLowerCase().includes('duplicate column name')) throw err;
+      }
+    },
+  },
 ];
 
 export function ensureSchema(sql: SqlStorage, transact: <T>(fn: () => T) => T): void {

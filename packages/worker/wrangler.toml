@@ -2,9 +2,13 @@ name = "chinwag-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
-# Weekly pulse check -- verifies tool directory data freshness (GitHub stars, website status)
+# Scheduled triggers:
+#   - "0 3 * * 1" — weekly pulse check (Mon 3am UTC) verifying tool directory
+#     freshness: GitHub stars, website uptime.
+#   - "0 */6 * * *" — 6-hour model pricing refresh from LiteLLM.
+# Every cron must have an explicit case in src/index.ts scheduled() dispatch.
 [triggers]
-crons = ["0 3 * * 1"]
+crons = ["0 3 * * 1", "0 */6 * * *"]
 
 # Workers Observability — logs + traces persisted to CF dashboard
 # View at: dash.cloudflare.com → Workers & Pages → chinwag-api → Observability

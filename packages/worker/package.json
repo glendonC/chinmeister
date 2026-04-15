@@ -10,7 +10,8 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:coverage": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:pricing-seed": "node --experimental-strip-types scripts/fetch-pricing-seed.ts"
   },
   "dependencies": {
     "@chinwag/shared": "file:../shared"
