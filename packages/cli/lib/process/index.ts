@@ -25,8 +25,19 @@ export {
 } from './lifecycle.js';
 
 // Registry (lookup, query, subscribe)
-export { getAgents, getOutput, onUpdate, waitForExit, removeAgent } from './registry.js';
+export {
+  getAgents,
+  getOutput,
+  onUpdate,
+  onProcessExit,
+  waitForExit,
+  removeAgent,
+} from './registry.js';
 
 // Conversation and token collection (post-session analytics)
-export { collectConversation, collectTokenUsage } from './conversation-collector.js';
+export {
+  collectConversation,
+  collectTokenUsage,
+  collectToolCalls,
+} from './conversation-collector.js';
 export type { TokenUsage } from './conversation-collector.js';

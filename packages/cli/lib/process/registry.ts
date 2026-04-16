@@ -11,6 +11,7 @@ const log = createLogger('process-registry');
 // ── Registry state ───────────────────────────────────
 export const processes = new Map<number, ManagedProcess>();
 let updateCallbacks: Array<(agents: AgentInfo[]) => void> = [];
+let exitCallbacks: Array<(proc: ManagedProcess) => void> = [];
 export let nextId = 1;
 
 /**
@@ -83,6 +84,29 @@ export function onUpdate(callback: (agents: AgentInfo[]) => void): () => void {
   return () => {
     updateCallbacks = updateCallbacks.filter((cb) => cb !== callback);
   };
+}
+
+/**
+ * Register a callback that fires when a managed process exits.
+ * Used by the dashboard to trigger post-session analytics collection
+ * (conversations, tokens, tool calls) with its config/teamId context.
+ */
+export function onProcessExit(callback: (proc: ManagedProcess) => void): () => void {
+  exitCallbacks.push(callback);
+  return () => {
+    exitCallbacks = exitCallbacks.filter((cb) => cb !== callback);
+  };
+}
+
+/** Fire all registered exit callbacks for a process. */
+export function notifyProcessExit(proc: ManagedProcess): void {
+  for (const cb of exitCallbacks) {
+    try {
+      cb(proc);
+    } catch (err: unknown) {
+      log.error(formatError(err));
+    }
+  }
 }
 
 /**

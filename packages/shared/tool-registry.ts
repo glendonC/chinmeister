@@ -261,8 +261,8 @@ export const MCP_TOOLS: McpTool[] = [
     },
     clientInfoNames: ['aider', 'aider-chat'],
     mcpConfig: '.mcp.json',
-    spawn: { cmd: 'aider', args: ['--message'] },
-    dataCapabilities: { conversationLogs: true },
+    spawn: { cmd: 'aider', args: ['--message', '--analytics-log', '.aider-analytics.jsonl'] },
+    dataCapabilities: { conversationLogs: true, tokenUsage: true },
     catalog: {
       description: 'Terminal pair programmer that edits code in your repo',
       category: 'coding-agent',

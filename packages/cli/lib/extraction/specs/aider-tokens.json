@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "tool": "aider",
+  "format": "jsonl",
+  "discovery": {
+    "strategy": "fixed-path",
+    "relativePath": ".aider-analytics.jsonl"
+  },
+  "extractions": {
+    "tokens": {
+      "usagePath": "properties",
+      "usagePathFallbacks": [],
+      "fieldMapping": {
+        "input_tokens": "prompt_tokens",
+        "output_tokens": "completion_tokens"
+      },
+      "normalization": "openai"
+    }
+  },
+  "generatedAt": "2026-04-16",
+  "source": "manual"
+}

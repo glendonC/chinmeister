@@ -221,10 +221,19 @@ function extractConversationFromEntry(
   spec: ConversationExtractionSpec,
   sequence: number,
 ): ExtractedConversation | null {
-  const roleVal = String(resolvePath(entry, spec.roleDetection.field) ?? '');
   let role: 'user' | 'assistant' | null = null;
-  if (spec.roleDetection.userValues.includes(roleVal)) role = 'user';
-  else if (spec.roleDetection.assistantValues.includes(roleVal)) role = 'assistant';
+  const fields = [spec.roleDetection.field, ...(spec.roleDetection.fieldFallbacks ?? [])];
+  for (const f of fields) {
+    const val = String(resolvePath(entry, f) ?? '');
+    if (spec.roleDetection.userValues.includes(val)) {
+      role = 'user';
+      break;
+    }
+    if (spec.roleDetection.assistantValues.includes(val)) {
+      role = 'assistant';
+      break;
+    }
+  }
   if (!role) return null;
 
   let content: string | null = null;

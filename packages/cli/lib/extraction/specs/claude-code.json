@@ -11,7 +11,8 @@
     "conversation": {
       "roleDetection": {
         "field": "type",
-        "userValues": ["human"],
+        "fieldFallbacks": ["role"],
+        "userValues": ["human", "user"],
         "assistantValues": ["assistant"]
       },
       "contentPaths": ["message", "text", "content", "message.content"],

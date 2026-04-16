@@ -7,7 +7,13 @@ import { shellQuote } from '../utils/shell.js';
 import { formatError, createLogger } from '@chinwag/shared';
 import { KILL_GRACE_MS, DEFAULT_COLS, DEFAULT_ROWS } from '../constants/timings.js';
 import { appendOutput } from './output.js';
-import { processes, allocateId, notifyUpdate, cleanupCompletedEntries } from './registry.js';
+import {
+  processes,
+  allocateId,
+  notifyUpdate,
+  notifyProcessExit,
+  cleanupCompletedEntries,
+} from './registry.js';
 import type {
   ManagedProcess,
   SpawnAgentLaunch,
@@ -194,6 +200,7 @@ export function spawnAgent(launch: SpawnAgentLaunch): SpawnAgentResult {
     }
 
     cleanupCompletedEntries();
+    notifyProcessExit(proc);
     notifyUpdate();
   });
 

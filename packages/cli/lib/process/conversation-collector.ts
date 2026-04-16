@@ -17,6 +17,8 @@ import { createLogger } from '@chinwag/shared';
 import { getDataCapabilities } from '@chinwag/shared/tool-registry.js';
 import type { ChinwagConfig } from '@chinwag/shared/config.js';
 import { api } from '../api.js';
+import { extract } from '../extraction/engine.js';
+import { loadSpec } from '../extraction/loader.js';
 import type { ManagedProcess } from './types.js';
 
 const log = createLogger('conversation-collector');
@@ -33,17 +35,7 @@ interface ConversationEvent {
 export interface TokenUsage {
   input_tokens: number;
   output_tokens: number;
-  /**
-   * Tokens billed at the cache-read rate (Anthropic prompt caching). For most
-   * Claude Code sessions this is the dominant input-side volume; omitting it
-   * undercounts total tokens by roughly 5-10x.
-   */
   cache_read_tokens: number;
-  /**
-   * Tokens billed at the cache-write rate (Anthropic prompt caching). Set
-   * once per cache-block creation; typically smaller than cache_read_tokens
-   * in steady-state workloads.
-   */
   cache_creation_tokens: number;
 }
 
@@ -60,8 +52,59 @@ type ConversationParser = (cwd: string, startedAt: number) => Promise<Conversati
 type TokenParser = (cwd: string, startedAt: number) => Promise<TokenUsage | null>;
 type ToolCallParser = (cwd: string, startedAt: number) => Promise<ToolCallEvent[]>;
 
-// -- Parser Registries --
-// Adding a new tool = one parser function + one entry here + dataCapabilities flag in tool-registry.
+// -- Spec-based extraction (primary path) --
+// Tries declarative JSON spec first. Falls back to hand-written parsers
+// for tools that don't have a spec yet or if the spec engine fails.
+
+async function extractViaSpec(
+  toolId: string,
+  cwd: string,
+  startedAt: number,
+): Promise<{
+  conversations: ConversationEvent[];
+  tokens: TokenUsage | null;
+  toolCalls: ToolCallEvent[];
+} | null> {
+  const spec = await loadSpec(toolId);
+  if (!spec) return null;
+
+  try {
+    const result = await extract(spec, cwd, startedAt);
+
+    // Some tools use separate files for conversation vs tokens (e.g. Aider:
+    // markdown for conversations, analytics JSONL for tokens). If the primary
+    // spec didn't yield tokens, try a {toolId}-tokens spec.
+    let tokens = result.tokens;
+    if (!tokens) {
+      const tokenSpec = await loadSpec(`${toolId}-tokens`);
+      if (tokenSpec) {
+        const tokenResult = await extract(tokenSpec, cwd, startedAt);
+        tokens = tokenResult.tokens;
+      }
+    }
+
+    return {
+      conversations: result.conversations,
+      tokens,
+      toolCalls: result.toolCalls.map((tc) => ({
+        tool: tc.tool,
+        at: tc.at,
+        is_error: tc.is_error || undefined,
+        error_preview: tc.error_preview,
+        input_preview: tc.input_preview,
+        duration_ms: tc.duration_ms,
+      })),
+    };
+  } catch (err) {
+    log.warn(
+      `spec-based extraction failed for ${toolId}, falling back to hand-written parser: ${err}`,
+    );
+    return null;
+  }
+}
+
+// -- Hand-written parser registries (fallback) --
+// These are kept as fallback until spec-based extraction is validated for each tool.
 
 const CONVERSATION_PARSERS: Record<string, ConversationParser> = {
   'claude-code': parseClaudeCodeConversation,
@@ -80,7 +123,7 @@ const TOOL_CALL_PARSERS: Record<string, ToolCallParser> = {
 
 /**
  * Collect and upload conversation events from a completed managed session.
- * Uses the parser registry — never branches on tool ID directly.
+ * Tries spec-based extraction first, falls back to hand-written parsers.
  */
 export async function collectConversation(
   proc: ManagedProcess,
@@ -91,32 +134,24 @@ export async function collectConversation(
   if (!config?.token || !teamId || !sessionId) return;
 
   const capabilities = getDataCapabilities(proc.toolId);
-  if (!capabilities.conversationLogs) {
-    log.info(
-      `conversation analytics not available for ${proc.toolId} — no conversationLogs capability. ` +
-        `Session/edit analytics are still tracked.`,
-    );
-    return;
-  }
-
-  const parser = CONVERSATION_PARSERS[proc.toolId];
-  if (!parser) {
-    log.warn(
-      `${proc.toolId} declares conversationLogs capability but no parser is registered — ` +
-        `add a parser to CONVERSATION_PARSERS in conversation-collector.ts`,
-    );
-    return;
-  }
+  if (!capabilities.conversationLogs) return;
 
   try {
-    const events = await parser(proc.cwd, proc.startedAt);
+    // Try spec-based extraction first
+    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
+    let events: ConversationEvent[];
 
-    if (events.length === 0) {
-      log.info(
-        `no conversation events found for ${proc.toolId} session — logs may be empty or in an unexpected location`,
-      );
-      return;
+    if (specResult && specResult.conversations.length > 0) {
+      events = specResult.conversations;
+      log.info(`spec engine extracted ${events.length} conversation events for ${proc.toolId}`);
+    } else {
+      // Fallback to hand-written parser
+      const parser = CONVERSATION_PARSERS[proc.toolId];
+      if (!parser) return;
+      events = await parser(proc.cwd, proc.startedAt);
     }
+
+    if (events.length === 0) return;
 
     const client = api(config, { agentId: proc.agentId });
     await client.post(`/teams/${teamId}/conversations`, {
@@ -133,7 +168,7 @@ export async function collectConversation(
 
 /**
  * Collect and upload token usage from a completed managed session.
- * Uses the parser registry — never branches on tool ID directly.
+ * Tries spec-based extraction first, falls back to hand-written parsers.
  */
 export async function collectTokenUsage(
   proc: ManagedProcess,
@@ -146,14 +181,20 @@ export async function collectTokenUsage(
   const capabilities = getDataCapabilities(proc.toolId);
   if (!capabilities.tokenUsage) return;
 
-  const parser = TOKEN_PARSERS[proc.toolId];
-  if (!parser) {
-    log.warn(`${proc.toolId} declares tokenUsage capability but no parser is registered`);
-    return;
-  }
-
   try {
-    const usage = await parser(proc.cwd, proc.startedAt);
+    let usage: TokenUsage | null = null;
+
+    // Try spec-based extraction first
+    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
+    if (specResult?.tokens) {
+      usage = specResult.tokens;
+      log.info(`spec engine extracted token usage for ${proc.toolId}`);
+    } else {
+      // Fallback to hand-written parser
+      const parser = TOKEN_PARSERS[proc.toolId];
+      if (parser) usage = await parser(proc.cwd, proc.startedAt);
+    }
+
     if (
       !usage ||
       (usage.input_tokens === 0 &&
@@ -183,7 +224,7 @@ export async function collectTokenUsage(
 
 /**
  * Collect and upload tool call events from a completed managed session.
- * Extracts per-tool-call data (name, timing, errors) from structured logs.
+ * Tries spec-based extraction first, falls back to hand-written parsers.
  */
 export async function collectToolCalls(
   proc: ManagedProcess,
@@ -196,14 +237,21 @@ export async function collectToolCalls(
   const capabilities = getDataCapabilities(proc.toolId);
   if (!capabilities.toolCallLogs) return;
 
-  const parser = TOOL_CALL_PARSERS[proc.toolId];
-  if (!parser) {
-    log.warn(`${proc.toolId} declares toolCallLogs capability but no parser is registered`);
-    return;
-  }
-
   try {
-    const calls = await parser(proc.cwd, proc.startedAt);
+    let calls: ToolCallEvent[];
+
+    // Try spec-based extraction first
+    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
+    if (specResult && specResult.toolCalls.length > 0) {
+      calls = specResult.toolCalls;
+      log.info(`spec engine extracted ${calls.length} tool calls for ${proc.toolId}`);
+    } else {
+      // Fallback to hand-written parser
+      const parser = TOOL_CALL_PARSERS[proc.toolId];
+      if (!parser) return;
+      calls = await parser(proc.cwd, proc.startedAt);
+    }
+
     if (calls.length === 0) return;
 
     const client = api(config, { agentId: proc.agentId });

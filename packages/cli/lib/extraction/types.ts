@@ -57,6 +57,8 @@ export interface ConversationExtractionSpec {
   roleDetection: {
     /** Dot-notation path to the role/type field. */
     field: string;
+    /** Additional fields to check if the primary field doesn't match (OR logic). */
+    fieldFallbacks?: string[];
     /** Values that map to 'user'. */
     userValues: string[];
     /** Values that map to 'assistant'. */
