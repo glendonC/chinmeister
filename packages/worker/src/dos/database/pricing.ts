@@ -103,6 +103,19 @@ export function getPricingMetadata(sql: SqlStorage): PricingMetadata | null {
   return rows[0] ?? null;
 }
 
+/**
+ * Return the set of canonical names currently in model_prices. Used by the
+ * refresh path's derived validation — a new snapshot must share at least N%
+ * of these keys to be accepted. Much cheaper than fetching the full snapshot
+ * for a set-intersection check.
+ */
+export function getModelCanonicalNames(sql: SqlStorage): string[] {
+  const rows = sql.exec('SELECT canonical_name FROM model_prices').toArray() as unknown as Array<{
+    canonical_name: string;
+  }>;
+  return rows.map((r) => r.canonical_name);
+}
+
 /** Count rows in model_prices — used by seedFromBundled to decide whether to seed. */
 export function getModelPricesCount(sql: SqlStorage): number {
   const rows = sql.exec('SELECT COUNT(*) AS n FROM model_prices').toArray();

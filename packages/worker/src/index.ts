@@ -11,6 +11,7 @@ import { getErrorMessage } from './lib/errors.js';
 import {
   handleInit,
   handleStats,
+  handlePricingHealth,
   handleToolCatalog,
   handleGithubAuth,
   handleGithubCallback,
@@ -169,6 +170,7 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'POST', path: '/auth/init', handler: handleInit, auth: false },
   { method: 'POST', path: '/auth/refresh', handler: handleRefreshToken, auth: false },
   { method: 'GET', path: '/stats', handler: handleStats, auth: false },
+  { method: 'GET', path: '/pricing-health', handler: handlePricingHealth, auth: false },
   { method: 'GET', path: '/tools/catalog', handler: handleToolCatalog, auth: false },
   { method: 'GET', path: '/tools/directory', handler: handleListDirectory, auth: false },
   { method: 'GET', path: '/tools/categories', handler: handleGetCategories, auth: false },

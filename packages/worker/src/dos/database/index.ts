@@ -33,6 +33,7 @@ import {
 import {
   getModelPricesSnapshot as getModelPricesSnapshotFn,
   getPricingMetadata as getPricingMetadataFn,
+  getModelCanonicalNames as getModelCanonicalNamesFn,
   upsertModelPricesTxn as upsertModelPricesTxnFn,
   recordRefreshFailure as recordRefreshFailureFn,
   seedFromBundled as seedFromBundledFn,
@@ -1026,6 +1027,11 @@ export class DatabaseDO extends DurableObject<Env> {
   async getPricingMetadata(): Promise<{ ok: true; metadata: PricingMetadata | null }> {
     this.#ensureSchema();
     return { ok: true, metadata: getPricingMetadataFn(this.sql) };
+  }
+
+  async getModelCanonicalNames(): Promise<{ ok: true; names: string[] }> {
+    this.#ensureSchema();
+    return { ok: true, names: getModelCanonicalNamesFn(this.sql) };
   }
 
   async upsertModelPrices(

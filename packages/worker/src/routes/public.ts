@@ -120,6 +120,56 @@ export const handleStats = publicRoute(async ({ request, env }) => {
   });
 });
 
+/**
+ * Public pricing-health endpoint. Returns the freshness of the LiteLLM
+ * snapshot chinwag uses to compute costs, plus any recent failure reason.
+ * Operators curl this to see if the 6h refresh cron is alive without
+ * SSHing into DatabaseDO. Data is not sensitive — it's all about
+ * publicly-sourced LiteLLM pricing, not user data.
+ */
+export const handlePricingHealth = publicRoute(async ({ request, env }) => {
+  return withIpRateLimit(request, env, 'pricing-health', RATE_LIMIT_STATS_PER_IP, async () => {
+    const result = rpc(await getDB(env).getPricingMetadata());
+    const metadata = result.metadata;
+
+    if (!metadata) {
+      return json({
+        ok: true,
+        has_data: false,
+        fetched_at: null,
+        source_sha: null,
+        models_count: 0,
+        last_attempt_at: null,
+        last_failure_at: null,
+        last_failure_reason: null,
+        age_hours: null,
+        is_stale: true,
+      });
+    }
+
+    const fetchedAtMs = metadata.fetched_at ? Date.parse(metadata.fetched_at) : NaN;
+    const ageMs = Number.isFinite(fetchedAtMs) ? Date.now() - fetchedAtMs : null;
+    const ageHours = ageMs != null ? Math.round(ageMs / 3600000) : null;
+    // 7-day staleness mirrors the PricingSnapshot.isStale semantics in
+    // lib/pricing-cache.ts. Beyond that, the read path returns null costs
+    // and the UI shows "Pricing data unavailable".
+    const isStale = ageHours == null || ageHours > 24 * 7;
+
+    return json({
+      ok: true,
+      has_data: true,
+      fetched_at: metadata.fetched_at,
+      source_sha: metadata.source_sha,
+      models_count: metadata.models_count,
+      last_attempt_at: metadata.last_attempt_at,
+      last_failure_at: metadata.last_failure_at,
+      last_failure_reason: metadata.last_failure_reason,
+      age_hours: ageHours,
+      is_stale: isStale,
+    });
+  });
+});
+
 export const handleToolCatalog = publicRoute(async ({ request, env }) => {
   return withIpRateLimit(request, env, 'catalog', RATE_LIMIT_CATALOG_PER_IP, async () => {
     const result = rpc(await getDB(env).listEvaluations({}));

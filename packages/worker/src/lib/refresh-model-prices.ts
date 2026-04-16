@@ -61,20 +61,23 @@ const MIN_COMMIT_AGE_MS = 60 * 60 * 1000; // 1 hour
 // Refresh validation thresholds.
 const MIN_MODELS = 2000;
 const MAX_VOLUME_DROP_RATIO = 0.9; // new count must be >= 90% of old count
+// Derived canary threshold: new snapshot must share this fraction of keys
+// with the previous stored snapshot. Catches accidental mass deletions
+// (e.g. a LiteLLM PR that removes a family) without any hand-maintained
+// canary list. Only runs in steady state; the first refresh bootstraps
+// from BOOTSTRAP_CANARY below.
+const MIN_KEY_OVERLAP_RATIO = 0.95;
 
-// Hardcoded canary models. Pragmatic compromise: a tiny list that covers
-// the three biggest providers (Anthropic, OpenAI, Google) and the pinning
-// mechanism catches schema drift before it can silently corrupt the snapshot.
-// If any of these four are missing OR have null cost fields, the refresh is
-// rejected and the previous snapshot is kept. Update only when a canary model
-// is genuinely retired.
-const REFRESH_CANARY = [
-  'claude-sonnet-4-5-20250929',
-  'claude-opus-4-5',
-  'claude-opus-4-6',
-  'gpt-5',
-  'gemini-2.5-pro',
-] as const;
+// Bootstrap-only canary — used ONLY on the first refresh ever, when no
+// previous snapshot exists to diff against. This happens only in a
+// catastrophic cold state (fresh DO with no rows AND the bundled seed
+// failed to load). Every subsequent refresh validates via derived overlap,
+// so this list exists purely as a safety net for the very first write.
+// Kept tiny (3 models across Anthropic / OpenAI / Google) to minimize the
+// maintenance surface. If a bootstrap canary is ever retired, a fresh
+// deploy in this failure mode would reject all refreshes until the list
+// is updated — but by design the bundled seed should prevent that state.
+const BOOTSTRAP_CANARY = ['claude-sonnet-4-5-20250929', 'gpt-5', 'gemini-2.5-pro'] as const;
 
 interface Commit {
   sha: string;
@@ -155,23 +158,26 @@ interface ValidationResult {
   newCount: number;
 }
 
+/**
+ * Validate + transform a fetched LiteLLM snapshot.
+ *
+ * Validation strategy:
+ *   - Absolute floor: ≥ MIN_MODELS text-token rows after filtering
+ *   - Volume drop guard: new count ≥ 90% of previous count
+ *   - Derived canary: new key set shares ≥ MIN_KEY_OVERLAP_RATIO of the
+ *     previous snapshot's keys. Catches mass deletions without any
+ *     hand-maintained list of "models that must exist".
+ *   - Bootstrap fallback: if there's no previous snapshot (first refresh
+ *     ever into a totally empty table), fall back to a tiny hardcoded
+ *     BOOTSTRAP_CANARY. This path is only hit when the bundled seed failed
+ *     to load AND the cron has never succeeded — a catastrophic cold state.
+ */
 function validateAndTransform(
   data: Record<string, LiteLLMEntry>,
   previousCount: number,
+  existingKeys: Set<string>,
 ): ValidationResult {
-  // 1. Canary: every canary model must exist with non-null costs.
-  for (const name of REFRESH_CANARY) {
-    const entry = data[name];
-    if (!entry) throw new Error(`canary missing: ${name}`);
-    if (entry.input_cost_per_token == null) {
-      throw new Error(`canary ${name} missing input_cost_per_token`);
-    }
-    if (entry.output_cost_per_token == null) {
-      throw new Error(`canary ${name} missing output_cost_per_token`);
-    }
-  }
-
-  // 2. Filter + transform via shared helpers (same path the build-time seed
+  // 1. Filter + transform via shared helpers (same path the build-time seed
   // script uses, so runtime and build-time can't drift).
   const rows: NormalizedModelPrice[] = [];
   for (const [name, entry] of Object.entries(data)) {
@@ -179,16 +185,48 @@ function validateAndTransform(
     rows.push(transformLiteLLMEntry(name, entry));
   }
 
-  // 3. Absolute floor.
+  // 2. Absolute floor.
   if (rows.length < MIN_MODELS) {
     throw new Error(`only ${rows.length} models after filter (min ${MIN_MODELS})`);
   }
 
-  // 4. Volume drop guard (skipped on first refresh where previousCount is 0).
+  // 3. Volume drop guard (skipped on first refresh where previousCount is 0).
   if (previousCount > 100 && rows.length < previousCount * MAX_VOLUME_DROP_RATIO) {
     throw new Error(
       `volume dropped too much: ${rows.length} vs previous ${previousCount} (ratio ${(rows.length / previousCount).toFixed(3)})`,
     );
+  }
+
+  // 4. Canary. Derived from previous snapshot in steady state, hardcoded
+  // only on the very first refresh ever.
+  if (existingKeys.size === 0) {
+    // Bootstrap path: no previous snapshot to derive from. This only fires
+    // when both the bundled seed failed AND the cron has never succeeded.
+    for (const name of BOOTSTRAP_CANARY) {
+      const entry = data[name];
+      if (!entry) throw new Error(`bootstrap canary missing: ${name}`);
+      if (entry.input_cost_per_token == null) {
+        throw new Error(`bootstrap canary ${name} missing input_cost_per_token`);
+      }
+      if (entry.output_cost_per_token == null) {
+        throw new Error(`bootstrap canary ${name} missing output_cost_per_token`);
+      }
+    }
+  } else {
+    // Derived path: require high overlap with previous snapshot. No list
+    // of "important models" to maintain — whatever was priced yesterday
+    // must still be priced today, minus an acceptable churn margin.
+    const newKeys = new Set(rows.map((r) => r.canonical_name));
+    let intersection = 0;
+    for (const k of existingKeys) {
+      if (newKeys.has(k)) intersection++;
+    }
+    const overlapRatio = intersection / existingKeys.size;
+    if (overlapRatio < MIN_KEY_OVERLAP_RATIO) {
+      throw new Error(
+        `key overlap ${(overlapRatio * 100).toFixed(1)}% below ${(MIN_KEY_OVERLAP_RATIO * 100).toFixed(0)}% floor (${intersection}/${existingKeys.size} previous keys retained)`,
+      );
+    }
   }
 
   return { rows, newCount: rows.length };
@@ -227,9 +265,14 @@ async function performRefresh(env: Env): Promise<void> {
     return;
   }
 
-  // 3. Validate and transform in one pass. Throws on any failure; we let it
+  // 3. Pull the previous snapshot's canonical names for derived-canary
+  //    validation. Empty set on first refresh triggers the bootstrap path.
+  const namesResult = rpc(await db.getModelCanonicalNames());
+  const existingKeys = new Set(namesResult.names);
+
+  // 4. Validate and transform in one pass. Throws on any failure; we let it
   // bubble up to the outer try/catch which records the failure in metadata.
-  const { rows, newCount } = validateAndTransform(fetched.data!, previousCount);
+  const { rows, newCount } = validateAndTransform(fetched.data!, previousCount, existingKeys);
 
   // 4. Atomic upsert through the DO.
   const upsertResult = rpc(
