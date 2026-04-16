@@ -12,18 +12,13 @@
 // mix. This is why the read path (getModelPricesSnapshot) does NOT need its
 // own transaction; SQLite-in-DO serializes reads and writes already.
 
-export interface ModelPriceRow {
-  canonical_name: string;
-  input_per_1m: number;
-  output_per_1m: number;
-  cache_creation_per_1m: number | null;
-  cache_read_per_1m: number | null;
-  input_per_1m_above_200k: number | null;
-  output_per_1m_above_200k: number | null;
-  max_input_tokens: number | null;
-  max_output_tokens: number | null;
-  /** Full LiteLLM entry as JSON string, for future tier access without schema churn. */
-  raw: string | null;
+import type { NormalizedModelPrice } from '../../lib/litellm-transform.js';
+
+/**
+ * A priced model as it lives in DatabaseDO. Extends the normalized shape
+ * produced by the LiteLLM transform with the DO-managed `updated_at` column.
+ */
+export interface ModelPriceRow extends NormalizedModelPrice {
   updated_at: string;
 }
 
@@ -55,20 +50,13 @@ export interface BundledPricingSeed {
   models: Omit<ModelPriceRow, 'updated_at'>[];
 }
 
-// -- Input to upsert (no updated_at; we set it inline) --
-
-export interface ModelPriceInput {
-  canonical_name: string;
-  input_per_1m: number;
-  output_per_1m: number;
-  cache_creation_per_1m: number | null;
-  cache_read_per_1m: number | null;
-  input_per_1m_above_200k: number | null;
-  output_per_1m_above_200k: number | null;
-  max_input_tokens: number | null;
-  max_output_tokens: number | null;
-  raw: string | null;
-}
+// -- Input to upsert (no updated_at; the DO sets it inline) --
+//
+// Identical to NormalizedModelPrice — the upsert accepts whatever the
+// LiteLLM transform emits with no additional shaping. Kept as an exported
+// alias so call sites read as "ModelPriceInput" (the DO contract) rather
+// than borrowing the transform's more generic name.
+export type ModelPriceInput = NormalizedModelPrice;
 
 export interface PricingMetadataInput {
   source: string;

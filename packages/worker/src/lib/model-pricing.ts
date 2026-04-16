@@ -1,9 +1,10 @@
-// Pure session-cost function. Replaces the legacy model-pricing.ts estimate
-// that hardcoded ~20 entries with no cache-token support.
+// Pure session-cost function. Given a resolved LiteLLM price row and the
+// four token counts for a session, returns the USD cost, or null when
+// pricing is unavailable.
 //
 // Contract:
-//   - takes a single ModelPriceRow (resolved upstream via litellm-resolver
-//     against the isolate cache) plus the four token counts for the session
+//   - takes a NormalizedModelPrice (resolved upstream via litellm-resolver
+//     against the isolate cache) plus the four token counts
 //   - returns a USD cost number, or null if the row is missing
 //   - NEVER returns 0 on missing data; a null signals "we don't know" and
 //     the response contract surfaces it via models_without_pricing
@@ -17,17 +18,7 @@
 // output rate. For heavy-cache Claude Code sessions (the default), cache
 // reads typically account for the dominant input-side cost.
 
-export interface ModelPriceRow {
-  canonical_name: string;
-  input_per_1m: number;
-  output_per_1m: number;
-  cache_creation_per_1m: number | null;
-  cache_read_per_1m: number | null;
-  input_per_1m_above_200k: number | null;
-  output_per_1m_above_200k: number | null;
-  max_input_tokens: number | null;
-  max_output_tokens: number | null;
-}
+import type { NormalizedModelPrice } from './litellm-transform.js';
 
 export interface TokenUsageInput {
   inputTokens: number;
@@ -49,8 +40,8 @@ const LONG_CONTEXT_THRESHOLD = 200_000;
  * counts. Returns null when pricing is unavailable; callers render "—" and
  * increment an unknown-model counter rather than treating null as zero.
  */
-export function estimateSessionCostV2(
-  row: ModelPriceRow | null | undefined,
+export function estimateSessionCost(
+  row: NormalizedModelPrice | null | undefined,
   tokens: TokenUsageInput,
 ): number | null {
   if (!row) return null;

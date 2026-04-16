@@ -38,7 +38,12 @@
 import type { Env } from '../types.js';
 import { getDB, rpc } from './env.js';
 import { createLogger } from './logger.js';
-import type { ModelPriceInput } from '../dos/database/pricing.js';
+import {
+  isTextTokenModel,
+  transformLiteLLMEntry,
+  type LiteLLMEntry,
+  type NormalizedModelPrice,
+} from './litellm-transform.js';
 
 const log = createLogger('pricing-refresh');
 
@@ -71,22 +76,6 @@ const REFRESH_CANARY = [
   'gemini-2.5-pro',
 ] as const;
 
-const ALLOWED_MODES = new Set(['chat', 'completion', 'responses']);
-const PER_1M = 1_000_000;
-
-interface LiteLLMEntry {
-  mode?: string;
-  input_cost_per_token?: number;
-  output_cost_per_token?: number;
-  cache_creation_input_token_cost?: number;
-  cache_read_input_token_cost?: number;
-  input_cost_per_token_above_200k_tokens?: number;
-  output_cost_per_token_above_200k_tokens?: number;
-  max_input_tokens?: number;
-  max_output_tokens?: number;
-  [k: string]: unknown;
-}
-
 interface Commit {
   sha: string;
   commit: { author: { date: string } };
@@ -95,36 +84,6 @@ interface Commit {
 // In-isolate debounce. Multiple scheduled triggers within the same worker
 // isolate (cold start + cron retry) share the same in-flight promise.
 let refreshInFlight: Promise<void> | null = null;
-
-function perMillion(value: number | undefined | null): number | null {
-  if (value == null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return value * PER_1M;
-}
-
-function isTextTokenModel(name: string, entry: LiteLLMEntry): boolean {
-  if (name === 'sample_spec') return false;
-  if (typeof entry !== 'object' || entry == null) return false;
-  if (entry.input_cost_per_token == null) return false;
-  if (entry.output_cost_per_token == null) return false;
-  if (entry.mode != null && !ALLOWED_MODES.has(entry.mode)) return false;
-  return true;
-}
-
-function transformEntry(name: string, entry: LiteLLMEntry): ModelPriceInput {
-  return {
-    canonical_name: name,
-    input_per_1m: perMillion(entry.input_cost_per_token) ?? 0,
-    output_per_1m: perMillion(entry.output_cost_per_token) ?? 0,
-    cache_creation_per_1m: perMillion(entry.cache_creation_input_token_cost),
-    cache_read_per_1m: perMillion(entry.cache_read_input_token_cost),
-    input_per_1m_above_200k: perMillion(entry.input_cost_per_token_above_200k_tokens),
-    output_per_1m_above_200k: perMillion(entry.output_cost_per_token_above_200k_tokens),
-    max_input_tokens: entry.max_input_tokens ?? null,
-    max_output_tokens: entry.max_output_tokens ?? null,
-    raw: JSON.stringify(entry),
-  };
-}
 
 function baseHeaders(token: string): Record<string, string> {
   return {
@@ -192,7 +151,7 @@ async function fetchAtSha(
 }
 
 interface ValidationResult {
-  rows: ModelPriceInput[];
+  rows: NormalizedModelPrice[];
   newCount: number;
 }
 
@@ -212,11 +171,12 @@ function validateAndTransform(
     }
   }
 
-  // 2. Filter + transform.
-  const rows: ModelPriceInput[] = [];
+  // 2. Filter + transform via shared helpers (same path the build-time seed
+  // script uses, so runtime and build-time can't drift).
+  const rows: NormalizedModelPrice[] = [];
   for (const [name, entry] of Object.entries(data)) {
     if (!isTextTokenModel(name, entry)) continue;
-    rows.push(transformEntry(name, entry));
+    rows.push(transformLiteLLMEntry(name, entry));
   }
 
   // 3. Absolute floor.

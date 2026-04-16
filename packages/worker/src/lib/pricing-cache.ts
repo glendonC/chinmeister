@@ -16,7 +16,7 @@
 import type { Env } from '../types.js';
 import { getDB, rpc } from './env.js';
 import { createLogger } from './logger.js';
-import type { ModelPriceRow } from './model-pricing-v2.js';
+import type { NormalizedModelPrice } from './litellm-transform.js';
 
 const log = createLogger('pricing-cache');
 
@@ -29,7 +29,7 @@ const STALE_MS = 7 * 24 * 60 * 60 * 1000;
 
 export interface PricingSnapshot {
   /** Canonical LiteLLM name -> price row. */
-  byName: Map<string, ModelPriceRow>;
+  byName: Map<string, NormalizedModelPrice>;
   /** ISO timestamp of the last successful cron refresh, null if never. */
   fetchedAt: string | null;
   /** True if fetchedAt is older than STALE_MS or missing entirely. */
@@ -70,8 +70,10 @@ async function loadSnapshot(env: Env): Promise<PricingSnapshot> {
     const result = rpc(await db.getModelPricesSnapshot());
     const { rows, metadata } = result.snapshot;
 
-    const byName = new Map<string, ModelPriceRow>();
+    const byName = new Map<string, NormalizedModelPrice>();
     for (const row of rows) {
+      // DO rows carry an extra updated_at column; strip it here since the
+      // in-memory cache only needs the pricing fields the cost function reads.
       byName.set(row.canonical_name, {
         canonical_name: row.canonical_name,
         input_per_1m: row.input_per_1m,
@@ -82,6 +84,7 @@ async function loadSnapshot(env: Env): Promise<PricingSnapshot> {
         output_per_1m_above_200k: row.output_per_1m_above_200k,
         max_input_tokens: row.max_input_tokens,
         max_output_tokens: row.max_output_tokens,
+        raw: row.raw,
       });
     }
 

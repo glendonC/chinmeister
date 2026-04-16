@@ -1,9 +1,17 @@
 // Analytics pricing enrichment.
 //
-// queryTokenUsage returns raw token totals with no cost math. This module
-// is called from the async DO methods (getAnalytics, getAnalyticsForOwner)
-// after the sync query returns, and fills in:
+// queryTokenUsage returns raw token totals with no cost math. This module is
+// called from two places:
+//   - dos/team/index.ts (getAnalytics, getAnalyticsForOwner) after the sync
+//     query returns
+//   - routes/user/analytics.ts once per cross-team request, on the merged
+//     token_usage object
 //
+// Lives in lib/ rather than dos/team/ because it's a generic enrichment
+// concern consumed by both the team DO and a cross-team route handler —
+// not a team-DO-specific helper.
+//
+// Fills in:
 //   - per-model estimated_cost_usd (null when the model isn't in LiteLLM)
 //   - total_estimated_cost_usd (sum of non-null per-model costs)
 //   - pricing_refreshed_at / pricing_is_stale (UI staleness banner signals)
@@ -18,10 +26,10 @@
 // a response that will be serialized once. Making copies would double the
 // allocation for every analytics request with no benefit.
 
-import type { Env } from '../../types.js';
-import { getPricingCache } from '../../lib/pricing-cache.js';
-import { estimateSessionCostV2 } from '../../lib/model-pricing-v2.js';
-import { resolveLiteLLMKey } from '../../lib/litellm-resolver.js';
+import type { Env } from '../types.js';
+import { getPricingCache } from './pricing-cache.js';
+import { estimateSessionCost } from './model-pricing.js';
+import { resolveLiteLLMKey } from './litellm-resolver.js';
 
 const MAX_UNPRICED_REPORTED = 20;
 
@@ -81,7 +89,7 @@ export async function enrichAnalyticsWithPricing<T>(analytics: T, env: Env): Pro
   for (const m of tokenUsage.by_model) {
     const canonical = resolveLiteLLMKey(m.agent_model, keySet);
     const row = canonical ? snapshot.byName.get(canonical) : undefined;
-    const cost = estimateSessionCostV2(row ?? null, {
+    const cost = estimateSessionCost(row ?? null, {
       inputTokens: m.input_tokens ?? 0,
       outputTokens: m.output_tokens ?? 0,
       cacheReadTokens: m.cache_read_tokens ?? 0,

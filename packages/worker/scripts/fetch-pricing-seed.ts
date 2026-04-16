@@ -12,6 +12,10 @@
 // reality. The runtime refresh (src/lib/refresh-model-prices.ts) takes over
 // from there on a 6h cadence.
 //
+// Transform helpers (isTextTokenModel, transformLiteLLMEntry) live in
+// src/lib/litellm-transform.ts and are shared with the runtime refresh path
+// so the two can't drift.
+//
 // Failure semantics:
 //   - Network failure:  exit 0, preserve existing seed, print WARNING. (CI
 //                       continues; the existing committed seed is used.)
@@ -22,9 +26,15 @@
 // Run with: node --experimental-strip-types packages/worker/scripts/fetch-pricing-seed.ts
 // (Node 22+ supports TypeScript type-stripping natively.)
 
-import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import {
+  isTextTokenModel,
+  transformLiteLLMEntry,
+  type LiteLLMEntry,
+  type NormalizedModelPrice,
+} from '../src/lib/litellm-transform.ts';
 
 const LITELLM_URL =
   'https://raw.githubusercontent.com/BerriAI/litellm/main/model_prices_and_context_window.json';
@@ -50,82 +60,15 @@ const BUILD_CANARY = [
   'gemini-2.5-pro',
 ] as const;
 
-// Modes we KEEP. All other modes (image, embedding, audio_*, rerank, moderation)
-// price on different units and don't belong in a text-token pricing table.
-const ALLOWED_MODES = new Set(['chat', 'completion', 'responses']);
-
 // Minimum acceptable model count. Anything less means LiteLLM shipped us a
 // bad file or our filter is too aggressive.
 const MIN_MODELS = 2000;
-
-interface LiteLLMEntry {
-  mode?: string;
-  input_cost_per_token?: number;
-  output_cost_per_token?: number;
-  cache_creation_input_token_cost?: number;
-  cache_read_input_token_cost?: number;
-  input_cost_per_token_above_200k_tokens?: number;
-  output_cost_per_token_above_200k_tokens?: number;
-  max_input_tokens?: number;
-  max_output_tokens?: number;
-  [k: string]: unknown;
-}
-
-interface SeedModelRow {
-  canonical_name: string;
-  input_per_1m: number;
-  output_per_1m: number;
-  cache_creation_per_1m: number | null;
-  cache_read_per_1m: number | null;
-  input_per_1m_above_200k: number | null;
-  output_per_1m_above_200k: number | null;
-  max_input_tokens: number | null;
-  max_output_tokens: number | null;
-  raw: string | null;
-}
 
 interface SeedFile {
   _sha: string;
   _fetchedAt: string;
   _models_count: number;
-  models: SeedModelRow[];
-}
-
-const PER_1M = 1_000_000;
-
-function perMillion(value: number | undefined | null): number | null {
-  if (value == null) return null;
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return value * PER_1M;
-}
-
-/**
- * Decide whether an entry is a text-token-priced model we want to store.
- * Nullish (not falsy) check so free-tier models with input_cost_per_token: 0
- * are kept.
- */
-function isTextTokenModel(name: string, entry: LiteLLMEntry): boolean {
-  if (name === 'sample_spec') return false;
-  if (typeof entry !== 'object' || entry == null) return false;
-  if (entry.input_cost_per_token == null) return false;
-  if (entry.output_cost_per_token == null) return false;
-  if (entry.mode != null && !ALLOWED_MODES.has(entry.mode)) return false;
-  return true;
-}
-
-function transformEntry(name: string, entry: LiteLLMEntry): SeedModelRow {
-  return {
-    canonical_name: name,
-    input_per_1m: perMillion(entry.input_cost_per_token) ?? 0,
-    output_per_1m: perMillion(entry.output_cost_per_token) ?? 0,
-    cache_creation_per_1m: perMillion(entry.cache_creation_input_token_cost),
-    cache_read_per_1m: perMillion(entry.cache_read_input_token_cost),
-    input_per_1m_above_200k: perMillion(entry.input_cost_per_token_above_200k_tokens),
-    output_per_1m_above_200k: perMillion(entry.output_cost_per_token_above_200k_tokens),
-    max_input_tokens: entry.max_input_tokens ?? null,
-    max_output_tokens: entry.max_output_tokens ?? null,
-    raw: JSON.stringify(entry),
-  };
+  models: NormalizedModelPrice[];
 }
 
 async function main(): Promise<void> {
@@ -190,8 +133,8 @@ async function main(): Promise<void> {
     }
   }
 
-  // Filter and transform.
-  const models: SeedModelRow[] = [];
+  // Filter and transform via the shared helpers.
+  const models: NormalizedModelPrice[] = [];
   let skippedMode = 0;
   let skippedMissingCost = 0;
   for (const [name, entry] of Object.entries(data)) {
@@ -205,7 +148,7 @@ async function main(): Promise<void> {
       }
       continue;
     }
-    models.push(transformEntry(name, entry));
+    models.push(transformLiteLLMEntry(name, entry));
   }
 
   if (models.length < MIN_MODELS) {
@@ -238,4 +181,4 @@ if (invokedDirectly) {
   await main();
 }
 
-export { isTextTokenModel, transformEntry, BUILD_CANARY, MIN_MODELS };
+export { BUILD_CANARY, MIN_MODELS };

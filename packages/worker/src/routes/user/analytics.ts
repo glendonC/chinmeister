@@ -4,7 +4,7 @@ import { getDB, getTeam, rpc } from '../../lib/env.js';
 import { getErrorMessage } from '../../lib/errors.js';
 import { json } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
-import { enrichTokenUsageWithPricing } from '../../dos/team/pricing-enrich.js';
+import { enrichTokenUsageWithPricing } from '../../lib/pricing-enrich.js';
 import { authedRoute } from '../../lib/middleware.js';
 import { MAX_DASHBOARD_TEAMS } from '../../lib/constants.js';
 import { getToolsWithCapability } from '@chinwag/shared/tool-registry.js';

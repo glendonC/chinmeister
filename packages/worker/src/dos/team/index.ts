@@ -91,7 +91,7 @@ import {
   getPendingCommands as getPendingCommandsFn,
 } from './commands.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
-import { enrichAnalyticsWithPricing } from './pricing-enrich.js';
+import { enrichAnalyticsWithPricing } from '../../lib/pricing-enrich.js';
 import {
   CONTEXT_CACHE_TTL_MS,
   CLEANUP_INTERVAL_MS,
