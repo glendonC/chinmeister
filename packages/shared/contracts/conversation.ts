@@ -17,6 +17,12 @@ export const conversationEventSchema = z.object({
   topic: z.string().nullable(),
   sequence: z.number(),
   created_at: z.string(),
+  input_tokens: z.number().nullable().default(null),
+  output_tokens: z.number().nullable().default(null),
+  cache_read_tokens: z.number().nullable().default(null),
+  cache_creation_tokens: z.number().nullable().default(null),
+  model: z.string().nullable().default(null),
+  stop_reason: z.string().nullable().default(null),
 });
 export type ConversationEvent = z.infer<typeof conversationEventSchema>;
 

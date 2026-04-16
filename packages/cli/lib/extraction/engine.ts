@@ -263,7 +263,38 @@ function extractConversationFromEntry(
     ? (resolvePath(entry, spec.timestampPath) as string | undefined)
     : undefined;
 
-  return { role, content, sequence, created_at: timestamp || undefined };
+  const result: ExtractedConversation = {
+    role,
+    content,
+    sequence,
+    created_at: timestamp || undefined,
+  };
+
+  // Per-message token/model/stop_reason (assistant entries only in practice)
+  if (spec.tokenPaths) {
+    const it = resolvePath(entry, spec.tokenPaths.input_tokens) as number | undefined;
+    const ot = resolvePath(entry, spec.tokenPaths.output_tokens) as number | undefined;
+    if (it != null) result.input_tokens = it;
+    if (ot != null) result.output_tokens = ot;
+    if (spec.tokenPaths.cache_read_tokens) {
+      const cr = resolvePath(entry, spec.tokenPaths.cache_read_tokens) as number | undefined;
+      if (cr != null) result.cache_read_tokens = cr;
+    }
+    if (spec.tokenPaths.cache_creation_tokens) {
+      const cc = resolvePath(entry, spec.tokenPaths.cache_creation_tokens) as number | undefined;
+      if (cc != null) result.cache_creation_tokens = cc;
+    }
+  }
+  if (spec.modelPath) {
+    const m = resolvePath(entry, spec.modelPath) as string | undefined;
+    if (m) result.model = m;
+  }
+  if (spec.stopReasonPath) {
+    const sr = resolvePath(entry, spec.stopReasonPath) as string | undefined;
+    if (sr) result.stop_reason = sr;
+  }
+
+  return result;
 }
 
 // ── Conversation extraction (markdown) ────────────

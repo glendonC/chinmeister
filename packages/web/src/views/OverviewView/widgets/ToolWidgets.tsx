@@ -7,7 +7,39 @@ import { formatRelativeTime } from '../../../lib/relativeTime.js';
 import type { TokenUsageStats, UserAnalytics } from '../../../lib/apiSchemas.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
+import { getDataCapabilities } from '@chinwag/shared/tool-registry.js';
 import { GhostBars, GhostRows, GhostStatRow, StatWidget } from './shared.js';
+
+/**
+ * Tool data depth: 3 = full analytics (cost, conversations, tool calls),
+ * 2 = activity analytics (edits, outcomes, patterns),
+ * 1 = session analytics (sessions, coordination only).
+ */
+function getToolDepth(toolId: string): { level: 1 | 2 | 3; label: string } {
+  const caps = getDataCapabilities(toolId);
+  if (caps.conversationLogs || caps.tokenUsage || caps.toolCallLogs) {
+    return { level: 3, label: 'Full analytics' };
+  }
+  if (caps.hooks || caps.commitTracking) {
+    return { level: 2, label: 'Activity analytics' };
+  }
+  return { level: 1, label: 'Session analytics' };
+}
+
+function ToolDepthBars({ toolId }: { toolId: string }) {
+  const { level, label } = getToolDepth(toolId);
+  return (
+    <span className={styles.toolDepthBars} title={label}>
+      {[1, 2, 3].map((i) => (
+        <span
+          key={i}
+          className={styles.depthBar}
+          style={{ height: `${i * 4}px`, opacity: i <= level ? 0.8 : 0.15 }}
+        />
+      ))}
+    </span>
+  );
+}
 
 function ToolsWidget({ analytics }: WidgetBodyProps) {
   const tools = analytics.tool_comparison;
@@ -45,7 +77,7 @@ function ToolsWidget({ analytics }: WidgetBodyProps) {
                 {meta.label[0]}
               </span>
             )}
-            <div>
+            <div style={{ flex: 1 }}>
               <span className={styles.factualLabel}>{meta.label}</span>
               <div className={styles.factualMeta}>
                 <span className={styles.factualMetaValue}>{t.sessions}</span> sessions ·{' '}
@@ -59,6 +91,7 @@ function ToolsWidget({ analytics }: WidgetBodyProps) {
                 )}
               </div>
             </div>
+            <ToolDepthBars toolId={t.host_tool} />
           </div>
         );
       })}

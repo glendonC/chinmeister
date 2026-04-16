@@ -82,6 +82,12 @@ export const handleTeamRecordConversation = teamJsonRoute(
       topic?: string | null;
       sequence: number;
       created_at?: string;
+      input_tokens?: number | null;
+      output_tokens?: number | null;
+      cache_read_tokens?: number | null;
+      cache_creation_tokens?: number | null;
+      model?: string | null;
+      stop_reason?: string | null;
     }>;
 
     // Strip invalid sentiment/topic values from client-supplied events

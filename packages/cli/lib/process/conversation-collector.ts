@@ -31,6 +31,12 @@ interface ConversationEvent {
   content: string;
   sequence: number;
   created_at?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cache_creation_tokens?: number;
+  model?: string;
+  stop_reason?: string;
 }
 
 export interface TokenUsage {

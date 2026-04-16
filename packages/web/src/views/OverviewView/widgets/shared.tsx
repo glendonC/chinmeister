@@ -9,8 +9,34 @@ export const SENTIMENT_COLORS: Record<string, string> = {
   unclassified: 'var(--ghost)',
 };
 
-export function StatWidget({ value }: { value: string }) {
-  return <span className={styles.heroStatValue}>{value}</span>;
+export function StatWidget({
+  value,
+  delta,
+  deltaInvert,
+}: {
+  value: string;
+  delta?: { current: number; previous: number } | null;
+  deltaInvert?: boolean;
+}) {
+  let deltaEl = null;
+  if (delta && delta.previous > 0) {
+    const d = delta.current - delta.previous;
+    const isGood = deltaInvert ? d < 0 : d > 0;
+    const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
+    const color = d === 0 ? 'var(--muted)' : isGood ? 'var(--success)' : 'var(--danger)';
+    deltaEl = (
+      <span className={styles.statInlineDelta} style={{ color }}>
+        {arrow}
+        {Math.abs(Math.round(d * 10) / 10)}
+      </span>
+    );
+  }
+  return (
+    <span className={styles.heroStatValue}>
+      {value}
+      {deltaEl}
+    </span>
+  );
 }
 
 export function GhostStatRow({ labels }: { labels: string[] }) {

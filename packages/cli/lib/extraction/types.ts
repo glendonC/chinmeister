@@ -68,6 +68,17 @@ export interface ConversationExtractionSpec {
   contentPaths: string[];
   /** Dot-notation path to timestamp (optional). */
   timestampPath?: string;
+  /** Dot-notation paths to per-message token fields (optional, assistant entries only). */
+  tokenPaths?: {
+    input_tokens: string;
+    output_tokens: string;
+    cache_read_tokens?: string;
+    cache_creation_tokens?: string;
+  };
+  /** Dot-notation path to model name (optional, assistant entries only). */
+  modelPath?: string;
+  /** Dot-notation path to stop reason (optional, assistant entries only). */
+  stopReasonPath?: string;
 }
 
 // ── Tool call extraction ──────────────────────────
@@ -132,6 +143,12 @@ export interface ExtractedConversation {
   content: string;
   sequence: number;
   created_at?: string;
+  input_tokens?: number;
+  output_tokens?: number;
+  cache_read_tokens?: number;
+  cache_creation_tokens?: number;
+  model?: string;
+  stop_reason?: string;
 }
 
 export interface NormalizedTokens {

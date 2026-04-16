@@ -3,12 +3,20 @@ import { StatWidget } from './shared.js';
 
 function SessionsWidget({ analytics }: WidgetBodyProps) {
   const v = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
-  return <StatWidget value={v.toLocaleString()} />;
+  const pc = analytics.period_comparison;
+  const delta = pc.previous
+    ? { current: pc.current.total_sessions, previous: pc.previous.total_sessions }
+    : null;
+  return <StatWidget value={v.toLocaleString()} delta={delta} />;
 }
 
 function EditsWidget({ analytics }: WidgetBodyProps) {
   const v = analytics.daily_trends.reduce((s, d) => s + d.edits, 0);
-  return <StatWidget value={v.toLocaleString()} />;
+  const pc = analytics.period_comparison;
+  const delta = pc.previous
+    ? { current: pc.current.edit_velocity, previous: pc.previous.edit_velocity }
+    : null;
+  return <StatWidget value={v.toLocaleString()} delta={delta} />;
 }
 
 function LinesAddedWidget({ analytics }: WidgetBodyProps) {

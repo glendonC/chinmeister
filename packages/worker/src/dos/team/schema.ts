@@ -614,6 +614,19 @@ const migrations: Migration[] = [
       addColumnIfMissing(sql, 'edits', "work_type TEXT DEFAULT 'other'");
     },
   },
+  {
+    name: '019_conversation_per_message_data',
+    up(sql) {
+      // Per-message token counts, model, and stop reason enable burn rate
+      // analysis, multi-model session tracking, and cost-per-turn.
+      addColumnIfMissing(sql, 'conversation_events', 'input_tokens INTEGER DEFAULT NULL');
+      addColumnIfMissing(sql, 'conversation_events', 'output_tokens INTEGER DEFAULT NULL');
+      addColumnIfMissing(sql, 'conversation_events', 'cache_read_tokens INTEGER DEFAULT NULL');
+      addColumnIfMissing(sql, 'conversation_events', 'cache_creation_tokens INTEGER DEFAULT NULL');
+      addColumnIfMissing(sql, 'conversation_events', 'model TEXT DEFAULT NULL');
+      addColumnIfMissing(sql, 'conversation_events', 'stop_reason TEXT DEFAULT NULL');
+    },
+  },
 ];
 
 export function ensureSchema(

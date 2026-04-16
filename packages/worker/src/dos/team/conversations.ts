@@ -29,6 +29,12 @@ export interface ConversationEventInput {
   topic?: string | null;
   sequence: number;
   created_at?: string;
+  input_tokens?: number | null;
+  output_tokens?: number | null;
+  cache_read_tokens?: number | null;
+  cache_creation_tokens?: number | null;
+  model?: string | null;
+  stop_reason?: string | null;
 }
 
 export function recordConversationEvent(
@@ -44,8 +50,8 @@ export function recordConversationEvent(
   const charCount = content.length;
 
   sql.exec(
-    `INSERT INTO conversation_events (id, session_id, agent_id, handle, host_tool, role, content, char_count, sentiment, topic, sequence, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')))`,
+    `INSERT INTO conversation_events (id, session_id, agent_id, handle, host_tool, role, content, char_count, sentiment, topic, sequence, created_at, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, model, stop_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), ?, ?, ?, ?, ?, ?)`,
     id,
     sessionId,
     agentId,
@@ -58,6 +64,12 @@ export function recordConversationEvent(
     event.topic || null,
     event.sequence,
     event.created_at || null,
+    event.input_tokens ?? null,
+    event.output_tokens ?? null,
+    event.cache_read_tokens ?? null,
+    event.cache_creation_tokens ?? null,
+    event.model || null,
+    event.stop_reason || null,
   );
 
   return { ok: true, id };
@@ -96,7 +108,7 @@ export function getConversationForSession(
 ): { ok: true; events: ConversationEvent[] } {
   const rows = sql
     .exec(
-      `SELECT id, session_id, agent_id, handle, host_tool, role, content, char_count, sentiment, topic, sequence, created_at
+      `SELECT id, session_id, agent_id, handle, host_tool, role, content, char_count, sentiment, topic, sequence, created_at, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, model, stop_reason
        FROM conversation_events
        WHERE session_id = ?
        ORDER BY sequence ASC
@@ -122,6 +134,12 @@ export function getConversationForSession(
         topic: (row.topic as string) || null,
         sequence: (row.sequence as number) || 0,
         created_at: row.created_at as string,
+        input_tokens: (row.input_tokens as number) ?? null,
+        output_tokens: (row.output_tokens as number) ?? null,
+        cache_read_tokens: (row.cache_read_tokens as number) ?? null,
+        cache_creation_tokens: (row.cache_creation_tokens as number) ?? null,
+        model: (row.model as string) || null,
+        stop_reason: (row.stop_reason as string) || null,
       };
     }),
   };
