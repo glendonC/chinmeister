@@ -5,7 +5,7 @@ import { WORK_TYPE_COLORS } from '../overview-utils.js';
 import type { UserAnalytics } from '../../../lib/apiSchemas.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostBars, GhostStatRow } from './shared.js';
+import { GhostBars, GhostStatRow, StatWidget } from './shared.js';
 
 function OutcomesWidget({ analytics }: WidgetBodyProps) {
   return <OutcomeBar cs={analytics.completion_summary} />;
@@ -231,8 +231,15 @@ function RetryPatternsWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
+function OneShotRateWidget({ analytics }: WidgetBodyProps) {
+  const s = analytics.tool_call_stats;
+  if (s.one_shot_sessions === 0) return <StatWidget value="--" />;
+  return <StatWidget value={`${s.one_shot_rate}%`} />;
+}
+
 export const outcomeWidgets: WidgetRegistry = {
   outcomes: OutcomesWidget,
+  'one-shot-rate': OneShotRateWidget,
   stuckness: StucknessWidget,
   'work-type-outcomes': WorkTypeOutcomesWidget,
   'tool-outcomes': ToolOutcomesWidget,

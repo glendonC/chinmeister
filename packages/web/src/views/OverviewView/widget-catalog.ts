@@ -193,6 +193,30 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 2,
     dataKeys: ['token_usage'],
   },
+  {
+    id: 'cost-per-edit',
+    name: 'Cost per edit',
+    description: 'Average cost per file edit across sessions with token data',
+    category: 'usage',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['token_usage'],
+  },
+  {
+    id: 'cache-efficiency',
+    name: 'Cache efficiency',
+    description: 'Share of input tokens served from prompt cache',
+    category: 'tools',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['token_usage'],
+  },
 
   // ── Trends (sparklines) ───────────────
   {
@@ -234,6 +258,18 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     dataKeys: ['completion_summary'],
   },
   {
+    id: 'one-shot-rate',
+    name: 'One-shot rate',
+    description: 'Percentage of sessions where edits worked without retry',
+    category: 'outcomes',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['tool_call_stats'],
+  },
+  {
     id: 'stuckness',
     name: 'Stuck sessions',
     description: 'Sessions where the agent stalled for 15+ minutes',
@@ -273,6 +309,18 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Codebase ──────────────────────────
+  {
+    id: 'commit-stats',
+    name: 'Commits',
+    description: 'Commit activity from agent sessions',
+    category: 'codebase',
+    viz: 'stat-row',
+    w: 6,
+    h: 2,
+    minW: 3,
+    minH: 2,
+    dataKeys: ['commit_stats'],
+  },
   {
     id: 'directories',
     name: 'Top directories',

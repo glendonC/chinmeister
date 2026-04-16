@@ -392,6 +392,10 @@ export const toolCallStatsSchema = z.object({
   avg_duration_ms: z.number(),
   calls_per_session: z.number(),
   research_to_edit_ratio: z.number(),
+  /** Percentage of sessions where the first edit succeeded without retry (0-100). */
+  one_shot_rate: z.number(),
+  /** Number of sessions with edits used in the one-shot calculation. */
+  one_shot_sessions: z.number(),
   frequency: z.array(toolCallFrequencySchema),
   error_patterns: z.array(toolCallErrorPatternSchema),
   hourly_activity: z.array(toolCallTimelineSchema),
@@ -512,6 +516,10 @@ export const tokenUsageStatsSchema = z.object({
   // is missing a large swath of real production models — much louder than
   // silently truncating. Always >= models_without_pricing.length.
   models_without_pricing_total: z.number().default(0),
+  /** Cost divided by total edits across sessions with token data. Null when no edits. */
+  cost_per_edit: z.number().nullable().default(null),
+  /** cache_read_tokens / (input + cache_read + cache_creation). 0-1, null when no tokens. */
+  cache_hit_rate: z.number().nullable().default(null),
   by_model: z.array(tokenModelBreakdownSchema),
   by_tool: z.array(tokenToolBreakdownSchema),
 });

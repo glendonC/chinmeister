@@ -31,6 +31,12 @@ function CostWidget({ analytics }: WidgetBodyProps) {
   return <StatWidget value={`$${t.total_estimated_cost_usd.toFixed(2)}`} />;
 }
 
+function CostPerEditWidget({ analytics }: WidgetBodyProps) {
+  const cpe = analytics.token_usage.cost_per_edit;
+  if (cpe == null) return <StatWidget value="--" />;
+  return <StatWidget value={`$${cpe.toFixed(3)}`} />;
+}
+
 export const usageWidgets: WidgetRegistry = {
   sessions: SessionsWidget,
   edits: EditsWidget,
@@ -38,4 +44,5 @@ export const usageWidgets: WidgetRegistry = {
   'lines-removed': LinesRemovedWidget,
   'files-touched': FilesTouchedWidget,
   cost: CostWidget,
+  'cost-per-edit': CostPerEditWidget,
 };

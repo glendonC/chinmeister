@@ -69,6 +69,16 @@ export function GhostSparkline() {
   );
 }
 
+/**
+ * Inline coverage note for deep-capture widgets.
+ * Extends the PricingAttribution pattern (muted, one-line).
+ * Only shown when data is partial (some tools report, others don't).
+ */
+export function CoverageNote({ text }: { text: string | null }) {
+  if (!text) return null;
+  return <div className={styles.coverageNote}>{text}</div>;
+}
+
 export function DeltaStat({
   label,
   current,

@@ -209,7 +209,29 @@ function FileOverlapWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
+function CommitStatsWidget({ analytics }: WidgetBodyProps) {
+  const cs = analytics.commit_stats;
+  if (cs.total_commits === 0) return <GhostStatRow labels={['commits', 'per session']} />;
+  return (
+    <div className={styles.statRow}>
+      <div className={styles.statBlock}>
+        <span className={styles.statBlockValue}>{cs.total_commits}</span>
+        <span className={styles.statBlockLabel}>commits</span>
+      </div>
+      <div className={styles.statBlock}>
+        <span className={styles.statBlockValue}>{cs.commits_per_session}</span>
+        <span className={styles.statBlockLabel}>per session</span>
+      </div>
+      <div className={styles.statBlock}>
+        <span className={styles.statBlockValue}>{cs.sessions_with_commits}</span>
+        <span className={styles.statBlockLabel}>sessions with commits</span>
+      </div>
+    </div>
+  );
+}
+
 export const codebaseWidgets: WidgetRegistry = {
+  'commit-stats': CommitStatsWidget,
   directories: DirectoriesWidget,
   files: FilesWidget,
   'file-churn': FileChurnWidget,

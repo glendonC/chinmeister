@@ -7,7 +7,7 @@ import { formatRelativeTime } from '../../../lib/relativeTime.js';
 import type { TokenUsageStats, UserAnalytics } from '../../../lib/apiSchemas.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostBars, GhostRows, GhostStatRow } from './shared.js';
+import { GhostBars, GhostRows, GhostStatRow, StatWidget } from './shared.js';
 
 function ToolsWidget({ analytics }: WidgetBodyProps) {
   const tools = analytics.tool_comparison;
@@ -456,6 +456,12 @@ function ToolWorkTypeWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
+function CacheEfficiencyWidget({ analytics }: WidgetBodyProps) {
+  const chr = analytics.token_usage.cache_hit_rate;
+  if (chr == null) return <StatWidget value="--" />;
+  return <StatWidget value={`${Math.round(chr * 100)}%`} />;
+}
+
 export const toolWidgets: WidgetRegistry = {
   tools: ToolsWidget,
   models: ModelsWidget,
@@ -466,4 +472,5 @@ export const toolWidgets: WidgetRegistry = {
   'token-detail': TokenDetailWidget,
   'tool-daily': ToolDailyWidget,
   'tool-work-type': ToolWorkTypeWidget,
+  'cache-efficiency': CacheEfficiencyWidget,
 };

@@ -1877,6 +1877,8 @@ function queryTokenUsage(sql: SqlStorage, days: number): TokenUsageStats {
     pricing_is_stale: false,
     models_without_pricing: [],
     models_without_pricing_total: 0,
+    cost_per_edit: null,
+    cache_hit_rate: null,
     by_model: [],
     by_tool: [],
   };
@@ -1978,6 +1980,13 @@ function queryTokenUsage(sql: SqlStorage, days: number): TokenUsageStats {
       pricing_is_stale: false,
       models_without_pricing: [],
       models_without_pricing_total: 0,
+      cost_per_edit: null, // Populated by pricing enrichment layer
+      cache_hit_rate: (() => {
+        const totalAllInput = totalInput + totalCacheRead + totalCacheCreation;
+        return totalAllInput > 0
+          ? Math.round((totalCacheRead / totalAllInput) * 1000) / 1000
+          : null;
+      })(),
       by_model: byModel,
       by_tool: toolRows.map((r) => {
         const row = r as Record<string, unknown>;
@@ -2007,6 +2016,8 @@ function queryToolCallStats(sql: SqlStorage, days: number): ToolCallStats {
     avg_duration_ms: 0,
     calls_per_session: 0,
     research_to_edit_ratio: 0,
+    one_shot_rate: 0,
+    one_shot_sessions: 0,
     frequency: [],
     error_patterns: [],
     hourly_activity: [],
@@ -2128,6 +2139,51 @@ function queryToolCallStats(sql: SqlStorage, days: number): ToolCallStats {
       };
     });
 
+    // One-shot success rate: sessions where edits worked without retry cycles.
+    // A retry = Edit→Bash→Edit pattern (edit, test, re-edit).
+    let oneShotSessions = 0;
+    let sessionsWithEdits = 0;
+    try {
+      const sessionCalls = sql
+        .exec(
+          `SELECT session_id, tool FROM tool_calls
+           WHERE created_at > datetime('now', '-' || ? || ' days')
+           ORDER BY session_id, called_at ASC`,
+          days,
+        )
+        .toArray();
+
+      const bySession = new Map<string, string[]>();
+      for (const row of sessionCalls) {
+        const r = row as Record<string, unknown>;
+        const sid = r.session_id as string;
+        if (!bySession.has(sid)) bySession.set(sid, []);
+        bySession.get(sid)!.push(r.tool as string);
+      }
+
+      for (const tools of bySession.values()) {
+        const hasEdit = tools.some((t) => EDIT_TOOLS.includes(t));
+        if (!hasEdit) continue;
+        sessionsWithEdits++;
+        let sawEditBeforeBash = false;
+        let sawBashAfterEdit = false;
+        let retries = 0;
+        for (const t of tools) {
+          if (EDIT_TOOLS.includes(t)) {
+            if (sawBashAfterEdit) retries++;
+            sawEditBeforeBash = true;
+            sawBashAfterEdit = false;
+          }
+          if (t === 'Bash' && sawEditBeforeBash) {
+            sawBashAfterEdit = true;
+          }
+        }
+        if (retries === 0) oneShotSessions++;
+      }
+    } catch {
+      // Non-critical: one-shot computation is best-effort
+    }
+
     return {
       total_calls: totalCalls,
       total_errors: totalErrors,
@@ -2135,6 +2191,9 @@ function queryToolCallStats(sql: SqlStorage, days: number): ToolCallStats {
       avg_duration_ms: (totalsRow.avg_duration_ms as number) || 0,
       calls_per_session: Math.round((totalCalls / distinctSessions) * 10) / 10,
       research_to_edit_ratio: Math.round((researchCount / editCount) * 10) / 10,
+      one_shot_rate:
+        sessionsWithEdits > 0 ? Math.round((oneShotSessions / sessionsWithEdits) * 100) : 0,
+      one_shot_sessions: sessionsWithEdits,
       frequency,
       error_patterns,
       hourly_activity,
