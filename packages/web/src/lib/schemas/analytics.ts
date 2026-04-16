@@ -383,6 +383,7 @@ const tokenUsageStatsSchema = z.object({
   pricing_refreshed_at: z.string().nullable().default(null),
   pricing_is_stale: z.boolean().default(false),
   models_without_pricing: z.array(z.string()).default([]),
+  models_without_pricing_total: z.number().default(0),
   by_model: z.array(tokenModelBreakdownSchema).default([]),
   by_tool: z.array(tokenToolBreakdownSchema).default([]),
 });
@@ -668,6 +669,7 @@ export function createEmptyUserAnalytics(): UserAnalytics {
       pricing_refreshed_at: null,
       pricing_is_stale: false,
       models_without_pricing: [],
+      models_without_pricing_total: 0,
       by_model: [],
       by_tool: [],
     },

@@ -510,9 +510,15 @@ export const tokenUsageStatsSchema = z.object({
   // True when the snapshot is >7 days old. The enrichment layer zeroes
   // costs in that state rather than serving stale numbers.
   pricing_is_stale: z.boolean().default(false),
-  // Canonical names we couldn't price, capped at 20. Drives a "coverage gap"
-  // surface so we know when the resolver needs updating.
+  // Canonical names we couldn't price, capped at MAX_UNPRICED_REPORTED (20).
+  // Drives a "coverage gap" surface so we know when the resolver needs
+  // updating. Complemented by models_without_pricing_total below.
   models_without_pricing: z.array(z.string()).default([]),
+  // Total count of unknown models, including any beyond the display cap.
+  // A response with 20 in the list and total = 100 signals that the resolver
+  // is missing a large swath of real production models — much louder than
+  // silently truncating. Always >= models_without_pricing.length.
+  models_without_pricing_total: z.number().default(0),
   by_model: z.array(tokenModelBreakdownSchema),
   by_tool: z.array(tokenToolBreakdownSchema),
 });

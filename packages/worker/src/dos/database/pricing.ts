@@ -136,6 +136,15 @@ export function upsertModelPricesTxn(
   rows: ModelPriceInput[],
   metadata: PricingMetadataInput,
 ): void {
+  // Defense in depth: the refresh path already rejects empty snapshots via
+  // MIN_MODELS and the volume-drop guard, but we refuse empty upserts here
+  // too so any future caller that bypasses validation cannot accidentally
+  // wipe the pricing table. An empty table means all cost lookups return
+  // null — a failure mode we want to make structurally impossible.
+  if (rows.length === 0) {
+    throw new Error('upsertModelPricesTxn: refusing to upsert empty rows array');
+  }
+
   transact(() => {
     sql.exec('DELETE FROM model_prices');
 

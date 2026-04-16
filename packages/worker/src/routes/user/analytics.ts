@@ -104,6 +104,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
         pricing_refreshed_at: null,
         pricing_is_stale: false,
         models_without_pricing: [],
+        models_without_pricing_total: 0,
         by_model: [],
         by_tool: [],
       },
@@ -1084,6 +1085,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
     pricing_refreshed_at: null as string | null,
     pricing_is_stale: false,
     models_without_pricing: [] as string[],
+    models_without_pricing_total: 0,
     by_model: [...tokenByModel.entries()]
       .sort(([, a], [, b]) => b.input - a.input)
       .map(([agent_model, v]) => ({

@@ -47,6 +47,7 @@ interface TokenUsageShape {
   pricing_refreshed_at: string | null;
   pricing_is_stale: boolean;
   models_without_pricing: string[];
+  models_without_pricing_total: number;
   [k: string]: unknown;
 }
 
@@ -77,13 +78,15 @@ export async function enrichAnalyticsWithPricing<T>(analytics: T, env: Env): Pro
     tokenUsage.pricing_is_stale = true;
     tokenUsage.total_estimated_cost_usd = 0;
     tokenUsage.models_without_pricing = [];
+    tokenUsage.models_without_pricing_total = 0;
     for (const m of tokenUsage.by_model) {
       m.estimated_cost_usd = null;
     }
     return analytics;
   }
 
-  const unpriced: string[] = [];
+  const unpricedCapped: string[] = [];
+  let unpricedTotal = 0;
   let totalCost = 0;
 
   for (const m of tokenUsage.by_model) {
@@ -98,8 +101,11 @@ export async function enrichAnalyticsWithPricing<T>(analytics: T, env: Env): Pro
 
     m.estimated_cost_usd = cost;
     if (cost == null) {
-      if (m.agent_model && unpriced.length < MAX_UNPRICED_REPORTED) {
-        unpriced.push(m.agent_model);
+      if (m.agent_model) {
+        unpricedTotal++;
+        if (unpricedCapped.length < MAX_UNPRICED_REPORTED) {
+          unpricedCapped.push(m.agent_model);
+        }
       }
     } else {
       totalCost += cost;
@@ -109,7 +115,8 @@ export async function enrichAnalyticsWithPricing<T>(analytics: T, env: Env): Pro
   tokenUsage.pricing_refreshed_at = snapshot.fetchedAt;
   tokenUsage.pricing_is_stale = false;
   tokenUsage.total_estimated_cost_usd = Math.round(totalCost * 100) / 100;
-  tokenUsage.models_without_pricing = unpriced;
+  tokenUsage.models_without_pricing = unpricedCapped;
+  tokenUsage.models_without_pricing_total = unpricedTotal;
 
   return analytics;
 }

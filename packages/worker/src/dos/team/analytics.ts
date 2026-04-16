@@ -1910,6 +1910,7 @@ function queryTokenUsage(sql: SqlStorage, days: number): TokenUsageStats {
     pricing_refreshed_at: null,
     pricing_is_stale: false,
     models_without_pricing: [],
+    models_without_pricing_total: 0,
     by_model: [],
     by_tool: [],
   };
@@ -2010,6 +2011,7 @@ function queryTokenUsage(sql: SqlStorage, days: number): TokenUsageStats {
       pricing_refreshed_at: null,
       pricing_is_stale: false,
       models_without_pricing: [],
+      models_without_pricing_total: 0,
       by_model: byModel,
       by_tool: toolRows.map((r) => {
         const row = r as Record<string, unknown>;
