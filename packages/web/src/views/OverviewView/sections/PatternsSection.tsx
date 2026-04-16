@@ -45,7 +45,7 @@ export function PatternsSection({
                           <div
                             key={dow}
                             className={styles.heatmapCell}
-                            style={{ background: `var(--accent)`, opacity }}
+                            style={{ background: `var(--ink)`, opacity }}
                             title={`${DAY_LABELS[dow]} ${hour}:00 - ${val} sessions`}
                           />
                         );

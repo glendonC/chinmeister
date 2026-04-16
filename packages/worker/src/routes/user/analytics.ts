@@ -13,6 +13,9 @@ import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 const log = createLogger('routes.user.teams');
 
 const ANALYTICS_MAX_DAYS = 90;
+// Cross-team aggregation builds 45+ accumulator maps in memory; cap the window
+// so a 25-team fan-out stays within Worker memory/latency budget.
+const CROSS_TEAM_MAX_DAYS = 30;
 
 export const handleUserAnalytics = authedRoute(async ({ request, user, env }) => {
   const url = new URL(request.url);
@@ -36,6 +39,9 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
   // Filter to requested subset (intersection with user's actual teams)
   const teams = teamIdsFilter ? allTeams.filter((t) => teamIdsFilter.has(t.team_id)) : allTeams;
+
+  // Cap days for multi-team aggregation to bound memory usage
+  const effectiveDays = teams.length > 1 ? Math.min(days, CROSS_TEAM_MAX_DAYS) : days;
 
   if (teams.length === 0) {
     return json({
@@ -130,7 +136,9 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       try {
         return rpc(
           await withTimeout(
-            team.getAnalyticsForOwner(user.id, days) as unknown as Promise<Record<string, unknown>>,
+            team.getAnalyticsForOwner(user.id, effectiveDays) as unknown as Promise<
+              Record<string, unknown>
+            >,
             DO_CALL_TIMEOUT_MS,
           ),
         );
@@ -1048,9 +1056,15 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       }
     }
 
-    // Track active tools for data_coverage
+    // Track active tools for data_coverage — pull from both tool_distribution
+    // and tool_comparison so any tool with session activity is represented,
+    // even if one source is empty due to different aggregation windows.
     for (const t of (data.tool_distribution as Array<Record<string, unknown>>) || []) {
       const tool = t.host_tool as string;
+      if (tool && tool !== 'unknown') activeToolsSet.add(tool);
+    }
+    for (const tc of (data.tool_comparison as Array<Record<string, unknown>>) || []) {
+      const tool = tc.host_tool as string;
       if (tool && tool !== 'unknown') activeToolsSet.add(tool);
     }
   }
@@ -1101,7 +1115,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
   return json({
     ok: true,
-    period_days: days,
+    period_days: effectiveDays,
     daily_trends: [...dailyTrends.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([day, v]) => ({
@@ -1576,7 +1590,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
         tools_reporting: reporting,
         tools_without_data: withoutData,
         coverage_rate:
-          allTools.length > 0 ? Math.round((reporting.length / allTools.length) * 100) / 100 : 1,
+          allTools.length > 0 ? Math.round((reporting.length / allTools.length) * 100) / 100 : 0,
         capabilities_available: capsAvailable,
         capabilities_missing: capsMissing,
       };

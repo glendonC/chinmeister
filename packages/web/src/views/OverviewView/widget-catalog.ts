@@ -838,14 +838,13 @@ export const CATEGORIES: Array<{ id: WidgetCategory; label: string }> = [
 // x/y positions on the 12-column grid
 
 export const DEFAULT_LAYOUT: RGLLayout[] = [
-  // Row 0: Live presence table (full width, h=3 to fit header + ~3 rows)
+  // Row 0: Live presence table (full width)
   { i: 'live-agents', x: 0, y: 0, w: 12, h: 3 },
 
-  // Row 3: KPI stats across the top
-  { i: 'sessions', x: 0, y: 3, w: 3, h: 2 },
-  { i: 'edits', x: 3, y: 3, w: 3, h: 2 },
-  { i: 'cost', x: 6, y: 3, w: 3, h: 2 },
-  { i: 'files-touched', x: 9, y: 3, w: 3, h: 2 },
+  // Row 3: KPI stats — edits, cost, cost-per-edit (4-col each)
+  { i: 'edits', x: 0, y: 3, w: 4, h: 2 },
+  { i: 'cost', x: 4, y: 3, w: 4, h: 2 },
+  { i: 'cost-per-edit', x: 8, y: 3, w: 4, h: 2 },
 
   // Row 5: Trend chart (wide) + Outcomes (narrow)
   { i: 'session-trend', x: 0, y: 5, w: 8, h: 3 },

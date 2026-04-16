@@ -18,7 +18,7 @@ export function queryPromptEfficiency(sql: SqlStorage, days: number): PromptEffi
            date(ce.created_at) AS day,
            ROUND(
              CAST(SUM(CASE WHEN ce.role = 'user' THEN 1 ELSE 0 END) AS REAL)
-             / NULLIF(AVG(s.edit_count), 0),
+             / NULLIF(SUM(s.edit_count), 0),
            1) AS avg_turns_per_edit,
            COUNT(DISTINCT s.id) AS sessions
          FROM conversation_events ce

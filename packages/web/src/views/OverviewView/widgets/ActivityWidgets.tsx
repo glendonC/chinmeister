@@ -36,7 +36,7 @@ function Heatmap({ hourly }: { hourly: UserAnalytics['hourly_distribution'] }) {
                   <div
                     key={dow}
                     className={styles.heatmapCell}
-                    style={{ background: 'var(--accent)', opacity }}
+                    style={{ background: 'var(--ink)', opacity }}
                     title={hasData ? `${DAY_LABELS[dow]} ${hour}:00 — ${val} sessions` : ''}
                   />
                 );

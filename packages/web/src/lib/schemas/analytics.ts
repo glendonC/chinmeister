@@ -423,7 +423,7 @@ const toolCallStatsSchema = z.object({
 const dataCoverageSchema = baseDataCoverageSchema.extend({
   tools_reporting: z.array(z.string()).default([]),
   tools_without_data: z.array(z.string()).default([]),
-  coverage_rate: z.number().default(1),
+  coverage_rate: z.number().default(0),
   capabilities_available: z.array(z.string()).default([]),
   capabilities_missing: z.array(z.string()).default([]),
 });

@@ -14,35 +14,35 @@ const log = createLogger('TeamDO.analytics');
 
 export function queryRetryPatterns(sql: SqlStorage, days: number): RetryPattern[] {
   try {
-    // Find files that were touched by the same handle across multiple sessions,
-    // where at least one prior session was abandoned or failed.
-    // This indicates retry/rework patterns.
+    // Find files touched by the same handle across multiple sessions where at
+    // least one session was abandoned/failed. Uses CTEs to avoid triple-nested
+    // correlated subqueries: one pass to explode files, one to rank by recency.
     const rows = sql
       .exec(
-        `SELECT
-           s.handle,
-           f.value AS file,
-           COUNT(DISTINCT s.id) AS attempts,
-           (SELECT outcome FROM sessions s2, json_each(s2.files_touched) f2
-            WHERE s2.handle = s.handle AND f2.value = f.value
-              AND s2.started_at > datetime('now', '-' || ? || ' days')
-            ORDER BY s2.started_at DESC LIMIT 1) AS final_outcome
-         FROM sessions s, json_each(s.files_touched) f
-         WHERE s.started_at > datetime('now', '-' || ? || ' days')
-           AND s.files_touched != '[]'
-           AND EXISTS (
-             SELECT 1 FROM sessions s3, json_each(s3.files_touched) f3
-             WHERE s3.handle = s.handle AND f3.value = f.value
-               AND s3.id != s.id
-               AND s3.outcome IN ('abandoned', 'failed')
-               AND s3.started_at > datetime('now', '-' || ? || ' days')
-           )
-         GROUP BY s.handle, f.value
-         HAVING attempts >= 2
-         ORDER BY attempts DESC
+        `WITH file_sessions AS (
+           SELECT s.id, s.handle, s.outcome, s.started_at, f.value AS file
+           FROM sessions s, json_each(s.files_touched) f
+           WHERE s.started_at > datetime('now', '-' || ? || ' days')
+             AND s.files_touched != '[]'
+         ),
+         handle_files AS (
+           SELECT handle, file,
+             COUNT(DISTINCT id) AS attempts,
+             MAX(CASE WHEN outcome IN ('abandoned', 'failed') THEN 1 ELSE 0 END) AS has_failure
+           FROM file_sessions
+           GROUP BY handle, file
+           HAVING attempts >= 2 AND has_failure = 1
+         ),
+         latest_outcome AS (
+           SELECT handle, file, outcome AS final_outcome,
+             ROW_NUMBER() OVER (PARTITION BY handle, file ORDER BY started_at DESC) AS rn
+           FROM file_sessions
+         )
+         SELECT hf.handle, hf.file, hf.attempts, lo.final_outcome
+         FROM handle_files hf
+         JOIN latest_outcome lo ON lo.handle = hf.handle AND lo.file = hf.file AND lo.rn = 1
+         ORDER BY hf.attempts DESC
          LIMIT 30`,
-        days,
-        days,
         days,
       )
       .toArray();
@@ -199,23 +199,27 @@ export function queryFirstEditStats(sql: SqlStorage, days: number): FirstEditSta
       )
       .toArray();
 
-    // Median via sorted middle value
-    const medianRows = sql
+    // Median via LIMIT/OFFSET — O(n log n) in SQLite, O(1) memory in JS
+    const medianRow = sql
       .exec(
-        `SELECT ROUND((julianday(first_edit_at) - julianday(started_at)) * 24 * 60, 1) AS mins
-         FROM sessions
-         WHERE started_at > datetime('now', '-' || ? || ' days')
-           AND first_edit_at IS NOT NULL
-         ORDER BY mins`,
+        `SELECT ROUND(mins, 1) AS mins FROM (
+           SELECT (julianday(first_edit_at) - julianday(started_at)) * 24 * 60 AS mins
+           FROM sessions
+           WHERE started_at > datetime('now', '-' || ? || ' days')
+             AND first_edit_at IS NOT NULL
+           ORDER BY mins
+           LIMIT 1
+           OFFSET (SELECT COUNT(*) / 2 FROM sessions
+                   WHERE started_at > datetime('now', '-' || ? || ' days')
+                     AND first_edit_at IS NOT NULL)
+         )`,
+        days,
         days,
       )
       .toArray();
 
-    let median = 0;
-    if (medianRows.length > 0) {
-      const midIdx = Math.floor(medianRows.length / 2);
-      median = ((medianRows[midIdx] as Record<string, unknown>).mins as number) || 0;
-    }
+    const median =
+      medianRow.length > 0 ? ((medianRow[0] as Record<string, unknown>).mins as number) || 0 : 0;
 
     // By tool
     const toolRows = sql

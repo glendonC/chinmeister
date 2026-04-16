@@ -2,23 +2,11 @@ import type { CSSProperties } from 'react';
 import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostRows, GhostStatRow } from './shared.js';
+import { GhostBars, GhostRows, GhostStatRow } from './shared.js';
 
 function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   const dirs = analytics.directory_heatmap;
-  if (dirs.length === 0) {
-    return (
-      <div className={styles.metricBars}>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className={styles.ghostRow}>
-            <span className={styles.ghostLabel}>—</span>
-            <div className={styles.ghostBarTrack} />
-            <span className={styles.ghostValue}>—</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  if (dirs.length === 0) return <GhostBars count={3} />;
   const maxT = Math.max(...dirs.map((d) => d.touch_count), 1);
   return (
     <div className={styles.metricBars}>
@@ -45,20 +33,7 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
 
 function FilesWidget({ analytics }: WidgetBodyProps) {
   const files = analytics.file_heatmap;
-  if (files.length === 0) {
-    return (
-      <div className={styles.dataList}>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className={styles.ghostRow}>
-            <span className={styles.ghostLabel} style={{ width: 'auto' }}>
-              —
-            </span>
-            <span className={styles.ghostValue}>—</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  if (files.length === 0) return <GhostRows count={3} />;
   return (
     <div className={styles.dataList}>
       {files.slice(0, 10).map((f, i) => (

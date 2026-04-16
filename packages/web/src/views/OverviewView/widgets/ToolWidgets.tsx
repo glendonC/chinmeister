@@ -7,7 +7,7 @@ import { formatRelativeTime } from '../../../lib/relativeTime.js';
 import type { TokenUsageStats, UserAnalytics } from '../../../lib/apiSchemas.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { getDataCapabilities } from '@chinwag/shared/tool-registry.js';
+import { getDataCapabilities, getToolsWithCapability } from '@chinwag/shared/tool-registry.js';
 import { GhostBars, GhostRows, GhostStatRow, StatWidget, CoverageNote } from './shared.js';
 
 /**
@@ -24,6 +24,13 @@ function getToolDepth(toolId: string): { level: 1 | 2 | 3; label: string } {
     return { level: 2, label: 'Activity analytics' };
   }
   return { level: 1, label: 'Session analytics' };
+}
+
+function toolCallCoverageNote(toolsReporting: string[]): string | null {
+  const capable = getToolsWithCapability('toolCallLogs');
+  const reporting = toolsReporting.filter((t) => capable.includes(t));
+  if (reporting.length === 0 || reporting.length === toolsReporting.length) return null;
+  return `Tool call data from ${reporting.join(', ')}`;
 }
 
 function ToolDepthBars({ toolId }: { toolId: string }) {
@@ -105,21 +112,7 @@ function ModelsWidget({ analytics }: WidgetBodyProps) {
 
 function ModelsList({ modelOutcomes }: { modelOutcomes: UserAnalytics['model_outcomes'] }) {
   const models = useMemo(() => aggregateModels(modelOutcomes), [modelOutcomes]);
-  if (models.length === 0) {
-    return (
-      <div className={styles.dataList}>
-        {[1, 2].map((i) => (
-          <div key={i} className={styles.ghostRow}>
-            <span className={styles.ghostLabel} style={{ width: 'auto' }}>
-              —
-            </span>
-            <span className={styles.ghostValue}>— sessions</span>
-            <span className={styles.ghostValue}>— edits</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  if (models.length === 0) return <GhostRows count={2} />;
   return (
     <div className={styles.dataList}>
       {models.map((m, i) => (
@@ -188,25 +181,29 @@ function ToolCallsWidget({ analytics }: WidgetBodyProps) {
   const tc = analytics.tool_call_stats;
   if (tc.total_calls === 0)
     return <GhostStatRow labels={['calls', 'error rate', 'research:edit']} />;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
   return (
-    <div className={styles.statRow}>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{tc.total_calls.toLocaleString()}</span>
-        <span className={styles.statBlockLabel}>calls</span>
+    <>
+      <div className={styles.statRow}>
+        <div className={styles.statBlock}>
+          <span className={styles.statBlockValue}>{tc.total_calls.toLocaleString()}</span>
+          <span className={styles.statBlockLabel}>calls</span>
+        </div>
+        <div className={styles.statBlock}>
+          <span className={styles.statBlockValue}>{tc.error_rate}%</span>
+          <span className={styles.statBlockLabel}>error rate</span>
+        </div>
+        <div className={styles.statBlock}>
+          <span className={styles.statBlockValue}>{tc.research_to_edit_ratio}:1</span>
+          <span className={styles.statBlockLabel}>research:edit</span>
+        </div>
+        <div className={styles.statBlock}>
+          <span className={styles.statBlockValue}>{tc.calls_per_session}</span>
+          <span className={styles.statBlockLabel}>calls/session</span>
+        </div>
       </div>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{tc.error_rate}%</span>
-        <span className={styles.statBlockLabel}>error rate</span>
-      </div>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{tc.research_to_edit_ratio}:1</span>
-        <span className={styles.statBlockLabel}>research:edit</span>
-      </div>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{tc.calls_per_session}</span>
-        <span className={styles.statBlockLabel}>calls/session</span>
-      </div>
-    </div>
+      <CoverageNote text={toolCallCoverageNote(tools)} />
+    </>
   );
 }
 
@@ -214,54 +211,65 @@ function ToolCallFreqWidget({ analytics }: WidgetBodyProps) {
   const freq = analytics.tool_call_stats.frequency;
   if (freq.length === 0) return <GhostBars count={5} />;
   const maxC = Math.max(...freq.map((f) => f.calls), 1);
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
   return (
-    <div className={styles.metricBars}>
-      {freq.slice(0, 15).map((f) => (
-        <div key={f.tool} className={styles.metricRow}>
-          <span className={styles.metricLabel}>{f.tool}</span>
-          <div className={styles.metricBarTrack}>
-            <div
-              className={styles.metricBarFill}
-              style={{
-                width: `${(f.calls / maxC) * 100}%`,
-                background: f.error_rate > 10 ? 'var(--warn)' : undefined,
-              }}
-            />
+    <>
+      <div className={styles.metricBars}>
+        {freq.slice(0, 15).map((f) => (
+          <div key={f.tool} className={styles.metricRow}>
+            <span className={styles.metricLabel}>{f.tool}</span>
+            <div className={styles.metricBarTrack}>
+              <div
+                className={styles.metricBarFill}
+                style={{
+                  width: `${(f.calls / maxC) * 100}%`,
+                  background: f.error_rate > 10 ? 'var(--warn)' : undefined,
+                }}
+              />
+            </div>
+            <span className={styles.metricValue}>
+              {f.calls}
+              {f.errors > 0 ? ` · ${f.error_rate}% err` : ''}
+              {f.avg_duration_ms > 0 ? ` · ${formatDuration(f.avg_duration_ms)}` : ''}
+            </span>
           </div>
-          <span className={styles.metricValue}>
-            {f.calls}
-            {f.errors > 0 ? ` · ${f.error_rate}% err` : ''}
-            {f.avg_duration_ms > 0 ? ` · ${formatDuration(f.avg_duration_ms)}` : ''}
-          </span>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+      <CoverageNote text={toolCallCoverageNote(tools)} />
+    </>
   );
 }
 
 function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
   const errs = analytics.tool_call_stats.error_patterns;
   if (errs.length === 0) return <SectionEmpty>No tool errors</SectionEmpty>;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
   return (
-    <div className={styles.dataList}>
-      {errs.slice(0, 10).map((e, i) => (
-        <div
-          key={`${e.tool}-${i}`}
-          className={styles.dataRow}
-          style={{ '--row-index': i } as CSSProperties}
-        >
-          <span className={styles.dataName}>{e.tool}</span>
-          <div className={styles.dataMeta}>
-            <span className={styles.dataStat} style={{ color: 'var(--danger)' }}>
-              <span className={styles.dataStatValue}>{e.count}x</span>
-            </span>
-            <span className={styles.dataStat} style={{ opacity: 0.7, fontSize: 'var(--text-2xs)' }}>
-              {e.error_preview.slice(0, 80)}
-            </span>
+    <>
+      <div className={styles.dataList}>
+        {errs.slice(0, 10).map((e, i) => (
+          <div
+            key={`${e.tool}-${i}`}
+            className={styles.dataRow}
+            style={{ '--row-index': i } as CSSProperties}
+          >
+            <span className={styles.dataName}>{e.tool}</span>
+            <div className={styles.dataMeta}>
+              <span className={styles.dataStat} style={{ color: 'var(--danger)' }}>
+                <span className={styles.dataStatValue}>{e.count}x</span>
+              </span>
+              <span
+                className={styles.dataStat}
+                style={{ opacity: 0.7, fontSize: 'var(--text-2xs)' }}
+              >
+                {e.error_preview.slice(0, 80)}
+              </span>
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+      <CoverageNote text={toolCallCoverageNote(tools)} />
+    </>
   );
 }
 
@@ -321,7 +329,7 @@ function TokenDetailWidget({ analytics }: WidgetBodyProps) {
               {
                 '--row-index': tu.by_model.length,
                 opacity: 0.5,
-                borderTop: '1px solid var(--ghost)',
+                marginTop: 8,
               } as CSSProperties
             }
           >

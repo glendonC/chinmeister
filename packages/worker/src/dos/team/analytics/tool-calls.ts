@@ -62,7 +62,7 @@ export function queryToolCallStats(sql: SqlStorage, days: number): ToolCallStats
       .toArray()[0] as Record<string, unknown> | undefined;
 
     const researchCount = (ratioRow?.research as number) || 0;
-    const editCount = (ratioRow?.edits as number) || 1;
+    const editCount = (ratioRow?.edits as number) || 0;
 
     // Per-tool frequency
     const freqRows = sql
@@ -193,7 +193,7 @@ export function queryToolCallStats(sql: SqlStorage, days: number): ToolCallStats
       error_rate: totalCalls > 0 ? Math.round((totalErrors / totalCalls) * 10000) / 100 : 0,
       avg_duration_ms: (totalsRow.avg_duration_ms as number) || 0,
       calls_per_session: Math.round((totalCalls / distinctSessions) * 10) / 10,
-      research_to_edit_ratio: Math.round((researchCount / editCount) * 10) / 10,
+      research_to_edit_ratio: editCount > 0 ? Math.round((researchCount / editCount) * 10) / 10 : 0,
       one_shot_rate:
         sessionsWithEdits > 0 ? Math.round((oneShotSessions / sessionsWithEdits) * 100) : 0,
       one_shot_sessions: sessionsWithEdits,

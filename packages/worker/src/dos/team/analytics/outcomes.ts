@@ -327,19 +327,28 @@ export function queryToolWorkType(sql: SqlStorage, days: number): ToolWorkTypeBr
 
 export function queryWorkTypeOutcomes(sql: SqlStorage, days: number): WorkTypeOutcome[] {
   try {
+    // Assign each session to its PRIMARY work type (the type with the most
+    // files) to avoid double-counting sessions that touch multiple types.
     const rows = sql
       .exec(
-        `SELECT
-           ${WORK_TYPE_CASE_VALUE} AS work_type,
-           COUNT(DISTINCT s.id) AS sessions,
-           SUM(CASE WHEN s.outcome = 'completed' THEN 1 ELSE 0 END) AS completed,
-           SUM(CASE WHEN s.outcome = 'abandoned' THEN 1 ELSE 0 END) AS abandoned,
-           SUM(CASE WHEN s.outcome = 'failed' THEN 1 ELSE 0 END) AS failed,
-           ROUND(CAST(SUM(CASE WHEN s.outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
-             / NULLIF(COUNT(DISTINCT s.id), 0) * 100, 1) AS completion_rate
-         FROM sessions s, json_each(s.files_touched) f
-         WHERE s.started_at > datetime('now', '-' || ? || ' days')
-           AND s.files_touched != '[]'
+        `WITH session_work_type AS (
+           SELECT s.id, s.outcome,
+             (SELECT ${WORK_TYPE_CASE_VALUE} AS wt
+              FROM json_each(s.files_touched) f
+              GROUP BY wt ORDER BY COUNT(*) DESC LIMIT 1) AS work_type
+           FROM sessions s
+           WHERE s.started_at > datetime('now', '-' || ? || ' days')
+             AND s.files_touched != '[]'
+         )
+         SELECT
+           work_type,
+           COUNT(*) AS sessions,
+           SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS completed,
+           SUM(CASE WHEN outcome = 'abandoned' THEN 1 ELSE 0 END) AS abandoned,
+           SUM(CASE WHEN outcome = 'failed' THEN 1 ELSE 0 END) AS failed,
+           ROUND(CAST(SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(COUNT(*), 0) * 100, 1) AS completion_rate
+         FROM session_work_type
          GROUP BY work_type
          ORDER BY sessions DESC`,
         days,

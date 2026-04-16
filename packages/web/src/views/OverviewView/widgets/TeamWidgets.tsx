@@ -3,24 +3,11 @@ import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
 import { getToolMeta } from '../../../lib/toolMeta.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
+import { GhostRows } from './shared.js';
 
 function TeamMembersWidget({ analytics }: WidgetBodyProps) {
   const members = analytics.member_analytics;
-  if (members.length <= 1) {
-    return (
-      <div className={styles.dataList}>
-        {[1, 2].map((i) => (
-          <div key={i} className={styles.ghostRow}>
-            <span className={styles.ghostLabel} style={{ width: 'auto' }}>
-              —
-            </span>
-            <span className={styles.ghostValue}>— sessions</span>
-            <span className={styles.ghostValue}>— edits</span>
-          </div>
-        ))}
-      </div>
-    );
-  }
+  if (members.length <= 1) return <GhostRows count={2} />;
   return (
     <div className={styles.dataList}>
       {members.map((m, i) => {
