@@ -6,7 +6,7 @@ import { normalizePath } from '../../lib/text-utils.js';
 import { createLogger } from '../../lib/logger.js';
 import { safeParse } from '../../lib/safe-parse.js';
 import { normalizeRuntimeMetadata, normalizeModelName } from './runtime.js';
-import { classifyWorkType } from './analytics.js';
+import { classifyWorkType } from './analytics/outcomes.js';
 import { HEARTBEAT_STALE_WINDOW_S, ACTIVITY_MAX_FILES, METRIC_KEYS } from '../../lib/constants.js';
 import { sqlChanges, withTransaction } from '../../lib/validation.js';
 

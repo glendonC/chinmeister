@@ -1,0 +1,311 @@
+// Session analytics: retry patterns, conflict correlation, stuckness, file overlap, scope complexity.
+
+import { createLogger } from '../../../lib/logger.js';
+import type {
+  RetryPattern,
+  ConflictCorrelation,
+  StucknessStats,
+  FileOverlapStats,
+  FirstEditStats,
+  ScopeComplexityBucket,
+} from '@chinwag/shared/contracts/analytics.js';
+
+const log = createLogger('TeamDO.analytics');
+
+export function queryRetryPatterns(sql: SqlStorage, days: number): RetryPattern[] {
+  try {
+    // Find files that were touched by the same handle across multiple sessions,
+    // where at least one prior session was abandoned or failed.
+    // This indicates retry/rework patterns.
+    const rows = sql
+      .exec(
+        `SELECT
+           s.handle,
+           f.value AS file,
+           COUNT(DISTINCT s.id) AS attempts,
+           (SELECT outcome FROM sessions s2, json_each(s2.files_touched) f2
+            WHERE s2.handle = s.handle AND f2.value = f.value
+              AND s2.started_at > datetime('now', '-' || ? || ' days')
+            ORDER BY s2.started_at DESC LIMIT 1) AS final_outcome
+         FROM sessions s, json_each(s.files_touched) f
+         WHERE s.started_at > datetime('now', '-' || ? || ' days')
+           AND s.files_touched != '[]'
+           AND EXISTS (
+             SELECT 1 FROM sessions s3, json_each(s3.files_touched) f3
+             WHERE s3.handle = s.handle AND f3.value = f.value
+               AND s3.id != s.id
+               AND s3.outcome IN ('abandoned', 'failed')
+               AND s3.started_at > datetime('now', '-' || ? || ' days')
+           )
+         GROUP BY s.handle, f.value
+         HAVING attempts >= 2
+         ORDER BY attempts DESC
+         LIMIT 30`,
+        days,
+        days,
+        days,
+      )
+      .toArray();
+
+    return rows.map((r) => {
+      const row = r as Record<string, unknown>;
+      const finalOutcome = (row.final_outcome as string) || null;
+      return {
+        handle: row.handle as string,
+        file: row.file as string,
+        attempts: (row.attempts as number) || 0,
+        final_outcome: finalOutcome,
+        resolved: finalOutcome === 'completed',
+      };
+    });
+  } catch (err) {
+    log.warn(`retryPatterns query failed: ${err}`);
+    return [];
+  }
+}
+
+export function queryConflictCorrelation(sql: SqlStorage, days: number): ConflictCorrelation[] {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT
+           CASE WHEN conflicts_hit > 0 THEN '1+ conflicts' ELSE 'no conflicts' END AS bucket,
+           COUNT(*) AS sessions,
+           SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS completed,
+           ROUND(CAST(SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(COUNT(*), 0) * 100, 1) AS completion_rate
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+         GROUP BY bucket
+         ORDER BY bucket`,
+        days,
+      )
+      .toArray();
+
+    return rows.map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        bucket: row.bucket as string,
+        sessions: (row.sessions as number) || 0,
+        completed: (row.completed as number) || 0,
+        completion_rate: (row.completion_rate as number) || 0,
+      };
+    });
+  } catch (err) {
+    log.warn(`conflictCorrelation query failed: ${err}`);
+    return [];
+  }
+}
+
+export function queryStuckness(sql: SqlStorage, days: number): StucknessStats {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT
+           COUNT(*) AS total_sessions,
+           SUM(CASE WHEN got_stuck = 1 THEN 1 ELSE 0 END) AS stuck_sessions,
+           ROUND(CAST(SUM(CASE WHEN got_stuck = 1 THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(COUNT(*), 0) * 100, 1) AS stuckness_rate,
+           ROUND(CAST(SUM(CASE WHEN got_stuck = 1 AND outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(SUM(CASE WHEN got_stuck = 1 THEN 1 ELSE 0 END), 0) * 100, 1) AS stuck_completion_rate,
+           ROUND(CAST(SUM(CASE WHEN got_stuck = 0 AND outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(SUM(CASE WHEN got_stuck = 0 THEN 1 ELSE 0 END), 0) * 100, 1) AS normal_completion_rate
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')`,
+        days,
+      )
+      .toArray();
+
+    if (rows.length === 0)
+      return {
+        total_sessions: 0,
+        stuck_sessions: 0,
+        stuckness_rate: 0,
+        stuck_completion_rate: 0,
+        normal_completion_rate: 0,
+      };
+
+    const row = rows[0] as Record<string, unknown>;
+    return {
+      total_sessions: (row.total_sessions as number) || 0,
+      stuck_sessions: (row.stuck_sessions as number) || 0,
+      stuckness_rate: (row.stuckness_rate as number) || 0,
+      stuck_completion_rate: (row.stuck_completion_rate as number) || 0,
+      normal_completion_rate: (row.normal_completion_rate as number) || 0,
+    };
+  } catch (err) {
+    log.warn(`stuckness query failed: ${err}`);
+    return {
+      total_sessions: 0,
+      stuck_sessions: 0,
+      stuckness_rate: 0,
+      stuck_completion_rate: 0,
+      normal_completion_rate: 0,
+    };
+  }
+}
+
+export function queryFileOverlap(sql: SqlStorage, days: number): FileOverlapStats {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT
+           COUNT(*) AS total_files,
+           SUM(CASE WHEN agents >= 2 THEN 1 ELSE 0 END) AS overlapping_files
+         FROM (
+           SELECT file_path, COUNT(DISTINCT handle) AS agents
+           FROM edits
+           WHERE created_at > datetime('now', '-' || ? || ' days')
+           GROUP BY file_path
+         )`,
+        days,
+      )
+      .toArray();
+
+    if (rows.length === 0) return { total_files: 0, overlapping_files: 0, overlap_rate: 0 };
+
+    const row = rows[0] as Record<string, unknown>;
+    const total = (row.total_files as number) || 0;
+    const overlapping = (row.overlapping_files as number) || 0;
+    return {
+      total_files: total,
+      overlapping_files: overlapping,
+      overlap_rate: total > 0 ? Math.round((overlapping / total) * 1000) / 10 : 0,
+    };
+  } catch (err) {
+    log.warn(`fileOverlap query failed: ${err}`);
+    return { total_files: 0, overlapping_files: 0, overlap_rate: 0 };
+  }
+}
+
+export function queryFirstEditStats(sql: SqlStorage, days: number): FirstEditStats {
+  const empty: FirstEditStats = {
+    avg_minutes_to_first_edit: 0,
+    median_minutes_to_first_edit: 0,
+    by_tool: [],
+  };
+  try {
+    // Overall stats
+    const overall = sql
+      .exec(
+        `SELECT
+           ROUND(AVG(
+             (julianday(first_edit_at) - julianday(started_at)) * 24 * 60
+           ), 1) AS avg_min
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+           AND first_edit_at IS NOT NULL`,
+        days,
+      )
+      .toArray();
+
+    // Median via sorted middle value
+    const medianRows = sql
+      .exec(
+        `SELECT ROUND((julianday(first_edit_at) - julianday(started_at)) * 24 * 60, 1) AS mins
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+           AND first_edit_at IS NOT NULL
+         ORDER BY mins`,
+        days,
+      )
+      .toArray();
+
+    let median = 0;
+    if (medianRows.length > 0) {
+      const midIdx = Math.floor(medianRows.length / 2);
+      median = ((medianRows[midIdx] as Record<string, unknown>).mins as number) || 0;
+    }
+
+    // By tool
+    const toolRows = sql
+      .exec(
+        `SELECT
+           host_tool,
+           ROUND(AVG(
+             (julianday(first_edit_at) - julianday(started_at)) * 24 * 60
+           ), 1) AS avg_minutes,
+           COUNT(*) AS sessions
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+           AND first_edit_at IS NOT NULL
+           AND host_tool IS NOT NULL AND host_tool != 'unknown'
+         GROUP BY host_tool
+         ORDER BY sessions DESC`,
+        days,
+      )
+      .toArray();
+
+    const avgMin = ((overall[0] as Record<string, unknown>)?.avg_min as number) || 0;
+
+    return {
+      avg_minutes_to_first_edit: avgMin,
+      median_minutes_to_first_edit: median,
+      by_tool: toolRows.map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          host_tool: row.host_tool as string,
+          avg_minutes: (row.avg_minutes as number) || 0,
+          sessions: (row.sessions as number) || 0,
+        };
+      }),
+    };
+  } catch (err) {
+    log.warn(`firstEditStats query failed: ${err}`);
+    return empty;
+  }
+}
+
+export function queryScopeComplexity(sql: SqlStorage, days: number): ScopeComplexityBucket[] {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT
+           CASE
+             WHEN file_count = 1 THEN '1 file'
+             WHEN file_count <= 3 THEN '2-3 files'
+             WHEN file_count <= 7 THEN '4-7 files'
+             WHEN file_count <= 15 THEN '8-15 files'
+             ELSE '16+ files'
+           END AS bucket,
+           COUNT(*) AS sessions,
+           ROUND(AVG(edit_count), 1) AS avg_edits,
+           ROUND(AVG(
+             ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60)
+           ), 1) AS avg_duration_min,
+           ROUND(CAST(SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(COUNT(*), 0) * 100, 1) AS completion_rate
+         FROM (
+           SELECT *, json_array_length(files_touched) AS file_count
+           FROM sessions
+           WHERE started_at > datetime('now', '-' || ? || ' days')
+             AND files_touched != '[]'
+         )
+         GROUP BY bucket
+         ORDER BY
+           CASE bucket
+             WHEN '1 file' THEN 1
+             WHEN '2-3 files' THEN 2
+             WHEN '4-7 files' THEN 3
+             WHEN '8-15 files' THEN 4
+             ELSE 5
+           END`,
+        days,
+      )
+      .toArray();
+
+    return rows.map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        bucket: row.bucket as string,
+        sessions: (row.sessions as number) || 0,
+        avg_edits: (row.avg_edits as number) || 0,
+        avg_duration_min: (row.avg_duration_min as number) || 0,
+        completion_rate: (row.completion_rate as number) || 0,
+      };
+    });
+  } catch (err) {
+    log.warn(`scopeComplexity query failed: ${err}`);
+    return [];
+  }
+}

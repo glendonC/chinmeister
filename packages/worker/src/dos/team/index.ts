@@ -71,7 +71,7 @@ import type { EditEntry, SessionRecord } from './sessions.js';
 import {
   getAnalytics as getAnalyticsFn,
   getExtendedAnalytics as getExtendedAnalyticsFn,
-} from './analytics.js';
+} from './analytics/index.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import {
   batchRecordConversationEvents as batchRecordConversationEventsFn,
