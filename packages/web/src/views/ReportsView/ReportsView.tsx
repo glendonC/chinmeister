@@ -15,7 +15,7 @@ import { useQueryParam, setQueryParam } from '../../lib/router.js';
 import { agentGradient } from '../../lib/agentGradient.js';
 import { projectGradient } from '../../lib/projectGradient.js';
 import { REPORT_CATALOG, reportHex, type ReportDef } from './report-catalog.js';
-import { reportMesh, hexToHue } from './reportMesh.js';
+import { hexToHue } from './reportMesh.js';
 import { ReportMark, reportGradientId } from './ReportMark.js';
 import { getLatestRun, getRunsForReport } from './mock-runs.js';
 import { computeFreshness, formatFreshness } from './freshness.js';
@@ -114,7 +114,6 @@ const ReportRow = memo(function ReportRow({
         {
           '--report-color': hex,
           '--report-gradient': agentGradient(hex),
-          '--report-mesh': reportMesh(hex, report.id),
         } as React.CSSProperties
       }
       onMouseEnter={(e) => onHoverChange(report.id, e.clientX, e.clientY)}
@@ -164,7 +163,6 @@ function HoverTooltip({
         {
           ...style,
           '--report-color': hex,
-          '--report-mesh': reportMesh(hex, report.id),
         } as CSSProperties
       }
       aria-hidden="true"

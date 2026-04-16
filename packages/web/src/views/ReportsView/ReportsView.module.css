@@ -281,11 +281,6 @@
     transform 0.1s ease;
 }
 
-/* Tooltip top band — a 64px accent at the top of the panel painted
-   with the hovered report's full mesh gradient, animated on the
-   shared meshBreathe loop. Border-radius handled by parent's
-   overflow: hidden, so no need to set it here. Masked to fade to
-   transparent at the bottom so the mesh blends into the panel body. */
 .tooltip::before {
   content: '';
   position: absolute;
@@ -293,19 +288,9 @@
   left: 0;
   right: 0;
   height: 64px;
-  background: var(--report-mesh);
-  opacity: 0.28;
+  background: linear-gradient(to bottom, var(--report-color, transparent), transparent);
+  opacity: 0.12;
   pointer-events: none;
-  mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);
-  -webkit-mask-image: linear-gradient(to bottom, black 0%, black 35%, transparent 100%);
-  animation: meshBreathe 36s ease-in-out infinite;
-  will-change: transform;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .tooltip::before {
-    animation: none;
-  }
 }
 
 .tooltipVisible {
