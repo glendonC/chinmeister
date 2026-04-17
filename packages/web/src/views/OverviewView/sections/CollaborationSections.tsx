@@ -160,7 +160,7 @@ export function RetryPatternsSection({ retries }: { retries: RetryPattern[] }) {
 
   return (
     <div className={styles.section}>
-      <span className={styles.sectionLabel}>Retry patterns</span>
+      <span className={styles.sectionLabel}>Recurring failures</span>
       <div className={styles.dataList}>
         {retries.slice(0, 15).map((r, i) => (
           <div

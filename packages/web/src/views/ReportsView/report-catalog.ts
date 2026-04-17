@@ -151,7 +151,7 @@ export const REPORT_CATALOG: ReportDef[] = [
       'Conflict data',
       'File claims & locks',
       'Tool handoffs',
-      'Concurrent edits',
+      'Edit collisions',
       'Member analytics',
       'Git rework',
     ],

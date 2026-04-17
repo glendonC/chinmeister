@@ -542,8 +542,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'concurrent-edits',
-    name: 'Concurrent edits',
-    description: 'Files edited by multiple agents',
+    name: 'Edit collisions',
+    description: 'Files touched by multiple agents in the same period — conflict risk',
     category: 'codebase',
     viz: 'data-list',
     w: 6,
@@ -729,8 +729,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'retry-patterns',
-    name: 'Retry patterns',
-    description: 'Files retried across sessions after failure',
+    name: 'Recurring failures',
+    description: 'Files edited repeatedly across failed sessions',
     category: 'team',
     viz: 'data-list',
     w: 6,
