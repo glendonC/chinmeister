@@ -274,7 +274,6 @@ export class TeamDO extends DurableObject<Env> {
    * agent (dashboard/summary calls). Confirms the caller owns at least one
    * member in this team before running the callback.
    */
-  // eslint-disable-next-line no-unused-private-class-members -- consumed in follow-up commits
   #withOwner<T>(ownerId: string, fn: () => T): T | DOError {
     this.#ensureSchema();
     const row = this.sql
@@ -955,13 +954,10 @@ export class TeamDO extends DurableObject<Env> {
   ): Promise<
     { ok: true; sessions: SessionRecord[]; truncated: boolean; total_sessions: number } | DOError
   > {
-    this.#ensureSchema();
-    const ownerRow = this.sql
-      .exec('SELECT 1 FROM members WHERE owner_id = ? LIMIT 1', ownerId)
-      .toArray();
-    if (ownerRow.length === 0) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const result = getSessionsInRangeFn(this.sql, fromDate, toDate);
-    return { ok: true, ...result };
+    return this.#withOwner(ownerId, () => {
+      const result = getSessionsInRangeFn(this.sql, fromDate, toDate);
+      return { ok: true as const, ...result };
+    });
   }
 
   // -- Extended analytics (cross-project dashboard) --
@@ -970,26 +966,18 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string,
     days: number,
   ): Promise<ReturnType<typeof getExtendedAnalyticsFn> | DOError> {
-    this.#ensureSchema();
-    const ownerRow = this.sql
-      .exec('SELECT 1 FROM members WHERE owner_id = ? LIMIT 1', ownerId)
-      .toArray();
-    if (ownerRow.length === 0) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    const raw = getExtendedAnalyticsFn(this.sql, days);
-    return enrichAnalyticsWithPricing(raw, this.env);
+    const gate = this.#withOwner(ownerId, () => getExtendedAnalyticsFn(this.sql, days));
+    if (isDOError(gate)) return gate;
+    return enrichAnalyticsWithPricing(gate, this.env);
   }
 
   // -- Summary (lightweight, for cross-project dashboard) --
 
   async getSummary(ownerId: string): Promise<ReturnType<typeof queryTeamSummary> | DOError> {
-    this.#ensureSchema();
-    // Dashboard summary: check that this user owns at least one agent in the team
-    const ownerRow = this.sql
-      .exec('SELECT 1 FROM members WHERE owner_id = ? LIMIT 1', ownerId)
-      .toArray();
-    if (ownerRow.length === 0) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
-    this.#maybeCleanup();
-    return queryTeamSummary(this.sql);
+    return this.#withOwner(ownerId, () => {
+      this.#maybeCleanup();
+      return queryTeamSummary(this.sql);
+    });
   }
 }
 
