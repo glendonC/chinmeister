@@ -30,7 +30,9 @@ function extractExecutableName(command = ''): string {
     .match(/^("[^"]+"|'[^']+'|\S+)/);
   if (!match) return '';
 
-  const token = match[1].replace(/^['"]|['"]$/g, '');
+  const raw = match[1];
+  if (raw === undefined) return '';
+  const token = raw.replace(/^['"]|['"]$/g, '');
   return basename(token).toLowerCase();
 }
 
@@ -45,8 +47,10 @@ function includesAlias(command = '', alias = ''): boolean {
 
 function getArgValue(flag: string, argv = process.argv): string | null {
   for (let i = 0; i < argv.length; i++) {
-    if (argv[i] === flag) return argv[i + 1] || null;
-    if (argv[i].startsWith(flag + '=')) return argv[i].slice(flag.length + 1) || null;
+    const arg = argv[i];
+    if (arg === undefined) continue;
+    if (arg === flag) return argv[i + 1] || null;
+    if (arg.startsWith(flag + '=')) return arg.slice(flag.length + 1) || null;
   }
   return null;
 }

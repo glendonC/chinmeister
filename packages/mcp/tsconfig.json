@@ -4,7 +4,8 @@
     "rootDir": ".",
     "outDir": "./dist",
     "types": ["node"],
-    "exactOptionalPropertyTypes": true
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["lib/**/*.ts"],
   "exclude": ["node_modules", "dist", "lib/__tests__"]

@@ -24,7 +24,7 @@ export function readProcessInfo(pid: number): { ppid: number; command: string } 
 
     if (!line) return null;
     const match = line.match(/^\s*(\d+)\s+(.*)$/s);
-    if (!match) return null;
+    if (!match || match[1] === undefined || match[2] === undefined) return null;
     return {
       ppid: Number(match[1]),
       command: match[2],
