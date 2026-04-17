@@ -237,6 +237,50 @@ export class TeamDO extends DurableObject<Env> {
     return fn(resolved);
   }
 
+  /**
+   * Member-scoped RPC wrapper that layers declarative side effects on top of
+   * #withMember. On non-error results, the optional broadcast/metric hooks
+   * fire. Methods whose success values fit the DO result contract can use
+   * this to avoid inlining the same three-step pattern everywhere.
+   */
+  // eslint-disable-next-line no-unused-private-class-members -- consumed in follow-up commits
+  #op<R>(
+    agentId: string,
+    ownerId: string | null,
+    run: (resolved: string) => R,
+    side: {
+      broadcast?: (result: R) => Record<string, unknown> | null;
+      broadcastOpts?: { invalidateCache?: boolean };
+      metric?: (result: R) => string | null;
+    } = {},
+  ): R | DOError {
+    return this.#withMember(agentId, ownerId, (resolved) => {
+      const result = run(resolved);
+      if (!isDOError(result)) {
+        const event = side.broadcast?.(result);
+        if (event) this.#broadcastToWatchers(event, side.broadcastOpts);
+        const metric = side.metric?.(result);
+        if (metric) this.#recordMetric(metric);
+      }
+      return result;
+    });
+  }
+
+  /**
+   * Owner-scoped RPC wrapper for endpoints that do not resolve a specific
+   * agent (dashboard/summary calls). Confirms the caller owns at least one
+   * member in this team before running the callback.
+   */
+  // eslint-disable-next-line no-unused-private-class-members -- consumed in follow-up commits
+  #withOwner<T>(ownerId: string, fn: () => T): T | DOError {
+    this.#ensureSchema();
+    const row = this.sql
+      .exec('SELECT 1 FROM members WHERE owner_id = ? LIMIT 1', ownerId)
+      .toArray();
+    if (row.length === 0) return { error: 'Not a member of this team', code: 'NOT_MEMBER' };
+    return fn();
+  }
+
   // --- Bound helper for submodules that need to record telemetry ---
   #boundRecordMetric = (metric: string): void => this.#recordMetric(metric);
 
