@@ -139,4 +139,94 @@ describe('cleanupProcessSession', () => {
     expect(team.endSession).not.toHaveBeenCalled();
     expect(team.leaveTeam).toHaveBeenCalledWith('t_team');
   });
+
+  it('writes a completion record so the dashboard can pick up sessionId', async () => {
+    const team = {
+      endSession: vi.fn().mockResolvedValue({ ok: true }),
+      leaveTeam: vi.fn().mockResolvedValue({ ok: true }),
+      flushToolCalls: vi.fn().mockResolvedValue({ ok: true }),
+    };
+    const writeCompleted = vi.fn();
+
+    await cleanupProcessSession(
+      'agent-abc',
+      {
+        heartbeatInterval: null,
+        sessionId: 'sess_42',
+        teamId: 't_team',
+        toolCalls: [],
+      },
+      team,
+      {
+        deleteRecord: vi.fn(),
+        writeCompleted,
+        toolId: 'claude-code',
+        startedAt: 1000,
+      },
+    );
+
+    expect(writeCompleted).toHaveBeenCalledTimes(1);
+    const [record, opts] = writeCompleted.mock.calls[0];
+    expect(record).toMatchObject({
+      agentId: 'agent-abc',
+      sessionId: 'sess_42',
+      teamId: 't_team',
+      toolId: 'claude-code',
+      startedAt: 1000,
+    });
+    expect(typeof record.completedAt).toBe('number');
+    expect(opts).toEqual({});
+  });
+
+  it('does not write completion record when sessionId is missing', async () => {
+    const team = {
+      endSession: vi.fn(),
+      leaveTeam: vi.fn().mockResolvedValue({ ok: true }),
+    };
+    const writeCompleted = vi.fn();
+
+    await cleanupProcessSession(
+      'agent-abc',
+      {
+        heartbeatInterval: null,
+        sessionId: null,
+        teamId: 't_team',
+        toolCalls: [],
+      },
+      team,
+      {
+        deleteRecord: vi.fn(),
+        writeCompleted,
+        toolId: 'claude-code',
+      },
+    );
+
+    expect(writeCompleted).not.toHaveBeenCalled();
+  });
+
+  it('does not write completion record when toolId is unknown', async () => {
+    const team = {
+      endSession: vi.fn().mockResolvedValue({ ok: true }),
+      leaveTeam: vi.fn().mockResolvedValue({ ok: true }),
+      flushToolCalls: vi.fn().mockResolvedValue({ ok: true }),
+    };
+    const writeCompleted = vi.fn();
+
+    await cleanupProcessSession(
+      'agent-abc',
+      {
+        heartbeatInterval: null,
+        sessionId: 'sess_42',
+        teamId: 't_team',
+        toolCalls: [],
+      },
+      team,
+      {
+        deleteRecord: vi.fn(),
+        writeCompleted,
+      },
+    );
+
+    expect(writeCompleted).not.toHaveBeenCalled();
+  });
 });

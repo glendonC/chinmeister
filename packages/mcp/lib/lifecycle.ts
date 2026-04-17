@@ -5,6 +5,7 @@ import {
   resolveSessionAgentId,
   SESSION_COMMAND_MARKER,
   type SessionRecordInput,
+  writeCompletedSession,
   writeSessionRecord,
 } from '@chinwag/shared/session-registry.js';
 import { generateAgentId, getConfiguredAgentId } from './identity.js';
@@ -123,10 +124,21 @@ interface ShutdownOptions {
   agentId: string;
   state: McpState;
   team: TeamHandlers;
+  /** Tool identifier for the completion record written on shutdown. */
+  toolId?: string;
+  /** Agent start timestamp for the completion record. Defaults to now. */
+  startedAt?: number;
   onDisconnectWs?: () => void;
 }
 
-export function setupShutdownHandlers({ agentId, state, team, onDisconnectWs }: ShutdownOptions): {
+export function setupShutdownHandlers({
+  agentId,
+  state,
+  team,
+  toolId,
+  startedAt,
+  onDisconnectWs,
+}: ShutdownOptions): {
   parentWatch: ReturnType<typeof setInterval>;
   cleanup: () => void;
 } {
@@ -140,7 +152,7 @@ export function setupShutdownHandlers({ agentId, state, team, onDisconnectWs }: 
     // Force exit if cleanup hangs (e.g. backend unreachable)
     const forceExit = setTimeout(() => process.exit(0), FORCE_EXIT_TIMEOUT_MS);
     forceExit.unref?.();
-    cleanupProcessSession(agentId, state, team)
+    cleanupProcessSession(agentId, state, team, { toolId, startedAt })
       .then(() => {
         clearTimeout(forceExit);
         setTimeout(() => process.exit(0), 100);
@@ -172,8 +184,13 @@ export function setupShutdownHandlers({ agentId, state, team, onDisconnectWs }: 
 
 interface CleanupOptions {
   deleteRecord?: typeof deleteSessionRecord;
+  writeCompleted?: typeof writeCompletedSession;
   clearIntervalFn?: typeof clearInterval;
   homeDir?: string;
+  /** Overridable for tests: agent startedAt timestamp for completion record. */
+  startedAt?: number;
+  /** Overridable for tests: toolId for completion record. */
+  toolId?: string;
 }
 
 export async function cleanupProcessSession(
@@ -183,10 +200,35 @@ export async function cleanupProcessSession(
   options: CleanupOptions = {},
 ): Promise<void> {
   const deleteRecord = options.deleteRecord || deleteSessionRecord;
+  const writeCompleted = options.writeCompleted || writeCompletedSession;
   const clearTimer = options.clearIntervalFn || clearInterval;
+  const homeOpt = options.homeDir ? { homeDir: options.homeDir } : {};
 
   state.shuttingDown = true;
-  deleteRecord(agentId, options.homeDir ? { homeDir: options.homeDir } : {});
+
+  // Hand off sessionId to the dashboard so it can run post-session collectors.
+  // The dashboard observes the parent CLI agent's exit via node-pty but has no
+  // access to MCP's in-memory state. The completion file is the bridge.
+  if (state.sessionId && state.teamId && options.toolId) {
+    try {
+      writeCompleted(
+        {
+          agentId,
+          sessionId: state.sessionId,
+          teamId: state.teamId,
+          toolId: options.toolId,
+          cwd: process.cwd(),
+          startedAt: options.startedAt ?? Date.now(),
+          completedAt: Date.now(),
+        },
+        homeOpt,
+      );
+    } catch (err: unknown) {
+      log.error('Failed to write completion record: ' + getErrorMessage(err));
+    }
+  }
+
+  deleteRecord(agentId, homeOpt);
   if (state.heartbeatInterval) clearTimer(state.heartbeatInterval);
   if (state.heartbeatRecoveryTimeout) clearTimeout(state.heartbeatRecoveryTimeout);
   if (state.ws)

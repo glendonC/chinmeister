@@ -100,10 +100,13 @@ async function main() {
   let wsManager = null;
 
   // 6. Setup graceful shutdown (before MCP server so it covers all exit paths)
+  const mcpStartedAt = Date.now();
   setupShutdownHandlers({
     agentId,
     state,
     team,
+    toolId: toolName,
+    startedAt: mcpStartedAt,
     onDisconnectWs: () => {
       wsManager?.disconnect();
       cleanupSpawnedProcesses();

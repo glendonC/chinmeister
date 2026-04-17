@@ -6,6 +6,7 @@ import { useMemoryManager } from './memory.js';
 import { useAgentLifecycle } from './agents.js';
 import { useComposer as useComposerHook } from './composer.js';
 import { useIntegrationDoctor } from './integrations.js';
+import { useCollectorSubscription } from './hooks/useCollectorSubscription.js';
 import { MainPane } from './main-pane.jsx';
 import { MemoryView } from './memory-view.jsx';
 import { SessionsView } from './sessions-view.jsx';
@@ -163,6 +164,7 @@ function DashboardProviders({
     stdout,
     flash,
   });
+  useCollectorSubscription({ config, teamId });
   const integrations = useIntegrationDoctor({ projectRoot, flash });
   const composer = useComposerHook({
     config,

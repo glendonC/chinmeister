@@ -28,6 +28,10 @@ import {
   resolveSessionAgentId,
   setTerminalTitle,
   pingAgentTerminal,
+  getCompletedSessionPath,
+  writeCompletedSession,
+  readCompletedSession,
+  deleteCompletedSession,
 } from '../session-registry.js';
 import {
   existsSync,
@@ -911,6 +915,74 @@ describe('session-registry', () => {
           recordAlive: () => true,
         }),
       ).toBe(false);
+    });
+  });
+
+  describe('completed session records', () => {
+    it('writes to the .completed.json sibling of the session file', () => {
+      const record = {
+        agentId: 'agent-1',
+        sessionId: 'sess_abc123',
+        teamId: 't_team',
+        toolId: 'claude-code',
+        cwd: '/repo',
+        startedAt: 1000,
+        completedAt: 2000,
+      };
+      const path = writeCompletedSession(record, { homeDir: '/tmp' });
+      expect(path).toBe('/tmp/.chinwag/sessions/agent-1.completed.json');
+      expect(writeFileSync).toHaveBeenCalledWith(
+        '/tmp/.chinwag/sessions/agent-1.completed.json',
+        JSON.stringify(record) + '\n',
+        { mode: 0o600 },
+      );
+    });
+
+    it('sanitizes agentId in the completion file path', () => {
+      expect(getCompletedSessionPath('weird/agent?name', '/tmp')).toBe(
+        '/tmp/.chinwag/sessions/weird_agent_name.completed.json',
+      );
+    });
+
+    it('reads a previously written completion record', () => {
+      const record = {
+        agentId: 'agent-2',
+        sessionId: 'sess_xyz',
+        teamId: 't_team',
+        toolId: 'codex',
+        cwd: '/repo',
+        startedAt: 1000,
+        completedAt: 2000,
+      };
+      existsSync.mockReturnValue(true);
+      readFileSync.mockReturnValue(JSON.stringify(record));
+      expect(readCompletedSession('agent-2', { homeDir: '/tmp' })).toEqual(record);
+    });
+
+    it('returns null when the completion file is missing', () => {
+      existsSync.mockReturnValue(false);
+      expect(readCompletedSession('never-was', { homeDir: '/tmp' })).toBeNull();
+    });
+
+    it('returns null and logs when the completion file is malformed', () => {
+      existsSync.mockReturnValue(true);
+      readFileSync.mockReturnValue('{ not json');
+      expect(readCompletedSession('broken', { homeDir: '/tmp' })).toBeNull();
+    });
+
+    it('deletes the completion file and returns true', () => {
+      unlinkSync.mockReturnValue(undefined);
+      expect(deleteCompletedSession('agent-1', { homeDir: '/tmp' })).toBe(true);
+      expect(unlinkSync).toHaveBeenCalledWith('/tmp/.chinwag/sessions/agent-1.completed.json');
+    });
+
+    it('returns false and does not crash when ENOENT on delete', () => {
+      const enoent = new Error('not found');
+      enoent.code = 'ENOENT';
+      unlinkSync.mockImplementation(() => {
+        throw enoent;
+      });
+      expect(deleteCompletedSession('gone', { homeDir: '/tmp' })).toBe(false);
     });
   });
 });

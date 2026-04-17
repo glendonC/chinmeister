@@ -165,6 +165,67 @@ export function resolveSessionAgentId({
   }
 }
 
+/**
+ * Completion record written by the MCP server when a session ends, so that the
+ * dashboard (which observes the parent CLI agent's exit) can recover the
+ * sessionId it needs for post-session analytics collection. The MCP's own
+ * state.sessionId is lost when MCP exits; the dashboard has teamId but no
+ * sessionId. This file is the handoff.
+ */
+export interface CompletedSession {
+  agentId: string;
+  sessionId: string;
+  teamId: string;
+  toolId: string;
+  cwd: string;
+  startedAt: number;
+  completedAt: number;
+}
+
+export function getCompletedSessionPath(agentId: string, homeDir = homedir()): string {
+  return join(getSessionsDir(homeDir), `${safeAgentId(agentId)}.completed.json`);
+}
+
+export function writeCompletedSession(
+  record: CompletedSession,
+  { homeDir = homedir() }: { homeDir?: string } = {},
+): string {
+  const filePath = getCompletedSessionPath(record.agentId, homeDir);
+  mkdirSync(getSessionsDir(homeDir), { recursive: true, mode: 0o700 });
+  writeFileSync(filePath, JSON.stringify(record) + '\n', { mode: 0o600 });
+  return filePath;
+}
+
+export function readCompletedSession(
+  agentId: string,
+  { homeDir = homedir() }: { homeDir?: string } = {},
+): CompletedSession | null {
+  const filePath = getCompletedSessionPath(agentId, homeDir);
+  if (!existsSync(filePath)) return null;
+  try {
+    return JSON.parse(readFileSync(filePath, 'utf-8')) as CompletedSession;
+  } catch (err: unknown) {
+    log.error(`failed to parse completed session file ${filePath}: ${formatError(err)}`);
+    return null;
+  }
+}
+
+export function deleteCompletedSession(
+  agentId: string,
+  { homeDir = homedir() }: { homeDir?: string } = {},
+): boolean {
+  try {
+    unlinkSync(getCompletedSessionPath(agentId, homeDir));
+    return true;
+  } catch (err: unknown) {
+    if (
+      !(err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code === 'ENOENT')
+    )
+      log.error(`failed to delete completed session record: ${formatError(err)}`);
+    return false;
+  }
+}
+
 export function setTerminalTitle(tty: string | null, title: string): boolean {
   if (!tty) return false;
   try {

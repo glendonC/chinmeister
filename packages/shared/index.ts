@@ -166,9 +166,14 @@ export {
   resolveSessionAgentId,
   setTerminalTitle,
   pingAgentTerminal,
+  getCompletedSessionPath,
+  writeCompletedSession,
+  readCompletedSession,
+  deleteCompletedSession,
   type SessionRecord,
   type SessionRecordInput,
   type ResolveSessionOptions,
+  type CompletedSession,
 } from './session-registry.js';
 
 // team-utils
