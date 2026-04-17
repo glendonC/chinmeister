@@ -164,6 +164,7 @@ export function cleanupCompletedEntries(): void {
 
   const toRemove = completed.length - MAX_COMPLETED_ENTRIES;
   for (let i = 0; i < toRemove; i++) {
-    processes.delete(completed[i].id);
+    const entry = completed[i];
+    if (entry) processes.delete(entry.id);
   }
 }

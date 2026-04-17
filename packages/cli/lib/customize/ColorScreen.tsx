@@ -18,7 +18,7 @@ export function ColorScreen({
   colors,
   colorIdx,
 }: ColorScreenProps): React.ReactNode {
-  const previewColor = colors[colorIdx];
+  const previewColor = colors[colorIdx] ?? currentColor;
   return (
     <Box flexDirection="column" padding={1}>
       <Text bold>Change color</Text>

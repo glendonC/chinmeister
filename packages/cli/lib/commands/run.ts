@@ -50,8 +50,9 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
+    if (arg === undefined) continue;
     if (arg === '--tool') {
-      toolId = args[i + 1] || null;
+      toolId = args[i + 1] ?? null;
       i += 1;
       continue;
     }

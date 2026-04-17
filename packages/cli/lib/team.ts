@@ -3,7 +3,7 @@ import { loadConfig, configExists } from './config.js';
 import { api } from './api.js';
 import { writeFileAtomicSync } from '@chinwag/shared/fs-atomic.js';
 
-export async function handleTeamCommand(subcmd: string, arg?: string): Promise<void> {
+export async function handleTeamCommand(subcmd: string | undefined, arg?: string): Promise<void> {
   if (!configExists()) {
     console.log('Run `npx chinwag` first to create an account.');
     return;

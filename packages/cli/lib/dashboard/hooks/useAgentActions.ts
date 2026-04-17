@@ -131,7 +131,7 @@ export function useAgentActions({
       tools.readyCliAgents.length > 0 ? tools.readyCliAgents : managed.installedCliAgents;
     if (pickerTools.length === 0) {
       flash('No tools configured. Run chinwag add <tool>.', { tone: 'warning' });
-    } else if (pickerTools.length === 1) {
+    } else if (pickerTools.length === 1 && pickerTools[0]) {
       handleSpawnAgent(pickerTools[0], '', { flashSuccess: true });
     } else {
       tools.setToolPickerIdx(0);

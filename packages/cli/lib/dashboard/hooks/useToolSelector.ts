@@ -46,7 +46,8 @@ export function useToolSelector({
     if (tools.launcherChoices.length <= 1) return;
     const currentIdx = tools.launcherChoices.findIndex((t) => t.id === tools.launchToolId);
     const nextIdx = (currentIdx + 1) % tools.launcherChoices.length;
-    tools.setLaunchToolId(tools.launcherChoices[nextIdx].id);
+    const nextTool = tools.launcherChoices[nextIdx];
+    if (nextTool) tools.setLaunchToolId(nextTool.id);
   }
 
   function resolveReadyTool(query: string): ManagedTool | null {

@@ -136,9 +136,11 @@ export function smartSummary(activity: AgentActivity | null | undefined): string
   if (!activity?.summary) return null;
   const summary = activity.summary;
   if (/^editing\s/i.test(summary)) return null;
+  const firstFile = activity.files?.[0];
   if (
     activity.files?.length === 1 &&
-    summary.toLowerCase().includes(basename(activity.files[0]).toLowerCase())
+    firstFile &&
+    summary.toLowerCase().includes(basename(firstFile).toLowerCase())
   ) {
     return null;
   }
@@ -252,7 +254,7 @@ export function countLiveAgents(agentRows: CombinedAgentRow[] | null | undefined
 export function shortAgentId(agentId: string | null | undefined): string {
   if (!agentId) return '';
   const parts = agentId.split(':');
-  if (parts.length >= 3) return parts[2].slice(0, 4);
+  if (parts.length >= 3 && parts[2]) return parts[2].slice(0, 4);
   return '';
 }
 

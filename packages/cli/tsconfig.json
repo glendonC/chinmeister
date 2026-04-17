@@ -5,7 +5,8 @@
     "outDir": "./dist",
     "jsx": "react-jsx",
     "types": ["node"],
-    "exactOptionalPropertyTypes": true
+    "exactOptionalPropertyTypes": true,
+    "noUncheckedIndexedAccess": true
   },
   "include": ["**/*.ts", "**/*.tsx"],
   "exclude": ["node_modules", "dist", "lib/__tests__"]

@@ -161,7 +161,7 @@ export function createCommandHandler({
       return;
     }
 
-    const [verbRaw, ...restParts] = text.split(/\s+/);
+    const [verbRaw = '', ...restParts] = text.split(/\s+/);
     const verb = verbRaw.toLowerCase();
     const rest = restParts.join(' ').trim();
 

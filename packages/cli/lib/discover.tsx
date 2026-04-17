@@ -149,7 +149,8 @@ export function Discover({ config, navigate }: DiscoverProps): React.ReactNode {
     // Number keys to quick-add recommendations
     const num = parseInt(ch, 10);
     if (num >= 1 && num <= recommendations.length) {
-      addTool(recommendations[num - 1]);
+      const rec = recommendations[num - 1];
+      if (rec) addTool(rec);
       return;
     }
 
@@ -160,9 +161,11 @@ export function Discover({ config, navigate }: DiscoverProps): React.ReactNode {
       } else {
         const idx = categoryKeys.indexOf(selectedCategory);
         if (key.rightArrow && idx < categoryKeys.length - 1) {
-          setSelectedCategory(categoryKeys[idx + 1]);
+          const next = categoryKeys[idx + 1];
+          if (next) setSelectedCategory(next);
         } else if (key.leftArrow && idx > 0) {
-          setSelectedCategory(categoryKeys[idx - 1]);
+          const prev = categoryKeys[idx - 1];
+          if (prev) setSelectedCategory(prev);
         }
       }
     }

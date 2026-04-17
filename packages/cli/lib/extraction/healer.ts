@@ -193,7 +193,7 @@ function writeHealedSpec(toolId: string, spec: ParserSpec): string {
 function parseSpecFromResponse(response: string, toolId: string): ParserSpec | null {
   // Extract JSON from LLM response (may be wrapped in markdown code blocks)
   const jsonMatch = response.match(/```(?:json)?\s*\n?([\s\S]*?)\n?\s*```/);
-  const raw = jsonMatch ? jsonMatch[1] : response;
+  const raw = jsonMatch?.[1] ?? response;
 
   try {
     const parsed = JSON.parse(raw.trim()) as ParserSpec;

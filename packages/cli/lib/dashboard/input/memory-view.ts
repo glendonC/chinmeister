@@ -121,7 +121,8 @@ export function handleGlobalShortcuts(
       memory.setDeleteConfirm(true);
       return true;
     }
-    memory.deleteMemoryItem(visibleMemories[memory.memorySelectedIdx]);
+    const target = visibleMemories[memory.memorySelectedIdx];
+    if (target) memory.deleteMemoryItem(target);
     return true;
   }
 

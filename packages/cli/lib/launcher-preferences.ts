@@ -79,6 +79,6 @@ export function resolvePreferredManagedTool(
     if (preferredTool) return preferredTool;
   }
 
-  if (tools.length === 1) return tools[0];
+  if (tools.length === 1) return tools[0] ?? null;
   return null;
 }

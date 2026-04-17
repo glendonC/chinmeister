@@ -325,7 +325,8 @@ export function Customize({
         return;
       }
       if (key.return) {
-        saveColor(colors[nav.colorIdx]);
+        const selectedColor = colors[nav.colorIdx];
+        if (selectedColor) saveColor(selectedColor);
         return;
       }
     }
@@ -333,7 +334,8 @@ export function Customize({
     if (nav.mode === 'tools') {
       const num = parseInt(ch, 10);
       if (num >= 1 && num <= recommendations.length) {
-        addTool(recommendations[num - 1]);
+        const tool = recommendations[num - 1];
+        if (tool) addTool(tool);
         return;
       }
     }

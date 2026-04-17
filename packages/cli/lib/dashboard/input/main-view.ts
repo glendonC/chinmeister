@@ -154,7 +154,8 @@ export function handleSessionsViewInput(
   }
   if (key.return) {
     if (selectedIdx >= 0 && selectedIdx < allVisibleAgents.length) {
-      dispatch(enterAgentFocus(liveAgents[selectedIdx]));
+      const agent = liveAgents[selectedIdx];
+      if (agent) dispatch(enterAgentFocus(agent));
     }
     return true;
   }

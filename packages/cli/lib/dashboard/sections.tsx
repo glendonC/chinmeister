@@ -7,8 +7,8 @@ import type { CombinedAgentRow, MemoryEntry } from './view.js';
 function shortSessionId(agentId: string | null | undefined): string {
   if (!agentId) return '';
   const parts = agentId.split(':');
-  if (parts.length >= 3) return parts[2].slice(0, 4);
-  if (parts.length >= 2) return parts[1].slice(0, 4);
+  if (parts.length >= 3 && parts[2]) return parts[2].slice(0, 4);
+  if (parts.length >= 2 && parts[1]) return parts[1].slice(0, 4);
   return '';
 }
 

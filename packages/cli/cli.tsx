@@ -53,7 +53,8 @@ async function handOffToRuntime(
     process.env.CHINWAG_TRANSPORT = transport;
   }
   if (stripSubcommand) {
-    process.argv = [process.argv[0], process.argv[1], ...process.argv.slice(3)];
+    const [node = '', script = ''] = process.argv;
+    process.argv = [node, script, ...process.argv.slice(3)];
   }
   await import(modulePath);
   // Keep process alive — the imported module owns the event loop from here.
@@ -270,7 +271,8 @@ function App(): React.ReactNode {
 
     const delta = key.shift ? -1 : 1;
     const nextIdx = (idx + delta + PRIMARY_MODES.length) % PRIMARY_MODES.length;
-    setScreen(PRIMARY_MODES[nextIdx].key);
+    const nextMode = PRIMARY_MODES[nextIdx];
+    if (nextMode) setScreen(nextMode.key);
   });
 
   function renderScreen({ viewportRows }: { viewportRows: number }): React.ReactNode {

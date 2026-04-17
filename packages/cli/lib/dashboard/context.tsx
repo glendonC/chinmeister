@@ -336,7 +336,7 @@ export function DataProvider({ viewportRows, children }: DataProviderProps): Rea
     [liveAgents, recentlyFinished],
   );
 
-  const selectedAgent = selectedIdx >= 0 ? allVisibleAgents[selectedIdx] : null;
+  const selectedAgent = selectedIdx >= 0 ? (allVisibleAgents[selectedIdx] ?? null) : null;
   const mainSelectedAgent = mainFocus === 'agents' ? selectedAgent : null;
   const hasLiveAgents = liveAgents.length > 0;
 

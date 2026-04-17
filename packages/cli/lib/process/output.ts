@@ -28,6 +28,7 @@ export function summarizeOutput(outputBuffer: string[], task = ''): string | nul
 
   for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
+    if (line === undefined) continue;
     if (/^(Done in \d+ms|Live|Running|Completed|failed \(|exited \()/i.test(line)) continue;
     if (/^(No files reported yet|No current work summary|No captured output yet)$/i.test(line))
       continue;
@@ -54,8 +55,10 @@ export function appendOutput(proc: ManagedProcess, data: string): void {
   if (lines.length === 0) return;
 
   // If buffer has content, the last entry might be a partial line -- append to it
-  if (proc.outputBuffer.length > 0 && !proc._lastNewline) {
-    proc.outputBuffer[proc.outputBuffer.length - 1] += lines[0];
+  const lastIdx = proc.outputBuffer.length - 1;
+  const firstChunk = lines[0];
+  if (lastIdx >= 0 && !proc._lastNewline && firstChunk !== undefined) {
+    proc.outputBuffer[lastIdx] = (proc.outputBuffer[lastIdx] ?? '') + firstChunk;
     lines.shift();
   }
 
