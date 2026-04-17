@@ -143,43 +143,53 @@ async function main() {
           const commandType = data.command_type;
           const payload = data.payload || {};
 
-          // Claim the command (first-claim-wins across all connected MCP servers)
+          // First-claim-wins across all connected MCPs. Execution is deferred
+          // until the server confirms the claim was accepted — the server
+          // responds to every claim_command with a claim_result, and the
+          // losing MCPs get { error, code: 'CONFLICT' } so their callback
+          // is a no-op. The 5-second timeout is a fallback for disconnects.
           const claimTimer = setTimeout(() => {
             pendingClaims.delete(commandId);
+            log.warn(`Claim for command ${commandId} timed out; not executing`);
           }, 5000);
-          pendingClaims.set(commandId, { timer: claimTimer });
-          ws.send(JSON.stringify({ type: 'claim_command', id: commandId }));
 
-          // Execute after a brief delay to allow claim_result to arrive
-          // (optimistic execution — if claim fails, the result is harmless)
-          setTimeout(() => {
-            let result;
-            try {
-              if (commandType === 'spawn') {
-                result = executeSpawnCommand(payload, process.cwd());
-              } else if (commandType === 'stop') {
-                result = executeStopCommand(payload);
-              } else {
-                result = { error: `Unknown command type: ${commandType}` };
+          pendingClaims.set(commandId, {
+            timer: claimTimer,
+            execute() {
+              let result;
+              try {
+                if (commandType === 'spawn') {
+                  result = executeSpawnCommand(payload, process.cwd());
+                } else if (commandType === 'stop') {
+                  result = executeStopCommand(payload);
+                } else {
+                  result = { error: `Unknown command type: ${commandType}` };
+                }
+              } catch (err) {
+                result = { error: String(err?.message || err) };
               }
-            } catch (err) {
-              result = { error: String(err?.message || err) };
-            }
 
-            const status = result.error ? 'failed' : 'completed';
-            log.info(`Command ${commandId} ${status}`);
-            try {
-              ws.send(JSON.stringify({ type: 'command_result', id: commandId, status, result }));
-            } catch {
-              /* ws may have closed */
-            }
-          }, 100);
+              const status = result.error ? 'failed' : 'completed';
+              log.info(`Command ${commandId} ${status}`);
+              try {
+                ws.send(JSON.stringify({ type: 'command_result', id: commandId, status, result }));
+              } catch {
+                /* ws may have closed */
+              }
+            },
+          });
+
+          ws.send(JSON.stringify({ type: 'claim_command', id: commandId }));
         } else if (data.type === 'claim_result') {
           const pending = pendingClaims.get(data.id);
-          if (pending) {
-            clearTimeout(pending.timer);
-            pendingClaims.delete(data.id);
+          if (!pending) return;
+          clearTimeout(pending.timer);
+          pendingClaims.delete(data.id);
+          if (data.error) {
+            // Another MCP won the claim. Silent no-op; the winner runs it.
+            return;
           }
+          pending.execute();
         }
       }
 
