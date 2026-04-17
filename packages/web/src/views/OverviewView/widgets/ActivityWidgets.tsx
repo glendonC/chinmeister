@@ -152,7 +152,7 @@ function ScopeComplexityWidget({ analytics }: WidgetBodyProps) {
               style={{
                 width: `${b.completion_rate}%`,
                 background: 'var(--success)',
-                opacity: 0.6,
+                opacity: 'var(--opacity-bar-fill)',
               }}
             />
           </div>

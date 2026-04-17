@@ -21,6 +21,27 @@ export const WORK_TYPE_COLORS: Record<string, string> = {
 
 export const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
+// ── Semantic thresholds ───────────────────────────
+// Thresholds that widgets use to switch between success/warn/danger
+// colors. Centralized here so tuning the cutoffs is a one-line change
+// rather than a grep-and-edit across widgets.
+
+export const COMPLETION_THRESHOLDS = {
+  /** Sessions at or above this completion rate render in --success. */
+  good: 70,
+  /** Below `good` but at or above `warning` render in --warn. Below render in --danger. */
+  warning: 40,
+} as const;
+
+/** Error rate (%) at or above which tool-call frequency bars tint to --warn. */
+export const TOOL_ERROR_RATE_WARN_THRESHOLD = 10;
+
+export function completionColor(rate: number): string {
+  if (rate >= COMPLETION_THRESHOLDS.good) return 'var(--success)';
+  if (rate >= COMPLETION_THRESHOLDS.warning) return 'var(--warn)';
+  return 'var(--danger)';
+}
+
 // ── Helpers ────────────────────────────────────────
 
 export function summarizeNames(items: Array<{ team_id?: string; team_name?: string }>): string {

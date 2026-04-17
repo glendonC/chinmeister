@@ -1,7 +1,12 @@
 import { useMemo, type CSSProperties } from 'react';
 import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
 import { Sparkline } from '../overview-charts.js';
-import { WORK_TYPE_COLORS, aggregateModels, formatDuration } from '../overview-utils.js';
+import {
+  TOOL_ERROR_RATE_WARN_THRESHOLD,
+  WORK_TYPE_COLORS,
+  aggregateModels,
+  formatDuration,
+} from '../overview-utils.js';
 import { getToolMeta } from '../../../lib/toolMeta.js';
 import { formatRelativeTime } from '../../../lib/relativeTime.js';
 import type { TokenUsageStats, UserAnalytics } from '../../../lib/apiSchemas.js';
@@ -222,7 +227,8 @@ function ToolCallFreqWidget({ analytics }: WidgetBodyProps) {
                 className={styles.metricBarFill}
                 style={{
                   width: `${(f.calls / maxC) * 100}%`,
-                  background: f.error_rate > 10 ? 'var(--warn)' : undefined,
+                  background:
+                    f.error_rate > TOOL_ERROR_RATE_WARN_THRESHOLD ? 'var(--warn)' : undefined,
                 }}
               />
             </div>
@@ -339,28 +345,7 @@ function TokenDetailWidget({ analytics }: WidgetBodyProps) {
       ))}
       {tu.by_tool.length > 1 && (
         <>
-          <div
-            className={styles.dataRow}
-            style={
-              {
-                '--row-index': tu.by_model.length,
-                opacity: 0.5,
-                marginTop: 8,
-              } as CSSProperties
-            }
-          >
-            <span
-              className={styles.dataName}
-              style={{
-                fontSize: 'var(--text-2xs)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
-              }}
-            >
-              By tool
-            </span>
-            <div className={styles.dataMeta} />
-          </div>
+          <span className={styles.sectionSublabel}>By tool</span>
           {tu.by_tool.map((t, i) => (
             <div
               key={t.host_tool}

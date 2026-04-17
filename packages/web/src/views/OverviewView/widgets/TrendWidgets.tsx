@@ -1,4 +1,5 @@
 import { Sparkline } from '../overview-charts.js';
+import { completionColor } from '../overview-utils.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { CoverageNote, GhostBars, GhostSparkline, capabilityCoverageNote } from './shared.js';
@@ -61,13 +62,8 @@ function HourlyEffectivenessWidget({ analytics }: WidgetBodyProps) {
                 className={styles.metricBarFill}
                 style={{
                   width: `${(h.sessions / maxS) * 100}%`,
-                  background:
-                    h.completion_rate >= 70
-                      ? 'var(--success)'
-                      : h.completion_rate >= 40
-                        ? 'var(--warn)'
-                        : 'var(--danger)',
-                  opacity: 0.6,
+                  background: completionColor(h.completion_rate),
+                  opacity: 'var(--opacity-bar-fill)',
                 }}
               />
             </div>

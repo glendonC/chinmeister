@@ -58,7 +58,7 @@ function MemoryOutcomesWidget({ analytics }: WidgetBodyProps) {
               style={{
                 width: `${m.completion_rate}%`,
                 background: 'var(--success)',
-                opacity: 0.6,
+                opacity: 'var(--opacity-bar-fill)',
               }}
             />
           </div>

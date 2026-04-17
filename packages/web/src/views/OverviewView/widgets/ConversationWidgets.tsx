@@ -60,7 +60,7 @@ function SentimentOutcomesWidget({ conversationData, analytics }: WidgetBodyProp
                 style={{
                   width: `${s.completion_rate}%`,
                   background: SENTIMENT_COLORS[s.dominant_sentiment] || 'var(--ghost)',
-                  opacity: 0.6,
+                  opacity: 'var(--opacity-bar-fill)',
                 }}
               />
             </div>

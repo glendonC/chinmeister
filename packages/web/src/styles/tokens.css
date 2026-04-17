@@ -38,6 +38,13 @@
   /* ── Breakpoints (for documentation — CSS can't use vars in @media) ── */
   /* Mobile: 480px | Small: 640px | Medium: 768px | Large: 900px | Wide: 980px */
 
+  /* ── Bar fill opacity ──
+     Single source of truth for the muted look that applies to the fill
+     bands of the comparative bar widgets (tool-outcomes, scope-complexity,
+     sentiment-outcomes, memory-outcomes, work-type-outcomes,
+     hourly-effectiveness). Hardcoded in 7+ places before consolidation. */
+  --opacity-bar-fill: 0.6;
+
   /* ── Work-type palette ──
      Categorical palette for the work-type widgets (work-types,
      work-type-outcomes, tool-work-type). Aliases existing semantic

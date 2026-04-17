@@ -38,7 +38,7 @@ function OutcomeBar({ cs }: { cs: UserAnalytics['completion_summary'] }) {
             style={{
               width: `${(i.count / cs.total_sessions) * 100}%`,
               background: i.color,
-              opacity: i.key === 'unknown' ? 1 : 0.6,
+              opacity: i.key === 'unknown' ? 1 : 'var(--opacity-bar-fill)',
             }}
           />
         ))}
@@ -71,7 +71,7 @@ function StucknessWidget({ analytics }: WidgetBodyProps) {
           const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
           const color = d === 0 ? 'var(--muted)' : d < 0 ? 'var(--success)' : 'var(--danger)';
           return (
-            <span style={{ color, marginLeft: 6, fontSize: 'var(--text-2xs)' }}>
+            <span className={styles.statInlineDelta} style={{ color }}>
               {arrow}
               {Math.abs(Math.round(d * 10) / 10)}
             </span>
@@ -114,7 +114,7 @@ function WorkTypeOutcomesWidget({ analytics }: WidgetBodyProps) {
               style={{
                 width: `${w.completion_rate}%`,
                 background: WORK_TYPE_COLORS[w.work_type] || WORK_TYPE_COLORS.other,
-                opacity: 0.6,
+                opacity: 'var(--opacity-bar-fill)',
               }}
             />
           </div>
@@ -157,7 +157,7 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
               style={{
                 width: `${(t.completed / maxT) * 100}%`,
                 background: 'var(--success)',
-                opacity: 0.6,
+                opacity: 'var(--opacity-bar-fill)',
               }}
             />
             <div
@@ -165,7 +165,7 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
               style={{
                 width: `${(t.abandoned / maxT) * 100}%`,
                 background: 'var(--warn)',
-                opacity: 0.6,
+                opacity: 'var(--opacity-bar-fill)',
               }}
             />
             <div
@@ -173,7 +173,7 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
               style={{
                 width: `${(t.failed / maxT) * 100}%`,
                 background: 'var(--danger)',
-                opacity: 0.6,
+                opacity: 'var(--opacity-bar-fill)',
               }}
             />
           </div>
