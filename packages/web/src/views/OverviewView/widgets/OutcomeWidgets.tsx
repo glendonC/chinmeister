@@ -19,28 +19,7 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
 
 function OutcomeBar({ cs }: { cs: UserAnalytics['completion_summary'] }) {
   if (cs.total_sessions === 0) {
-    return (
-      <>
-        <div className={styles.outcomeBar}>
-          <div
-            className={styles.outcomeSegment}
-            style={{ width: '100%', background: 'var(--ghost)' }}
-          />
-        </div>
-        <div
-          className={styles.outcomeLegend}
-          style={{ flexDirection: 'column', gap: 8, marginTop: 12, opacity: 0.3 }}
-        >
-          {['finished', 'abandoned', 'failed'].map((l) => (
-            <div key={l} className={styles.outcomeItem}>
-              <span className={styles.outcomeDot} style={{ background: 'var(--ghost)' }} />
-              <span className={styles.outcomeValue}>—</span>
-              <span className={styles.outcomeLabel}>{l}</span>
-            </div>
-          ))}
-        </div>
-      </>
-    );
+    return <SectionEmpty>No sessions yet</SectionEmpty>;
   }
   const items = [
     { key: 'completed', count: cs.completed, color: 'var(--success)', label: 'finished' },

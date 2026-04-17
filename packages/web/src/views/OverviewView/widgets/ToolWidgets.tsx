@@ -51,23 +51,7 @@ function ToolDepthBars({ toolId }: { toolId: string }) {
 function ToolsWidget({ analytics }: WidgetBodyProps) {
   const tools = analytics.tool_comparison;
   if (tools.length === 0) {
-    return (
-      <div className={styles.factualGrid} style={{ opacity: 0.3 }}>
-        {[1, 2].map((i) => (
-          <div key={i} className={styles.factualItem}>
-            <span className={styles.toolIconLetter} style={{ background: 'var(--ghost)' }}>
-              ?
-            </span>
-            <div>
-              <span className={styles.factualLabel} style={{ color: 'var(--muted)' }}>
-                —
-              </span>
-              <div className={styles.factualMeta}>— sessions · — edits</div>
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    return <SectionEmpty>Connect a tool to see comparison</SectionEmpty>;
   }
   return (
     <div className={styles.factualGrid}>

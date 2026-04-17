@@ -426,9 +426,23 @@
   gap: 2px;
   flex: 1;
   min-height: 0;
-  /* No overflow: the widget's own overflow: hidden handles vertical
-   * clipping. Rows beyond the visible widget height are truncated;
-   * clicking any row opens LiveNowView for the full picture. */
+  /* Scroll within the widget when the team runs many agents concurrently
+   * (8+ on hackathons / large teams). Previously rows beyond the visible
+   * widget height were silently clipped, which hid the overflow from
+   * users at team scale. Clicking any row still opens LiveNowView for
+   * the full-page view; the scroll is a discoverability affordance. */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--soft) transparent;
+}
+
+.liveTableBody::-webkit-scrollbar {
+  width: 4px;
+}
+
+.liveTableBody::-webkit-scrollbar-thumb {
+  background: var(--soft);
+  border-radius: 2px;
 }
 
 .liveTableRow {
