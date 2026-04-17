@@ -30,12 +30,12 @@ vi.mock('../api.js', () => ({
   api: vi.fn().mockReturnValue({}),
 }));
 
-vi.mock('../../../shared/session-registry.js', () => ({
+vi.mock('@chinwag/shared/session-registry.js', () => ({
   isProcessAlive: vi.fn().mockReturnValue(true),
   pingAgentTerminal: vi.fn(),
 }));
 
-import { pingAgentTerminal } from '../../../shared/session-registry.js';
+import { pingAgentTerminal } from '@chinwag/shared/session-registry.js';
 
 // --- shouldRequestAttention logic ---
 // Extracted from channel.js for testing. We test the pattern directly.

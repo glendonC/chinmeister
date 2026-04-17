@@ -181,4 +181,34 @@ export default [
       },
     },
   },
+
+  // Guardrail: cross-package imports must go through @chinwag/shared, never
+  // via relative paths that reach out of the current package root. Relative
+  // paths break when packages move, bypass the exports map (no subpath
+  // restriction, no type-only resolution), and allow one test to quietly
+  // couple the MCP server to the worker's internals. Enforcement avoids the
+  // drift that the one-off channel-server.test.js violation represented.
+  {
+    files: ['packages/*/**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts}'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: [
+                '**/../cli/**',
+                '**/../mcp/**',
+                '**/../shared/**',
+                '**/../web/**',
+                '**/../worker/**',
+              ],
+              message:
+                'Cross-package imports must use the package name (e.g. @chinwag/shared/...). Relative paths that escape the current package are forbidden.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 ];
