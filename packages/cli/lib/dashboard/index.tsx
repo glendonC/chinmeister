@@ -15,23 +15,14 @@ import { formatProjectPath } from './utils.js';
 import { useDashboardHandlers } from './useDashboardHandlers.js';
 import { useDashboardHints } from './useDashboardHints.js';
 import { DashboardGuards } from './DashboardGuards.jsx';
-import {
-  ViewProvider,
-  ConnectionProvider,
-  AgentProvider,
-  ComposerProvider,
-  MemoryProvider,
-  IntegrationProvider,
-  DataProvider,
-  useView,
-  useConnection,
-  useAgents,
-  useComposerCtx,
-  useMemory,
-  useIntegrations,
-  useData,
-  useCommandSuggestions,
-} from './context.jsx';
+import { ViewProvider, useView, useCommandSuggestions } from './context.jsx';
+import { useDashboardData } from './hooks/useDashboardData.js';
+import type { DashboardDerivedData } from './hooks/useDashboardData.js';
+import type { UseAgentLifecycleReturn } from './agents.js';
+import type { UseMemoryManagerReturn } from './memory.js';
+import type { UseComposerReturn } from './composer.js';
+import type { UseIntegrationDoctorReturn } from './integrations.js';
+import type { UseDashboardConnectionReturn } from './connection.jsx';
 import type { ChinwagConfig } from '../config.js';
 
 interface FooterHint {
@@ -144,7 +135,7 @@ function DashboardProviders({
   setFooterHints,
   stdout,
 }: DashboardProvidersProps): React.ReactNode {
-  const { flash } = useView();
+  const { state, dispatch, notice, flash } = useView();
 
   // ── Connection + project state ─────────────────────
   const connection = useDashboardConnection({ config, stdout });
@@ -175,26 +166,31 @@ function DashboardProviders({
     clearMemoryInput: memoryHook.clearMemoryInput,
   });
 
-  // ── Nested provider tree ──────────────────────────
+  // ── Derived data (replaces the former DataProvider context) ─────────
+  const data = useDashboardData({
+    viewportRows,
+    state,
+    dispatch,
+    connection,
+    agents: agentsHook,
+    memory: memoryHook,
+    composer,
+  });
+
   return (
     <DashboardErrorBoundary>
-      <ConnectionProvider connection={connection}>
-        <AgentProvider value={agentsHook}>
-          <ComposerProvider value={composer}>
-            <MemoryProvider value={memoryHook}>
-              <IntegrationProvider value={integrations}>
-                <DataProvider viewportRows={viewportRows}>
-                  <DashboardViewComponent
-                    config={config}
-                    navigate={navigate}
-                    setFooterHints={setFooterHints}
-                  />
-                </DataProvider>
-              </IntegrationProvider>
-            </MemoryProvider>
-          </ComposerProvider>
-        </AgentProvider>
-      </ConnectionProvider>
+      <DashboardViewComponent
+        config={config}
+        navigate={navigate}
+        setFooterHints={setFooterHints}
+        connection={connection}
+        agents={agentsHook}
+        composer={composer}
+        memory={memoryHook}
+        integrations={integrations}
+        data={data}
+        notice={notice}
+      />
     </DashboardErrorBoundary>
   );
 }
@@ -203,25 +199,32 @@ interface DashboardViewProps {
   config: ChinwagConfig | null;
   navigate: (to: string) => void;
   setFooterHints: ((hints: FooterHint[]) => void) | null;
+  connection: UseDashboardConnectionReturn;
+  agents: UseAgentLifecycleReturn;
+  composer: UseComposerReturn;
+  memory: UseMemoryManagerReturn;
+  integrations: UseIntegrationDoctorReturn;
+  data: DashboardDerivedData;
+  notice: ReturnType<typeof useView>['notice'];
 }
 
 /**
- * Handles input, rendering, and all view-level logic.
- * Consumes providers for domain data and useCommandSuggestions hook
- * for command palette.
+ * Handles input, rendering, and all view-level logic. Takes hook returns
+ * as props — only view-state is still read from a context, since that is
+ * the one piece of state genuinely shared with outer components.
  */
 function DashboardViewComponent({
   config,
   navigate,
   setFooterHints,
+  connection,
+  agents: agentsHook,
+  composer,
+  memory: memoryHook,
+  integrations,
+  data,
+  notice,
 }: DashboardViewProps): React.ReactNode {
-  // ── Context hooks ─────────────────────────────────
-  const connection = useConnection();
-  const agentsHook = useAgents();
-  const composer = useComposerCtx();
-  const memoryHook = useMemory();
-  const integrations = useIntegrations();
-
   const {
     context,
     error,
@@ -234,13 +237,13 @@ function DashboardViewComponent({
   } = connection;
 
   // ── View state from ViewProvider ───────────────────
-  const { state, dispatch, notice, flash } = useView();
+  const { state, dispatch, flash } = useView();
   const { view, focusedAgent, showDiagnostics } = state;
   const isSessionsView = view === 'sessions';
   const isMemoryView = view === 'memory';
   const isAgentFocusView = view === 'agent-focus';
 
-  // ── Context-derived data ───────────────────────────
+  // ── Derived data ───────────────────────────────────
   const {
     combinedAgents,
     liveAgents,
@@ -256,7 +259,7 @@ function DashboardViewComponent({
     visibleMemories,
     visibleKnowledgeRows,
     hasMemories,
-  } = useData();
+  } = data;
 
   const commandSuggestions = useCommandSuggestions({
     composer,

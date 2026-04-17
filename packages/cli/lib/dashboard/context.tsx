@@ -1,3 +1,22 @@
+/**
+ * Dashboard view state — reducer + flash notifications.
+ *
+ * This file used to host a mega-provider with seven contexts (View,
+ * Connection, Agent, Composer, Memory, Integration, Data). Six of those
+ * had exactly one consumer and existed purely to shuttle hook returns
+ * between sibling components. They've been collapsed: DashboardProviders
+ * now builds the hooks and passes them explicitly as props, and the
+ * DataProvider body lives as a hook at ./hooks/useDashboardData.ts.
+ *
+ * ViewProvider stays because it has multiple consumers at different
+ * nesting levels (the outer DashboardProviders reads `flash` from it,
+ * and the inner DashboardViewComponent reads `state`, `dispatch`, and
+ * `notice`) — that's the case where a context genuinely earns its
+ * keep.
+ *
+ * useCommandSuggestions stays here because it's still the command
+ * palette logic; it has no context dependency, just args in, list out.
+ */
 import React, {
   createContext,
   useContext,
@@ -9,26 +28,16 @@ import React, {
   useState,
 } from 'react';
 import type { Dispatch, ReactNode } from 'react';
-import { basename } from 'path';
-import { buildCombinedAgentRows, buildDashboardView } from './view.js';
-import type { CombinedAgentRow, ManagedAgent, MemoryEntry } from './view.js';
 import { isAgentAddressable } from './agent-display.js';
-import { getVisibleWindow } from './utils.js';
-import {
-  RECENTLY_FINISHED_LIMIT,
-  MIN_VIEWPORT_ROWS,
-  VIEWPORT_CHROME_ROWS,
-  COMMAND_SUGGESTION_LIMIT,
-} from './constants.js';
-import { dashboardReducer, createInitialState, clampSelection } from './reducer.js';
+import { COMMAND_SUGGESTION_LIMIT } from './constants.js';
+import { dashboardReducer, createInitialState } from './reducer.js';
 import type { DashboardState, DashboardAction, DashboardNotice, NoticeTone } from './reducer.js';
 import type { UseAgentLifecycleReturn } from './agents.js';
-import type { UseMemoryManagerReturn } from './memory.js';
 import type { UseComposerReturn } from './composer.js';
 import type { UseIntegrationDoctorReturn } from './integrations.js';
-import type { UseDashboardConnectionReturn } from './connection.jsx';
+import type { CombinedAgentRow } from './view.js';
 
-// ── Context value types ────────────────────────────
+// ── View context ─────────────────────────────────────
 
 interface ViewContextValue {
   state: DashboardState;
@@ -37,130 +46,13 @@ interface ViewContextValue {
   flash: (msg: string, opts?: { tone?: NoticeTone; autoClearMs?: number }) => void;
 }
 
-interface DataContextValue {
-  // Agent-derived data
-  combinedAgents: CombinedAgentRow[];
-  liveAgents: CombinedAgentRow[];
-  allVisibleAgents: CombinedAgentRow[];
-  selectedAgent: CombinedAgentRow | null;
-  mainSelectedAgent: CombinedAgentRow | null;
-  hasLiveAgents: boolean;
-  liveAgentNameCounts: Map<string, number>;
-  visibleSessionRows: { items: CombinedAgentRow[]; start: number };
-  conflicts: Array<[string, string[]]>;
-  getToolName: (id: string) => string | null;
-  // Memory-derived data
-  memories: MemoryEntry[];
-  filteredMemories: MemoryEntry[];
-  visibleMemories: MemoryEntry[];
-  visibleKnowledgeRows: { items: MemoryEntry[]; start: number };
-  hasMemories: boolean;
-}
-
-export interface CommandSuggestion {
-  name: string;
-  description: string;
-}
-
-// ── Contexts ────────────────────────────────────────
-
 const ViewContext = createContext<ViewContextValue | null>(null);
-const ConnectionContext = createContext<UseDashboardConnectionReturn | null>(null);
-const AgentContext = createContext<UseAgentLifecycleReturn | null>(null);
-const ComposerContext = createContext<UseComposerReturn | null>(null);
-const MemoryContext = createContext<UseMemoryManagerReturn | null>(null);
-const IntegrationContext = createContext<UseIntegrationDoctorReturn | null>(null);
-const DataContext = createContext<DataContextValue | null>(null);
-
-// ── Hooks ───────────────────────────────────────────
 
 export function useView(): ViewContextValue {
   const ctx = useContext(ViewContext);
   if (!ctx) throw new Error('useView must be used within ViewProvider');
   return ctx;
 }
-
-export function useConnection(): UseDashboardConnectionReturn {
-  const ctx = useContext(ConnectionContext);
-  if (!ctx) throw new Error('useConnection must be used within ConnectionProvider');
-  return ctx;
-}
-
-export function useAgents(): UseAgentLifecycleReturn {
-  const ctx = useContext(AgentContext);
-  if (!ctx) throw new Error('useAgents must be used within AgentProvider');
-  return ctx;
-}
-
-export function useComposerCtx(): UseComposerReturn {
-  const ctx = useContext(ComposerContext);
-  if (!ctx) throw new Error('useComposerCtx must be used within ComposerProvider');
-  return ctx;
-}
-
-export function useMemory(): UseMemoryManagerReturn {
-  const ctx = useContext(MemoryContext);
-  if (!ctx) throw new Error('useMemory must be used within MemoryProvider');
-  return ctx;
-}
-
-export function useIntegrations(): UseIntegrationDoctorReturn {
-  const ctx = useContext(IntegrationContext);
-  if (!ctx) throw new Error('useIntegrations must be used within IntegrationProvider');
-  return ctx;
-}
-
-export function useData(): DataContextValue {
-  const ctx = useContext(DataContext);
-  if (!ctx) throw new Error('useData must be used within DataProvider');
-  return ctx;
-}
-
-/** Focused selector for agent-related data from DataProvider. */
-export function useAgentData(): Pick<
-  DataContextValue,
-  | 'combinedAgents'
-  | 'liveAgents'
-  | 'allVisibleAgents'
-  | 'selectedAgent'
-  | 'mainSelectedAgent'
-  | 'hasLiveAgents'
-  | 'liveAgentNameCounts'
-  | 'visibleSessionRows'
-  | 'conflicts'
-  | 'getToolName'
-> {
-  const data = useData();
-  return {
-    combinedAgents: data.combinedAgents,
-    liveAgents: data.liveAgents,
-    allVisibleAgents: data.allVisibleAgents,
-    selectedAgent: data.selectedAgent,
-    mainSelectedAgent: data.mainSelectedAgent,
-    hasLiveAgents: data.hasLiveAgents,
-    liveAgentNameCounts: data.liveAgentNameCounts,
-    visibleSessionRows: data.visibleSessionRows,
-    conflicts: data.conflicts,
-    getToolName: data.getToolName,
-  };
-}
-
-/** Focused selector for memory-related data from DataProvider. */
-export function useMemoryData(): Pick<
-  DataContextValue,
-  'memories' | 'filteredMemories' | 'visibleMemories' | 'visibleKnowledgeRows' | 'hasMemories'
-> {
-  const data = useData();
-  return {
-    memories: data.memories,
-    filteredMemories: data.filteredMemories,
-    visibleMemories: data.visibleMemories,
-    visibleKnowledgeRows: data.visibleKnowledgeRows,
-    hasMemories: data.hasMemories,
-  };
-}
-
-// ── Providers ───────────────────────────────────────
 
 interface ViewProviderProps {
   children: ReactNode;
@@ -169,8 +61,6 @@ interface ViewProviderProps {
 /**
  * View state: owns the dashboard reducer (view, selectedIdx, mainFocus,
  * focusedAgent, showDiagnostics, heroInput) plus the flash notification.
- * Every component that previously received these as props can now
- * `useView()` instead.
  */
 export function ViewProvider({ children }: ViewProviderProps): React.ReactNode {
   const [state, dispatch] = useReducer(dashboardReducer, undefined, createInitialState);
@@ -210,219 +100,12 @@ export function ViewProvider({ children }: ViewProviderProps): React.ReactNode {
   return <ViewContext.Provider value={value}>{children}</ViewContext.Provider>;
 }
 
-interface ConnectionProviderProps {
-  connection: UseDashboardConnectionReturn;
-  children: ReactNode;
-}
-
-/**
- * Connection state: teamId, teamName, projectRoot, connState, etc.
- * Thin wrapper — the useDashboardConnection hook does the real work.
- */
-export function ConnectionProvider({
-  connection,
-  children,
-}: ConnectionProviderProps): React.ReactNode {
-  return <ConnectionContext.Provider value={connection}>{children}</ConnectionContext.Provider>;
-}
-
-interface AgentProviderProps {
-  value: UseAgentLifecycleReturn;
-  children: ReactNode;
-}
-
-export function AgentProvider({ value, children }: AgentProviderProps): React.ReactNode {
-  return <AgentContext.Provider value={value}>{children}</AgentContext.Provider>;
-}
-
-interface ComposerProviderProps {
-  value: UseComposerReturn;
-  children: ReactNode;
-}
-
-export function ComposerProvider({ value, children }: ComposerProviderProps): React.ReactNode {
-  return <ComposerContext.Provider value={value}>{children}</ComposerContext.Provider>;
-}
-
-interface MemoryProviderProps {
-  value: UseMemoryManagerReturn;
-  children: ReactNode;
-}
-
-export function MemoryProvider({ value, children }: MemoryProviderProps): React.ReactNode {
-  return <MemoryContext.Provider value={value}>{children}</MemoryContext.Provider>;
-}
-
-interface IntegrationProviderProps {
-  value: UseIntegrationDoctorReturn;
-  children: ReactNode;
-}
-
-export function IntegrationProvider({
-  value,
-  children,
-}: IntegrationProviderProps): React.ReactNode {
-  return <IntegrationContext.Provider value={value}>{children}</IntegrationContext.Provider>;
-}
-
-interface DataProviderProps {
-  viewportRows: number;
-  children: ReactNode;
-}
-
-/**
- * Combined data context: merges agent and memory derived data into a single provider.
- * Owns: combinedAgents, liveAgents, allVisibleAgents, selection clamping,
- * visibleSessionRows, liveAgentNameCounts, conflicts, memories, filteredMemories,
- * visibleMemories, visibleKnowledgeRows, hasMemories.
- *
- * Reads from AgentProvider, ComposerProvider, MemoryProvider, and ConnectionProvider
- * via context hooks instead of props.
- */
-export function DataProvider({ viewportRows, children }: DataProviderProps): React.ReactNode {
-  const { state, dispatch } = useView();
-  const { selectedIdx, mainFocus } = state;
-  const agents = useAgents();
-  const memory = useMemory();
-  const composer = useComposerCtx();
-  const { context, detectedTools, teamName, cols } = useConnection();
-
-  const memorySearch = composer.composeMode === 'memory-search' ? memory.memorySearch : '';
-
-  // Build dashboard view data (tool name resolver, visible agents, conflicts, memories)
-  const dashboardView = useMemo(
-    () =>
-      buildDashboardView({
-        context: context ?? undefined,
-        detectedTools,
-        memoryFilter: null,
-        memorySearch,
-        cols,
-        projectDir: teamName || basename(process.cwd()),
-      }),
-    [context, detectedTools, memorySearch, cols, teamName],
-  );
-
-  // ── Agent-derived data ────────────────────────────
-
-  // Build combined agent rows from managed + connected
-  const combinedAgents = useMemo(
-    () =>
-      buildCombinedAgentRows({
-        // AgentInfo[] from process-manager shares the same shape as ManagedAgent
-        managedAgents: agents.managedAgents as ManagedAgent[],
-        connectedAgents: dashboardView.visibleAgents,
-        getToolName: dashboardView.getToolName,
-      }),
-    [agents.managedAgents, dashboardView.visibleAgents, dashboardView.getToolName],
-  );
-
-  const liveAgents = useMemo(
-    () => combinedAgents.filter((agent) => !agent._dead),
-    [combinedAgents],
-  );
-
-  const recentlyFinished = useMemo(
-    () =>
-      combinedAgents
-        .filter((agent) => agent._managed && agent._dead)
-        .sort((a, b) => (b.startedAt || 0) - (a.startedAt || 0))
-        .slice(0, RECENTLY_FINISHED_LIMIT),
-    [combinedAgents],
-  );
-
-  const allVisibleAgents = useMemo(
-    () => [...liveAgents, ...recentlyFinished],
-    [liveAgents, recentlyFinished],
-  );
-
-  const selectedAgent = selectedIdx >= 0 ? (allVisibleAgents[selectedIdx] ?? null) : null;
-  const mainSelectedAgent = mainFocus === 'agents' ? selectedAgent : null;
-  const hasLiveAgents = liveAgents.length > 0;
-
-  const liveAgentNameCounts = useMemo(
-    () =>
-      liveAgents.reduce((counts, agent) => {
-        const label = agent._display || agent.toolName || agent.tool || 'agent';
-        counts.set(label, (counts.get(label) || 0) + 1);
-        return counts;
-      }, new Map<string, number>()),
-    [liveAgents],
-  );
-
-  const maxViewportItems = Math.max(MIN_VIEWPORT_ROWS, viewportRows - VIEWPORT_CHROME_ROWS);
-  const visibleSessionRows = useMemo(
-    () => getVisibleWindow(allVisibleAgents, selectedIdx, maxViewportItems),
-    [allVisibleAgents, selectedIdx, maxViewportItems],
-  );
-
-  // Clamp selection indices when agent list shrinks
-  useEffect(() => {
-    dispatch(clampSelection(allVisibleAgents.length));
-  }, [allVisibleAgents.length, dispatch]);
-
-  // ── Memory-derived data ───────────────────────────
-
-  const { memories, filteredMemories, visibleMemories } = dashboardView;
-  const hasMemories = memories.length > 0;
-
-  const visibleKnowledgeRows = useMemo(
-    () => getVisibleWindow(visibleMemories, memory.memorySelectedIdx, maxViewportItems),
-    [visibleMemories, memory.memorySelectedIdx, maxViewportItems],
-  );
-
-  // Clamp memory selection when list shrinks
-  useEffect(() => {
-    if (memory.memorySelectedIdx >= visibleMemories.length) {
-      memory.setMemorySelectedIdx(visibleMemories.length > 0 ? visibleMemories.length - 1 : -1);
-    }
-  }, [memory.memorySelectedIdx, visibleMemories.length, memory]);
-
-  // ── Combined value ────────────────────────────────
-
-  const value = useMemo(
-    () => ({
-      // Agent-derived
-      combinedAgents,
-      liveAgents,
-      allVisibleAgents,
-      selectedAgent,
-      mainSelectedAgent,
-      hasLiveAgents,
-      liveAgentNameCounts,
-      visibleSessionRows,
-      conflicts: dashboardView.conflicts,
-      getToolName: dashboardView.getToolName,
-      // Memory-derived
-      memories,
-      filteredMemories,
-      visibleMemories,
-      visibleKnowledgeRows,
-      hasMemories,
-    }),
-    [
-      combinedAgents,
-      liveAgents,
-      allVisibleAgents,
-      selectedAgent,
-      mainSelectedAgent,
-      hasLiveAgents,
-      liveAgentNameCounts,
-      visibleSessionRows,
-      dashboardView.conflicts,
-      dashboardView.getToolName,
-      memories,
-      filteredMemories,
-      visibleMemories,
-      visibleKnowledgeRows,
-      hasMemories,
-    ],
-  );
-
-  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
-}
-
 // ── Command palette hook ────────────────────────────
+
+export interface CommandSuggestion {
+  name: string;
+  description: string;
+}
 
 interface UseCommandSuggestionsArgs {
   composer: UseComposerReturn;

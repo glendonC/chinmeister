@@ -245,24 +245,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-// ── useView / useConnection / useData throw outside providers ───
+// ── useView throws outside ViewProvider ────────────────
+// Connection/Agent/Composer/Memory/Integration/Data contexts were collapsed
+// into plain hook returns passed as props — they no longer exist to throw.
 
 describe('context hooks outside providers', () => {
   it('useView throws when used outside ViewProvider', async () => {
     const mod = await loadContextModule();
     expect(() => mod.useView()).toThrow('useView must be used within ViewProvider');
-  });
-
-  it('useConnection throws when used outside ConnectionProvider', async () => {
-    const mod = await loadContextModule();
-    expect(() => mod.useConnection()).toThrow(
-      'useConnection must be used within ConnectionProvider',
-    );
-  });
-
-  it('useData throws when used outside DataProvider', async () => {
-    const mod = await loadContextModule();
-    expect(() => mod.useData()).toThrow('useData must be used within DataProvider');
   });
 });
 
@@ -596,18 +586,7 @@ describe('useCommandSuggestions', () => {
   });
 });
 
-// ── ConnectionProvider ─────────────────────────────────
-
-describe('ConnectionProvider', () => {
-  it('is an exported function', async () => {
-    const mod = await loadContextModule();
-    expect(typeof mod.ConnectionProvider).toBe('function');
-  });
-
-  it('renders without throwing', async () => {
-    const mod = await loadContextModule();
-    resetHookSim();
-    const connection = { teamId: 'team_1', connState: 'connected' };
-    expect(() => mod.ConnectionProvider({ connection, children: null })).not.toThrow();
-  });
-});
+// ConnectionProvider and the other pass-through providers (Agent, Composer,
+// Memory, Integration, Data) were deleted. Connection data is now passed as
+// a prop from DashboardProviders → DashboardViewComponent. No provider, no
+// test to write.
