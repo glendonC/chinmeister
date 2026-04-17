@@ -6,9 +6,10 @@
 // Adding a new tool = adding one entry there. No logic changes here.
 
 import chalk from 'chalk';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { basename, join } from 'path';
 import { configExists, loadConfig, saveConfig } from '../config.js';
+import { writeFileAtomicSync } from '../fs-atomic.js';
 import type { ChinwagConfig } from '../config.js';
 import { api, initAccount } from '../api.js';
 import { detectTools, configureTool } from '../mcp-config.js';
@@ -131,7 +132,7 @@ export async function runInit(): Promise<void> {
       const result = await client.post<CreateTeamResponse>('/teams', { name: projectName });
       teamId = result.team_id;
       await client.post(`/teams/${teamId}/join`, { name: projectName });
-      writeFileSync(
+      writeFileAtomicSync(
         chinwagFile,
         JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n',
       );

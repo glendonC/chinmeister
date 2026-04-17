@@ -6,10 +6,11 @@
  * The healer reads health to decide when to trigger re-discovery.
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { createLogger } from '@chinwag/shared';
+import { writeFileAtomicSync } from '../fs-atomic.js';
 
 const log = createLogger('spec-health');
 
@@ -54,8 +55,7 @@ function loadStore(): SpecHealthStore {
 
 function saveStore(store: SpecHealthStore): void {
   try {
-    mkdirSync(HEALTH_DIR, { recursive: true });
-    writeFileSync(HEALTH_FILE, JSON.stringify(store, null, 2));
+    writeFileAtomicSync(HEALTH_FILE, JSON.stringify(store, null, 2));
   } catch (err) {
     log.warn(`failed to persist spec health: ${err}`);
   }

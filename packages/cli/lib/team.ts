@@ -1,7 +1,7 @@
-import { writeFileSync } from 'fs';
 import { basename, join } from 'path';
 import { loadConfig, configExists } from './config.js';
 import { api } from './api.js';
+import { writeFileAtomicSync } from './fs-atomic.js';
 
 export async function handleTeamCommand(subcmd: string, arg?: string): Promise<void> {
   if (!configExists()) {
@@ -19,7 +19,7 @@ export async function handleTeamCommand(subcmd: string, arg?: string): Promise<v
       const teamId = result.team_id;
 
       const chinwagFile = join(process.cwd(), '.chinwag');
-      writeFileSync(
+      writeFileAtomicSync(
         chinwagFile,
         JSON.stringify({ team: teamId, name: projectName }, null, 2) + '\n',
       );
@@ -43,7 +43,10 @@ export async function handleTeamCommand(subcmd: string, arg?: string): Promise<v
       await client.post(`/teams/${arg}/join`, { name: projectName });
 
       const chinwagFile = join(process.cwd(), '.chinwag');
-      writeFileSync(chinwagFile, JSON.stringify({ team: arg, name: projectName }, null, 2) + '\n');
+      writeFileAtomicSync(
+        chinwagFile,
+        JSON.stringify({ team: arg, name: projectName }, null, 2) + '\n',
+      );
 
       console.log(`Joined team: ${arg}`);
       console.log(`Wrote .chinwag to ${chinwagFile}`);

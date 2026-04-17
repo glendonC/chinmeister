@@ -14,13 +14,14 @@
  * Rate-limited to 1 heal attempt per tool per day.
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { createLogger } from '@chinwag/shared';
 import { loadSpec } from './loader.js';
 import { diagnose, markHealed } from './health.js';
 import { validateSpec, checkConsensus } from './validator.js';
+import { writeFileAtomicSync } from '../fs-atomic.js';
 import type { ParserSpec } from './types.js';
 
 const log = createLogger('spec-healer');
@@ -167,15 +168,13 @@ async function attemptHeal(
 }
 
 function writeHealedSpec(toolId: string, spec: ParserSpec): string {
-  mkdirSync(HEALED_SPECS_DIR, { recursive: true });
   const specPath = join(HEALED_SPECS_DIR, `${toolId}.json`);
 
-  // Backup previous healed spec if exists
   if (existsSync(specPath)) {
     const backupPath = join(HEALED_SPECS_DIR, `${toolId}.backup.json`);
     try {
       const existing = readFileSync(specPath, 'utf-8');
-      writeFileSync(backupPath, existing);
+      writeFileAtomicSync(backupPath, existing);
     } catch {
       // Non-critical backup failure
     }
@@ -187,7 +186,7 @@ function writeHealedSpec(toolId: string, spec: ParserSpec): string {
     generatedAt: new Date().toISOString(),
   };
 
-  writeFileSync(specPath, JSON.stringify(healedSpec, null, 2));
+  writeFileAtomicSync(specPath, JSON.stringify(healedSpec, null, 2));
   return specPath;
 }
 
