@@ -138,7 +138,7 @@ async function extractViaSpec(
 }
 
 // -- Hand-written parser registries (fallback) --
-// These are kept as fallback until spec-based extraction is validated for each tool.
+// Kept alongside spec-based extraction until every tool has a validated spec.
 
 const CONVERSATION_PARSERS: Record<string, ConversationParser> = {
   'claude-code': parseClaudeCodeConversation,
@@ -153,6 +153,64 @@ const TOOL_CALL_PARSERS: Record<string, ToolCallParser> = {
   'claude-code': parseClaudeCodeToolCalls,
 };
 
+type SpecResult = NonNullable<Awaited<ReturnType<typeof extractViaSpec>>>;
+type Capability = 'conversationLogs' | 'tokenUsage' | 'toolCallLogs';
+
+/**
+ * Shared post-session collection pipeline. Each collector differs only in
+ * which slice of the spec result it cares about, which hand-written parser
+ * to fall back to, how to detect empty output, and which endpoint to post.
+ * Keeping the control flow in one place prevents the three variants drifting.
+ */
+async function collect<T>(params: {
+  proc: ManagedProcess;
+  config: ChinwagConfig | null;
+  teamId: string | null;
+  sessionId: string | null;
+  capability: Capability;
+  label: string;
+  selectFromSpec: (result: SpecResult) => T | null;
+  handWrittenParser: ((cwd: string, startedAt: number) => Promise<T | null>) | undefined;
+  isEmpty: (result: T) => boolean;
+  uploadPath: string;
+  uploadBody: (result: T) => Record<string, unknown>;
+  describeSuccess: (result: T) => string;
+}): Promise<void> {
+  const { proc, config, teamId, sessionId, capability, label } = params;
+  if (!config?.token || !teamId || !sessionId) return;
+
+  const capabilities = getDataCapabilities(proc.toolId);
+  if (!capabilities[capability]) return;
+
+  try {
+    let result: T | null = null;
+
+    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
+    if (specResult) {
+      const fromSpec = params.selectFromSpec(specResult);
+      if (fromSpec && !params.isEmpty(fromSpec)) {
+        result = fromSpec;
+        log.info(`spec engine extracted ${label} for ${proc.toolId}`);
+      }
+    }
+
+    if (!result && params.handWrittenParser) {
+      const fromParser = await params.handWrittenParser(proc.cwd, proc.startedAt);
+      if (fromParser && !params.isEmpty(fromParser)) {
+        result = fromParser;
+      }
+    }
+
+    if (!result) return;
+
+    const client = api(config, { agentId: proc.agentId });
+    await client.post(params.uploadPath, params.uploadBody(result));
+    log.info(params.describeSuccess(result));
+  } catch (err) {
+    log.warn(`${label} collection failed: ${err}`);
+  }
+}
+
 // -- Public API --
 
 /**
@@ -165,39 +223,25 @@ export async function collectConversation(
   teamId: string | null,
   sessionId: string | null,
 ): Promise<void> {
-  if (!config?.token || !teamId || !sessionId) return;
-
-  const capabilities = getDataCapabilities(proc.toolId);
-  if (!capabilities.conversationLogs) return;
-
-  try {
-    // Try spec-based extraction first
-    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
-    let events: ConversationEvent[];
-
-    if (specResult && specResult.conversations.length > 0) {
-      events = specResult.conversations;
-      log.info(`spec engine extracted ${events.length} conversation events for ${proc.toolId}`);
-    } else {
-      // Fallback to hand-written parser
-      const parser = CONVERSATION_PARSERS[proc.toolId];
-      if (!parser) return;
-      events = await parser(proc.cwd, proc.startedAt);
-    }
-
-    if (events.length === 0) return;
-
-    const client = api(config, { agentId: proc.agentId });
-    await client.post(`/teams/${teamId}/conversations`, {
+  await collect<ConversationEvent[]>({
+    proc,
+    config,
+    teamId,
+    sessionId,
+    capability: 'conversationLogs',
+    label: 'conversation events',
+    selectFromSpec: (spec) => (spec.conversations.length > 0 ? spec.conversations : null),
+    handWrittenParser: CONVERSATION_PARSERS[proc.toolId],
+    isEmpty: (events) => events.length === 0,
+    uploadPath: `/teams/${teamId}/conversations`,
+    uploadBody: (events) => ({
       session_id: sessionId,
       host_tool: proc.toolId,
       events,
-    });
-
-    log.info(`uploaded ${events.length} conversation events for session ${sessionId}`);
-  } catch (err) {
-    log.warn(`conversation collection failed: ${err}`);
-  }
+    }),
+    describeSuccess: (events) =>
+      `uploaded ${events.length} conversation events for session ${sessionId}`,
+  });
 }
 
 /**
@@ -210,50 +254,31 @@ export async function collectTokenUsage(
   teamId: string | null,
   sessionId: string | null,
 ): Promise<void> {
-  if (!config?.token || !teamId || !sessionId) return;
-
-  const capabilities = getDataCapabilities(proc.toolId);
-  if (!capabilities.tokenUsage) return;
-
-  try {
-    let usage: TokenUsage | null = null;
-
-    // Try spec-based extraction first
-    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
-    if (specResult?.tokens) {
-      usage = specResult.tokens;
-      log.info(`spec engine extracted token usage for ${proc.toolId}`);
-    } else {
-      // Fallback to hand-written parser
-      const parser = TOKEN_PARSERS[proc.toolId];
-      if (parser) usage = await parser(proc.cwd, proc.startedAt);
-    }
-
-    if (
-      !usage ||
-      (usage.input_tokens === 0 &&
-        usage.output_tokens === 0 &&
-        usage.cache_read_tokens === 0 &&
-        usage.cache_creation_tokens === 0)
-    ) {
-      return;
-    }
-
-    const client = api(config, { agentId: proc.agentId });
-    await client.post(`/teams/${teamId}/sessiontokens`, {
+  await collect<TokenUsage>({
+    proc,
+    config,
+    teamId,
+    sessionId,
+    capability: 'tokenUsage',
+    label: 'token usage',
+    selectFromSpec: (spec) => spec.tokens,
+    handWrittenParser: TOKEN_PARSERS[proc.toolId],
+    isEmpty: (usage) =>
+      usage.input_tokens === 0 &&
+      usage.output_tokens === 0 &&
+      usage.cache_read_tokens === 0 &&
+      usage.cache_creation_tokens === 0,
+    uploadPath: `/teams/${teamId}/sessiontokens`,
+    uploadBody: (usage) => ({
       session_id: sessionId,
       input_tokens: usage.input_tokens,
       output_tokens: usage.output_tokens,
       cache_read_tokens: usage.cache_read_tokens,
       cache_creation_tokens: usage.cache_creation_tokens,
-    });
-
-    log.info(
+    }),
+    describeSuccess: (usage) =>
       `uploaded token usage for session ${sessionId}: ${usage.input_tokens} in, ${usage.output_tokens} out, ${usage.cache_read_tokens} cache_read, ${usage.cache_creation_tokens} cache_write`,
-    );
-  } catch (err) {
-    log.warn(`token usage collection failed: ${err}`);
-  }
+  });
 }
 
 /**
@@ -266,42 +291,29 @@ export async function collectToolCalls(
   teamId: string | null,
   sessionId: string | null,
 ): Promise<void> {
-  if (!config?.token || !teamId || !sessionId) return;
-
-  const capabilities = getDataCapabilities(proc.toolId);
-  if (!capabilities.toolCallLogs) return;
-
-  try {
-    let calls: ToolCallEvent[];
-
-    // Try spec-based extraction first
-    const specResult = await extractViaSpec(proc.toolId, proc.cwd, proc.startedAt);
-    if (specResult && specResult.toolCalls.length > 0) {
-      calls = specResult.toolCalls;
-      log.info(`spec engine extracted ${calls.length} tool calls for ${proc.toolId}`);
-    } else {
-      // Fallback to hand-written parser
-      const parser = TOOL_CALL_PARSERS[proc.toolId];
-      if (!parser) return;
-      calls = await parser(proc.cwd, proc.startedAt);
-    }
-
-    if (calls.length === 0) return;
-
-    const client = api(config, { agentId: proc.agentId });
-    await client.post(`/teams/${teamId}/tool-calls`, {
+  await collect<ToolCallEvent[]>({
+    proc,
+    config,
+    teamId,
+    sessionId,
+    capability: 'toolCallLogs',
+    label: 'tool calls',
+    selectFromSpec: (spec) => (spec.toolCalls.length > 0 ? spec.toolCalls : null),
+    handWrittenParser: TOOL_CALL_PARSERS[proc.toolId],
+    isEmpty: (calls) => calls.length === 0,
+    uploadPath: `/teams/${teamId}/tool-calls`,
+    uploadBody: (calls) => ({
       session_id: sessionId,
       calls,
-    });
-
-    const errors = calls.filter((c) => c.is_error).length;
-    log.info(
-      `uploaded ${calls.length} tool call events for session ${sessionId}` +
-        (errors > 0 ? ` (${errors} errors)` : ''),
-    );
-  } catch (err) {
-    log.warn(`tool call collection failed: ${err}`);
-  }
+    }),
+    describeSuccess: (calls) => {
+      const errors = calls.filter((c) => c.is_error).length;
+      return (
+        `uploaded ${calls.length} tool call events for session ${sessionId}` +
+        (errors > 0 ? ` (${errors} errors)` : '')
+      );
+    },
+  });
 }
 
 // -- Claude Code shared helpers --
