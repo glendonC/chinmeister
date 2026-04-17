@@ -243,13 +243,12 @@ export class TeamDO extends DurableObject<Env> {
    * fire. Methods whose success values fit the DO result contract can use
    * this to avoid inlining the same three-step pattern everywhere.
    */
-  // eslint-disable-next-line no-unused-private-class-members -- consumed in follow-up commits
   #op<R>(
     agentId: string,
     ownerId: string | null,
     run: (resolved: string) => R,
     side: {
-      broadcast?: (result: R) => Record<string, unknown> | null;
+      broadcast?: (result: R, resolved: string) => Record<string, unknown> | null;
       broadcastOpts?: { invalidateCache?: boolean };
       metric?: (result: R) => string | null;
     } = {},
@@ -257,7 +256,7 @@ export class TeamDO extends DurableObject<Env> {
     return this.#withMember(agentId, ownerId, (resolved) => {
       const result = run(resolved);
       if (!isDOError(result)) {
-        const event = side.broadcast?.(result);
+        const event = side.broadcast?.(result, resolved);
         if (event) this.#broadcastToWatchers(event, side.broadcastOpts);
         const metric = side.metric?.(result);
         if (metric) this.#recordMetric(metric);
@@ -352,13 +351,14 @@ export class TeamDO extends DurableObject<Env> {
     summary: string,
     ownerId: string | null = null,
   ): Promise<DOResult<{ ok: true }> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
-      const result = updateActivityFn(this.sql, resolved, files, summary, this.#transact);
-      if (!isDOError(result)) {
-        this.#broadcastToWatchers({ type: 'activity', agent_id: resolved, files, summary });
-      }
-      return result;
-    });
+    return this.#op(
+      agentId,
+      ownerId,
+      (resolved) => updateActivityFn(this.sql, resolved, files, summary, this.#transact),
+      {
+        broadcast: (_r, resolved) => ({ type: 'activity', agent_id: resolved, files, summary }),
+      },
+    );
   }
 
   async checkConflicts(
@@ -382,13 +382,14 @@ export class TeamDO extends DurableObject<Env> {
     filePath: string,
     ownerId: string | null = null,
   ): Promise<DOResult<{ ok: true }> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
-      const result = reportFileFn(this.sql, resolved, filePath, this.#transact);
-      if (!isDOError(result)) {
-        this.#broadcastToWatchers({ type: 'file', agent_id: resolved, file: filePath });
-      }
-      return result;
-    });
+    return this.#op(
+      agentId,
+      ownerId,
+      (resolved) => reportFileFn(this.sql, resolved, filePath, this.#transact),
+      {
+        broadcast: (_r, resolved) => ({ type: 'file', agent_id: resolved, file: filePath }),
+      },
+    );
   }
 
   // -- Context (composite queries -- logic in context.ts) --
@@ -661,25 +662,29 @@ export class TeamDO extends DurableObject<Env> {
     textHash: string | null = null,
     embedding: ArrayBuffer | null = null,
   ): Promise<ReturnType<typeof saveMemoryFn> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
-      const result = saveMemoryFn(
-        this.sql,
-        resolved,
-        text,
-        tags,
-        categories,
-        handle,
-        runtime,
-        this.#boundRecordMetric,
-        this.#transact,
-        textHash,
-        embedding,
-      );
-      if (!isDOError(result) && !('code' in result && result.code === 'DUPLICATE')) {
-        this.#broadcastToWatchers({ type: 'memory', text, tags });
-      }
-      return result;
-    });
+    // DUPLICATE results carry `error: string`, so #op's isDOError guard skips
+    // the broadcast for them automatically — no explicit filter needed here.
+    return this.#op(
+      agentId,
+      ownerId,
+      (resolved) =>
+        saveMemoryFn(
+          this.sql,
+          resolved,
+          text,
+          tags,
+          categories,
+          handle,
+          runtime,
+          this.#boundRecordMetric,
+          this.#transact,
+          textHash,
+          embedding,
+        ),
+      {
+        broadcast: () => ({ type: 'memory', text, tags }),
+      },
+    );
   }
 
   async searchMemories(
@@ -807,18 +812,19 @@ export class TeamDO extends DurableObject<Env> {
     runtimeOrTool: string | Record<string, unknown> | null | undefined,
     ownerId: string | null = null,
   ): Promise<ReturnType<typeof claimFilesFn> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
-      const result = claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool, ownerId!);
-      if (!isDOError(result)) {
-        this.#broadcastToWatchers({
+    return this.#op(
+      agentId,
+      ownerId,
+      (resolved) => claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool, ownerId!),
+      {
+        broadcast: (_r, resolved) => ({
           type: 'lock_change',
           action: 'claim',
           agent_id: resolved,
           files,
-        });
-      }
-      return result;
-    });
+        }),
+      },
+    );
   }
 
   async releaseFiles(
@@ -826,18 +832,19 @@ export class TeamDO extends DurableObject<Env> {
     files: string[] | null | undefined,
     ownerId: string | null = null,
   ): Promise<{ ok: true } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
-      const result = releaseFilesFn(this.sql, resolved, files, ownerId);
-      if (!isDOError(result)) {
-        this.#broadcastToWatchers({
+    return this.#op(
+      agentId,
+      ownerId,
+      (resolved) => releaseFilesFn(this.sql, resolved, files, ownerId),
+      {
+        broadcast: (_r, resolved) => ({
           type: 'lock_change',
           action: 'release',
           agent_id: resolved,
           files,
-        });
-      }
-      return result;
-    });
+        }),
+      },
+    );
   }
 
   async getLockedFiles(
@@ -859,21 +866,23 @@ export class TeamDO extends DurableObject<Env> {
     targetAgent: string | null | undefined,
     ownerId: string | null = null,
   ): Promise<{ ok: true; id: string } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
-      const result = sendMessageFn(
-        this.sql,
-        resolved,
-        handle,
-        runtimeOrTool,
-        text,
-        targetAgent,
-        this.#boundRecordMetric,
-      );
-      if (!isDOError(result)) {
-        this.#broadcastToWatchers({ type: 'message', from_handle: handle, text });
-      }
-      return result;
-    });
+    return this.#op(
+      agentId,
+      ownerId,
+      (resolved) =>
+        sendMessageFn(
+          this.sql,
+          resolved,
+          handle,
+          runtimeOrTool,
+          text,
+          targetAgent,
+          this.#boundRecordMetric,
+        ),
+      {
+        broadcast: () => ({ type: 'message', from_handle: handle, text }),
+      },
+    );
   }
 
   async getMessages(
