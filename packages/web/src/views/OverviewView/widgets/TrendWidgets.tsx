@@ -1,8 +1,7 @@
-import { getToolsWithCapability } from '@chinwag/shared/tool-registry.js';
 import { Sparkline } from '../overview-charts.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { CoverageNote, GhostBars, GhostSparkline } from './shared.js';
+import { CoverageNote, GhostBars, GhostSparkline, capabilityCoverageNote } from './shared.js';
 
 function SessionTrendWidget({ analytics }: WidgetBodyProps) {
   const data = analytics.daily_trends.map((d) => d.sessions);
@@ -16,22 +15,23 @@ function EditVelocityWidget({ analytics }: WidgetBodyProps) {
   return <Sparkline data={data} height={80} />;
 }
 
-function promptEfficiencyCoverageNote(toolsReporting: string[]): string | null {
-  const capable = getToolsWithCapability('conversationLogs');
-  const reporting = toolsReporting.filter((t) => capable.includes(t));
-  if (reporting.length === 0 || reporting.length === toolsReporting.length) return null;
-  return `Captured with ${reporting.join(', ')}`;
-}
-
 function PromptEfficiencyWidget({ analytics }: WidgetBodyProps) {
   const pe = analytics.prompt_efficiency;
   const data = pe.map((d) => d.avg_turns_per_edit);
-  if (data.length < 2) return <GhostSparkline />;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
+  if (data.length < 2) {
+    return (
+      <>
+        <GhostSparkline />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   return (
     <>
       <Sparkline data={data} height={80} />
-      <CoverageNote text={promptEfficiencyCoverageNote(tools)} />
+      <CoverageNote text={note} />
     </>
   );
 }

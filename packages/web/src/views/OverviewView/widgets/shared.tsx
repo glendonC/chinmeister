@@ -1,3 +1,5 @@
+import { getToolsWithCapability, type DataCapabilities } from '@chinwag/shared/tool-registry.js';
+import { getToolMeta } from '../../../lib/toolMeta.js';
 import styles from '../OverviewView.module.css';
 
 export const SENTIMENT_COLORS: Record<string, string> = {
@@ -98,9 +100,63 @@ export function GhostSparkline() {
 /**
  * Inline coverage note for deep-capture widgets.
  * Extends the PricingAttribution pattern (muted, one-line).
- * Only shown when data is partial (some tools report, others don't).
+ * Shown both in empty states (gating disclosure) and in partial-capture
+ * states (attribution). Falls through to nothing when coverage is universal.
  */
 export function CoverageNote({ text }: { text: string | null }) {
   if (!text) return null;
   return <div className={styles.coverageNote}>{text}</div>;
+}
+
+// Display prefix shown in coverage notes for each capability. These phrase
+// the attribution like "Conversation data from ..." so partial and gated
+// empty states share a vocabulary.
+const CAPABILITY_LABEL: Partial<Record<keyof DataCapabilities, string>> = {
+  conversationLogs: 'Conversation data',
+  tokenUsage: 'Token and cost data',
+  toolCallLogs: 'Tool call data',
+  commitTracking: 'Commit data',
+  hooks: 'Hook-driven data',
+};
+
+/**
+ * Compute the coverage note string for a capability-gated widget. Returns
+ * null when no disclosure is needed (either no active tools at all — so the
+ * surrounding empty state covers it — or every active tool supports the
+ * capability, so the gating is invisible to this user).
+ *
+ * Callers must render the returned note in both populated AND empty states.
+ * That is the A3 honesty fix: gating must be visible when the widget is
+ * rendering em-dashes, not only when it has data.
+ */
+export function capabilityCoverageNote(
+  toolsReporting: string[],
+  capability: keyof DataCapabilities,
+): string | null {
+  const label = CAPABILITY_LABEL[capability];
+  if (!label) return null;
+
+  const capable = getToolsWithCapability(capability);
+  const reporting = toolsReporting.filter((t) => capable.includes(t));
+
+  // No active tools at all — the outer empty state handles messaging.
+  if (toolsReporting.length === 0) return null;
+
+  // Full coverage — no disclosure needed.
+  if (reporting.length === toolsReporting.length) return null;
+
+  // Partial capture — attribute to the tools that are reporting.
+  if (reporting.length > 0) {
+    const names = reporting.map((t) => getToolMeta(t).label).join(', ');
+    return `${label} from ${names}`;
+  }
+
+  // No reporting tool supports this capability — name which ones would.
+  if (capable.length > 0) {
+    const first = capable.slice(0, 4).map((t) => getToolMeta(t).label);
+    const tail = capable.length > 4 ? `, and ${capable.length - 4} more` : '';
+    return `${label} from ${first.join(', ')}${tail}`;
+  }
+
+  return null;
 }

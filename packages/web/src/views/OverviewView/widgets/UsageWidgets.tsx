@@ -1,13 +1,5 @@
-import { getToolsWithCapability } from '@chinwag/shared/tool-registry.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { StatWidget, CoverageNote } from './shared.js';
-
-function tokenCoverageNote(toolsReporting: string[]): string | null {
-  const capable = getToolsWithCapability('tokenUsage');
-  const reporting = toolsReporting.filter((t) => capable.includes(t));
-  if (reporting.length === 0 || reporting.length === toolsReporting.length) return null;
-  return `Estimated from ${reporting.join(', ')}`;
-}
+import { StatWidget, CoverageNote, capabilityCoverageNote } from './shared.js';
 
 function SessionsWidget({ analytics }: WidgetBodyProps) {
   const v = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
@@ -43,24 +35,27 @@ function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
 
 function CostWidget({ analytics }: WidgetBodyProps) {
   const t = analytics.token_usage;
-  if (t.sessions_with_token_data === 0) return <StatWidget value="--" />;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'tokenUsage');
+  const value =
+    t.sessions_with_token_data === 0 ? '--' : `$${t.total_estimated_cost_usd.toFixed(2)}`;
   return (
     <>
-      <StatWidget value={`$${t.total_estimated_cost_usd.toFixed(2)}`} />
-      <CoverageNote text={tokenCoverageNote(tools)} />
+      <StatWidget value={value} />
+      <CoverageNote text={note} />
     </>
   );
 }
 
 function CostPerEditWidget({ analytics }: WidgetBodyProps) {
   const cpe = analytics.token_usage.cost_per_edit;
-  if (cpe == null) return <StatWidget value="--" />;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'tokenUsage');
+  const value = cpe == null ? '--' : `$${cpe.toFixed(3)}`;
   return (
     <>
-      <StatWidget value={`$${cpe.toFixed(3)}`} />
-      <CoverageNote text={tokenCoverageNote(tools)} />
+      <StatWidget value={value} />
+      <CoverageNote text={note} />
     </>
   );
 }

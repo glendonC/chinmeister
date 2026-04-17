@@ -1,21 +1,20 @@
-import { getToolsWithCapability } from '@chinwag/shared/tool-registry.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostBars, SENTIMENT_COLORS, CoverageNote } from './shared.js';
-
-function conversationCoverageNote(analytics: WidgetBodyProps['analytics']): string | null {
-  const tools = analytics.data_coverage?.tools_reporting ?? [];
-  const capable = getToolsWithCapability('conversationLogs');
-  const reporting = tools.filter((t) => capable.includes(t));
-  if (reporting.length === 0 || reporting.length === tools.length) return null;
-  return `Conversation data from ${reporting.join(', ')}`;
-}
+import { GhostBars, SENTIMENT_COLORS, CoverageNote, capabilityCoverageNote } from './shared.js';
 
 function TopicsWidget({ conversationData, analytics }: WidgetBodyProps) {
   const data = conversationData.topic_distribution;
-  if (data.length === 0) return <GhostBars count={3} />;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
+  if (data.length === 0) {
+    return (
+      <>
+        <GhostBars count={3} />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   const maxC = Math.max(...data.map((t) => t.count), 1);
-  const note = conversationCoverageNote(analytics);
   return (
     <>
       <div className={styles.metricBars}>
@@ -39,8 +38,16 @@ function TopicsWidget({ conversationData, analytics }: WidgetBodyProps) {
 
 function SentimentOutcomesWidget({ conversationData, analytics }: WidgetBodyProps) {
   const soc = conversationData.sentiment_outcome_correlation;
-  if (!soc || soc.length === 0) return <GhostBars count={3} />;
-  const note = conversationCoverageNote(analytics);
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
+  if (!soc || soc.length === 0) {
+    return (
+      <>
+        <GhostBars count={3} />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   return (
     <>
       <div className={styles.metricBars}>
@@ -70,9 +77,17 @@ function SentimentOutcomesWidget({ conversationData, analytics }: WidgetBodyProp
 
 function ConversationDepthWidget({ analytics }: WidgetBodyProps) {
   const ced = analytics.conversation_edit_correlation;
-  if (ced.length === 0) return <GhostBars count={4} />;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
+  if (ced.length === 0) {
+    return (
+      <>
+        <GhostBars count={4} />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   const maxCed = Math.max(...ced.map((c) => c.avg_edits), 1);
-  const note = conversationCoverageNote(analytics);
   return (
     <>
       <div className={styles.metricBars}>

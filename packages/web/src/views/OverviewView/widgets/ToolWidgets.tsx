@@ -7,8 +7,15 @@ import { formatRelativeTime } from '../../../lib/relativeTime.js';
 import type { TokenUsageStats, UserAnalytics } from '../../../lib/apiSchemas.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { getDataCapabilities, getToolsWithCapability } from '@chinwag/shared/tool-registry.js';
-import { GhostBars, GhostRows, GhostStatRow, StatWidget, CoverageNote } from './shared.js';
+import { getDataCapabilities } from '@chinwag/shared/tool-registry.js';
+import {
+  GhostBars,
+  GhostRows,
+  GhostStatRow,
+  StatWidget,
+  CoverageNote,
+  capabilityCoverageNote,
+} from './shared.js';
 
 /**
  * Tool data depth: 3 = full analytics (cost, conversations, tool calls),
@@ -24,13 +31,6 @@ function getToolDepth(toolId: string): { level: 1 | 2 | 3; label: string } {
     return { level: 2, label: 'Activity analytics' };
   }
   return { level: 1, label: 'Session analytics' };
-}
-
-function toolCallCoverageNote(toolsReporting: string[]): string | null {
-  const capable = getToolsWithCapability('toolCallLogs');
-  const reporting = toolsReporting.filter((t) => capable.includes(t));
-  if (reporting.length === 0 || reporting.length === toolsReporting.length) return null;
-  return `Tool call data from ${reporting.join(', ')}`;
 }
 
 function ToolDepthBars({ toolId }: { toolId: string }) {
@@ -179,9 +179,16 @@ function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
 
 function ToolCallsWidget({ analytics }: WidgetBodyProps) {
   const tc = analytics.tool_call_stats;
-  if (tc.total_calls === 0)
-    return <GhostStatRow labels={['calls', 'error rate', 'research:edit']} />;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'toolCallLogs');
+  if (tc.total_calls === 0) {
+    return (
+      <>
+        <GhostStatRow labels={['calls', 'error rate', 'research:edit']} />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   return (
     <>
       <div className={styles.statRow}>
@@ -202,16 +209,24 @@ function ToolCallsWidget({ analytics }: WidgetBodyProps) {
           <span className={styles.statBlockLabel}>calls/session</span>
         </div>
       </div>
-      <CoverageNote text={toolCallCoverageNote(tools)} />
+      <CoverageNote text={note} />
     </>
   );
 }
 
 function ToolCallFreqWidget({ analytics }: WidgetBodyProps) {
   const freq = analytics.tool_call_stats.frequency;
-  if (freq.length === 0) return <GhostBars count={5} />;
-  const maxC = Math.max(...freq.map((f) => f.calls), 1);
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'toolCallLogs');
+  if (freq.length === 0) {
+    return (
+      <>
+        <GhostBars count={5} />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
+  const maxC = Math.max(...freq.map((f) => f.calls), 1);
   return (
     <>
       <div className={styles.metricBars}>
@@ -235,15 +250,23 @@ function ToolCallFreqWidget({ analytics }: WidgetBodyProps) {
           </div>
         ))}
       </div>
-      <CoverageNote text={toolCallCoverageNote(tools)} />
+      <CoverageNote text={note} />
     </>
   );
 }
 
 function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
   const errs = analytics.tool_call_stats.error_patterns;
-  if (errs.length === 0) return <SectionEmpty>No tool errors</SectionEmpty>;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'toolCallLogs');
+  if (errs.length === 0) {
+    return (
+      <>
+        <SectionEmpty>No tool errors</SectionEmpty>
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   return (
     <>
       <div className={styles.dataList}>
@@ -268,7 +291,7 @@ function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
           </div>
         ))}
       </div>
-      <CoverageNote text={toolCallCoverageNote(tools)} />
+      <CoverageNote text={note} />
     </>
   );
 }
@@ -292,7 +315,16 @@ function PricingAttribution({ usage }: { usage: TokenUsageStats }) {
 
 function TokenDetailWidget({ analytics }: WidgetBodyProps) {
   const tu = analytics.token_usage;
-  if (tu.sessions_with_token_data === 0) return <GhostRows count={3} />;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'tokenUsage');
+  if (tu.sessions_with_token_data === 0) {
+    return (
+      <>
+        <GhostRows count={3} />
+        <CoverageNote text={note} />
+      </>
+    );
+  }
   return (
     <div className={styles.dataList}>
       {tu.by_model.map((m, i) => (
@@ -499,18 +531,13 @@ function ToolWorkTypeWidget({ analytics }: WidgetBodyProps) {
 
 function CacheEfficiencyWidget({ analytics }: WidgetBodyProps) {
   const chr = analytics.token_usage.cache_hit_rate;
-  if (chr == null) return <StatWidget value="--" />;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'tokenUsage');
+  const value = chr == null ? '--' : `${Math.round(chr * 100)}%`;
   return (
     <>
-      <StatWidget value={`${Math.round(chr * 100)}%`} />
-      <CoverageNote
-        text={
-          tools.length > 0 && tools.length < (analytics.tool_comparison?.length ?? 0)
-            ? `Cache data from ${tools.join(', ')}`
-            : null
-        }
-      />
+      <StatWidget value={value} />
+      <CoverageNote text={note} />
     </>
   );
 }

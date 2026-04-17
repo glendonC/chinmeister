@@ -5,7 +5,13 @@ import { WORK_TYPE_COLORS } from '../overview-utils.js';
 import type { UserAnalytics } from '../../../lib/apiSchemas.js';
 import styles from '../OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostBars, GhostStatRow, StatWidget, CoverageNote } from './shared.js';
+import {
+  GhostBars,
+  GhostStatRow,
+  StatWidget,
+  CoverageNote,
+  capabilityCoverageNote,
+} from './shared.js';
 
 function OutcomesWidget({ analytics }: WidgetBodyProps) {
   return <OutcomeBar cs={analytics.completion_summary} />;
@@ -251,11 +257,16 @@ function RetryPatternsWidget({ analytics }: WidgetBodyProps) {
 
 function OneShotRateWidget({ analytics }: WidgetBodyProps) {
   const s = analytics.tool_call_stats;
-  if (s.one_shot_sessions === 0) return <StatWidget value="--" />;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note =
+    s.one_shot_sessions > 0
+      ? `Computed from ${s.one_shot_sessions} sessions with tool call data`
+      : capabilityCoverageNote(tools, 'toolCallLogs');
+  const value = s.one_shot_sessions === 0 ? '--' : `${s.one_shot_rate}%`;
   return (
     <>
-      <StatWidget value={`${s.one_shot_rate}%`} />
-      <CoverageNote text={`Computed from ${s.one_shot_sessions} sessions with tool call data`} />
+      <StatWidget value={value} />
+      <CoverageNote text={note} />
     </>
   );
 }
