@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 /**
  * Tests for packages/cli/lib/dashboard/composer.ts — useComposer hook.

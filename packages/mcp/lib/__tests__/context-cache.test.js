@@ -1,15 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Re-import fresh module per test group to get clean cache state.
-let refreshContext, offlinePrefix, getCachedContext, clearContextCache, teamPreamble;
+let refreshContext, clearContextCache, teamPreamble;
 
 describe('context cache (TTL, inflight dedup, preamble memoization)', () => {
   beforeEach(async () => {
     vi.resetModules();
     const mod = await import('../context.js');
     refreshContext = mod.refreshContext;
-    offlinePrefix = mod.offlinePrefix;
-    getCachedContext = mod.getCachedContext;
     clearContextCache = mod.clearContextCache;
     teamPreamble = mod.teamPreamble;
   });

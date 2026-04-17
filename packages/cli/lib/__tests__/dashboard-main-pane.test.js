@@ -26,13 +26,6 @@ function findElementsByType(type) {
   return createdElements.filter((el) => el.type === type);
 }
 
-function findElementsWithText(needle) {
-  return createdElements.filter((el) => {
-    const children = el.children || [];
-    return children.some((c) => typeof c === 'string' && c.includes(needle));
-  });
-}
-
 function collectText(node) {
   if (typeof node === 'string') return [node];
   if (typeof node === 'number') return [String(node)];
@@ -555,10 +548,8 @@ describe('MainPane', () => {
       onComposeSubmit: vi.fn(),
       onMemorySubmit: vi.fn(),
     });
-    // InputBars should be rendered (it's a component reference)
-    const inputBars = findElementsByType('InputBars');
-    // The InputBars component is referenced from the same module,
-    // so it should appear as a function reference
+    // InputBars should be rendered (it's a component reference from the same
+    // module and appears as a function reference in the element tree).
     expect(createdElements.length).toBeGreaterThan(0);
   });
 

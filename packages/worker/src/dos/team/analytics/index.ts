@@ -11,7 +11,6 @@ import {
   queryEditVelocity,
 } from './activity.js';
 import {
-  classifyWorkType,
   queryModelPerformance,
   queryToolOutcomes,
   queryCompletionSummary,

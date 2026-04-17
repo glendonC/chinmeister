@@ -24,16 +24,14 @@ export type TestCase = {
   raw: string | null;
   /**
    * Expected LiteLLM key. `null` means "we expect no match, and that's
-   * correct." Use `ACCEPT_ANY` when we don't care which variant matches as
-   * long as something does.
+   * correct." When several variants are equally correct, leave `expected`
+   * as one and list the rest in `acceptAny`.
    */
   expected: string | null;
   /** Leave empty to require exact match; set if any of these are acceptable. */
   acceptAny?: string[];
   notes?: string;
 };
-
-const ACCEPT_ANY = Symbol('ACCEPT_ANY');
 
 export const CASES: TestCase[] = [
   // ---- Claude Code JSONL outputs (Anthropic API names) ----

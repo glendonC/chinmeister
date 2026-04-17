@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 /**
  * Tests for packages/cli/lib/dashboard/context.tsx.
@@ -18,16 +18,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 let hookStates;
 let stateIdx;
 let effectCallbacks;
-let memoCache;
-let memoIdx;
 let contextValues;
 
 function resetHookSim() {
   hookStates = [];
   stateIdx = 0;
   effectCallbacks = [];
-  memoCache = [];
-  memoIdx = 0;
   contextValues = new Map();
 }
 

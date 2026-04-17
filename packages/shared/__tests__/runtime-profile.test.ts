@@ -14,7 +14,6 @@ import {
   PROD_RUNTIME_PROFILE,
   LOCAL_RUNTIME_PROFILE,
 } from '../runtime-profile.js';
-import type { ChinwagRuntimeProfile, RuntimeProfileOptions } from '../runtime-profile.js';
 
 // ---------------------------------------------------------------------------
 // normalizeRuntimeProfile

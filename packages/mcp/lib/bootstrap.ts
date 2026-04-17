@@ -10,7 +10,7 @@ import { resolveAgentIdentity } from './lifecycle.js';
 import { validateConfig } from './auth.js';
 import { createLogger } from './utils/logger.js';
 import type { RuntimeIdentity } from '@chinwag/shared/agent-identity.js';
-import type { ApiClient, TeamHandlers } from './team.js';
+import type { TeamHandlers } from './team.js';
 
 const log = createLogger('bootstrap');
 

@@ -11,7 +11,7 @@ import React, {
 import type { Dispatch, ReactNode } from 'react';
 import { basename } from 'path';
 import { buildCombinedAgentRows, buildDashboardView } from './view.js';
-import type { CombinedAgentRow, ManagedAgent, MemoryEntry, TeamContext } from './view.js';
+import type { CombinedAgentRow, ManagedAgent, MemoryEntry } from './view.js';
 import { isAgentAddressable } from './agent-display.js';
 import { getVisibleWindow } from './utils.js';
 import {

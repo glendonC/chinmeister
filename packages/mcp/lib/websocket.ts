@@ -4,12 +4,7 @@
 
 import { createLogger } from './utils/logger.js';
 import { getErrorMessage } from './utils/responses.js';
-import {
-  WS_PING_MS,
-  INITIAL_RECONNECT_DELAY_MS,
-  MAX_RECONNECT_DELAY_MS,
-  nextReconnectDelay,
-} from './constants.js';
+import { WS_PING_MS, INITIAL_RECONNECT_DELAY_MS, nextReconnectDelay } from './constants.js';
 import type { ApiClient } from './team.js';
 
 // Re-export for backwards compatibility

@@ -43,10 +43,6 @@ const mockUser: User = {
 };
 
 function mockEnv(): Env {
-  const stubFn = () => ({
-    get: () => ({}),
-    idFromName: () => ({}),
-  });
   return {
     DATABASE: { get: () => ({}), idFromName: () => ({}) },
     LOBBY: { get: () => ({}), idFromName: () => ({}) },

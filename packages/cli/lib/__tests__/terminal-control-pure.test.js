@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 
 // Mock React before importing the module
 vi.mock('react', () => ({
@@ -18,7 +18,6 @@ import { getTerminalUiCapabilities } from '../terminal-control.js';
 
 describe('getTerminalUiCapabilities', () => {
   const origEnv = { ...process.env };
-  const origStdout = process.stdout;
 
   afterEach(() => {
     process.env = { ...origEnv };

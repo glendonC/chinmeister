@@ -10,9 +10,6 @@
 import { readFile } from 'fs/promises';
 import { extract } from './engine.js';
 import type { ParserSpec, ExtractionResult } from './types.js';
-import { createLogger } from '@chinwag/shared';
-
-const log = createLogger('spec-validator');
 
 export interface ValidationResult {
   valid: boolean;
