@@ -15,11 +15,8 @@
 
 import { DurableObject } from 'cloudflare:workers';
 import type { Env, DOResult, DOError, TeamContext } from '../../types.js';
-import { getErrorMessage, isDOError } from '../../lib/errors.js';
-import { createLogger } from '../../lib/logger.js';
-import { toSQLDateTime } from '../../lib/text-utils.js';
+import { isDOError } from '../../lib/errors.js';
 
-const log = createLogger('TeamDO');
 import { ensureSchema } from './schema.js';
 import { queryTeamContext, queryTeamSummary } from './context.js';
 import { resolveOwnedAgentId } from './identity.js';
@@ -86,8 +83,6 @@ import type {
 } from '@chinwag/shared/contracts/conversation.js';
 import {
   submitCommand as submitCommandFn,
-  claimCommand as claimCommandFn,
-  completeCommand as completeCommandFn,
   getPendingCommands as getPendingCommandsFn,
 } from './commands.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
@@ -101,13 +96,13 @@ import {
 import {
   getConnectedAgentIds,
   getAllConnectedMemberIds,
-  getExecutorSockets,
   getAvailableSpawnTools,
   hasExecutorConnected,
 } from './presence.js';
 import { broadcastToWatchers, broadcastToExecutors } from './broadcast.js';
 import { recordMetric as recordMetricFn } from './telemetry.js';
 import { ContextCache } from './context-cache.js';
+import { handleFetch, handleMessage, handleClose, handleError, type WsCtx } from './websocket.js';
 
 export class TeamDO extends DurableObject<Env> {
   sql: SqlStorage;
@@ -139,224 +134,11 @@ export class TeamDO extends DurableObject<Env> {
   // Tags: [resolvedAgentId, 'role:agent|daemon|watcher']
 
   async fetch(request: Request): Promise<Response> {
-    const url = new URL(request.url);
-    if (url.pathname !== '/ws') {
-      return new Response('Not found', { status: 404 });
-    }
-
-    if (request.headers.get('X-Chinwag-Verified') !== '1') {
-      return new Response('Forbidden', { status: 403 });
-    }
-
-    const agentId = url.searchParams.get('agentId');
-    const ownerId = url.searchParams.get('ownerId');
-    if (!agentId || !ownerId) {
-      return new Response('Missing agentId or ownerId', { status: 400 });
-    }
-
-    this.#ensureSchema();
-
-    const resolved = this.#resolveOwnedAgentId(agentId, ownerId);
-    if (!resolved) {
-      return new Response('Not a member of this team', { status: 403 });
-    }
-
-    const roleParam = url.searchParams.get('role');
-    const role = roleParam === 'agent' ? 'agent' : roleParam === 'daemon' ? 'daemon' : 'watcher';
-    const pair = new WebSocketPair();
-    const [client, server] = Object.values(pair);
-
-    // Agents and daemons can report available spawn tools via query string — stored as
-    // WebSocket tags so they survive DO hibernation and can be queried for context responses.
-    const tags = [resolved, `role:${role}`];
-    if (role === 'agent' || role === 'daemon') {
-      const toolsParam = url.searchParams.get('tools');
-      if (toolsParam) {
-        for (const t of toolsParam.split(',')) {
-          const trimmed = t.trim();
-          if (trimmed) tags.push(`spawn:${trimmed}`);
-        }
-      }
-    }
-
-    this.ctx.acceptWebSocket(server, tags);
-
-    // Agents and daemons: bump heartbeat on connect (WS keeps them alive going forward)
-    if (role === 'agent' || role === 'daemon') {
-      this.sql.exec(
-        "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-        resolved,
-      );
-      this.#broadcastToWatchers({ type: 'status_change', agent_id: resolved, status: 'active' });
-    }
-
-    // Spawn capability connect: notify watchers about available tools
-    const hasSpawnCapability = tags.some((t) => t.startsWith('spawn:'));
-    if (hasSpawnCapability) {
-      this.#broadcastToWatchers({
-        type: 'daemon_status',
-        connected: true,
-        available_tools: this.#getAvailableSpawnTools(),
-      });
-    }
-
-    // Send initial full context -- on failure, send error frame so client knows
-    try {
-      const ctx = await this.getContext(resolved);
-      server.send(JSON.stringify({ type: 'context', data: ctx }));
-    } catch (err) {
-      log.error('failed to send initial context', { error: getErrorMessage(err) });
-      try {
-        server.send(JSON.stringify({ type: 'error', message: 'Failed to load initial context' }));
-      } catch {
-        // Client may have already disconnected
-      }
-    }
-
-    // Executors (any socket with spawn capability): deliver pending commands
-    if (hasSpawnCapability) {
-      try {
-        const pending = getPendingCommandsFn(this.sql);
-        for (const cmd of pending.commands) {
-          const c = cmd as Record<string, unknown>;
-          if (c.status === 'pending') {
-            server.send(
-              JSON.stringify({
-                type: 'command',
-                id: c.id,
-                command_type: c.type,
-                payload: JSON.parse((c.payload as string) || '{}'),
-              }),
-            );
-          }
-        }
-      } catch (err) {
-        log.error('failed to send pending commands to daemon', { error: getErrorMessage(err) });
-      }
-    }
-
-    return new Response(null, { status: 101, webSocket: client });
+    return handleFetch(this.#wsCtx(), request);
   }
 
   async webSocketMessage(ws: WebSocket, rawMessage: string | ArrayBuffer): Promise<void> {
-    // Guard: if the WS has no tags, it was never properly accepted -- ignore
-    let tags: string[];
-    try {
-      tags = this.ctx.getTags(ws);
-    } catch (err) {
-      log.error('webSocketMessage: failed to read tags', { error: getErrorMessage(err) });
-      return;
-    }
-    const agentId = tags.find((t) => !t.startsWith('role:'));
-    if (!agentId) {
-      // Unauthenticated or untagged WebSocket -- log and ignore
-      log.warn('untagged WebSocket message', {
-        event: 'ws_unauth_message',
-        messagePreview: String(rawMessage).slice(0, 200),
-      });
-      return;
-    }
-
-    const isAgent = tags.includes('role:agent');
-
-    try {
-      const data = JSON.parse(rawMessage as string) as Record<string, unknown>;
-
-      if (data.type === 'ping') {
-        this.#ensureSchema();
-        if (data.lastToolUseAt) {
-          const parsed = new Date(data.lastToolUseAt as string);
-          if (!isNaN(parsed.getTime())) {
-            const ts = toSQLDateTime(parsed);
-            this.sql.exec(
-              "UPDATE members SET last_heartbeat = datetime('now'), last_tool_use = ? WHERE agent_id = ?",
-              ts,
-              agentId,
-            );
-          } else {
-            this.sql.exec(
-              "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-              agentId,
-            );
-          }
-        } else {
-          this.sql.exec(
-            "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-            agentId,
-          );
-        }
-        ws.send(JSON.stringify({ type: 'pong' }));
-      } else if (data.type === 'activity' && isAgent) {
-        this.#ensureSchema();
-        const result = updateActivityFn(
-          this.sql,
-          agentId,
-          (data.files as string[]) || [],
-          (data.summary as string) || '',
-          this.#transact,
-        );
-        if (!isDOError(result)) {
-          this.#broadcastToWatchers({
-            type: 'activity',
-            agent_id: agentId,
-            files: data.files,
-            summary: data.summary,
-          });
-        }
-      } else if (data.type === 'file' && isAgent) {
-        this.#ensureSchema();
-        const result = reportFileFn(this.sql, agentId, data.file as string, this.#transact);
-        if (!isDOError(result)) {
-          this.#broadcastToWatchers({ type: 'file', agent_id: agentId, file: data.file });
-        }
-      } else if (data.type === 'claim_command' && tags.some((t) => t.startsWith('spawn:'))) {
-        this.#ensureSchema();
-        const commandId = typeof data.id === 'string' ? data.id : '';
-        if (commandId) {
-          const result = claimCommandFn(this.sql, commandId, agentId);
-          ws.send(JSON.stringify({ type: 'claim_result', id: commandId, ...result }));
-          if (!isDOError(result)) {
-            this.#broadcastToWatchers({
-              type: 'command_status',
-              id: commandId,
-              status: 'claimed',
-              claimed_by: agentId,
-            });
-          }
-        }
-      } else if (data.type === 'command_result' && tags.some((t) => t.startsWith('spawn:'))) {
-        this.#ensureSchema();
-        const commandId = typeof data.id === 'string' ? data.id : '';
-        const cmdStatus = data.status === 'completed' ? 'completed' : 'failed';
-        const resultData =
-          typeof data.result === 'object' && data.result
-            ? (data.result as Record<string, unknown>)
-            : {};
-        if (commandId) {
-          const result = completeCommandFn(this.sql, commandId, agentId, cmdStatus, resultData);
-          if (!isDOError(result)) {
-            this.#broadcastToWatchers({
-              type: 'command_status',
-              id: commandId,
-              status: cmdStatus,
-              result: resultData,
-            });
-          }
-        }
-      }
-    } catch (err) {
-      log.error('WebSocket message processing failed', {
-        event: 'ws_message_error',
-        agentId,
-        messagePreview: String(rawMessage).slice(0, 200),
-        error: getErrorMessage(err),
-      });
-      try {
-        ws.send(JSON.stringify({ type: 'error', message: 'Message processing failed' }));
-      } catch {
-        // Client may have disconnected
-      }
-    }
+    return handleMessage(this.#wsCtx(), ws, rawMessage);
   }
 
   async webSocketClose(
@@ -365,68 +147,26 @@ export class TeamDO extends DurableObject<Env> {
     _reason: string,
     _wasClean: boolean,
   ): Promise<void> {
-    let tags: string[];
-    try {
-      tags = this.ctx.getTags(ws);
-    } catch (err) {
-      log.error('webSocketClose: failed to read tags on closing socket', {
-        error: getErrorMessage(err),
-      });
-      // Tags lost -- cannot identify agent. This is rare (DO restart mid-close).
-      // Stale locks/members will be cleaned up by #maybeCleanup's heartbeat eviction.
-      return;
-    }
-    const isAgent = tags.includes('role:agent');
-    const closingHasSpawn = tags.some((t) => t.startsWith('spawn:'));
-    const agentId = tags.find((t) => !t.startsWith('role:') && !t.startsWith('spawn:'));
-
-    // Spawn capability disconnect: recompute available tools for watchers
-    if (closingHasSpawn && agentId) {
-      const remaining = this.#getExecutorSockets().filter((s) => s !== ws);
-      this.#broadcastToWatchers({
-        type: 'daemon_status',
-        connected: remaining.length > 0,
-        available_tools: this.#getAvailableSpawnTools(),
-      });
-    }
-
-    if (isAgent && agentId) {
-      this.#ensureSchema();
-      this.#lastHeartbeatBroadcast.delete(agentId);
-      // Release locks -- agent is gone, don't block others
-      let locksReleased = true;
-      try {
-        releaseFilesFn(this.sql, agentId, null);
-      } catch (err) {
-        locksReleased = false;
-        log.error('webSocketClose: lock release failed', {
-          agentId,
-          error: getErrorMessage(err),
-        });
-      }
-      // Always broadcast status_change (agent is offline regardless)
-      this.#broadcastToWatchers({ type: 'status_change', agent_id: agentId, status: 'offline' });
-      // Only broadcast lock release if it actually happened
-      if (locksReleased) {
-        this.#broadcastToWatchers({
-          type: 'lock_change',
-          action: 'release_all',
-          agent_id: agentId,
-        });
-      }
-    }
+    return handleClose(this.#wsCtx(), ws);
   }
 
   async webSocketError(ws: WebSocket, _error: unknown): Promise<void> {
-    // Log the error for observability; webSocketClose fires after for actual cleanup
-    let agentId = 'unknown';
-    try {
-      const tags = this.ctx.getTags(ws);
-      agentId = tags.find((t) => !t.startsWith('role:')) || 'unknown';
-    } catch (err) {
-      log.error('webSocketError: failed to read tags', { error: getErrorMessage(err) });
-    }
-    log.warn('WebSocket error', { event: 'ws_error', agentId });
+    return handleError(this.#wsCtx(), ws);
+  }
+
+  /** Dependency bag for the WebSocket handlers — rebuilt per call so closures
+   *  stay tied to live class state. Cheap: just a literal. */
+  #wsCtx(): WsCtx {
+    return {
+      sql: this.sql,
+      ctx: this.ctx,
+      ensureSchema: () => this.#ensureSchema(),
+      transact: this.#transact,
+      resolveOwnedAgentId: (id, ownerId) => this.#resolveOwnedAgentId(id, ownerId),
+      broadcastToWatchers: (event, opts) => this.#broadcastToWatchers(event, opts),
+      getContext: (agentId) => this.getContext(agentId),
+      lastHeartbeatBroadcast: this.#lastHeartbeatBroadcast,
+    };
   }
 
   // -- Internal helpers --
@@ -450,11 +190,6 @@ export class TeamDO extends DurableObject<Env> {
   }
 
   // -- Daemon command relay helpers --
-
-  /** All connected sockets with spawn capability (any role, identified by spawn:* tags). */
-  #getExecutorSockets(): WebSocket[] {
-    return getExecutorSockets(this.ctx);
-  }
 
   #broadcastToExecutors(event: Record<string, unknown>): void {
     broadcastToExecutors(this.ctx, event);
