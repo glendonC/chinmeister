@@ -3,12 +3,17 @@
 // zero-shaped values, so we build them explicitly here rather than
 // running the accumulators against an empty fan-out.
 
+import type { UserAnalytics } from '@chinwag/shared/contracts/analytics.js';
+
 /**
  * Shape the body returned by /me/analytics when the user has no visible
  * teams. `period_days` echoes the requested window so the UI can render
  * the chosen range; all analytic slices are empty or zeroed.
+ *
+ * Typed as UserAnalytics so TypeScript catches any schema drift at
+ * compile time rather than waiting for a runtime safeParse mismatch.
  */
-export function buildEmptyAnalyticsResponse(days: number) {
+export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
   return {
     ok: true as const,
     period_days: days,
@@ -92,6 +97,48 @@ export function buildEmptyAnalyticsResponse(days: number) {
       outcome_correlation: [],
       commit_edit_ratio: [],
     },
+    tool_call_stats: {
+      total_calls: 0,
+      total_errors: 0,
+      error_rate: 0,
+      avg_duration_ms: 0,
+      calls_per_session: 0,
+      research_to_edit_ratio: 0,
+      one_shot_rate: 0,
+      one_shot_sessions: 0,
+      frequency: [],
+      error_patterns: [],
+      hourly_activity: [],
+    },
+    work_type_outcomes: [],
+    conversation_edit_correlation: [],
+    file_rework: [],
+    directory_heatmap: [],
+    stuckness: {
+      total_sessions: 0,
+      stuck_sessions: 0,
+      stuckness_rate: 0,
+      stuck_completion_rate: 0,
+      normal_completion_rate: 0,
+    },
+    file_overlap: {
+      total_files: 0,
+      overlapping_files: 0,
+      overlap_rate: 0,
+    },
+    audit_staleness: [],
+    first_edit_stats: {
+      avg_minutes_to_first_edit: 0,
+      median_minutes_to_first_edit: 0,
+      by_tool: [],
+    },
+    memory_outcome_correlation: [],
+    top_memories: [],
+    scope_complexity: [],
+    prompt_efficiency: [],
+    hourly_effectiveness: [],
+    outcome_tags: [],
+    tool_handoffs: [],
     teams_included: 0,
     degraded: false,
   };

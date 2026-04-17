@@ -511,3 +511,42 @@ describe('GET /me/teams', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// --- GET /me/analytics ---
+//
+// These tests exercise the runtime-validated response pipeline so schema
+// drift between the worker handler and @chinwag/shared/contracts fails
+// loud in dev/CI. Without at least one path hitting the route, the
+// json({ schema }) wiring is silently inert.
+
+describe('GET /me/analytics', () => {
+  it('returns a shape that satisfies userAnalyticsSchema for a user with no teams', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/analytics?days=30', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    // If the handler returned a schema violation the json() helper would
+    // have written { error: 'Response schema violation', issues: [...] }
+    // with status 500. Assert positively instead.
+    expect(body.ok).toBe(true);
+    expect(body.period_days).toBe(30);
+    expect(body.teams_included).toBe(0);
+    expect(body.degraded).toBe(false);
+  });
+
+  it('returns a shape that satisfies userAnalyticsSchema after a team is created', async () => {
+    const { headers } = await createAuthUser();
+    await SELF.fetch('http://localhost/teams', { method: 'POST', headers });
+    const res = await SELF.fetch('http://localhost/me/analytics?days=7', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    expect(body.period_days).toBe(7);
+    expect(body.teams_included).toBeGreaterThanOrEqual(1);
+  });
+
+  it('requires auth', async () => {
+    const res = await SELF.fetch('http://localhost/me/analytics');
+    expect(res.status).toBe(401);
+  });
+});

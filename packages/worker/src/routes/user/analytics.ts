@@ -31,6 +31,7 @@ import * as activity from './analytics/activity.js';
 import * as sessions from './analytics/sessions.js';
 import * as members from './analytics/members.js';
 import * as period from './analytics/period.js';
+import * as toolCalls from './analytics/tool-calls.js';
 
 const log = createLogger('routes.user.teams');
 
@@ -132,6 +133,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
   const tokensAcc = tokens.createAcc();
   const commitsAcc = commits.createAcc();
+  const toolCallsAcc = toolCalls.createAcc();
 
   let included = 0;
   let failed = 0;
@@ -198,6 +200,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
     tokens.merge(tokensAcc, team);
     commits.merge(commitsAcc, team);
+    toolCalls.merge(toolCallsAcc, team);
   }
 
   // Token usage needs pricing enrichment before shipping; do it once against
@@ -252,6 +255,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       outcome_tags: sessions.projectOutcomeTags(outcomeTagsAcc),
       tool_handoffs: tools.projectToolHandoffs(toolHandoffsAcc),
       commit_stats: commits.project(commitsAcc, completionSummary.total_sessions),
+      tool_call_stats: toolCalls.project(toolCallsAcc),
       data_coverage: buildDataCoverage(activeToolsAcc),
       teams_included: included,
       degraded: failed > 0,
