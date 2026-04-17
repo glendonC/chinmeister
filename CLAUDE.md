@@ -78,10 +78,10 @@ Every change must pass these checks. These are not aspirational; they are blocke
 
 ### Patterns to follow
 
-- **DO RPC, not fetch.** All Durable Object communication uses native RPC (direct method calls), not HTTP fetch. `await db.someMethod(args)`, not `await db.fetch(new Request(...))`.
+- **DO RPC, not fetch — with one exception.** All Durable Object communication uses native RPC (direct method calls), not HTTP fetch. `await db.someMethod(args)`, not `await db.fetch(new Request(...))`. The one place `team.fetch()` is still required is the WebSocket upgrade in `routes/team/membership.ts`: Cloudflare's Hibernation API only exposes WebSockets through a fetch-shaped entry point, so the worker sets `X-Chinwag-Verified: 1` on the internal request and `TeamDO.fetch` trusts it. Every other code path is RPC.
 - **Error returns, not throws.** DO methods return `{ ok: true }` or `{ error: 'message' }`. Route handlers check for `.error` and return the appropriate HTTP status. Throws are for unexpected failures only.
-- **Handlers validate, DOs trust.** Input validation (type checking, length caps, sanitization) happens in the route handler. DO methods assume clean input. This keeps DOs focused on data logic.
-- **MCP server: never `console.log`.** Stdio transport uses stdout for JSON-RPC. Any `console.log` corrupts the protocol. Use `console.error` for all logging.
+- **Handlers validate, DOs trust — with defense in depth on untrusted inputs.** Input validation (type checking, length caps, sanitization) happens in the route handler. DO methods then trust the shape, but will still cap lengths on free-text inputs that get persisted (e.g. `tool.slice(0,100)`, `error_preview.slice(0,200)` in `dos/team/sessions.ts`) and will still reject unknown enum values on outcomes and moderation categories. The rule is: handlers are the primary validation line, DOs carry the minimum defensive truncation for fields that directly land in the database.
+- **MCP server: never `console.log`.** Stdio transport uses stdout for JSON-RPC. Any `console.log` corrupts the protocol. Use `console.error` for all logging. Enforced by ESLint (`no-console` as `error` for the MCP package).
 
 ## Key Design Decisions
 
