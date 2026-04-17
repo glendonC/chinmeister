@@ -70,12 +70,6 @@ export interface WidgetDef {
   maxH?: number;
   /** Data keys on UserAnalytics or ConversationAnalytics */
   dataKeys: string[];
-  /**
-   * Hide the shared section-label eyebrow above the body. For widgets whose
-   * body is self-explanatory (e.g. live-agents: a directory-style table with
-   * its own column headers), the eyebrow becomes visual redundancy.
-   */
-  hideLabel?: boolean;
 }
 
 // ── The catalog ──────────────────────────────────
@@ -84,7 +78,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Live (presence / coordination) ────
   {
     id: 'live-agents',
-    name: 'Live now',
+    name: 'Live agents',
     description: 'Agents working across your projects right now',
     category: 'live',
     viz: 'live-list',
@@ -108,7 +102,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'files-in-play',
-    name: 'Files in play',
+    name: 'Active files',
     description: 'Files currently being edited across your projects',
     category: 'live',
     viz: 'data-list',
@@ -206,7 +200,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'cache-efficiency',
-    name: 'Cache efficiency',
+    name: 'Cache hit rate',
     description: 'Share of input tokens served from prompt cache',
     category: 'tools',
     viz: 'stat',
@@ -232,7 +226,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'edit-velocity',
-    name: 'Edit velocity',
+    name: 'Edits per hour',
     description: 'Edits per hour trend over time',
     category: 'usage',
     viz: 'sparkline',
@@ -348,7 +342,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Tools & Models ────────────────────
   {
     id: 'tools',
-    name: 'Tools used',
+    name: 'Tool comparison',
     description: 'AI tools and their session/edit counts',
     category: 'tools',
     viz: 'factual-grid',
@@ -360,7 +354,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'models',
-    name: 'Models used',
+    name: 'Models',
     description: 'AI models and their session/edit counts',
     category: 'tools',
     viz: 'data-list',
@@ -388,7 +382,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Memory ────────────────────────────
   {
     id: 'memory-stats',
-    name: 'Memory',
+    name: 'Memory usage',
     description: 'Shared memories, searches, and freshness',
     category: 'memory',
     viz: 'stat-row',
@@ -402,7 +396,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Team ──────────────────────────────
   {
     id: 'team-members',
-    name: 'Team',
+    name: 'Team members',
     description: 'Teammates and their session/edit activity',
     category: 'team',
     viz: 'data-list',
@@ -430,7 +424,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Outcomes (extended) ─────────────
   {
     id: 'first-edit',
-    name: 'First edit timing',
+    name: 'Time to first edit',
     description: 'How long before agents start producing edits',
     category: 'outcomes',
     viz: 'stat-row',
@@ -480,7 +474,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'hourly-effectiveness',
-    name: 'Hourly effectiveness',
+    name: 'Completion rate by hour',
     description: 'Completion rate and output by hour of day',
     category: 'activity',
     viz: 'bar-chart',
@@ -666,7 +660,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Conversations (extended) ────────
   {
     id: 'sentiment-outcomes',
-    name: 'Sentiment vs outcomes',
+    name: 'Outcomes by sentiment',
     description: 'How conversation sentiment correlates with session success',
     category: 'conversations',
     viz: 'bar-chart',
@@ -691,7 +685,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // ── Memory (extended) ───────────────
   {
     id: 'memory-outcomes',
-    name: 'Memory vs outcomes',
+    name: 'Outcomes by memory',
     description: 'How memory usage correlates with session success',
     category: 'memory',
     viz: 'bar-chart',

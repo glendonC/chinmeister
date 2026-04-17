@@ -15,7 +15,7 @@ function WidgetRendererInner({ widgetId, ...bodyProps }: WidgetRendererProps) {
   const Body = widgetBodies[widgetId];
   return (
     <>
-      {!def.hideLabel && <SectionTitle>{def.name}</SectionTitle>}
+      <SectionTitle>{def.name}</SectionTitle>
       {Body ? <Body {...bodyProps} /> : <SectionEmpty>Unknown widget</SectionEmpty>}
     </>
   );
