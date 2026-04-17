@@ -277,18 +277,18 @@
 }
 
 .outcome_completed {
-  background: color-mix(in srgb, #8ec0a4 16%, transparent);
-  color: #6fa685;
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .outcome_abandoned {
-  background: color-mix(in srgb, #d4a58e 16%, transparent);
-  color: #b68065;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 
 .outcome_failed {
-  background: color-mix(in srgb, #d49aae 18%, transparent);
-  color: #b4687f;
+  background: var(--danger-bg);
+  color: var(--danger);
 }
 
 .editSummary {
@@ -314,7 +314,7 @@
 }
 
 .editConflict {
-  color: #b4687f;
+  color: var(--danger);
 }
 
 @keyframes rowReveal {

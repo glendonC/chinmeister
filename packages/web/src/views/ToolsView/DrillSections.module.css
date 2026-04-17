@@ -189,7 +189,7 @@
 }
 
 .shapeMarkError {
-  outline: 1.5px solid var(--warn, #d17a5a);
+  outline: 1.5px solid var(--warn);
   outline-offset: 1px;
 }
 
