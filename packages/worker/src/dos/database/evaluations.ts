@@ -27,7 +27,7 @@ export interface EvaluationInput {
   data_passes?: string | Record<string, unknown>;
 }
 
-interface ParsedEvaluation {
+export interface ParsedEvaluation {
   id: string;
   name: string;
   tagline: string | null;

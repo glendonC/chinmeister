@@ -17,6 +17,7 @@ import {
 } from '../lib/icons.js';
 import { authedJsonRoute, publicRoute } from '../lib/middleware.js';
 import { RATE_LIMIT_ADMIN_BATCH_PER_IP, RATE_LIMIT_SUGGESTIONS } from '../lib/constants.js';
+import type { ParsedEvaluation } from '../dos/database/evaluations.js';
 
 const log = createLogger('routes.directory');
 
@@ -90,14 +91,14 @@ export const handleListDirectory = publicRoute(async ({ request, env }) => {
         }),
       );
 
-  const evaluations = result.evaluations || [];
+  const evaluations: ParsedEvaluation[] = result.evaluations || [];
   const total = (result as { total?: number }).total ?? evaluations.length;
 
   const allCategories = await getCategoryNames(env);
 
   // Only return categories that have at least one tool in this result set.
   // The frontend paginates and accumulates categories across pages.
-  const populated = new Set(evaluations.map((ev: any) => ev.category));
+  const populated = new Set(evaluations.map((ev) => ev.category));
   const categories = Object.fromEntries(
     Object.entries(allCategories).filter(([id]) => populated.has(id)),
   );
@@ -245,33 +246,24 @@ export const handleBatchResolveIcons = publicRoute(async ({ request, env }) => {
 
     const db = getDB(env);
     const existing = rpc(await db.listEvaluations({ limit: 500, offset: 0 }));
-    const evaluations = existing.evaluations || [];
+    const evaluations: ParsedEvaluation[] = existing.evaluations || [];
 
     // Find tools without cached icons
-    const needsIcon = evaluations
-      .filter((ev: any) => {
-        const md = ev.metadata;
-        if (!md || typeof md !== 'object') return true;
-        return !(md as Record<string, unknown>).icon_cached;
-      })
-      .slice(0, batchLimit);
+    const needsIcon = evaluations.filter((ev) => !ev.metadata.icon_cached).slice(0, batchLimit);
 
     log.info(`Resolving icons for ${needsIcon.length} tools`);
 
     const results: Array<Record<string, unknown>> = [];
     for (const ev of needsIcon) {
-      const evObj = ev as Record<string, unknown>;
-      const name = evObj.name as string;
-      const id = evObj.id as string;
-      const md = { ...(evObj.metadata || {}) } as Record<string, unknown>;
+      const md: Record<string, unknown> = { ...ev.metadata };
 
-      await resolveAndCacheIcon(id, md, env);
+      await resolveAndCacheIcon(ev.id, md, env);
 
       if (md.icon_cached) {
-        await db.saveEvaluation({ ...evObj, metadata: md });
-        results.push({ name, icon_url: md.icon_url, icon_source: md.icon_source });
+        await db.saveEvaluation({ ...ev, metadata: md });
+        results.push({ name: ev.name, icon_url: md.icon_url, icon_source: md.icon_source });
       } else {
-        results.push({ name, icon_url: null });
+        results.push({ name: ev.name, icon_url: null });
       }
     }
 
@@ -303,44 +295,34 @@ export const handleBatchExtractColors = publicRoute(async ({ request, env }) => 
 
     const db = getDB(env);
     const existing = rpc(await db.listEvaluations({ limit: 500, offset: 0 }));
-    const evaluations = existing.evaluations || [];
+    const evaluations: ParsedEvaluation[] = existing.evaluations || [];
 
     // Find tools with cached icons but no brand_color
     const needsColor = evaluations
-      .filter((ev: any) => {
-        const md = ev.metadata;
-        if (!md || typeof md !== 'object') return false;
-        const m = md as Record<string, unknown>;
-        return m.icon_cached && !m.brand_color;
-      })
+      .filter((ev) => ev.metadata.icon_cached && !ev.metadata.brand_color)
       .slice(0, batchLimit);
 
     log.info(`Extracting brand colors for ${needsColor.length} tools`);
 
     const results: Array<Record<string, unknown>> = [];
     for (const ev of needsColor) {
-      const evObj = ev as Record<string, unknown>;
-      const name = evObj.name as string;
-      const id = evObj.id as string;
-
       // Try PNG pixel extraction first (fast, no AI cost)
-      let color = await extractBrandColorFromCache(id, env);
+      let color = await extractBrandColorFromCache(ev.id, env);
 
       // If PNG extraction fails, try Workers AI vision (handles any format)
       if (!color) {
-        const dataUri = await getCachedIcon(id, env);
+        const dataUri = await getCachedIcon(ev.id, env);
         if (dataUri) {
           color = await extractColorWithAI(dataUri, env);
         }
       }
 
       if (color) {
-        const md = { ...(evObj.metadata || {}) } as Record<string, unknown>;
-        md.brand_color = color;
-        await db.saveEvaluation({ ...evObj, metadata: md });
-        results.push({ name, brand_color: color, source: color === null ? 'none' : 'extracted' });
+        const md: Record<string, unknown> = { ...ev.metadata, brand_color: color };
+        await db.saveEvaluation({ ...ev, metadata: md });
+        results.push({ name: ev.name, brand_color: color, source: 'extracted' });
       } else {
-        results.push({ name, brand_color: null });
+        results.push({ name: ev.name, brand_color: null });
       }
     }
 
@@ -459,7 +441,7 @@ export const handleReportStale = publicRoute(async ({ request, env, params }) =>
     const existing = rpc(await db.getEvaluation(toolId));
     if (!existing.evaluation) return json({ error: 'Tool not found' }, 404);
 
-    const ev = existing.evaluation as Record<string, any>;
+    const ev = existing.evaluation;
     const md = { ...ev.metadata, reported_stale_at: new Date().toISOString() };
     await db.saveEvaluation({ ...ev, metadata: md });
 
