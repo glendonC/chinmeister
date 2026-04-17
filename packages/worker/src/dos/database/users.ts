@@ -200,10 +200,14 @@ export function getUser(sql: SqlStorage, id: string): DOResult<{ ok: true; user:
     .toArray();
   const user = (rows[0] as unknown as User) || null;
   if (user) {
-    const lastActive = new Date(user.last_active).getTime();
-    if (Date.now() - lastActive > 300_000) {
-      sql.exec("UPDATE users SET last_active = datetime('now') WHERE id = ?", id);
-    }
+    // Throttle last_active writes to once per 5 minutes. Running the check in
+    // SQL keeps time math in SQLite's domain (no JS Date parsing of the
+    // "YYYY-MM-DD HH:MM:SS" format) and collapses the read-then-write pair
+    // into a single conditional UPDATE that no-ops when the row is fresh.
+    sql.exec(
+      "UPDATE users SET last_active = datetime('now') WHERE id = ? AND last_active <= datetime('now', '-300 seconds')",
+      id,
+    );
   }
   return user ? { ok: true, user } : { error: 'User not found', code: 'NOT_FOUND' };
 }

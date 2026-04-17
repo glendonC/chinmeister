@@ -87,10 +87,14 @@ export function endSession(
   resolvedAgentId: string,
   sessionId: string,
 ): DOResult<{ ok: true; outcome?: string | null; summary?: Record<string, unknown> | null }> {
-  // Read session state for outcome inference before closing
+  // Read session state for outcome inference before closing. duration_min is
+  // computed in SQL so all time arithmetic stays in one domain.
   const rows = sql
     .exec(
-      `SELECT edit_count, conflicts_hit, memories_searched, started_at, outcome FROM sessions WHERE id = ? AND agent_id = ? AND ended_at IS NULL`,
+      `SELECT edit_count, conflicts_hit, memories_searched, outcome,
+              (julianday('now') - julianday(started_at)) * 24 * 60 AS duration_min
+         FROM sessions
+        WHERE id = ? AND agent_id = ? AND ended_at IS NULL`,
       sessionId,
       resolvedAgentId,
     )
@@ -107,11 +111,10 @@ export function endSession(
     const editCount = (session.edit_count as number) || 0;
     const conflictsHit = (session.conflicts_hit as number) || 0;
     const memoriesSearched = (session.memories_searched as number) || 0;
-    const startedAt = session.started_at as string;
-    // SQLite datetime: "2026-01-15 10:30:45" (space, no T) — normalize for JS Date
-    const durationMin =
-      (new Date().getTime() - new Date(String(startedAt).replace(' ', 'T') + 'Z').getTime()) /
-      60000;
+    // Duration computed server-side via julianday() so all time logic stays in
+    // SQLite's domain — mixing JS Date parsing with SQLite's "YYYY-MM-DD HH:MM:SS"
+    // format was brittle across timezones.
+    const durationMin = (session.duration_min as number) || 0;
 
     if (editCount > 0) {
       outcome = 'completed';

@@ -249,15 +249,23 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
   }
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-  const sqlStr = `SELECT m.id, m.text, m.tags, m.categories, m.handle, m.host_tool, m.agent_surface, m.agent_model, m.session_id, m.created_at, m.updated_at, m.last_accessed_at
+  // is_stale is computed in SQL so the throttle decision stays in SQLite's
+  // time domain — no JS Date parsing of SQLite datetime strings.
+  const throttleSeconds = Math.round(LAST_ACCESSED_THROTTLE_MS / 1000);
+  const sqlStr = `SELECT m.id, m.text, m.tags, m.categories, m.handle, m.host_tool, m.agent_surface, m.agent_model, m.session_id, m.created_at, m.updated_at, m.last_accessed_at,
+                   CASE
+                     WHEN m.last_accessed_at IS NULL THEN 1
+                     WHEN (julianday('now') - julianday(m.last_accessed_at)) * 86400 > ? THEN 1
+                     ELSE 0
+                   END AS is_stale
                FROM memories m ${where}
                ORDER BY m.updated_at DESC, m.created_at DESC LIMIT ?`;
+  params.unshift(throttleSeconds);
   params.push(cappedLimit);
 
   const rows = sql.exec(sqlStr, ...params).toArray();
-  const now = Date.now();
 
-  // Throttled last_accessed_at update — only touch rows not accessed within the throttle window.
+  // Throttled last_accessed_at update — only touch rows flagged is_stale by SQL.
   // Writes cost 20x reads on DO SQLite, so we avoid updating on every search.
   const idsToTouch: string[] = [];
   const memories = rows.map((m) => {
@@ -275,13 +283,14 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
       log,
     );
 
-    // Check if last_accessed_at needs updating
-    const lastAccessed = row.last_accessed_at as string | null;
-    if (!lastAccessed || now - new Date(lastAccessed + 'Z').getTime() > LAST_ACCESSED_THROTTLE_MS) {
+    if (row.is_stale === 1) {
       idsToTouch.push(row.id as string);
     }
 
-    return { ...row, tags: parsedTags, categories: parsedCategories } as unknown as Memory;
+    // Strip the SQL-only is_stale column from the returned row so callers
+    // see the same Memory shape as before.
+    const { is_stale: _is_stale, ...rest } = row;
+    return { ...rest, tags: parsedTags, categories: parsedCategories } as unknown as Memory;
   });
 
   // Batch update last_accessed_at for stale entries
