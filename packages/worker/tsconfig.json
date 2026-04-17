@@ -1,13 +1,6 @@
 {
+  "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "noEmit": true,
-    "strict": true,
-    "noImplicitAny": true,
-    "target": "ES2022",
-    "module": "ES2022",
-    "moduleResolution": "bundler",
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
     "types": ["@cloudflare/workers-types"]
   },
   "include": ["src/**/*.ts", "src/**/*.json"],
