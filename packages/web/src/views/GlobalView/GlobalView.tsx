@@ -2,21 +2,13 @@ import { useMemo, type ReactNode } from 'react';
 import DottedMap from 'dotted-map/without-countries';
 import { COUNTRY_COORDS } from '../../components/GlobalMap/countryCoords.js';
 import { useGlobalStats } from '../../hooks/useGlobalStats.js';
-import { useGlobalRank, type EffectivenessTier } from '../../hooks/useGlobalRank.js';
+import { useGlobalRank } from '../../hooks/useGlobalRank.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.js';
 import { MAP_JSON } from './mapData.js';
 import styles from './GlobalView.module.css';
 
 const ARC_LEN = Math.PI * 45;
-
-const TIER_COLORS: Record<EffectivenessTier, string> = {
-  Elite: 'var(--accent)',
-  Strong: 'var(--success)',
-  Solid: 'var(--ink)',
-  Developing: 'var(--warn)',
-  New: 'var(--muted)',
-};
 
 function formatNum(n: number): string {
   if (n >= 100000) return `${(n / 1000).toFixed(0)}k`;
@@ -75,73 +67,6 @@ function SectionHead({ label }: { label: string }): ReactNode {
     <div className={styles.sectionHeader}>
       <span className={styles.sectionLabel}>{label}</span>
       <span className={styles.sectionRule} />
-    </div>
-  );
-}
-
-// ═══════════════════════════════════════════════
-//  Score card
-// ═══════════════════════════════════════════════
-
-function ScoreCard({
-  score,
-  tier,
-  totalDevelopers,
-  sessions,
-}: {
-  score: number;
-  tier: EffectivenessTier;
-  totalDevelopers: number;
-  sessions: number;
-}): ReactNode {
-  const tierDesc: Record<EffectivenessTier, string> = {
-    Elite: 'Exceptional AI-assisted developer. Your sessions consistently succeed.',
-    Strong: 'Consistently effective with agents across tools and projects.',
-    Solid: "Competent and growing. You're building strong AI workflow habits.",
-    Developing: 'Building AI workflow skills. Keep experimenting with different approaches.',
-    New:
-      sessions < 10
-        ? `Complete ${10 - sessions} more session${10 - sessions === 1 ? '' : 's'} to unlock your effectiveness rating.`
-        : 'Just getting started with AI-assisted development.',
-  };
-
-  const circ = 2 * Math.PI * 64;
-
-  return (
-    <div className={styles.scoreCard}>
-      <div className={styles.scoreRing}>
-        <svg viewBox="0 0 148 148" className={styles.scoreRingSvg}>
-          <circle cx="74" cy="74" r="64" fill="none" stroke="var(--hairline)" strokeWidth="5" />
-          <circle
-            cx="74"
-            cy="74"
-            r="64"
-            fill="none"
-            stroke={TIER_COLORS[tier]}
-            strokeWidth="5"
-            strokeDasharray={circ}
-            strokeDashoffset={circ * (1 - score / 100)}
-            strokeLinecap="round"
-            transform="rotate(-90 74 74)"
-            className={styles.scoreRingFill}
-          />
-        </svg>
-        <div className={styles.scoreInner}>
-          <span className={styles.scoreNumber}>{score}</span>
-        </div>
-      </div>
-      <span className={styles.scoreTier} style={{ color: TIER_COLORS[tier] }}>
-        {tier}
-      </span>
-      <span className={styles.scoreDesc}>{tierDesc[tier]}</span>
-      {totalDevelopers > 0 && tier !== 'New' && (
-        <span className={styles.scoreContext}>
-          Top {Math.max(1, 100 - score)}%
-          {totalDevelopers >= 100
-            ? ` of ${totalDevelopers.toLocaleString()} developers`
-            : ' of developers'}
-        </span>
-      )}
     </div>
   );
 }
@@ -833,18 +758,18 @@ export default function GlobalView(): ReactNode {
         <WorldMap countries={gs.countries} />
       </div>
 
-      {/* ── Developer Effectiveness ── */}
+      {/* ── Percentile ranks ── */}
       <section className={styles.section}>
-        <SectionHead label="Developer Effectiveness" />
+        <SectionHead label="Your Percentile Ranks" />
         <div className={styles.scoreSection}>
-          <ScoreCard
-            score={gr.score}
-            tier={gr.tier}
-            totalDevelopers={gr.totalDevelopers}
-            sessions={t.totalSessions}
-          />
           <RadarChart metrics={m} />
         </div>
+        {gr.totalDevelopers >= 100 && (
+          <p className={styles.sectionHint}>
+            Against {gr.totalDevelopers.toLocaleString()} developers with at least one session. Each
+            axis is independent — there is no composite rank.
+          </p>
+        )}
       </section>
 
       {/* ── Your Totals ── */}

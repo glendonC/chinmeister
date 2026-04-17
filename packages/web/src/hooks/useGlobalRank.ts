@@ -24,13 +24,9 @@ export interface PersonalTotals {
   totalOutputTokens: number;
 }
 
-export type EffectivenessTier = 'Elite' | 'Strong' | 'Solid' | 'Developing' | 'New';
-
 export interface GlobalRank {
   metrics: Record<string, MetricRank>;
   totals: PersonalTotals;
-  score: number;
-  tier: EffectivenessTier;
   totalDevelopers: number;
 }
 
@@ -53,8 +49,6 @@ const EMPTY_TOTALS: PersonalTotals = {
 const EMPTY: GlobalRank = {
   metrics: {},
   totals: EMPTY_TOTALS,
-  score: 0,
-  tier: 'New',
   totalDevelopers: 0,
 };
 
@@ -80,7 +74,7 @@ export function useGlobalRank(): GlobalRank {
         const totalDevelopers = (data.total_developers as number) || 0;
 
         if (!raw) {
-          setRank({ metrics: {}, totals: EMPTY_TOTALS, score: 0, tier: 'New', totalDevelopers });
+          setRank({ metrics: {}, totals: EMPTY_TOTALS, totalDevelopers });
           return;
         }
 
@@ -143,10 +137,7 @@ export function useGlobalRank(): GlobalRank {
           totalOutputTokens: (raw.total_output_tokens as number) || 0,
         };
 
-        const score = (raw.effectiveness_score as number) || 0;
-        const tier = ((raw.effectiveness_tier as string) || 'New') as EffectivenessTier;
-
-        setRank({ metrics, totals, score, tier, totalDevelopers });
+        setRank({ metrics, totals, totalDevelopers });
       } catch {
         // Silently ignore — page works with mock data
       }

@@ -936,45 +936,11 @@ export class DatabaseDO extends DurableObject<Env> {
 
     const rank = rows[0] as Record<string, unknown>;
 
-    // ── Developer Effectiveness Score ──────────────────
-    // Weighted geometric mean of 8 percentile dimensions.
-    // Weights derived from composite indicator methodology:
-    //   Session Quality (55%): completion 25%, stuck 18%, velocity 12%
-    //   Efficiency (25%): lines/session 15%, first-edit 10%
-    //   Engagement (20%): total lines 8%, focus hours 7%, tool diversity 5%
-    // Geometric mean prevents full compensation (high volume can't mask low quality).
-    // Floor at 1 prevents zero-collapse.
-
-    const weights = [
-      { key: 'completion_rate_pct', w: 0.25 },
-      { key: 'stuck_rate_pct', w: 0.18 },
-      { key: 'edit_velocity_pct', w: 0.12 },
-      { key: 'lines_per_session_pct', w: 0.15 },
-      { key: 'first_edit_pct', w: 0.1 },
-      { key: 'total_lines_pct', w: 0.08 },
-      { key: 'focus_hours_pct', w: 0.07 },
-      { key: 'tool_diversity_pct', w: 0.05 },
-    ];
-
-    let logScore = 0;
-    for (const { key, w } of weights) {
-      const pct = Math.max((rank[key] as number) || 0, 1); // floor at 1
-      logScore += w * Math.log(pct);
-    }
-    const score = Math.round(Math.exp(logScore));
-
-    // Tier assignment — min 10 sessions for real tier
-    const sessions = (rank.total_sessions as number) || 0;
-    let tier: string;
-    if (sessions < 10) tier = 'New';
-    else if (score >= 80) tier = 'Elite';
-    else if (score >= 60) tier = 'Strong';
-    else if (score >= 40) tier = 'Solid';
-    else if (score >= 20) tier = 'Developing';
-    else tier = 'New';
-
-    rank.effectiveness_score = score;
-    rank.effectiveness_tier = tier;
+    // No composite "effectiveness score" — the 8 raw percentile dimensions
+    // (completion_rate_pct, edit_velocity_pct, tool_diversity_pct,
+    // first_edit_pct, stuck_rate_pct, lines_per_session_pct,
+    // total_lines_pct, focus_hours_pct) are what the UI consumes. Any
+    // weighted mean across incomparable axes would be a fabricated number.
 
     return { ok: true, rank, total_developers: totalDevelopers };
   }
