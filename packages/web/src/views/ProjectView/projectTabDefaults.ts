@@ -9,15 +9,20 @@ interface RGLLayout {
   h: number;
 }
 
-// Activity tab — at-a-glance + recent state. Mostly compact stat widgets
-// since live widgets aren't in the catalog yet (follow-up slice).
+// Activity tab — live operational surface. Who's working in this repo
+// right now, what files are contested, what's in play. KPI strip below
+// for at-a-glance project health. Trends tab owns the historical charts.
 export const ACTIVITY_DEFAULT_LAYOUT: RGLLayout[] = [
-  { i: 'sessions', x: 0, y: 0, w: 3, h: 2 },
-  { i: 'edits', x: 3, y: 0, w: 3, h: 2 },
-  { i: 'files-touched', x: 6, y: 0, w: 3, h: 2 },
-  { i: 'cost', x: 9, y: 0, w: 3, h: 2 },
-  { i: 'outcomes', x: 0, y: 2, w: 6, h: 3 },
-  { i: 'tools', x: 6, y: 2, w: 6, h: 3 },
+  // Live presence banner
+  { i: 'live-agents', x: 0, y: 0, w: 12, h: 3 },
+  // Live operational row
+  { i: 'live-conflicts', x: 0, y: 3, w: 6, h: 3 },
+  { i: 'files-in-play', x: 6, y: 3, w: 6, h: 3 },
+  // At-a-glance KPI strip
+  { i: 'sessions', x: 0, y: 6, w: 3, h: 2 },
+  { i: 'edits', x: 3, y: 6, w: 3, h: 2 },
+  { i: 'cost', x: 6, y: 6, w: 3, h: 2 },
+  { i: 'files-touched', x: 9, y: 6, w: 3, h: 2 },
 ];
 
 // Trends tab — historical reflection. Bigger charts, full coverage.

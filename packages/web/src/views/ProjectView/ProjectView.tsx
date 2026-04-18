@@ -33,6 +33,7 @@ import { useProjectData } from './useProjectData.js';
 import { useProjectTabLayout } from './useProjectTabLayout.js';
 import { ACTIVITY_DEFAULT_LAYOUT, TRENDS_DEFAULT_LAYOUT } from './projectTabDefaults.js';
 import ProjectMemoryTab from './ProjectMemoryTab.jsx';
+import SpawnForm from '../../components/SpawnAgentModal/SpawnAgentModal.jsx';
 
 import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
 import { WidgetCatalog } from '../../widgets/WidgetCatalog.js';
@@ -249,12 +250,14 @@ export default function ProjectView(_props: Props) {
     conflicts,
     memories,
     memoryBreakdown,
+    availableSpawnTools,
   } = useProjectData();
 
   const { activeTab, setActiveTab, hint, ref: statsRef } = useTabs(PROJECT_TABS);
   const [rangeDays, setRangeDays] = useState<7 | 30 | 90>(30);
   const [editing, setEditing] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
+  const [showSpawn, setShowSpawn] = useState(false);
 
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const isAnalytical = activeTab === 'activity' || activeTab === 'trends';
@@ -444,9 +447,49 @@ export default function ProjectView(_props: Props) {
             {!isMobile && (
               <CustomizeButton active={catalogOpen} onClick={() => setCatalogOpen(!catalogOpen)} />
             )}
+            {activeTab === 'activity' && activeTeamId && (
+              <button
+                type="button"
+                className={styles.spawnBtn}
+                onClick={() => setShowSpawn((v) => !v)}
+                aria-expanded={showSpawn}
+              >
+                {showSpawn ? 'Cancel' : 'Spawn agent'}
+                <span className={styles.spawnBtnArrow}>
+                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                    {showSpawn ? (
+                      <path
+                        d="M3 3l6 6M9 3l-6 6"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    ) : (
+                      <path
+                        d="M6 2.5v7M3 6.5l3 3 3-3"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    )}
+                  </svg>
+                </span>
+              </button>
+            )}
           </div>
           <RangePills value={rangeDays} onChange={setRangeDays} />
         </div>
+      )}
+
+      {/* Inline spawn form (Activity tab only, toggled by the spawn pill) */}
+      {activeTab === 'activity' && showSpawn && activeTeamId && (
+        <SpawnForm
+          teamId={activeTeamId}
+          availableTools={availableSpawnTools}
+          onClose={() => setShowSpawn(false)}
+        />
       )}
 
       {/* Tab content */}
