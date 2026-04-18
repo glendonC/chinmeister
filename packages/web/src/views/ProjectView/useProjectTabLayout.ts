@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getWidget } from '../OverviewView/widget-catalog.js';
+import { getWidget } from '../../widgets/widget-catalog.js';
 
 // Per-tab layout persistence for the project page. Each tab (Activity, Trends)
 // has its own layout stored under a separate localStorage key so users can

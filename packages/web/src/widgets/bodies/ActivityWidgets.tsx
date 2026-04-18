@@ -1,9 +1,13 @@
 import { useMemo } from 'react';
-import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
-import { DAY_LABELS, buildHeatmapData, workTypeColor } from '../overview-utils.js';
-import { getToolMeta } from '../../../lib/toolMeta.js';
-import type { UserAnalytics } from '../../../lib/apiSchemas.js';
-import styles from '../OverviewView.module.css';
+import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import {
+  DAY_LABELS,
+  buildHeatmapData,
+  workTypeColor,
+} from '../../views/OverviewView/overview-utils.js';
+import { getToolMeta } from '../../lib/toolMeta.js';
+import type { UserAnalytics } from '../../lib/apiSchemas.js';
+import styles from '../../views/OverviewView/OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { GhostBars, GhostStatRow } from './shared.js';
 

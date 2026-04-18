@@ -1,8 +1,8 @@
 import type { CSSProperties } from 'react';
-import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
-import { aggregateModels } from '../overview-utils.js';
-import type { UserAnalytics, ConversationAnalytics } from '../../../lib/apiSchemas.js';
-import styles from '../OverviewView.module.css';
+import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import { aggregateModels } from '../../views/OverviewView/overview-utils.js';
+import type { UserAnalytics, ConversationAnalytics } from '../../lib/apiSchemas.js';
+import styles from '../../views/OverviewView/OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
 interface CoverageCategory {

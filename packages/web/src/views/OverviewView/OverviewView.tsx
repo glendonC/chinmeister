@@ -93,9 +93,9 @@ import LiveNowView from './LiveNowView.js';
 import { RANGES, type RangeDays, summarizeNames } from './overview-utils.js';
 import { useOverviewLayout } from './useOverviewLayout.js';
 import { useProjectFilter } from './useProjectFilter.js';
-import { getWidget } from './widget-catalog.js';
-import { WidgetRenderer } from './WidgetRenderer.js';
-import { WidgetCatalog } from './WidgetCatalog.js';
+import { getWidget } from '../../widgets/widget-catalog.js';
+import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
+import { WidgetCatalog } from '../../widgets/WidgetCatalog.js';
 
 import styles from './OverviewView.module.css';
 

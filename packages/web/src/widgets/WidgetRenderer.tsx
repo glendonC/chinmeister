@@ -1,9 +1,9 @@
 import { memo } from 'react';
-import SectionTitle from '../../components/SectionTitle/SectionTitle.js';
-import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import SectionTitle from '../components/SectionTitle/SectionTitle.js';
+import SectionEmpty from '../components/SectionEmpty/SectionEmpty.js';
 import { getWidget } from './widget-catalog.js';
-import { widgetBodies } from './widgets/registry.js';
-import type { WidgetBodyProps } from './widgets/types.js';
+import { widgetBodies } from './bodies/registry.js';
+import type { WidgetBodyProps } from './bodies/types.js';
 
 interface WidgetRendererProps extends WidgetBodyProps {
   widgetId: string;

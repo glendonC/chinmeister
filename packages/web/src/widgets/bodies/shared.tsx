@@ -1,6 +1,6 @@
 import { getToolsWithCapability, type DataCapabilities } from '@chinwag/shared/tool-registry.js';
-import { getToolMeta } from '../../../lib/toolMeta.js';
-import styles from '../OverviewView.module.css';
+import { getToolMeta } from '../../lib/toolMeta.js';
+import styles from '../../views/OverviewView/OverviewView.module.css';
 
 export const SENTIMENT_COLORS: Record<string, string> = {
   positive: 'var(--success)',

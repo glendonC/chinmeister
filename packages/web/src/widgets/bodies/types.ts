@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
-import type { UserAnalytics, ConversationAnalytics } from '../../../lib/apiSchemas.js';
-import type { LiveAgent } from '../useOverviewData.js';
+import type { UserAnalytics, ConversationAnalytics } from '../../lib/apiSchemas.js';
+import type { LiveAgent } from '../../views/OverviewView/useOverviewData.js';
 
 export interface WidgetBodyProps {
   analytics: UserAnalytics;

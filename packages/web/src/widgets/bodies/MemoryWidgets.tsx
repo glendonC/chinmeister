@@ -1,6 +1,6 @@
 import { useState, type CSSProperties } from 'react';
-import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
-import styles from '../OverviewView.module.css';
+import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import styles from '../../views/OverviewView/OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { GhostBars, GhostStatRow } from './shared.js';
 

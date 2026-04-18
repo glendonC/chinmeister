@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { DEFAULT_WIDGET_IDS, DEFAULT_LAYOUT, getWidget } from './widget-catalog.js';
+import { DEFAULT_WIDGET_IDS, DEFAULT_LAYOUT, getWidget } from '../../widgets/widget-catalog.js';
 
 // ── Unified layout store ─────────────────────────
 // Single source of truth: widget IDs + grid positions in one object.

@@ -34,9 +34,9 @@ import { useProjectTabLayout } from './useProjectTabLayout.js';
 import { ACTIVITY_DEFAULT_LAYOUT, TRENDS_DEFAULT_LAYOUT } from './projectTabDefaults.js';
 import ProjectMemoryTab from './ProjectMemoryTab.jsx';
 
-import { WidgetRenderer } from '../OverviewView/WidgetRenderer.js';
-import { WidgetCatalog } from '../OverviewView/WidgetCatalog.js';
-import { getWidget } from '../OverviewView/widget-catalog.js';
+import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
+import { WidgetCatalog } from '../../widgets/WidgetCatalog.js';
+import { getWidget } from '../../widgets/widget-catalog.js';
 import type { LiveAgent } from '../OverviewView/useOverviewData.js';
 import type { UserAnalytics, ConversationAnalytics } from '../../lib/apiSchemas.js';
 

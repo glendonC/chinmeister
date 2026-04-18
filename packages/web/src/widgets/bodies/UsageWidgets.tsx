@@ -1,4 +1,4 @@
-import type { UserAnalytics } from '../../../lib/apiSchemas.js';
+import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { StatWidget, CoverageNote, capabilityCoverageNote } from './shared.js';
 

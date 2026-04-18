@@ -1,11 +1,11 @@
 import { useMemo, type CSSProperties } from 'react';
 import clsx from 'clsx';
-import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
-import { getToolMeta } from '../../../lib/toolMeta.js';
-import { formatDuration } from '../../../lib/utils.js';
-import { setQueryParam } from '../../../lib/router.js';
-import styles from '../OverviewView.module.css';
-import { groupFilesByTeam } from '../liveData.js';
+import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import { getToolMeta } from '../../lib/toolMeta.js';
+import { formatDuration } from '../../lib/utils.js';
+import { setQueryParam } from '../../lib/router.js';
+import styles from '../../views/OverviewView/OverviewView.module.css';
+import { groupFilesByTeam } from '../../views/OverviewView/liveData.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
 function LiveAgentsWidget({ liveAgents }: WidgetBodyProps) {

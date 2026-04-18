@@ -1,16 +1,16 @@
 import { useMemo, type CSSProperties } from 'react';
-import SectionEmpty from '../../../components/SectionEmpty/SectionEmpty.js';
-import { Sparkline } from '../overview-charts.js';
+import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import { Sparkline } from '../../views/OverviewView/overview-charts.js';
 import {
   TOOL_ERROR_RATE_WARN_THRESHOLD,
   aggregateModels,
   formatDuration,
   workTypeColor,
-} from '../overview-utils.js';
-import { getToolMeta } from '../../../lib/toolMeta.js';
-import { formatRelativeTime } from '../../../lib/relativeTime.js';
-import type { TokenUsageStats, UserAnalytics } from '../../../lib/apiSchemas.js';
-import styles from '../OverviewView.module.css';
+} from '../../views/OverviewView/overview-utils.js';
+import { getToolMeta } from '../../lib/toolMeta.js';
+import { formatRelativeTime } from '../../lib/relativeTime.js';
+import type { TokenUsageStats, UserAnalytics } from '../../lib/apiSchemas.js';
+import styles from '../../views/OverviewView/OverviewView.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { getDataCapabilities } from '@chinwag/shared/tool-registry.js';
 import {
