@@ -791,6 +791,7 @@ export default function OverviewView() {
         setEditing={setEditing}
         resetToDefault={resetToDefault}
         clearAll={clearAll}
+        viewScope="overview"
       />
     </div>
   );

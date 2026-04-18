@@ -494,6 +494,7 @@ export default function ProjectView(_props: Props) {
           setEditing={setEditing}
           resetToDefault={currentLayout.resetToDefault}
           clearAll={currentLayout.clearAll}
+          viewScope="project"
         />
       )}
     </div>

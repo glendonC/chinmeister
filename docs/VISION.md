@@ -34,9 +34,11 @@ Cross-vendor, cross-developer, real-time agent coordination.
 
 ### Workflow Intelligence
 
-Three levels of visibility into how you develop with AI — from individual agent sessions to your personal workflow to your entire team.
+Four levels of visibility into how you develop with AI — from individual agent sessions to a single codebase to your personal workflow to your entire team.
 
 **Agent-level: observe, measure, control.** Every agent session tracked — duration, edits, files touched, outcome, cost. For managed agents, chinwag captures the full conversation: how you communicate with agents, where sessions go sideways, what patterns lead to success or failure. Drill into any session to see the timeline. Control managed agents directly — start, stop, restart. Conflict prevention enforced in real time.
+
+**Project-level: what's happening in this codebase.** The repo-axis view. Who's editing what right now, which files are contested, how sessions perform against this specific codebase, what memory has accumulated here. Scoped by the `.chinwag` file — one view per repo, one coordination atom per project. This is where spawn, file-claim, and the live operational surface belong.
 
 **Developer-level: your personal AI performance.** Your workflow across all projects and tools in one view. Are your sessions improving over time? Which tools and models work best for which types of work? Where does your codebase need attention? chinwag gives you a feedback loop that individual tools can't — because it sees across all of them.
 

@@ -337,6 +337,7 @@ export function WidgetCatalog({
   setEditing,
   resetToDefault,
   clearAll,
+  viewScope,
 }: {
   open: boolean;
   onClose: () => void;
@@ -346,6 +347,8 @@ export function WidgetCatalog({
   setEditing: (v: boolean) => void;
   resetToDefault: () => void;
   clearAll: () => void;
+  /** Which view is hosting the picker. Filters catalog to scope-matching widgets. */
+  viewScope?: 'overview' | 'project';
 }) {
   const [activeCategory, setActiveCategory] = useState<'all' | WidgetCategory>('all');
   const [showFilter, setShowFilter] = useState<ShowFilter>('all');
@@ -390,10 +393,20 @@ export function WidgetCatalog({
     setListFade(canUp && canDown ? 'both' : canUp ? 'top' : canDown ? 'bottom' : 'none');
   }, []);
 
+  // Scope-gated catalog: widgets with scope='both' always pass; scope-specific widgets
+  // only pass when the host view matches. Without viewScope, show everything.
+  const scopedCatalog = useMemo(
+    () =>
+      viewScope
+        ? WIDGET_CATALOG.filter((w) => w.scope === 'both' || w.scope === viewScope)
+        : WIDGET_CATALOG,
+    [viewScope],
+  );
+
   // Filter widgets
   const filteredWidgets = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return WIDGET_CATALOG.filter((w) => {
+    return scopedCatalog.filter((w) => {
       if (activeCategory !== 'all' && w.category !== activeCategory) return false;
       if (showFilter === 'active' && !widgetIds.includes(w.id)) return false;
       if (showFilter === 'inactive' && widgetIds.includes(w.id)) return false;
@@ -401,20 +414,20 @@ export function WidgetCatalog({
         return false;
       return true;
     });
-  }, [searchQuery, activeCategory, showFilter, widgetIds]);
+  }, [searchQuery, activeCategory, showFilter, widgetIds, scopedCatalog]);
 
-  // Category counts
+  // Category counts (scope-gated so the "usage (12)" count matches what renders)
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     let total = 0;
     for (const cat of CATEGORIES) {
-      const n = WIDGET_CATALOG.filter((w) => w.category === cat.id).length;
+      const n = scopedCatalog.filter((w) => w.category === cat.id).length;
       counts[cat.id] = n;
       total += n;
     }
     counts.all = total;
     return counts;
-  }, []);
+  }, [scopedCatalog]);
 
   // Cycle show filter
   const cycleShowFilter = useCallback(() => {
