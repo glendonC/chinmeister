@@ -82,6 +82,11 @@ export const authenticatedUserSchema = z.object({
   handle: z.string(),
   color: z.string(),
   created_at: z.string(),
+  /**
+   * Partial BudgetConfig. The server re-validates on write via parseBudgetConfig
+   * so clients may receive an empty object or null if no override is set.
+   */
+  budgets: z.record(z.unknown()).nullable().optional(),
 });
 export type AuthenticatedUser = z.infer<typeof authenticatedUserSchema>;
 

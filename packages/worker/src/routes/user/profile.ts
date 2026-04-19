@@ -118,3 +118,10 @@ export const handleUpdateAgentProfile = authedJsonRoute(async ({ user, env, body
 export const handleGlobalRank = authedRoute(async ({ user, env }) => {
   return doResult(getDB(env).getUserGlobalRank(user.handle), 'getUserGlobalRank');
 });
+
+export const handleUpdateBudgets = authedJsonRoute(async ({ user, env, body }) => {
+  // `null` / missing budgets clears the override; an object is re-validated
+  // in the DO via parseBudgetConfig so unknown or malformed fields drop out.
+  const input = body?.budgets === undefined ? null : body.budgets;
+  return doResult(getDB(env).updateBudgets(user.id, input), 'updateBudgets');
+});

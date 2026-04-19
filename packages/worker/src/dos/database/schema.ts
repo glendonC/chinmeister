@@ -271,6 +271,21 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    name: '007_user_budgets',
+    up(sql) {
+      // Per-user context budgets (memory result cap, content truncation,
+      // coordination broadcast mode). Stored as JSON text so the shape can
+      // evolve without a migration. Parsed on read via parseBudgetConfig
+      // (packages/shared/budget-config.ts) which drops unknown or malformed
+      // fields silently.
+      try {
+        sql.exec('ALTER TABLE users ADD COLUMN budgets TEXT');
+      } catch (err) {
+        if (!getErrorMessage(err).toLowerCase().includes('duplicate column name')) throw err;
+      }
+    },
+  },
 ];
 
 export function ensureSchema(sql: SqlStorage, transact: <T>(fn: () => T) => T): void {

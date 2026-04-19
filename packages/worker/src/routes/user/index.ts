@@ -18,6 +18,7 @@ export {
   handleHeartbeat,
   handleUpdateAgentProfile,
   handleGlobalRank,
+  handleUpdateBudgets,
 } from './profile.js';
 export { handleGetUserTeams, handleChatUpgrade, handleCreateTeam } from './teams.js';
 export { handleUserAnalytics } from './analytics.js';

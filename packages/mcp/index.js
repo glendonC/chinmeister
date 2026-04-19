@@ -79,6 +79,10 @@ async function main() {
   // Runtime overrides land later via `chinwag_configure_budget`.
   // Budget loading is best-effort — a broken team or user config must never
   // prevent the MCP server from starting.
+  //
+  // User-layer budgets are now stored server-side (web-managed) and returned
+  // on `/me`. We fall back to the local `~/.chinwag/config.json` `budgets`
+  // field when the API is unreachable so offline agents still honor overrides.
   let teamBudgets = null;
   try {
     teamBudgets = loadTeamBudgets();
@@ -87,9 +91,15 @@ async function main() {
   }
   let userBudgets = null;
   try {
-    userBudgets = parseBudgetConfig(ctx.config?.budgets);
+    const me = await client.get('/me');
+    userBudgets = parseBudgetConfig(me?.budgets);
   } catch (err) {
-    log.warn(`Failed to parse user budgets: ${err?.message || err}`);
+    log.warn(`Falling back to local user budgets: ${err?.message || err}`);
+    try {
+      userBudgets = parseBudgetConfig(ctx.config?.budgets);
+    } catch (err2) {
+      log.warn(`Failed to parse local user budgets: ${err2?.message || err2}`);
+    }
   }
   const budgets = resolveBudgets({ team: teamBudgets, user: userBudgets });
 

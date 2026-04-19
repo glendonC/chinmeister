@@ -5,6 +5,36 @@
 import type { DOResult, User, NewUser, AgentProfile } from '../../types.js';
 import { toSQLDateTime } from '../../lib/text-utils.js';
 import { VALID_COLORS } from '../../lib/constants.js';
+import { parseBudgetConfig } from '@chinwag/shared/budget-config.js';
+
+// Columns fetched whenever a full User profile is returned (auth, /me, etc.).
+// Kept as a constant so the three getters that produce a User stay in sync.
+const USER_COLUMNS =
+  'id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active, budgets';
+
+/** Shape of a users-table row as it comes back from SQLite, before parsing. */
+type UserRow = Omit<User, 'budgets'> & { budgets?: string | null };
+
+/**
+ * Parse the `budgets` JSON text column into a validated partial BudgetConfig.
+ * Always returns a plain object (possibly empty) or null so the User type
+ * never leaks a raw string to callers.
+ */
+function parseBudgetsColumn(raw: unknown): Record<string, unknown> | null {
+  if (raw == null || raw === '') return null;
+  if (typeof raw !== 'string') return null;
+  try {
+    return parseBudgetConfig(JSON.parse(raw) as unknown);
+  } catch {
+    return null;
+  }
+}
+
+function toUser(raw: UserRow | null): User | null {
+  if (!raw) return null;
+  const { budgets, ...rest } = raw;
+  return { ...rest, budgets: parseBudgetsColumn(budgets) };
+}
 
 const ADJECTIVES = [
   'swift',
@@ -192,13 +222,8 @@ export function createUser(sql: SqlStorage): DOResult<NewUser & { ok: true }> {
 }
 
 export function getUser(sql: SqlStorage, id: string): DOResult<{ ok: true; user: User }> {
-  const rows = sql
-    .exec(
-      'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE id = ?',
-      id,
-    )
-    .toArray();
-  const user = (rows[0] as unknown as User) || null;
+  const rows = sql.exec(`SELECT ${USER_COLUMNS} FROM users WHERE id = ?`, id).toArray();
+  const user = toUser((rows[0] as unknown as UserRow | undefined) || null);
   if (user) {
     // Throttle last_active writes to once per 5 minutes. Running the check in
     // SQL keeps time math in SQLite's domain (no JS Date parsing of the
@@ -216,13 +241,8 @@ export function getUserByHandle(
   sql: SqlStorage,
   handle: string,
 ): DOResult<{ ok: true; user: User }> {
-  const rows = sql
-    .exec(
-      'SELECT id, handle, color, status, created_at, last_active FROM users WHERE handle = ?',
-      handle,
-    )
-    .toArray();
-  const user = (rows[0] as unknown as User) || null;
+  const rows = sql.exec(`SELECT ${USER_COLUMNS} FROM users WHERE handle = ?`, handle).toArray();
+  const user = toUser((rows[0] as unknown as UserRow | undefined) || null);
   return user ? { ok: true, user } : { error: 'User not found', code: 'NOT_FOUND' };
 }
 
@@ -269,6 +289,38 @@ export function setStatus(sql: SqlStorage, userId: string, status: string | null
   return { ok: true };
 }
 
+/**
+ * Persist a user's partial BudgetConfig override. Input is re-parsed through
+ * parseBudgetConfig so callers can't bypass the type guards in the shared
+ * validator by going through the DO directly. An empty object or null clears
+ * the row's budgets (MCP will fall back to team + defaults).
+ */
+export function updateBudgets(
+  sql: SqlStorage,
+  userId: string,
+  input: unknown,
+): DOResult<{ ok: true; budgets: Record<string, unknown> | null }> {
+  const rows = sql.exec('SELECT 1 FROM users WHERE id = ?', userId).toArray();
+  if (rows.length === 0) {
+    return { error: 'User not found', code: 'NOT_FOUND' };
+  }
+
+  const clearing = input === null || input === undefined;
+  const parsed = clearing ? null : parseBudgetConfig(input);
+  if (!clearing && parsed === null) {
+    return { error: 'budgets must be an object', code: 'VALIDATION' };
+  }
+  const empty = parsed !== null && Object.keys(parsed).length === 0;
+
+  if (clearing || empty) {
+    sql.exec('UPDATE users SET budgets = NULL WHERE id = ?', userId);
+    return { ok: true, budgets: null };
+  }
+
+  sql.exec('UPDATE users SET budgets = ? WHERE id = ?', JSON.stringify(parsed), userId);
+  return { ok: true, budgets: parsed };
+}
+
 // -- GitHub OAuth --
 
 export function getUserByGithubId(
@@ -276,12 +328,9 @@ export function getUserByGithubId(
   githubId: string | number,
 ): DOResult<{ ok: true; user: User }> {
   const rows = sql
-    .exec(
-      'SELECT id, handle, color, status, github_id, github_login, avatar_url, created_at, last_active FROM users WHERE github_id = ?',
-      String(githubId),
-    )
+    .exec(`SELECT ${USER_COLUMNS} FROM users WHERE github_id = ?`, String(githubId))
     .toArray();
-  const user = (rows[0] as unknown as User) || null;
+  const user = toUser((rows[0] as unknown as UserRow | undefined) || null);
   return user ? { ok: true, user } : { error: 'User not found' };
 }
 

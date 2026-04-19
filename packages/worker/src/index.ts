@@ -36,6 +36,7 @@ import {
   handleGetWsTicket,
   handleUpdateHandle,
   handleGlobalRank,
+  handleUpdateBudgets,
 } from './routes/user/index.js';
 import {
   handleListDirectory,
@@ -230,6 +231,7 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'GET', path: '/me/global-rank', handler: handleGlobalRank },
   { method: 'PUT', path: '/me/handle', handler: handleUpdateHandle },
   { method: 'PUT', path: '/me/color', handler: handleUpdateColor },
+  { method: 'PUT', path: '/me/budgets', handler: handleUpdateBudgets },
   { method: 'PUT', path: '/me/github', handler: handleUnlinkGithub },
   { method: 'PUT', path: '/status', handler: handleSetStatus },
   { method: 'DELETE', path: '/status', handler: handleClearStatus },

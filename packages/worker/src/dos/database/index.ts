@@ -39,6 +39,7 @@ import {
   updateHandle as updateHandleFn,
   updateColor as updateColorFn,
   setStatus as setStatusFn,
+  updateBudgets as updateBudgetsFn,
   getUserByGithubId as getUserByGithubIdFn,
   createUserFromGithub as createUserFromGithubFn,
   linkGithub as linkGithubFn,
@@ -162,6 +163,14 @@ export class DatabaseDO extends DurableObject<Env> {
   async setStatus(userId: string, status: string | null): Promise<{ ok: true }> {
     this.#ensureSchema();
     return setStatusFn(this.sql, userId, status);
+  }
+
+  async updateBudgets(
+    userId: string,
+    input: unknown,
+  ): Promise<DOResult<{ ok: true; budgets: Record<string, unknown> | null }>> {
+    this.#ensureSchema();
+    return updateBudgetsFn(this.sql, userId, input);
   }
 
   // -- GitHub OAuth --

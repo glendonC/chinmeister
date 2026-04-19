@@ -15,6 +15,111 @@ const GITHUB_REDIRECT_HOSTS = new Set(['github.com', 'www.github.com']);
 const THEME_OPTIONS = ['system', 'light', 'dark'] as const;
 type ThemePreference = (typeof THEME_OPTIONS)[number];
 
+// ── Budget presets ──
+// Users pick a semantic context level rather than twiddling raw numbers.
+// The mapping lives here (the only place in the UI that knows the magnitudes).
+// If someone edits `~/.chinwag/config.json` or `.chinwag` to an off-preset
+// combination we show no preset as active rather than lying about which one
+// matches — the MCP still honors the concrete values either way.
+const BUDGET_DEFAULTS = {
+  memoryResultCap: 20,
+  memoryContentTruncation: 500,
+  coordinationBroadcast: 'full' as const,
+};
+
+type ContextPreset = 'lean' | 'balanced' | 'rich';
+const CONTEXT_PRESETS: Array<{
+  id: ContextPreset;
+  label: string;
+  description: string;
+  memoryResultCap: number;
+  memoryContentTruncation: number;
+}> = [
+  {
+    id: 'lean',
+    label: 'Lean',
+    description: 'Tighter pulls, lower token cost. Best for focused tasks.',
+    memoryResultCap: 5,
+    memoryContentTruncation: 100,
+  },
+  {
+    id: 'balanced',
+    label: 'Balanced',
+    description: 'Moderate depth. The default that fits most sessions.',
+    memoryResultCap: 10,
+    memoryContentTruncation: 500,
+  },
+  {
+    id: 'rich',
+    label: 'Rich',
+    description: 'Deepest context. Full memory text, highest token cost.',
+    memoryResultCap: 20,
+    memoryContentTruncation: 0,
+  },
+];
+
+const BROADCAST_OPTIONS: Array<{ value: 'full' | 'silent'; label: string; description: string }> = [
+  {
+    value: 'full',
+    label: 'Shared',
+    description: 'Your file activity shows up in the team view.',
+  },
+  {
+    value: 'silent',
+    label: 'Private',
+    description: "Your work stays local. You still see teammates; they don't see you.",
+  },
+];
+
+type BroadcastMode = (typeof BROADCAST_OPTIONS)[number]['value'];
+interface BudgetShape {
+  memoryResultCap: number;
+  memoryContentTruncation: number;
+  coordinationBroadcast: BroadcastMode;
+}
+
+/**
+ * Extract only the fields the user has actively set. Unset fields stay
+ * `undefined` so the UI can distinguish "defaults are showing through"
+ * from "the user explicitly picked this value" — which matters for the
+ * empty state: we don't want to highlight `Balanced` as the user's choice
+ * just because that's what the defaults happen to be.
+ */
+function readExplicitBudgets(raw: unknown): Partial<BudgetShape> {
+  const obj = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
+  const out: Partial<BudgetShape> = {};
+  if (typeof obj.memoryResultCap === 'number') out.memoryResultCap = obj.memoryResultCap;
+  if (typeof obj.memoryContentTruncation === 'number') {
+    out.memoryContentTruncation = obj.memoryContentTruncation;
+  }
+  if (obj.coordinationBroadcast === 'silent' || obj.coordinationBroadcast === 'full') {
+    out.coordinationBroadcast = obj.coordinationBroadcast;
+  }
+  return out;
+}
+
+function resolveBudgets(explicit: Partial<BudgetShape>): BudgetShape {
+  return {
+    memoryResultCap: explicit.memoryResultCap ?? BUDGET_DEFAULTS.memoryResultCap,
+    memoryContentTruncation:
+      explicit.memoryContentTruncation ?? BUDGET_DEFAULTS.memoryContentTruncation,
+    coordinationBroadcast: explicit.coordinationBroadcast ?? BUDGET_DEFAULTS.coordinationBroadcast,
+  };
+}
+
+/** Match a pair of explicit values to a preset id. Null for custom combos or unset. */
+function matchContextPreset(explicit: Partial<BudgetShape>): ContextPreset | null {
+  if (explicit.memoryResultCap === undefined || explicit.memoryContentTruncation === undefined) {
+    return null;
+  }
+  const hit = CONTEXT_PRESETS.find(
+    (p) =>
+      p.memoryResultCap === explicit.memoryResultCap &&
+      p.memoryContentTruncation === explicit.memoryContentTruncation,
+  );
+  return hit ? hit.id : null;
+}
+
 function isValidRedirectUrl(url: string): boolean {
   try {
     const parsed = new URL(url);
@@ -67,10 +172,54 @@ export default function SettingsView(_props: Props) {
   });
   const [unlinking, setUnlinking] = useState<boolean>(false);
   const [linkError, setLinkError] = useState<string | null>(null);
+  const [budgetError, setBudgetError] = useState<string | null>(null);
+  const [savingBudgets, setSavingBudgets] = useState<boolean>(false);
   const { theme, setTheme } = useTheme();
 
   const previewColorName = colorForm.hovered || user?.color || 'white';
   const previewColor = getColorHex(previewColorName) || '#98989d';
+
+  // Two parallel values: `explicit` is what the user actually saved (for
+  // honest active-state rendering); `budgets` merges in defaults so the PUT
+  // body is always complete. Never let defaults leak into "what's active."
+  const explicitBudgets = readExplicitBudgets(user?.budgets);
+  const budgets = resolveBudgets(explicitBudgets);
+  const activeContext = matchContextPreset(explicitBudgets);
+  const activeBroadcast = explicitBudgets.coordinationBroadcast ?? null;
+
+  async function saveBudgets(next: BudgetShape): Promise<void> {
+    if (savingBudgets) return;
+    setBudgetError(null);
+    setSavingBudgets(true);
+    // Optimistic: reflect the choice immediately. The auth store is the single
+    // source of truth for rendered state, so reverting on failure is just
+    // another updateUser call.
+    const previous = user?.budgets ?? null;
+    const nextRecord = next as unknown as Record<string, unknown>;
+    authActions.updateUser({ budgets: nextRecord });
+    try {
+      await api('PUT', '/me/budgets', { budgets: nextRecord }, token);
+    } catch (err: unknown) {
+      authActions.updateUser({ budgets: previous });
+      setBudgetError(getErrorMessage(err, 'Could not save budget'));
+    } finally {
+      setSavingBudgets(false);
+    }
+  }
+
+  function selectContextPreset(preset: (typeof CONTEXT_PRESETS)[number]): void {
+    if (activeContext === preset.id) return;
+    void saveBudgets({
+      memoryResultCap: preset.memoryResultCap,
+      memoryContentTruncation: preset.memoryContentTruncation,
+      coordinationBroadcast: budgets.coordinationBroadcast,
+    });
+  }
+
+  function selectBroadcast(value: BroadcastMode): void {
+    if (activeBroadcast === value) return;
+    void saveBudgets({ ...budgets, coordinationBroadcast: value });
+  }
 
   function startEditHandle(): void {
     setHandleForm({
@@ -267,6 +416,54 @@ export default function SettingsView(_props: Props) {
       </section>
 
       <section className={styles.settingGroup} style={{ '--group-index': 3 } as CSSProperties}>
+        <SectionTitle>Agent defaults</SectionTitle>
+
+        <div className={styles.budgetGroup}>
+          <span className={styles.budgetLabel}>Memory depth</span>
+          <div className={styles.budgetOptionList}>
+            {CONTEXT_PRESETS.map((preset) => {
+              const active = activeContext === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  className={clsx(styles.budgetOption, active && styles.budgetOptionActive)}
+                  onClick={() => selectContextPreset(preset)}
+                  aria-pressed={active}
+                  disabled={savingBudgets}
+                >
+                  <span className={styles.budgetOptionName}>{preset.label}</span>
+                  <span className={styles.budgetOptionDescription}>{preset.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={styles.budgetGroup}>
+          <span className={styles.budgetLabel}>Teammate visibility</span>
+          <div className={styles.budgetOptionList}>
+            {BROADCAST_OPTIONS.map((option) => {
+              const active = activeBroadcast === option.value;
+              return (
+                <button
+                  key={option.value}
+                  className={clsx(styles.budgetOption, active && styles.budgetOptionActive)}
+                  onClick={() => selectBroadcast(option.value)}
+                  aria-pressed={active}
+                  disabled={savingBudgets}
+                >
+                  <span className={styles.budgetOptionName}>{option.label}</span>
+                  <span className={styles.budgetOptionDescription}>{option.description}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {budgetError ? <span className={styles.feedback}>{budgetError}</span> : null}
+      </section>
+
+      <section className={styles.settingGroup} style={{ '--group-index': 4 } as CSSProperties}>
         <SectionTitle>GitHub</SectionTitle>
         {user?.github_login ? (
           <div className={styles.heroRow}>
@@ -292,7 +489,7 @@ export default function SettingsView(_props: Props) {
         {linkError ? <p className={styles.feedback}>{linkError}</p> : null}
       </section>
 
-      <section className={styles.settingGroup} style={{ '--group-index': 4 } as CSSProperties}>
+      <section className={styles.settingGroup} style={{ '--group-index': 5 } as CSSProperties}>
         <SectionTitle>Session</SectionTitle>
         <button className={styles.sessionButton} onClick={handleLogout}>
           <svg width="18" height="18" viewBox="0 0 16 16" fill="none" aria-hidden="true">

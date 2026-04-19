@@ -208,6 +208,103 @@
   align-items: baseline;
 }
 
+/* Agent defaults — vertical option lists with inline descriptions.
+   Each option is its own row: large Manrope name + muted sans-serif
+   explainer of what picking that option means. Active = full ink,
+   inactive = --soft, hover = --muted. No cards, no borders, no chrome —
+   hierarchy is purely type weight + opacity. */
+.budgetGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.budgetGroup + .budgetGroup {
+  margin-top: 28px;
+}
+
+.budgetLabel {
+  font-family: var(--mono);
+  font-size: var(--text-11);
+  font-weight: 500;
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+  color: var(--soft);
+}
+
+.budgetOptionList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* Vertical option rows sit BELOW the section title in the hierarchy, not
+   competing with it. Body-sized name + smaller muted description; selection
+   state reads from weight + color, not size. Section title (1.25rem) stays
+   visibly dominant. */
+.budgetOption {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  align-items: baseline;
+  column-gap: 20px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  width: fit-content;
+  max-width: 640px;
+  transition: opacity var(--motion-fast) var(--motion);
+}
+
+.budgetOption:focus-visible {
+  outline: none;
+}
+
+.budgetOption:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.budgetOptionName {
+  font-family: var(--sans);
+  font-size: var(--text-lg);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+  color: var(--soft);
+  transition:
+    color var(--motion-fast) var(--motion),
+    font-weight var(--motion-fast) var(--motion);
+}
+
+.budgetOption:hover .budgetOptionName,
+.budgetOption:focus-visible .budgetOptionName {
+  color: var(--muted);
+}
+
+.budgetOptionActive .budgetOptionName,
+.budgetOptionActive:hover .budgetOptionName {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.budgetOptionDescription {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .budgetOption {
+    grid-template-columns: 1fr;
+    row-gap: 2px;
+  }
+}
+
 .themeOption {
   padding: 0;
   border: none;
