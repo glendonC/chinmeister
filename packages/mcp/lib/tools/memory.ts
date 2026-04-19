@@ -79,6 +79,23 @@ const batchDeleteSchema = z.object({
 });
 type BatchDeleteArgs = z.infer<typeof batchDeleteSchema>;
 
+const reviewProposalsSchema = z.object({
+  limit: z.number().min(1).max(200).optional().describe('Max proposals to return (default 50)'),
+});
+type ReviewProposalsArgs = z.infer<typeof reviewProposalsSchema>;
+
+const applyProposalSchema = z.object({
+  proposal_id: z.string().describe('Proposal ID from chinwag_review_consolidation_proposals'),
+});
+type ApplyProposalArgs = z.infer<typeof applyProposalSchema>;
+
+const unmergeSchema = z.object({
+  memory_id: z
+    .string()
+    .describe('Memory ID to restore (was merged into another via consolidation)'),
+});
+type UnmergeArgs = z.infer<typeof unmergeSchema>;
+
 export function registerMemoryTools(
   addTool: AddToolFn,
   deps: Pick<ToolDeps, 'team' | 'state'>,
@@ -257,5 +274,109 @@ export function registerMemoryTools(
       },
       { skipPreamble: true },
     ),
+  );
+
+  addTool(
+    'chinwag_review_consolidation_proposals',
+    {
+      description:
+        'List pending consolidation proposals — pairs of memories that look like duplicates (cosine similarity + lexical overlap + tag-set agreement). Each proposal shows both memories side-by-side so you can decide whether to apply (merge) or reject. Nothing merges automatically.',
+      inputSchema: reviewProposalsSchema,
+    },
+    withTeam(
+      deps,
+      async (args) => {
+        const { limit } = args as ReviewProposalsArgs;
+        const result = await withTimeout(
+          team.listConsolidationProposals(state.teamId!, limit),
+          API_TIMEOUT_MS,
+        );
+        if (!result.ok) {
+          return {
+            content: [{ type: 'text' as const, text: `Failed to load proposals: ${result.error}` }],
+            isError: true,
+          };
+        }
+        const proposals = result.proposals || [];
+        if (proposals.length === 0) {
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: 'No pending consolidation proposals. Run consolidation periodically to surface candidates.',
+              },
+            ],
+          };
+        }
+        const lines = proposals.map((p) => {
+          const cosine = (p.cosine * 100).toFixed(1);
+          const jaccard = (p.jaccard * 100).toFixed(1);
+          return [
+            `[${p.id}] cosine ${cosine}% / jaccard ${jaccard}%`,
+            `  source (${p.source_id}): ${p.source_text.slice(0, 120)}`,
+            `  target (${p.target_id}): ${p.target_text.slice(0, 120)}`,
+          ].join('\n');
+        });
+        return { content: [{ type: 'text' as const, text: lines.join('\n\n') }] };
+      },
+      { skipPreamble: true },
+    ),
+  );
+
+  addTool(
+    'chinwag_apply_consolidation',
+    {
+      description:
+        'Apply a consolidation proposal — soft-merges the source memory into the target. The source stays in the database with a merged_into pointer; search excludes it. Reversible via chinwag_unmerge_memory.',
+      inputSchema: applyProposalSchema,
+    },
+    withTeam(deps, async (args, { preamble }) => {
+      const { proposal_id } = args as ApplyProposalArgs;
+      const result = await withTimeout(
+        team.applyConsolidationProposal(state.teamId!, proposal_id),
+        API_TIMEOUT_MS,
+      );
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Failed to apply proposal: ${result.error}` }],
+          isError: true,
+        };
+      }
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `${preamble}Merged ${result.source_id} into ${result.target_id}. Reversible via chinwag_unmerge_memory.`,
+          },
+        ],
+      };
+    }),
+  );
+
+  addTool(
+    'chinwag_unmerge_memory',
+    {
+      description:
+        "Restore a memory that was soft-merged by consolidation. Clears the merged_into pointer so search picks it up again. Use this when consolidation absorbed a memory it shouldn't have.",
+      inputSchema: unmergeSchema,
+    },
+    withTeam(deps, async (args, { preamble }) => {
+      const { memory_id } = args as UnmergeArgs;
+      const result = await withTimeout(
+        team.unmergeMemory(state.teamId!, memory_id),
+        API_TIMEOUT_MS,
+      );
+      if (!result.ok) {
+        return {
+          content: [
+            { type: 'text' as const, text: `Failed to unmerge ${memory_id}: ${result.error}` },
+          ],
+          isError: true,
+        };
+      }
+      return {
+        content: [{ type: 'text' as const, text: `${preamble}Memory ${memory_id} restored.` }],
+      };
+    }),
   );
 }

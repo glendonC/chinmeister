@@ -28,6 +28,11 @@ export {
   handleTeamUpdateMemory,
   handleTeamDeleteMemory,
   handleTeamDeleteMemoryBatch,
+  handleTeamRunConsolidation,
+  handleTeamListConsolidationProposals,
+  handleTeamApplyConsolidation,
+  handleTeamRejectConsolidation,
+  handleTeamUnmergeMemory,
 } from './memory.js';
 export {
   handleTeamCreateCategory,

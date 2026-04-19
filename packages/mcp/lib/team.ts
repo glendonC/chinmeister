@@ -83,6 +83,32 @@ export interface TeamMemoryHandlers {
   ): Promise<OkResult & { deleted?: number }>;
 }
 
+/** Consolidation review queue: list, apply, reject, unmerge. */
+export interface ConsolidationProposal {
+  id: string;
+  source_id: string;
+  target_id: string;
+  source_text: string;
+  target_text: string;
+  cosine: number;
+  jaccard: number;
+  proposed_at: string;
+}
+
+export interface TeamConsolidationHandlers {
+  runConsolidation(teamId: string): Promise<OkResult & Record<string, number>>;
+  listConsolidationProposals(
+    teamId: string,
+    limit?: number,
+  ): Promise<OkResult & { proposals: ConsolidationProposal[] }>;
+  applyConsolidationProposal(
+    teamId: string,
+    proposalId: string,
+  ): Promise<OkResult & { source_id?: string; target_id?: string }>;
+  rejectConsolidationProposal(teamId: string, proposalId: string): Promise<OkResult>;
+  unmergeMemory(teamId: string, memoryId: string): Promise<OkResult>;
+}
+
 /** Coordination: file locks, messaging, sessions. */
 export interface TeamCoordinationHandlers {
   claimFiles(teamId: string, files: string[]): Promise<ClaimResult>;
@@ -138,6 +164,7 @@ export interface TeamCoordinationHandlers {
 export type TeamHandlers = TeamMemberHandlers &
   TeamActivityHandlers &
   TeamMemoryHandlers &
+  TeamConsolidationHandlers &
   TeamCoordinationHandlers;
 
 /**
@@ -236,6 +263,36 @@ export function teamHandlers(client: ApiClient): TeamHandlers {
     async deleteMemoriesBatch(teamId, filter) {
       validateTeam(teamId);
       return client.del(`/teams/${teamId}/memory/batch`, filter);
+    },
+
+    async runConsolidation(teamId) {
+      validateTeam(teamId);
+      return client.post(`/teams/${teamId}/memory/consolidation/run`, {});
+    },
+
+    async listConsolidationProposals(teamId, limit) {
+      validateTeam(teamId);
+      const qs = limit ? `?limit=${limit}` : '';
+      return client.get(`/teams/${teamId}/memory/consolidation/proposals${qs}`);
+    },
+
+    async applyConsolidationProposal(teamId, proposalId) {
+      validateTeam(teamId);
+      return client.post(`/teams/${teamId}/memory/consolidation/apply`, {
+        proposal_id: proposalId,
+      });
+    },
+
+    async rejectConsolidationProposal(teamId, proposalId) {
+      validateTeam(teamId);
+      return client.post(`/teams/${teamId}/memory/consolidation/reject`, {
+        proposal_id: proposalId,
+      });
+    },
+
+    async unmergeMemory(teamId, memoryId) {
+      validateTeam(teamId);
+      return client.post(`/teams/${teamId}/memory/unmerge`, { memory_id: memoryId });
     },
 
     async claimFiles(teamId, files) {

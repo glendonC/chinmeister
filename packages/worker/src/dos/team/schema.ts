@@ -627,6 +627,43 @@ const migrations: Migration[] = [
       addColumnIfMissing(sql, 'conversation_events', 'stop_reason TEXT DEFAULT NULL');
     },
   },
+  {
+    name: '020_memory_consolidation',
+    up(sql) {
+      // Soft-delete pointer for memories merged by consolidation. Search
+      // filters WHERE merged_into IS NULL by default; the row stays in the
+      // DB so unmerge_memory() can restore. Inspired by Graphiti's
+      // recall-then-verify funnel: cosine recall, deterministic Jaccard
+      // structural check, tag-set agreement, then propose-only review.
+      addColumnIfMissing(sql, 'memories', 'merged_into TEXT DEFAULT NULL');
+      addColumnIfMissing(sql, 'memories', 'merged_at TEXT DEFAULT NULL');
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_memories_merged ON memories(merged_into) WHERE merged_into IS NOT NULL',
+      );
+
+      // Review queue. Consolidation proposes merges with all three signals
+      // recorded so the reviewer can audit before applying. Status flow:
+      // pending -> applied | rejected. proposed_at orders the queue;
+      // resolved_at records review action.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS consolidation_proposals (
+          id TEXT PRIMARY KEY,
+          source_id TEXT NOT NULL,
+          target_id TEXT NOT NULL,
+          cosine REAL NOT NULL,
+          jaccard REAL NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          proposed_at TEXT NOT NULL DEFAULT (datetime('now')),
+          resolved_at TEXT DEFAULT NULL,
+          resolved_by TEXT DEFAULT NULL,
+          UNIQUE(source_id, target_id)
+        )
+      `);
+      sql.exec(
+        "CREATE INDEX IF NOT EXISTS idx_consolidation_proposals_status ON consolidation_proposals(status, proposed_at) WHERE status = 'pending'",
+      );
+    },
+  },
 ];
 
 export function ensureSchema(

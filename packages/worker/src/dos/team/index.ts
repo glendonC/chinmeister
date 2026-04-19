@@ -62,6 +62,13 @@ import {
   type BatchDeleteFilter,
 } from './memory.js';
 import {
+  consolidateMemories as consolidateMemoriesFn,
+  listConsolidationProposals as listConsolidationProposalsFn,
+  applyConsolidationProposal as applyConsolidationProposalFn,
+  rejectConsolidationProposal as rejectConsolidationProposalFn,
+  unmergeMemory as unmergeMemoryFn,
+} from './consolidation.js';
+import {
   createCategory as createCategoryFn,
   listCategories as listCategoriesFn,
   updateCategory as updateCategoryFn,
@@ -775,6 +782,50 @@ export class TeamDO extends DurableObject<Env> {
     return this.#withMember(agentId, ownerId, () =>
       deleteMemoriesBatchFn(this.sql, filter, this.#transact),
     );
+  }
+
+  // -- Memory Consolidation (review queue, propose-only, reversible) --
+
+  async runConsolidation(): Promise<ReturnType<typeof consolidateMemoriesFn>> {
+    return consolidateMemoriesFn(this.sql);
+  }
+
+  async listConsolidationProposals(
+    agentId: string,
+    limit: number = 50,
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof listConsolidationProposalsFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () => listConsolidationProposalsFn(this.sql, limit));
+  }
+
+  async applyConsolidationProposal(
+    agentId: string,
+    proposalId: string,
+    reviewerHandle: string,
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof applyConsolidationProposalFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () =>
+      applyConsolidationProposalFn(this.sql, proposalId, reviewerHandle),
+    );
+  }
+
+  async rejectConsolidationProposal(
+    agentId: string,
+    proposalId: string,
+    reviewerHandle: string,
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof rejectConsolidationProposalFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () =>
+      rejectConsolidationProposalFn(this.sql, proposalId, reviewerHandle),
+    );
+  }
+
+  async unmergeMemory(
+    agentId: string,
+    memoryId: string,
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof unmergeMemoryFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () => unmergeMemoryFn(this.sql, memoryId));
   }
 
   // -- Memory Categories --

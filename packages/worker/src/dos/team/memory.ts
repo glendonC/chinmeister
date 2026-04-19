@@ -79,7 +79,7 @@ export function saveMemory(
   // --- Exact dedup: hash lookup ---
   if (textHash) {
     const existing = sql
-      .exec('SELECT id, text FROM memories WHERE text_hash = ?', textHash)
+      .exec('SELECT id, text FROM memories WHERE text_hash = ? AND merged_into IS NULL', textHash)
       .toArray();
     if (existing.length > 0) {
       const row = existing[0] as Record<string, unknown>;
@@ -96,7 +96,9 @@ export function saveMemory(
   if (embedding) {
     const queryVec = new Float32Array(embedding);
     const rows = sql
-      .exec('SELECT id, text, embedding FROM memories WHERE embedding IS NOT NULL')
+      .exec(
+        'SELECT id, text, embedding FROM memories WHERE embedding IS NOT NULL AND merged_into IS NULL',
+      )
       .toArray();
 
     for (const row of rows) {
@@ -435,6 +437,10 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
     conditions.push('created_at < ?');
     params.push(before);
   }
+  // Exclude soft-merged memories from search by default. Consolidation
+  // marks the source memory's merged_into pointer; the target stays
+  // canonical. Restored via unmergeMemory() in consolidation.ts.
+  conditions.push('merged_into IS NULL');
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   // is_stale is computed in SQL so the throttle decision stays in SQLite's
@@ -508,6 +514,7 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
       nonFtsParams.push(before);
     }
     nonFtsConditions.push('embedding IS NOT NULL');
+    nonFtsConditions.push('merged_into IS NULL');
     const vecWhere = `WHERE ${nonFtsConditions.join(' AND ')}`;
 
     const vecRows = sql

@@ -198,10 +198,13 @@ export const handleTeamSearchMemory = teamRoute(async ({ request, agentId, team,
     format,
     queryEmbedding,
   });
-  if (result && typeof result === 'object' && 'ok' in result && result.ok && degraded) {
-    (result as Record<string, unknown>).degraded = true;
+  // Tag the response with degraded:true when the route asked for hybrid
+  // retrieval but couldn't generate a query embedding (Workers AI failed).
+  // Lets callers retry with backoff or surface a quality warning.
+  if (degraded && result && typeof result === 'object' && 'ok' in result) {
+    (result as { degraded?: boolean }).degraded = true;
   }
-  return doResult(result, 'searchMemories');
+  return doResult(Promise.resolve(result), 'searchMemories');
 });
 
 export const handleTeamUpdateMemory = teamJsonRoute(
@@ -301,6 +304,55 @@ export const handleTeamDeleteMemory = teamJsonRoute(
     });
   },
 );
+
+// --- Consolidation review queue ---
+//
+// Background consolidation runs the Graphiti funnel (cosine recall →
+// Jaccard structural → tag-set agreement) and writes propose-only
+// candidates. Nothing merges automatically; the agent or operator must
+// review and apply explicitly. Every merge is reversible via unmerge.
+
+export const handleTeamRunConsolidation = teamRoute(async ({ team }) => {
+  return doResult(team.runConsolidation(), 'runConsolidation');
+});
+
+export const handleTeamListConsolidationProposals = teamRoute(
+  async ({ request, agentId, team, user }) => {
+    const url = new URL(request.url);
+    const parsedLimit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const limit = Math.min(Math.max(1, isNaN(parsedLimit) ? 50 : parsedLimit), 200);
+    return doResult(
+      team.listConsolidationProposals(agentId, limit, user.id),
+      'listConsolidationProposals',
+    );
+  },
+);
+
+export const handleTeamApplyConsolidation = teamJsonRoute(async ({ body, user, team, agentId }) => {
+  const proposalId = requireString(body, 'proposal_id');
+  if (!proposalId) return json({ error: 'proposal_id is required' }, 400);
+  return doResult(
+    team.applyConsolidationProposal(agentId, proposalId, user.handle, user.id),
+    'applyConsolidationProposal',
+  );
+});
+
+export const handleTeamRejectConsolidation = teamJsonRoute(
+  async ({ body, user, team, agentId }) => {
+    const proposalId = requireString(body, 'proposal_id');
+    if (!proposalId) return json({ error: 'proposal_id is required' }, 400);
+    return doResult(
+      team.rejectConsolidationProposal(agentId, proposalId, user.handle, user.id),
+      'rejectConsolidationProposal',
+    );
+  },
+);
+
+export const handleTeamUnmergeMemory = teamJsonRoute(async ({ body, user, team, agentId }) => {
+  const memoryId = requireString(body, 'memory_id');
+  if (!memoryId) return json({ error: 'memory_id is required' }, 400);
+  return doResult(team.unmergeMemory(agentId, memoryId, user.id), 'unmergeMemory');
+});
 
 export const handleTeamDeleteMemoryBatch = teamJsonRoute(
   async ({ body, user, env, teamId, request }) => {
