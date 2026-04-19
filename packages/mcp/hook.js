@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
-// chinwag-hook — Claude Code hook handler.
-// Called by Claude Code's hook system as a shell command.
+// chinwag-hook — coding-tool hook handler.
+// Called by the host tool's hook system as a shell command.
 // Reads hook input from stdin (JSON), calls chinwag backend.
 //
+// Hosts supported: claude-code (default), cursor (identical payload), windsurf
+// (Cascade Hooks — different payload shape). Host is selected via --tool.
+//
 // This is NOT the MCP server — stdout is the output channel for hooks.
-// stdout text becomes user-visible in the Claude Code session.
-// Exit code 0 = allow, non-zero = block (for PreToolUse).
+// stdout text becomes user-visible in the host session.
+// Exit code 0 = allow, non-zero = block (for Pre* hooks).
 
 import { basename } from 'path';
 import { formatWho } from './dist/utils/formatting.js';
@@ -14,27 +17,36 @@ import { formatTeamContextDisplay } from './dist/utils/display.js';
 import { bootstrap } from './dist/bootstrap.js';
 import { createLogger } from './dist/utils/logger.js';
 import { STDIN_TIMEOUT_MS, STDIN_MAX_BYTES } from './dist/constants.js';
+import {
+  parseHookArgs,
+  extractFilePath,
+  extractEditLineCounts,
+  extractBashCommand,
+  extractBashResult,
+  rawLooksLikeGitCommit,
+} from './dist/hook-payload.js';
 
 const log = createLogger('hook');
 
-const subcommand = process.argv[2];
+const { subcommand, hostId } = parseHookArgs(process.argv);
 
 async function main() {
   // Read raw stdin first — enables fast rejection for report-commit.
-  // The Bash PostToolUse hook fires on every Bash tool call (~hundreds/session).
-  // For non-commit calls, we exit in <2ms by checking the raw string before
-  // any JSON parsing or bootstrap (which costs ~200-300ms).
+  // The Bash/command PostToolUse hook fires on every command invocation
+  // (~hundreds/session). For non-commit calls, we exit in <2ms by checking the
+  // raw string before any JSON parsing or bootstrap (which costs ~200-300ms).
   const { raw, parsed: input } = await readStdinWithRaw();
 
   // Fast rejection: report-commit only cares about git commits.
-  // Cost for non-commit Bash calls: ~2ms (stdin read + string check).
-  if (subcommand === 'report-commit' && !raw.includes('git commit')) {
+  // Cost for non-commit calls: ~2ms (stdin read + string check).
+  if (subcommand === 'report-commit' && !rawLooksLikeGitCommit(raw)) {
     process.exit(0);
   }
 
-  // Bootstrap: graceful degradation — exit(0) on missing config/token/team
+  // Bootstrap: graceful degradation — exit(0) on missing config/token/team.
+  // hostToolHint drives identity and telemetry tags for multi-host sessions.
   const ctx = await bootstrap({
-    hostToolHint: 'claude-code',
+    hostToolHint: hostId,
     defaultTransport: 'hook',
     configMode: 'simple',
     identityMode: 'resolve',
@@ -72,7 +84,7 @@ async function main() {
 // --- Hook handlers ---
 
 async function checkConflict(team, teamId, input) {
-  const filePath = input?.tool_input?.file_path;
+  const filePath = extractFilePath(input, hostId);
   if (!filePath) process.exit(0);
 
   try {
@@ -96,7 +108,9 @@ async function checkConflict(team, teamId, input) {
 
     if (issues.length > 0) {
       process.stdout.write(`CONFLICT: ${issues.join('; ')}\n`);
-      process.exit(1);
+      // Windsurf pre-hooks block with exit code 2; Claude Code / Cursor use
+      // any non-zero code. Using 2 is safe across all three.
+      process.exit(hostId === 'windsurf' ? 2 : 1);
     }
 
     process.exit(0);
@@ -108,24 +122,10 @@ async function checkConflict(team, teamId, input) {
 }
 
 async function reportEdit(team, teamId, input) {
-  const filePath = input?.tool_input?.file_path;
+  const filePath = extractFilePath(input, hostId);
   if (!filePath) process.exit(0);
 
-  // Compute diff stats from hook payload (counts only, never content)
-  let linesAdded = 0;
-  let linesRemoved = 0;
-  const oldStr = input?.tool_input?.old_string;
-  const newStr = input?.tool_input?.new_string;
-  const content = input?.tool_input?.content;
-
-  if (typeof oldStr === 'string' && typeof newStr === 'string') {
-    // Edit tool: old → new
-    linesRemoved = oldStr.split('\n').length;
-    linesAdded = newStr.split('\n').length;
-  } else if (typeof content === 'string') {
-    // Write tool: new file content (no way to know previous, so lines_removed = 0)
-    linesAdded = content.split('\n').length;
-  }
+  const { linesAdded, linesRemoved } = extractEditLineCounts(input, hostId);
 
   try {
     // Update current activity + record in session history with diff stats (parallel)
@@ -141,7 +141,7 @@ async function reportEdit(team, teamId, input) {
 }
 
 async function reportRead(team, teamId, input) {
-  const filePath = input?.tool_input?.file_path;
+  const filePath = extractFilePath(input, hostId);
   if (!filePath) process.exit(0);
 
   try {
@@ -154,33 +154,26 @@ async function reportRead(team, teamId, input) {
 }
 
 async function reportCommit(team, teamId, input) {
-  // Extract commit SHA from the Bash tool result.
-  // git commit outputs a line like: "[main abc1234] commit message"
-  // The tool_result.stdout contains the command output.
-  const command = input?.tool_input?.command || '';
-  const result = input?.tool_result?.stdout || input?.tool_result || '';
-  const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+  const command = extractBashCommand(input, hostId);
+  const resultStr = extractBashResult(input, hostId);
 
-  // Verify the command was actually a git commit (not just mentioned in output)
+  // Verify the command was actually a git commit (not just mentioned in output).
   if (!command.includes('git commit')) {
     process.exit(0);
   }
 
-  // Parse SHA from git output: "[branch SHA] message" or "SHA" on its own line
-  // git commit typically outputs: [branch abc1234] message
-  const shaMatch =
-    resultStr.match(/\[[\w/.-]+\s+([0-9a-f]{7,40})\]/) ||
-    resultStr.match(/\b([0-9a-f]{40})\b/) ||
-    resultStr.match(/\b([0-9a-f]{7,12})\b/);
-
-  if (!shaMatch) {
-    // No SHA found — commit might have failed or was dry-run
-    process.exit(0);
+  // Try to parse SHA from command output first (Claude Code / Cursor path).
+  // Windsurf's hook payload has no stdout, so we fall through to `git log -1`.
+  let shortSha = null;
+  if (resultStr) {
+    const shaMatch =
+      resultStr.match(/\[[\w/.-]+\s+([0-9a-f]{7,40})\]/) ||
+      resultStr.match(/\b([0-9a-f]{40})\b/) ||
+      resultStr.match(/\b([0-9a-f]{7,12})\b/);
+    if (shaMatch) shortSha = shaMatch[1];
   }
 
-  const shortSha = shaMatch[1];
-
-  // Extract richer commit metadata via git commands (best-effort)
+  // Extract richer commit metadata via git commands (best-effort).
   let sha = shortSha;
   let branch = null;
   let message = null;
@@ -193,12 +186,18 @@ async function reportCommit(team, teamId, input) {
     const { execSync } = await import('child_process');
     const opts = { encoding: 'utf-8', timeout: 3000, stdio: ['pipe', 'pipe', 'pipe'] };
 
-    // Get full SHA + branch + message + timestamp in one call
-    const info = execSync(`git log -1 --format="%H%n%D%n%s%n%aI" ${shortSha}`, opts)
-      .trim()
-      .split('\n');
+    // Get full SHA + branch + message + timestamp.
+    // If we didn't parse a SHA from stdout (Windsurf), use HEAD — the hook
+    // fires immediately after `git commit` completes, so HEAD is the commit
+    // that just happened.
+    const ref = shortSha || 'HEAD';
+    const info = execSync(`git log -1 --format="%H%n%D%n%s%n%aI" ${ref}`, opts).trim().split('\n');
 
     if (info[0] && /^[0-9a-f]{40}$/.test(info[0])) sha = info[0];
+    if (!sha) {
+      // Nothing to report — commit might have failed or was dry-run.
+      process.exit(0);
+    }
     // Parse branch from ref names (e.g. "HEAD -> main, origin/main")
     const refs = info[1] || '';
     const branchMatch = refs.match(/HEAD -> ([^,]+)/);
@@ -221,8 +220,12 @@ async function reportCommit(team, teamId, input) {
       }
     }
   } catch (err) {
-    // Best-effort: if git commands fail, still report what we have
+    // Best-effort: if git commands fail, still report what we have (if anything).
     log.warn(`Git metadata extraction failed: ${err.message}`);
+  }
+
+  if (!sha) {
+    process.exit(0);
   }
 
   try {
