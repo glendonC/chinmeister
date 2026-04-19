@@ -394,15 +394,19 @@
 .liveTableHeader,
 .liveTableRow {
   display: grid;
+  /* First three tracks match LiveNowView.agentsHeader/agentsRow so widget
+   * and detail columns align on the same data. Last track is `1fr` and
+   * holds the View pill (with justify-self: end inside). Using a single
+   * `1fr` (instead of `1fr auto`) keeps header and row tracks identical:
+   * an `auto` track would size to the row's View pill but collapse to 0
+   * in the empty header slot, shifting the earlier tracks and breaking
+   * header/data alignment. */
   grid-template-columns:
-    200px
-    1fr
-    130px
-    180px
-    56px
-    72px
-    64px;
-  gap: 24px;
+    minmax(180px, 220px)
+    minmax(150px, 180px)
+    minmax(160px, 220px)
+    1fr;
+  gap: var(--space-md);
   align-items: center;
   margin: 0 -14px;
 }
@@ -423,26 +427,11 @@
 .liveTableBody {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  flex: 1;
-  min-height: 0;
-  /* Scroll within the widget when the team runs many agents concurrently
-   * (8+ on hackathons / large teams). Previously rows beyond the visible
-   * widget height were silently clipped, which hid the overflow from
-   * users at team scale. Clicking any row still opens LiveNowView for
-   * the full-page view; the scroll is a discoverability affordance. */
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--soft) transparent;
-}
-
-.liveTableBody::-webkit-scrollbar {
-  width: 4px;
-}
-
-.liveTableBody::-webkit-scrollbar-thumb {
-  background: var(--soft);
-  border-radius: 2px;
+  /* No gap and no overflow-y:auto here. overflow-y:auto forces overflow-x
+   * to auto too, which clips the rows' `margin: 0 -14px` horizontal bleed
+   * and makes the hover strip look narrower than the detail view. Row
+   * count is capped by LIVE_AGENTS_CAP + SectionOverflow, so scrolling
+   * isn't needed. */
 }
 
 .liveTableRow {
@@ -477,20 +466,19 @@
   color: var(--page-bg);
   transition:
     background 0.12s ease,
-    color 0.12s ease,
-    transform 0.12s ease;
+    color 0.12s ease;
 }
 
 .liveTableRow:hover .liveViewButton {
   background: var(--accent);
   color: white;
-  transform: scale(1.04);
 }
 
 .liveAgentName {
-  font-size: var(--text-sm);
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.02em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -498,7 +486,20 @@
 
 .liveCell {
   font-size: var(--text-sm);
-  color: var(--soft);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveCellTool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.liveCellTool > span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1585,6 +1586,57 @@
   transition-duration: 120ms;
   box-shadow: 0 0 0 1px var(--accent-bg);
   z-index: 2;
+}
+
+/* Snap preview shown while a catalog widget is being dragged (dnd-kit) over
+ * the grid. Absolutely positioned inside the grid container; coords come
+ * from the drag monitor. Matches the .react-grid-placeholder vocabulary. */
+.snapPreview {
+  position: absolute;
+  background: var(--accent-bg);
+  border: 1.5px dashed var(--accent);
+  border-radius: 8px;
+  box-shadow: 0 0 0 1px var(--accent-bg);
+  pointer-events: none;
+  z-index: 3;
+  transition:
+    transform 120ms ease-out,
+    width 120ms,
+    height 120ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .snapPreview {
+    transition: none;
+  }
+}
+
+/* Ghost preview rendered inside the dnd-kit DragOverlay. Minimal card with
+ * the widget name — chromeless, one line of meta in mono. */
+.dragOverlayCard {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--page-bg);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-lg), var(--shadow-xs);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink);
+  letter-spacing: var(--tracking-stat);
+  pointer-events: none;
+}
+
+.dragOverlayName {
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.dragOverlayMeta {
+  color: var(--soft);
 }
 
 /*

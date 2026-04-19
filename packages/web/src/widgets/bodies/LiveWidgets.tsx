@@ -1,6 +1,8 @@
 import { useMemo, type CSSProperties } from 'react';
 import clsx from 'clsx';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
+import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { formatDuration } from '../../lib/utils.js';
 import { setQueryParam } from '../../lib/router.js';
@@ -8,29 +10,27 @@ import styles from '../../views/OverviewView/OverviewView.module.css';
 import { groupFilesByTeam } from '../live-data.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
+const LIVE_AGENTS_CAP = 3;
+
 function LiveAgentsWidget({ liveAgents }: WidgetBodyProps) {
   if (liveAgents.length === 0) {
     return <SectionEmpty>No one working right now</SectionEmpty>;
   }
 
+  const visible = liveAgents.slice(0, LIVE_AGENTS_CAP);
+  const overflow = liveAgents.length - visible.length;
+
   return (
     <div className={styles.liveTable}>
       <div className={styles.liveTableHeader}>
         <span>Member</span>
-        <span aria-hidden="true" />
         <span>Tool</span>
         <span>Project</span>
-        <span className={styles.liveTableHeaderNum}>Files</span>
-        <span className={styles.liveTableHeaderNum}>Session</span>
         <span aria-hidden="true" />
       </div>
       <div className={styles.liveTableBody}>
-        {liveAgents.map((a, i) => {
+        {visible.map((a, i) => {
           const meta = getToolMeta(a.host_tool);
-          const sessionLabel =
-            a.session_minutes != null && a.session_minutes > 0
-              ? formatDuration(a.session_minutes)
-              : '—';
           return (
             <button
               key={a.agent_id}
@@ -42,26 +42,23 @@ function LiveAgentsWidget({ liveAgents }: WidgetBodyProps) {
               <span className={styles.liveAgentName} style={{ color: meta.color }}>
                 {a.handle}
               </span>
-              <span aria-hidden="true" />
-              <span className={styles.liveCell}>{meta.label}</span>
+              <span className={clsx(styles.liveCell, styles.liveCellTool)}>
+                <ToolIcon tool={a.host_tool} size={16} />
+                <span>{meta.label}</span>
+              </span>
               <span className={styles.liveCell} title={a.teamName}>
                 {a.teamName || '—'}
-              </span>
-              <span
-                className={clsx(styles.liveCellNum, a.files.length === 0 && styles.liveCellMuted)}
-              >
-                {a.files.length}
-              </span>
-              <span
-                className={clsx(styles.liveCellNum, sessionLabel === '—' && styles.liveCellMuted)}
-              >
-                {sessionLabel}
               </span>
               <span className={styles.liveViewButton}>View</span>
             </button>
           );
         })}
       </div>
+      <SectionOverflow
+        count={overflow}
+        label={overflow === 1 ? 'agent' : 'agents'}
+        onClick={() => setQueryParam('live', '')}
+      />
     </div>
   );
 }

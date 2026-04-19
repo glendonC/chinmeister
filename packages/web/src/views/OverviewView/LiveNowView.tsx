@@ -4,6 +4,8 @@ import { getToolMeta } from '../../lib/toolMeta.js';
 import { formatDuration } from '../../lib/utils.js';
 import BackLink from '../../components/BackLink/BackLink.js';
 import SectionTitle from '../../components/SectionTitle/SectionTitle.js';
+import StatCard from '../../components/StatCard/StatCard.js';
+import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import type { LiveAgent } from '../../widgets/types.js';
 import { groupFilesByTeam } from '../../widgets/live-data.js';
 import styles from './LiveNowView.module.css';
@@ -24,12 +26,6 @@ export default function LiveNowView({ liveAgents, focusAgentId, onBack, onOpenPr
   const totalProjects = useMemo(() => {
     const seen = new Set<string>();
     for (const a of liveAgents) seen.add(a.teamId || '');
-    return seen.size;
-  }, [liveAgents]);
-
-  const totalTools = useMemo(() => {
-    const seen = new Set<string>();
-    for (const a of liveAgents) seen.add(getToolMeta(a.host_tool).id);
     return seen.size;
   }, [liveAgents]);
 
@@ -73,50 +69,26 @@ export default function LiveNowView({ liveAgents, focusAgentId, onBack, onOpenPr
     );
   }
 
-  const subtitleParts = [
-    `${totalAgents} ${totalAgents === 1 ? 'agent' : 'agents'}`,
-    `${totalProjects} ${totalProjects === 1 ? 'project' : 'projects'}`,
-    `${totalTools} ${totalTools === 1 ? 'tool' : 'tools'}`,
-  ];
-  if (totalConflicts > 0) {
-    subtitleParts.push(`${totalConflicts} ${totalConflicts === 1 ? 'conflict' : 'conflicts'}`);
-  }
-
   return (
     <div className={styles.detail}>
       <header className={styles.header}>
         <BackLink label="Overview" onClick={onBack} />
         <h1 className={styles.title}>live agents</h1>
-        <span className={styles.subtitle}>{subtitleParts.join(' · ')}</span>
       </header>
 
       <section className={styles.statGrid}>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Agents</span>
-          <span className={styles.statValue}>{totalAgents}</span>
-          <span className={styles.statHint}>live sessions</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Projects</span>
-          <span className={styles.statValue}>{totalProjects}</span>
-          <span className={styles.statHint}>with agents</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Open files</span>
-          <span className={styles.statValue}>{totalFilesInPlay}</span>
-          <span className={styles.statHint}>in use</span>
-        </div>
-        <div className={styles.stat}>
-          <span className={styles.statLabel}>Conflicts</span>
-          <span className={clsx(styles.statValue, totalConflicts > 0 && styles.statValueDanger)}>
-            {totalConflicts}
-          </span>
-          <span className={styles.statHint}>contested files</span>
-        </div>
+        <StatCard value={totalAgents} label="Agents" hint="live sessions" />
+        <StatCard value={totalProjects} label="Projects" hint="with agents" />
+        <StatCard value={totalFilesInPlay} label="Open files" hint="in use" />
+        <StatCard
+          value={totalConflicts}
+          label="Conflicts"
+          hint="contested files"
+          tone={totalConflicts > 0 ? 'danger' : 'default'}
+        />
       </section>
 
       <section className={styles.section}>
-        <SectionTitle>Active agents</SectionTitle>
         <div className={styles.agentsTable}>
           <div className={styles.agentsHeader}>
             <span>Member</span>
@@ -124,6 +96,7 @@ export default function LiveNowView({ liveAgents, focusAgentId, onBack, onOpenPr
             <span>Project</span>
             <span className={styles.numHeader}>Files</span>
             <span className={styles.numHeader}>Session</span>
+            <span aria-hidden="true" />
             <span aria-hidden="true" />
           </div>
           {liveAgents.map((a, i) => {
@@ -138,14 +111,17 @@ export default function LiveNowView({ liveAgents, focusAgentId, onBack, onOpenPr
                 ref={isFocused ? focusRowRef : undefined}
                 key={a.agent_id}
                 type="button"
-                className={clsx(styles.agentsRow, isFocused && styles.agentsRowFocused)}
+                className={styles.agentsRow}
                 style={{ '--row-index': i } as CSSProperties}
                 onClick={() => onOpenProject(a.teamId)}
               >
                 <span className={styles.agentName} style={{ color: meta.color }}>
                   {a.handle}
                 </span>
-                <span className={styles.agentCell}>{meta.label}</span>
+                <span className={clsx(styles.agentCell, styles.agentCellTool)}>
+                  <ToolIcon tool={a.host_tool} size={16} />
+                  <span>{meta.label}</span>
+                </span>
                 <span className={styles.agentCell} title={a.teamName}>
                   {a.teamName || '—'}
                 </span>
@@ -165,6 +141,7 @@ export default function LiveNowView({ liveAgents, focusAgentId, onBack, onOpenPr
                 >
                   {sessionLabel}
                 </span>
+                <span aria-hidden="true" />
                 <span className={styles.agentViewButton}>View</span>
               </button>
             );
