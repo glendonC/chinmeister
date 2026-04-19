@@ -95,37 +95,43 @@
   display: none;
 }
 
-/* ── Drag-from-catalog affordances ──────────────── */
-
-/* Subtle hint that the grid is a drop target while a catalog drag is in
- * flight. Soft outline pulled inward so it doesn't shift layout. */
-.gridCatalogDrag {
-  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
-  outline-offset: 8px;
-  border-radius: 12px;
+/* ── Drag-from-catalog affordance ────────────────
+ *
+ * A sized ghost placeholder rendered in the grid flow at the exact cell
+ * the catalog drop will occupy — insert-before a hovered widget, or at
+ * the end of the grid when dropping into empty space. The grid container
+ * itself never lights up: the affordance is local to the drop location,
+ * sized to the dragged widget's colSpan × rowSpan, so the user sees
+ * both WHERE and HOW BIG the landing widget will be. Because the
+ * placeholder is a real grid child, `grid-auto-flow: row dense` reflows
+ * neighbors automatically — no manual shift math. Radius matches .widget
+ * so the ghost reads as a widget-shaped preview, not arbitrary chrome.
+ */
+.placeholder {
+  min-width: 0;
+  pointer-events: none;
+  border: 1.5px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border-radius: 8px;
+  transition: opacity 80ms ease;
+  animation: placeholderIn 120ms ease both;
 }
 
-/* When the cursor is over empty grid area (below the last widget) the
- * catalog drop will APPEND. Highlight the whole grid container's outline
- * a little brighter so the user knows the end-append is armed. */
-.gridAppendHover {
-  outline-color: var(--accent);
+@keyframes placeholderIn {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-/* When the cursor is over a specific widget during a catalog drag the drop
- * will INSERT that catalog widget BEFORE this widget in source order.
- * Render a thin accent bar on the widget's left edge as the drop marker.
- * Vertical position: full cell height, 3px wide, inset slightly into the
- * gap so it reads as "insert BETWEEN the previous widget and this one". */
-.cellDropTarget::before,
-.cellDropTarget::after {
-  display: none; /* hide fade dividers while drop marker is active */
-}
-
-.cellDropTarget {
-  box-shadow: inset 3px 0 0 var(--accent);
-  border-radius: 2px;
-  transition: box-shadow 80ms ease-out;
+@media (prefers-reduced-motion: reduce) {
+  .placeholder {
+    animation: none;
+  }
 }
 
 /*
@@ -149,6 +155,49 @@
     opacity 0.18s ease,
     box-shadow 0.18s ease;
 }
+
+/* `data-widget-id` is set on `.cell` by WidgetGrid.tsx. Global selector
+ * (no module class) so it resolves wherever WidgetGrid renders. The
+ * scroll-margin keeps newly-added widgets clear of any sticky header
+ * when scrollIntoView fires. */
+[data-widget-id] {
+  scroll-margin-top: 80px;
+}
+
+/*
+ * Fit-content widgets (opt-in via WidgetDef.fitContent).
+ *
+ * `height: auto` lets the widget size to its content instead of stretching
+ * to fill the grid cell — WidgetGrid.tsx then measures the scrollHeight and
+ * shrinks the cell's grid-row span to match, so no vertical space is
+ * reserved past the widget's actual needs. `max-height: 100%` caps at the
+ * cell's computed height (which is driven by the declared `h` rowSpan acting
+ * as a ceiling); when content exceeds that cap, the body scrolls.
+ *
+ * Targets `[data-widget-zone='body']` rather than a CSS-module class because
+ * the body div's class is hashed inside WidgetRenderer's own module — the
+ * data attribute is the stable contract between the grid frame and the
+ * renderer's zones.
+ */
+.widgetFit {
+  height: auto;
+  max-height: 100%;
+}
+
+/*
+ * No overflow override on the widget body: the parent `.widget` already has
+ * `overflow: hidden` which caps content at the cell, and `fitContent`
+ * widgets by convention cap their own data (LIVE_AGENTS_CAP + SectionOverflow
+ * for live lists, intrinsic fixed heights for sparklines/outcome-bars).
+ *
+ * Adding `overflow-y: auto` here broke the live-agents hover squircle
+ * (which uses `margin: 0 -14px` to extend the pill into the widget's
+ * padding) because the browser promotes `overflow-x` to auto alongside it
+ * and any scroll container clips at the padding-box edge, cutting off the
+ * negative-margin extension. If a future fitContent widget needs scroll,
+ * give it its own scrollable wrapper inside the body rather than enabling
+ * it here globally.
+ */
 
 /*
  * Edit mode: the whole widget is the grab target. Dashed outline + grab

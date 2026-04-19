@@ -14,6 +14,7 @@ import {
 import { arrayMove } from '@dnd-kit/sortable';
 import {
   GRID_DROPPABLE_ID,
+  snapChipToCursor,
   type CatalogDragPayload,
 } from '../../components/WidgetGrid/WidgetGrid.js';
 
@@ -613,7 +614,7 @@ export default function OverviewView() {
           viewScope="overview"
         />
       </div>
-      <DragOverlay dropAnimation={null}>
+      <DragOverlay dropAnimation={null} modifiers={[snapChipToCursor]}>
         {catalogDragging ? (
           <div className={styles.dragOverlayCard}>
             <span className={styles.dragOverlayName}>{catalogDragging.name}</span>
