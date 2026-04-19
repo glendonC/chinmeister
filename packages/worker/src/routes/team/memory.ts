@@ -167,6 +167,13 @@ export const handleTeamSearchMemory = teamRoute(async ({ request, agentId, team,
   const filterHandle = url.searchParams.get('handle') || null;
   const after = url.searchParams.get('after') || null;
   const before = url.searchParams.get('before') || null;
+  // Decay-aware ranking is on by default; clients pass `decay=off` for
+  // recency-only ordering when running broad "show me everything" queries.
+  const decay = url.searchParams.get('decay') === 'off' ? 'off' : 'on';
+  // Compact format strips text down to a 160-char preview so an agent can
+  // scan many results without paying for full text on each. Detail is
+  // default for back-compat.
+  const format = url.searchParams.get('format') === 'compact' ? 'compact' : 'detail';
 
   return doResult(
     team.searchMemories(agentId, query, tags, categories, limit, user.id, {
@@ -175,6 +182,8 @@ export const handleTeamSearchMemory = teamRoute(async ({ request, agentId, team,
       handle: filterHandle,
       after,
       before,
+      decay,
+      format,
     }),
     'searchMemories',
   );

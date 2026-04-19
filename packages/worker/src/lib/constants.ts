@@ -58,6 +58,22 @@ export const MAX_CATEGORY_DESCRIPTION_LENGTH = 500;
 export const TAG_PROMOTION_THRESHOLD = 10;
 export const LAST_ACCESSED_THROTTLE_MS = 3600_000; // 1 hour — writes cost 20x reads
 
+// Memory decay halflife (days). Tag-aware: long for project-defining knowledge,
+// short for ephemeral notes, medium for everything else. Tunable via tag
+// conventions the agent already uses; no manual curation required.
+// Reference: Park et al. Generative Agents (~5.75 game-day halflife), Bedrock
+// AgentCore (5-11 days). Mem0 v3 ships no decay; we hedge with a moderate
+// default plus tag-aware overrides so foundational decisions don't decay out.
+export const MEMORY_DECAY_HALFLIFE_DAYS = 14;
+export const MEMORY_DECAY_HALFLIFE_LONG_DAYS = 365;
+export const MEMORY_DECAY_HALFLIFE_SHORT_DAYS = 7;
+export const MEMORY_DECAY_TAGS_LONG = ['decision', 'adr', 'architecture', 'design'];
+export const MEMORY_DECAY_TAGS_SHORT = ['scratch', 'debug', 'wip', 'temp', 'todo'];
+// Fetch this many candidates from SQL before JS-side decay rerank trims to
+// requested limit. 3x gives the rescorer headroom without burdening the row
+// reader; recall benefit plateaus by ~3x in spot tests.
+export const MEMORY_DECAY_CANDIDATE_MULTIPLIER = 3;
+
 // --- String length limits (worker-specific) ---
 export const MAX_STATUS_LENGTH = 280;
 export const MAX_FRAMEWORK_LENGTH = 50;

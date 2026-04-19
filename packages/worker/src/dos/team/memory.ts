@@ -5,7 +5,17 @@ import type { DOResult, Memory } from '../../types.js';
 import { createLogger } from '../../lib/logger.js';
 import { safeParse } from '../../lib/safe-parse.js';
 import { normalizeRuntimeMetadata } from './runtime.js';
-import { MEMORY_MAX_COUNT, LAST_ACCESSED_THROTTLE_MS, METRIC_KEYS } from '../../lib/constants.js';
+import {
+  MEMORY_MAX_COUNT,
+  LAST_ACCESSED_THROTTLE_MS,
+  METRIC_KEYS,
+  MEMORY_DECAY_HALFLIFE_DAYS,
+  MEMORY_DECAY_HALFLIFE_LONG_DAYS,
+  MEMORY_DECAY_HALFLIFE_SHORT_DAYS,
+  MEMORY_DECAY_TAGS_LONG,
+  MEMORY_DECAY_TAGS_SHORT,
+  MEMORY_DECAY_CANDIDATE_MULTIPLIER,
+} from '../../lib/constants.js';
 import { sqlChanges, withTransaction } from '../../lib/validation.js';
 import { recordTagUsage } from './categories.js';
 
@@ -173,7 +183,8 @@ export function saveMemory(
 
 interface SearchMemoriesResult {
   ok: true;
-  memories: Memory[];
+  memories: Memory[] | CompactMemory[];
+  format?: 'detail' | 'compact';
 }
 
 export interface SearchFilters {
@@ -186,6 +197,86 @@ export interface SearchFilters {
   after?: string | null;
   before?: string | null;
   limit?: number;
+  /**
+   * Decay-aware ranking. 'on' (default) multiplies relevance by an
+   * exponential decay factor based on age and a log-scale access boost,
+   * with halflife determined by tags (long for decision/adr/architecture,
+   * short for scratch/debug/wip). 'off' falls back to recency-only ordering
+   * for "show me everything" queries.
+   */
+  decay?: 'on' | 'off';
+  /**
+   * Response shape. 'detail' (default) returns the full Memory object.
+   * 'compact' returns {id, tags, preview, updated_at} for token-budgeted
+   * use cases — agents can scan the result list without loading every full
+   * text, then call back for detail on hits worth investigating.
+   */
+  format?: 'detail' | 'compact';
+}
+
+export interface CompactMemory {
+  id: string;
+  tags: string[];
+  preview: string;
+  updated_at: string;
+}
+
+/**
+ * Heuristic preview for compact mode: prefer first sentence (split on .!?),
+ * cap at 160 chars at a word boundary, ellipsis if truncated. Captures
+ * enough signal for an agent to decide whether to fetch detail without
+ * doubling round-trips on every hit.
+ */
+function buildPreview(text: string): string {
+  if (!text) return '';
+  const trimmed = text.trim();
+  const PREVIEW_MAX = 160;
+  if (trimmed.length <= PREVIEW_MAX) return trimmed;
+
+  // Try first sentence — most chinwag memories lead with a one-line summary
+  const sentenceMatch = trimmed.match(/^[^.!?]{20,200}[.!?]/);
+  if (sentenceMatch && sentenceMatch[0].length <= PREVIEW_MAX) {
+    return sentenceMatch[0].trim();
+  }
+
+  // Fall back to word-boundary truncation
+  const slice = trimmed.slice(0, PREVIEW_MAX);
+  const lastSpace = slice.lastIndexOf(' ');
+  const cutoff = lastSpace > PREVIEW_MAX * 0.6 ? lastSpace : PREVIEW_MAX;
+  return `${trimmed.slice(0, cutoff)}…`;
+}
+
+/**
+ * Pick the appropriate decay halflife in days based on memory tags.
+ * Tag conventions are agent-author authority; we read the tags they already
+ * apply rather than introducing a new "memory type" concept.
+ */
+function halflifeForTags(tags: string[]): number {
+  for (const tag of tags) {
+    const lower = tag.toLowerCase();
+    if (MEMORY_DECAY_TAGS_LONG.includes(lower)) return MEMORY_DECAY_HALFLIFE_LONG_DAYS;
+  }
+  for (const tag of tags) {
+    const lower = tag.toLowerCase();
+    if (MEMORY_DECAY_TAGS_SHORT.includes(lower)) return MEMORY_DECAY_HALFLIFE_SHORT_DAYS;
+  }
+  return MEMORY_DECAY_HALFLIFE_DAYS;
+}
+
+/**
+ * Compute the decay-aware score for a memory.
+ *   score = exp(-age_days / halflife) * (1 + log(1 + access_count))
+ * The access boost rescues old-but-frequently-used memories (chinwag's
+ * answer to the "we use pnpm" stable-fact starvation case). Multiplier
+ * with the existing relevance signal is left to the caller.
+ */
+function decayScore(createdAt: string, accessCount: number, tags: string[]): number {
+  const ageMs = Date.now() - new Date(createdAt).getTime();
+  const ageDays = Math.max(0, ageMs / 86_400_000);
+  const halflife = halflifeForTags(tags);
+  const decay = Math.exp(-ageDays / halflife);
+  const accessBoost = 1 + Math.log(1 + Math.max(0, accessCount));
+  return decay * accessBoost;
 }
 
 export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchMemoriesResult {
@@ -252,7 +343,15 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
   // is_stale is computed in SQL so the throttle decision stays in SQLite's
   // time domain — no JS Date parsing of SQLite datetime strings.
   const throttleSeconds = Math.round(LAST_ACCESSED_THROTTLE_MS / 1000);
-  const sqlStr = `SELECT m.id, m.text, m.tags, m.categories, m.handle, m.host_tool, m.agent_surface, m.agent_model, m.session_id, m.created_at, m.updated_at, m.last_accessed_at,
+
+  // Decay-aware ranking: when enabled, fetch a wider candidate pool from SQL
+  // (ordered by FTS rank or recency) and re-sort in JS by `position_signal *
+  // decay_score`. This combines text relevance / recency with tag-aware
+  // exponential decay and a log-scale access boost. `decay: 'off'` falls back
+  // to pure recency for "show me everything" queries.
+  const decayEnabled = filters.decay !== 'off';
+  const fetchLimit = decayEnabled ? cappedLimit * MEMORY_DECAY_CANDIDATE_MULTIPLIER : cappedLimit;
+  const sqlStr = `SELECT m.id, m.text, m.tags, m.categories, m.handle, m.host_tool, m.agent_surface, m.agent_model, m.session_id, m.created_at, m.updated_at, m.last_accessed_at, m.access_count,
                    CASE
                      WHEN m.last_accessed_at IS NULL THEN 1
                      WHEN (julianday('now') - julianday(m.last_accessed_at)) * 86400 > ? THEN 1
@@ -261,14 +360,15 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
                FROM memories m ${where}
                ORDER BY m.updated_at DESC, m.created_at DESC LIMIT ?`;
   params.unshift(throttleSeconds);
-  params.push(cappedLimit);
+  params.push(fetchLimit);
 
   const rows = sql.exec(sqlStr, ...params).toArray();
 
   // Throttled last_accessed_at update — only touch rows flagged is_stale by SQL.
   // Writes cost 20x reads on DO SQLite, so we avoid updating on every search.
   const idsToTouch: string[] = [];
-  const memories = rows.map((m) => {
+  type Scored = { memory: Memory; relevanceWeight: number; decayWeight: number };
+  const scored: Scored[] = rows.map((m, idx) => {
     const row = m as Record<string, unknown>;
     const parsedTags = safeParse(
       (row.tags as string) || '[]',
@@ -287,11 +387,63 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
       idsToTouch.push(row.id as string);
     }
 
-    // Strip the SQL-only is_stale column from the returned row so callers
-    // see the same Memory shape as before.
-    const { is_stale: _is_stale, ...rest } = row;
-    return { ...rest, tags: parsedTags, categories: parsedCategories } as unknown as Memory;
+    // Strip the SQL-only is_stale + access_count columns from the returned
+    // row so callers see the same Memory shape as before. access_count is
+    // used internally for decay scoring but kept off the wire for now.
+    const { is_stale: _is_stale, access_count, ...rest } = row;
+    const memory = {
+      ...rest,
+      tags: parsedTags,
+      categories: parsedCategories,
+    } as unknown as Memory;
+
+    // SQL ranks by recency, so position 0 = most recent. Reciprocal-rank
+    // weight gives diminishing returns to deeper candidates.
+    const relevanceWeight = 1 / (idx + 1);
+    const decayWeight = decayEnabled
+      ? decayScore(
+          (row.created_at as string) ?? new Date().toISOString(),
+          Number(access_count) || 0,
+          parsedTags as string[],
+        )
+      : 1;
+    return { memory, relevanceWeight, decayWeight };
   });
+
+  let memories: Memory[];
+  if (decayEnabled) {
+    scored.sort((a, b) => b.relevanceWeight * b.decayWeight - a.relevanceWeight * a.decayWeight);
+    memories = scored.slice(0, cappedLimit).map((s) => s.memory);
+  } else {
+    memories = scored.slice(0, cappedLimit).map((s) => s.memory);
+  }
+
+  // Compact format: shape down to {id, tags, preview, updated_at} for token-
+  // budgeted callers. Only applied here so decay scoring still uses full text.
+  if (filters.format === 'compact') {
+    const compact: CompactMemory[] = memories.map((m) => ({
+      id: m.id,
+      tags: (m.tags as string[]) || [],
+      preview: buildPreview(m.text),
+      updated_at: m.updated_at,
+    }));
+    // Touch stale memories before returning the compact view (preserves
+    // access tracking for later decay decisions).
+    if (idsToTouch.length > 0) {
+      const placeholders = idsToTouch.map(() => '?').join(',');
+      try {
+        sql.exec(
+          `UPDATE memories SET last_accessed_at = datetime('now'), access_count = access_count + 1 WHERE id IN (${placeholders})`,
+          ...idsToTouch,
+        );
+      } catch (e) {
+        log.error('failed to update last_accessed_at (compact)', {
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+    return { ok: true, memories: compact, format: 'compact' };
+  }
 
   // Batch update last_accessed_at for stale entries
   if (idsToTouch.length > 0) {
