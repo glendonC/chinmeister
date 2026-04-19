@@ -30,14 +30,12 @@ export const catalogDraggableId = (widgetId: string) => `catalog:${widgetId}`;
 function CatalogRow({
   widget,
   active,
-  showDescs,
   onToggle,
   onHover,
   onHoverEnd,
 }: {
   widget: WidgetDef;
   active: boolean;
-  showDescs: boolean;
   onToggle: () => void;
   onHover: (el: HTMLElement) => void;
   onHoverEnd: () => void;
@@ -64,7 +62,7 @@ function CatalogRow({
     >
       <div className={styles.panelRowInfo}>
         <div className={styles.panelRowName}>{widget.name}</div>
-        {showDescs && <div className={styles.panelRowDesc}>{widget.description}</div>}
+        <div className={styles.panelRowDesc}>{widget.description}</div>
       </div>
       <button
         type="button"
@@ -248,10 +246,15 @@ function VizIllustration({ viz }: { viz: WidgetViz }) {
 // ── Filter mode: what to show ─────────────────────
 
 type ShowFilter = 'all' | 'active' | 'inactive';
+// Labels read as the answer to "Show:" — `Added` / `Available` map to the
+// user's mental model (widgets I've put on my dashboard vs. ones I could
+// add) far better than the engineering vocabulary `active` / `inactive`,
+// which gives no hint about what's being filtered. The internal enum
+// keeps the original names so all the filter logic is unchanged.
 const SHOW_LABELS: Record<ShowFilter, string> = {
   all: 'All',
-  active: 'Active',
-  inactive: 'Inactive',
+  active: 'Added',
+  inactive: 'Available',
 };
 const SHOW_CYCLE: ShowFilter[] = ['all', 'active', 'inactive'];
 
@@ -425,7 +428,6 @@ export function WidgetCatalog({
 }) {
   const [activeCategory, setActiveCategory] = useState<'all' | WidgetCategory>('all');
   const [showFilter, setShowFilter] = useState<ShowFilter>('all');
-  const [showDescs, setShowDescs] = useState(true);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredWidgetId, setHoveredWidgetId] = useState<string | null>(null);
@@ -553,7 +555,7 @@ export function WidgetCatalog({
     obs.observe(el);
     for (const child of Array.from(el.children)) obs.observe(child);
     return () => obs.disconnect();
-  }, [open, updateListFade, filteredWidgets.length, showDescs]);
+  }, [open, updateListFade, filteredWidgets.length]);
 
   const tooltipStyle = useMemo(() => {
     if (!displayPos || !panelRect) return { display: 'none' } as CSSProperties;
@@ -597,19 +599,20 @@ export function WidgetCatalog({
           setEditing(!editing);
           e.preventDefault();
           break;
-        case 'v':
         case 'V':
+          // Shift+V — restore default. Unmodified `v` is intentionally
+          // ignored; restoring the default wipes any custom layout, which
+          // is too destructive to leave on a single keystroke.
+          if (!e.shiftKey) break;
           resetToDefault();
           e.preventDefault();
           break;
-        case 'c':
         case 'C':
+          // Shift+C — empty dashboard. Same reasoning as Shift+V: a single
+          // unmodified `c` accidentally wiping the layout is the wrong
+          // shape of friction even with undo behind it.
+          if (!e.shiftKey) break;
           clearAll();
-          e.preventDefault();
-          break;
-        case 'd':
-        case 'D':
-          setShowDescs((p) => !p);
           e.preventDefault();
           break;
         case '/':
@@ -761,7 +764,6 @@ export function WidgetCatalog({
                   key={w.id}
                   widget={w}
                   active={active}
-                  showDescs={showDescs}
                   onToggle={() => toggleWidget(w.id)}
                   onHover={(el) => handleRowHover(w.id, el)}
                   onHoverEnd={() => handleRowHover(null)}
@@ -834,18 +836,10 @@ export function WidgetCatalog({
         <span className={styles.stripDivider} />
         <button
           type="button"
-          className={clsx(styles.stripAction, !showDescs && styles.stripActionActive)}
-          onClick={() => setShowDescs((p) => !p)}
-        >
-          {showDescs ? 'Hide details' : 'Show details'} <kbd className={styles.kbd}>D</kbd>
-        </button>
-        <span className={styles.stripDivider} />
-        <button
-          type="button"
           className={clsx(styles.stripAction, showFilter !== 'all' && styles.stripActionActive)}
           onClick={cycleShowFilter}
         >
-          {SHOW_LABELS[showFilter]} <kbd className={styles.kbd}>Tab</kbd>
+          Show: {SHOW_LABELS[showFilter]} <kbd className={styles.kbd}>Tab</kbd>
         </button>
         <span className={styles.stripDivider} />
         <button
@@ -860,11 +854,19 @@ export function WidgetCatalog({
         </button>
         <span className={styles.stripDivider} />
         <button type="button" className={styles.stripAction} onClick={clearAll}>
-          Clear <kbd className={styles.kbd}>C</kbd>
+          Empty dashboard
+          <span className={styles.kbdGroup}>
+            <kbd className={styles.kbd}>⇧</kbd>
+            <kbd className={styles.kbd}>C</kbd>
+          </span>
         </button>
         <span className={styles.stripDivider} />
         <button type="button" className={styles.stripAction} onClick={resetToDefault}>
-          Reset <kbd className={styles.kbd}>V</kbd>
+          Restore default
+          <span className={styles.kbdGroup}>
+            <kbd className={styles.kbd}>⇧</kbd>
+            <kbd className={styles.kbd}>V</kbd>
+          </span>
         </button>
       </div>
     </>,

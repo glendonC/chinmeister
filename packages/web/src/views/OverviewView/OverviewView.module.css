@@ -125,6 +125,33 @@
   color: var(--ink);
 }
 
+/* Sortable drag overlay — sized inline to match the original cell's
+ * measured w × h. Same surface vocabulary as a regular widget (page-bg,
+ * 20px padding, rounded corners, hidden overflow) plus a stronger shadow
+ * so it reads as "lifted off the grid." Faint downward tilt to feel held
+ * by the cursor; respects reduced-motion. The overlay is rendered by the
+ * view's <DragOverlay>, so dnd-kit positions it at the cursor and the
+ * original cell shows the dashed ghost (see WidgetGrid.module.css
+ * .widgetGhost). */
+.dragOverlayWidget {
+  background: var(--page-bg);
+  padding: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow-lg), var(--shadow-xs);
+  cursor: grabbing;
+  pointer-events: none;
+  transform: rotate(0.5deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dragOverlayWidget {
+    transform: none;
+  }
+}
+
 /* ── Project filter dropdown ─────────────────────── */
 
 .projectFilter {

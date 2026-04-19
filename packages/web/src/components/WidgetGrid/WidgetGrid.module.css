@@ -33,6 +33,19 @@
   position: relative;
 }
 
+/* Drop-target indicator for sortable reorder. The cell being hovered
+ * during a sortable drag picks up an accent outline + faint accent fill
+ * so the user can see exactly where the dragged widget will land. We
+ * deliberately don't preview the swap (sortable's no-shift strategy
+ * keeps siblings in place); this indicator + the dragged widget in the
+ * DragOverlay are the only signals during drag. The actual reorder and
+ * grid reflow happen on drop. */
+.cellOver > .widget {
+  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline-offset: -2px;
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
+}
+
 /*
  * Fade dividers.
  *
@@ -214,6 +227,21 @@
 
 .widgetEditing:active {
   cursor: grabbing;
+}
+
+/* Original-slot placeholder rendered while the widget is being dragged.
+ * The actual widget renders in the parent view's DragOverlay (sized to
+ * its measured cell dimensions, follows the cursor cleanly). This ghost
+ * fills the original cell so the grid keeps its shape and sortable can
+ * shift it as siblings make room — it visibly tracks the drop target.
+ * Dashed accent border is the "blue outline" the user remembered from
+ * the old RGL behavior. */
+.widgetGhost {
+  height: 100%;
+  border-radius: 8px;
+  border: 1.5px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  pointer-events: none;
 }
 
 .editChrome {

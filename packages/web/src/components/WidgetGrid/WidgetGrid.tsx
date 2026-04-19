@@ -9,8 +9,8 @@ import {
   type ReactNode,
 } from 'react';
 import clsx from 'clsx';
-import { useDndMonitor, useDroppable, type Modifier } from '@dnd-kit/core';
-import { SortableContext, rectSortingStrategy, useSortable } from '@dnd-kit/sortable';
+import { useDndContext, useDndMonitor, useDroppable, type Modifier } from '@dnd-kit/core';
+import { SortableContext, useSortable, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities';
 
 import {
@@ -39,6 +39,20 @@ const ROW_SPAN_CHOICES: WidgetRowSpan[] = [2, 3, 4];
  *  DndContext's onDragEnd reads this to distinguish "dropped on empty grid
  *  space" (append) from "dropped on a specific widget" (insert before). */
 export const GRID_DROPPABLE_ID = 'widget-grid-append';
+
+/**
+ * No-shift sorting strategy: items stay in their declared positions while
+ * a drag is in flight; only the dragged item moves (in the parent view's
+ * DragOverlay). The default `rectSortingStrategy` tries to live-preview
+ * the swap by transforming sibling items toward where they'd land — but
+ * with mixed-size items in a CSS Grid using `grid-auto-flow: row dense`,
+ * the predicted positions don't match what the grid actually computes,
+ * so hovered widgets visibly distort/scale during the preview. Returning
+ * null for every item disables that preview entirely. The actual reorder
+ * happens on drop and the grid recomputes the final layout cleanly. The
+ * `cellOver` indicator (see CSS) tells the user where the drop will land
+ * without simulating it. */
+const noShiftStrategy: SortingStrategy = () => null;
 
 /** Shape of catalog drag payloads that the grid reacts to. WidgetCatalog.tsx
  *  sets exactly these fields on useDraggable.data.current. */
@@ -80,6 +94,7 @@ interface SortableWidgetProps {
   slot: WidgetSlot;
   editing: boolean;
   highlighted: boolean;
+  isOver: boolean;
   children: ReactNode;
   onRemove: () => void;
   onSlotSize: (size: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan }) => void;
@@ -107,11 +122,12 @@ function useFitRowSpan(
 ): WidgetRowSpan | null {
   const [rows, setRows] = useState<WidgetRowSpan | null>(null);
   useLayoutEffect(() => {
-    // Skip the effect entirely when disabled. The return below gates on
-    // `enabled` so stale measured state from a prior enabled run never
-    // leaks out — avoids a synchronous `setRows(null)` here, which the
-    // react-hooks/set-state-in-effect rule (correctly) rejects as a
-    // cascading-render trigger.
+    // Skip the effect entirely when disabled. We deliberately do NOT
+    // reset `rows` here — when the caller pauses fit measurements (e.g.,
+    // a drag is in flight), the last measured value should persist so
+    // the cell holds its visible height instead of snapping back to the
+    // declared cap mid-drag, which would itself be jank. After the drag
+    // ends and `enabled` flips true, ResizeObserver re-measures.
     if (!enabled) return;
     const el = widgetRef.current;
     if (!el) return;
@@ -138,18 +154,19 @@ function useFitRowSpan(
       obs.disconnect();
     };
   }, [enabled, declared, widgetRef]);
-  return enabled ? rows : null;
+  return rows;
 }
 
 function SortableWidget({
   slot,
   editing,
   highlighted,
+  isOver,
   children,
   onRemove,
   onSlotSize,
 }: SortableWidgetProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useSortable({
     id: slot.id,
     disabled: !editing,
   });
@@ -158,15 +175,24 @@ function SortableWidget({
   const widgetName = def?.name ?? 'widget';
   const fit = def?.fitContent === true;
   const widgetRef = useRef<HTMLDivElement | null>(null);
-  const fitRows = useFitRowSpan(fit, slot.rowSpan, widgetRef);
+  // Pause fitContent measurements whenever any drag is in flight in the
+  // ancestor DndContext. Even though transforms shouldn't change
+  // scrollHeight, a sibling reorder can reflow the dragged widget's
+  // surroundings and re-measure it mid-drag — that re-measurement updates
+  // grid-row span on a moving target, shifting the cursor anchor and
+  // making the drag feel laggy. Re-enabled the moment the drag ends.
+  const { active: anyDragActive } = useDndContext();
+  const fitRows = useFitRowSpan(fit && !anyDragActive, slot.rowSpan, widgetRef);
   const effectiveRowSpan: WidgetRowSpan = fitRows ?? slot.rowSpan;
 
+  // No `transition` from useSortable — we don't want the sibling
+  // shift-preview animation. With the no-shift strategy, transform stays
+  // identity for non-dragged items so this is mostly belt-and-suspenders;
+  // explicitly omitting the transition makes the intent obvious.
   const style: CSSProperties = {
     gridColumn: `span ${slot.colSpan}`,
     gridRow: `span ${effectiveRowSpan}`,
     transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
     zIndex: isDragging ? 2 : undefined,
   };
 
@@ -176,29 +202,38 @@ function SortableWidget({
       style={style}
       data-widget-id={slot.id}
       data-widget-viz={def?.viz ?? undefined}
-      className={styles.cell}
+      className={clsx(styles.cell, isOver && !isDragging && styles.cellOver)}
     >
-      <div
-        ref={widgetRef}
-        className={clsx(styles.widget, editing && styles.widgetEditing, fit && styles.widgetFit)}
-        {...(editing ? attributes : {})}
-        {...(editing ? listeners : {})}
-      >
-        {editing && (
-          <div className={styles.editChrome}>
-            <SizeControl colSpan={slot.colSpan} rowSpan={slot.rowSpan} onChange={onSlotSize} />
-            <button
-              type="button"
-              className={styles.removeButton}
-              onClick={onRemove}
-              aria-label={`Remove ${widgetName}`}
-            >
-              Remove
-            </button>
-          </div>
-        )}
-        {children}
-      </div>
+      {isDragging ? (
+        // Original-slot placeholder while dragging. The actual widget
+        // renders inside the parent view's DragOverlay so it stays sized
+        // to its real cell dimensions and follows the cursor cleanly.
+        // Sortable shifts this empty cell as siblings make room, so the
+        // placeholder visibly tracks the drop target.
+        <div className={styles.widgetGhost} aria-hidden="true" />
+      ) : (
+        <div
+          ref={widgetRef}
+          className={clsx(styles.widget, editing && styles.widgetEditing, fit && styles.widgetFit)}
+          {...(editing ? attributes : {})}
+          {...(editing ? listeners : {})}
+        >
+          {editing && (
+            <div className={styles.editChrome}>
+              <SizeControl colSpan={slot.colSpan} rowSpan={slot.rowSpan} onChange={onSlotSize} />
+              <button
+                type="button"
+                className={styles.removeButton}
+                onClick={onRemove}
+                aria-label={`Remove ${widgetName}`}
+              >
+                Remove
+              </button>
+            </div>
+          )}
+          {children}
+        </div>
+      )}
       {highlighted && (
         <div className={styles.borderSweep} aria-hidden="true">
           <span className={styles.borderSide1} />
@@ -286,32 +321,54 @@ function WidgetGridInner({
   // Non-null while a catalog drag is in flight. Carries w/h so the in-grid
   // ghost placeholder can size itself to the widget's real footprint.
   const [catalogDrag, setCatalogDrag] = useState<{ w: number; h: number } | null>(null);
+  // Sortable drag's hovered widget id. Pairs with `cellOver` styling on the
+  // SortableWidget cell so the user sees a clear drop target without
+  // sortable previewing a swap (which warps mixed-size grid items).
+  const [sortableOverId, setSortableOverId] = useState<string | null>(null);
+  const [sortableActiveId, setSortableActiveId] = useState<string | null>(null);
 
   useDndMonitor({
     onDragStart(event) {
-      const data = event.active.data.current as CatalogDragPayload | undefined;
-      if (data && String(event.active.id).startsWith('catalog:')) {
-        setCatalogDrag({ w: data.w, h: data.h });
+      const activeId = String(event.active.id);
+      if (activeId.startsWith('catalog:')) {
+        const data = event.active.data.current as CatalogDragPayload | undefined;
+        if (data) setCatalogDrag({ w: data.w, h: data.h });
+        return;
       }
+      setSortableActiveId(activeId);
     },
     onDragOver(event) {
-      if (!catalogDrag) return;
       const overId = event.over ? String(event.over.id) : null;
-      if (overId && overId !== GRID_DROPPABLE_ID) {
-        // Cursor is hovering a specific widget — that widget is the insertion
-        // anchor (we'll insert BEFORE it on drop).
-        setCatalogOverId(overId);
+      if (catalogDrag) {
+        if (overId && overId !== GRID_DROPPABLE_ID) {
+          // Cursor is hovering a specific widget — that widget is the insertion
+          // anchor (we'll insert BEFORE it on drop).
+          setCatalogOverId(overId);
+        } else {
+          setCatalogOverId(null);
+        }
+        return;
+      }
+      // Sortable drag — light up the hovered cell as drop target. Skip
+      // when the cursor is over the dragged widget's own slot (no-op
+      // drop) or over the empty-grid sentinel.
+      if (overId && overId !== GRID_DROPPABLE_ID && overId !== sortableActiveId) {
+        setSortableOverId(overId);
       } else {
-        setCatalogOverId(null);
+        setSortableOverId(null);
       }
     },
     onDragEnd() {
       setCatalogDrag(null);
       setCatalogOverId(null);
+      setSortableActiveId(null);
+      setSortableOverId(null);
     },
     onDragCancel() {
       setCatalogDrag(null);
       setCatalogOverId(null);
+      setSortableActiveId(null);
+      setSortableOverId(null);
     },
   });
 
@@ -349,7 +406,7 @@ function WidgetGridInner({
   const showAppendGhost = catalogDrag && gridIsOver && catalogOverId === null;
 
   return (
-    <SortableContext items={ids} strategy={rectSortingStrategy}>
+    <SortableContext items={ids} strategy={noShiftStrategy}>
       <div ref={setGridDroppableRef} className={styles.grid}>
         {slots.map((slot) => (
           <Fragment key={slot.id}>
@@ -360,6 +417,7 @@ function WidgetGridInner({
               slot={slot}
               editing={editing}
               highlighted={highlightedId === slot.id}
+              isOver={sortableOverId === slot.id}
               onRemove={() => onRemove(slot.id)}
               onSlotSize={(size) => onSlotSize(slot.id, size)}
             >

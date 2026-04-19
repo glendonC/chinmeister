@@ -79,6 +79,17 @@
   line-height: 1;
 }
 
+/* Multi-key combinations like Shift+C render each glyph in its own
+ * squircle. The tight 3px gap binds the two chips visually as a single
+ * shortcut while staying narrower than the parent .stripAction's 5px
+ * gap, so the modifier+key cluster reads as one unit distinct from the
+ * label. */
+.kbdGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 /* ── Search bar (appears above panel when invoked) ── */
 
 .searchBar {
@@ -361,7 +372,7 @@
 
 .panelRowDesc {
   font-size: 11px;
-  color: var(--muted);
+  color: var(--soft);
   margin-top: 2px;
   line-height: 1.3;
 }

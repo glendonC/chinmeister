@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useEffect, useSyncExternalStore } from 'react';
+import { useMemo, useState, useCallback, useEffect, useRef, useSyncExternalStore } from 'react';
 import clsx from 'clsx';
 import { useShallow } from 'zustand/react/shallow';
 import {
@@ -51,6 +51,7 @@ import InlineHint from '../../components/InlineHint/InlineHint.jsx';
 import StatusState from '../../components/StatusState/StatusState.jsx';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import CustomizeButton from '../../components/CustomizeButton/CustomizeButton.jsx';
+import EditModePill from '../../components/EditModePill/EditModePill.js';
 import RangePills from '../../components/RangePills/RangePills.jsx';
 import {
   ShimmerText,
@@ -59,12 +60,15 @@ import {
 } from '../../components/Skeleton/Skeleton.jsx';
 import { useOverviewData } from './useOverviewData.js';
 import LiveNowView from './LiveNowView.js';
+import UsageDetailView from './UsageDetailView.js';
 import { RANGES, type RangeDays, summarizeNames } from './overview-utils.js';
 import { useOverviewLayout } from './useOverviewLayout.js';
 import { useProjectFilter } from './useProjectFilter.js';
 import { getWidget } from '../../widgets/widget-catalog.js';
 import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
 import { WidgetCatalog } from '../../widgets/WidgetCatalog.js';
+import { DEMO_LIVE_AGENTS, DEMO_LOCKS } from '../../widgets/demo-live-data.js';
+import type { Lock } from '../../lib/apiSchemas.js';
 
 import styles from './OverviewView.module.css';
 import { WidgetGrid } from '../../components/WidgetGrid/WidgetGrid.js';
@@ -196,6 +200,16 @@ function ProjectFilter({
 
 const SINGLE_PROJECT_HINT_KEY = 'chinwag:single-project-hint-dismissed';
 
+// Module-level stable reference for the Live widgets' `locks` prop. Inline
+// `[]` rebuilds the array every render and defeats the memo on
+// WidgetRenderer (shallow compare sees a new reference). In dev we seed
+// the shared DEMO_LOCKS so the claimed pill + claimed-files widgets have
+// something to render without a live session; in prod we pass an empty
+// array. Either way the reference is stable per module load.
+// DEMO: remove the dev branch + the demo-live-data import when the Live
+// widget UIUX refinement is finished.
+const OVERVIEW_LOCKS: Lock[] = import.meta.env.DEV ? DEMO_LOCKS : [];
+
 // ── Main Component ────────────────────────────────
 
 export default function OverviewView() {
@@ -231,7 +245,17 @@ export default function OverviewView() {
   const hasKnownProjects = knownTeamCount > 0 || summaries.length > 0;
   const failedLabel = failedTeams.length > 0 ? summarizeNames(failedTeams) : '';
 
-  const { liveAgents, sortedSummaries } = useOverviewData(summaries);
+  const { liveAgents: rawLiveAgents, sortedSummaries } = useOverviewData(summaries);
+
+  // DEMO: dev-only hydration for the Live widgets (live-agents,
+  // live-conflicts, files-in-play). Append synthetic agents so we can
+  // refine the visuals without a live session. Tree-shaken from prod via
+  // import.meta.env.DEV. Remove this merge + the demo-live-data import
+  // when the widget UIUX refinement is done.
+  const liveAgents = useMemo(
+    () => (import.meta.env.DEV ? [...rawLiveAgents, ...DEMO_LIVE_AGENTS] : rawLiveAgents),
+    [rawLiveAgents],
+  );
 
   // Live Now full-page view. Query-param driven so the URL deep-links and
   // the back/forward buttons work. The value, when present, doubles as a
@@ -239,19 +263,35 @@ export default function OverviewView() {
   // agent_id so LiveNowView can auto-scroll to their row inside the full
   // picture. An empty string opens the view without focus.
   const liveParam = useQueryParam('live');
+  const liveTabParam = useQueryParam('live-tab');
   const liveShifted = liveParam !== null;
   const focusAgentId = liveParam && liveParam.length > 0 ? liveParam : null;
-  const closeLive = useCallback(() => setQueryParam('live', null), []);
+  const closeLive = useCallback(() => {
+    setQueryParam('live', null);
+    setQueryParam('live-tab', null);
+  }, []);
 
-  // Escape closes the detail view.
+  // Usage Detail — same query-param pattern as Live Now, scoped to the
+  // usage category. The value is the initial tab (sessions/edits/cost/etc).
+  const usageParam = useQueryParam('usage');
+  const usageShifted = usageParam !== null;
+  const closeUsage = useCallback(() => {
+    setQueryParam('usage', null);
+  }, []);
+
+  // Escape closes whichever detail view is open. One handler gated on either
+  // shift keeps the key binding singular.
+  const anyDetailShifted = liveShifted || usageShifted;
   useEffect(() => {
-    if (!liveShifted) return;
+    if (!anyDetailShifted) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') closeLive();
+      if (e.key !== 'Escape') return;
+      if (liveShifted) closeLive();
+      else if (usageShifted) closeUsage();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [liveShifted, closeLive]);
+  }, [anyDetailShifted, liveShifted, usageShifted, closeLive, closeUsage]);
 
   const projectFilter = useProjectFilter(teams);
   const { analytics } = useUserAnalytics(rangeDays, true, projectFilter.selectedIds);
@@ -330,18 +370,36 @@ export default function OverviewView() {
     useSensor(KeyboardSensor),
   );
   const [catalogDragging, setCatalogDragging] = useState<CatalogDragPayload | null>(null);
+  // Sortable reorder state — captured at drag start so the DragOverlay
+  // can render the dragged widget at its real cell dimensions. Without
+  // the overlay, sortable items move via inline transform on the
+  // original element, which on CSS Grid + transform combos visibly
+  // inflates past their grid track. With the overlay path, the original
+  // cell holds a stable placeholder and the moving widget is sized to
+  // exactly what the user grabbed.
+  const [sortableDragging, setSortableDragging] = useState<{
+    id: string;
+    w: number;
+    h: number;
+  } | null>(null);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const activeId = String(event.active.id);
     if (activeId.startsWith('catalog:')) {
       const data = event.active.data.current as CatalogDragPayload | undefined;
       if (data) setCatalogDragging(data);
+      return;
+    }
+    const rect = event.active.rect.current.initial;
+    if (rect) {
+      setSortableDragging({ id: activeId, w: rect.width, h: rect.height });
     }
   }, []);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setCatalogDragging(null);
+      setSortableDragging(null);
       const { active, over } = event;
       if (!over) return;
       const activeId = String(active.id);
@@ -376,7 +434,31 @@ export default function OverviewView() {
 
   const handleDragCancel = useCallback(() => {
     setCatalogDragging(null);
+    setSortableDragging(null);
   }, []);
+
+  // Stable render callback for WidgetGrid. Without useCallback, this arrow
+  // is a new reference on every render, which busts WidgetGrid's outer
+  // memo and re-creates every WidgetRenderer JSX wrapper inside.
+  // WidgetRenderer itself is memo'd, so what actually matters is whether
+  // its props change reference — which they don't, as long as the data
+  // hooks (analytics, conversationData, liveAgents, sortedSummaries)
+  // memoize their outputs. OVERVIEW_LOCKS is shared at module scope for
+  // the same reason — `[]` literal would re-bust memo every render.
+  const renderWidget = useCallback(
+    (id: string) => (
+      <WidgetRenderer
+        widgetId={id}
+        analytics={analytics}
+        conversationData={conversationData}
+        summaries={sortedSummaries as Array<Record<string, unknown>>}
+        liveAgents={liveAgents}
+        locks={OVERVIEW_LOCKS}
+        selectTeam={selectTeam}
+      />
+    ),
+    [analytics, conversationData, sortedSummaries, liveAgents, selectTeam],
+  );
 
   // Cmd/Ctrl-Z to undo layout changes (drag, resize, add, remove, reset).
   // Skips when typing in inputs or contenteditable elements so it doesn't
@@ -399,6 +481,55 @@ export default function OverviewView() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [undo, announce]);
+
+  // `c` opens the customize menu when the dashboard is the focus surface.
+  // `r` toggles rearrange mode — both work whether the catalog is open
+  // or closed (the catalog's own handler covers the open case; this
+  // covers the closed case so rearrange is a first-class action that
+  // doesn't require browsing the catalog first). `Esc` exits rearrange
+  // when the user is stranded in edit mode without the catalog open;
+  // when the catalog IS open, its own Esc handler closes it instead.
+  //
+  // Refs (not deps) for `catalogOpen` / `editing` so toggling either
+  // doesn't re-mount the window listener — listener churn during a drag
+  // (e.g., the user hits R mid-flow) was a candidate jank source.
+  const catalogOpenRef = useRef(catalogOpen);
+  const editingRef = useRef(editing);
+  useEffect(() => {
+    catalogOpenRef.current = catalogOpen;
+  }, [catalogOpen]);
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    if (isMobile || liveShifted || usageShifted) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (target.isContentEditable) return;
+      }
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setCatalogOpen((p) => !p);
+        return;
+      }
+      if (!catalogOpenRef.current && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        setEditing((p) => !p);
+        return;
+      }
+      if (!catalogOpenRef.current && editingRef.current && e.key === 'Escape') {
+        e.preventDefault();
+        setEditing(false);
+        return;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isMobile, liveShifted, usageShifted]);
 
   // ── Guards ──────────────────────────────────────
   const isLoading = !dashboardData && (dashboardStatus === 'idle' || dashboardStatus === 'loading');
@@ -484,7 +615,9 @@ export default function OverviewView() {
         {liveShifted ? (
           <LiveNowView
             liveAgents={liveAgents}
+            locks={OVERVIEW_LOCKS}
             focusAgentId={focusAgentId}
+            initialTab={liveTabParam}
             onBack={closeLive}
             onOpenProject={(teamId) => {
               closeLive();
@@ -496,6 +629,8 @@ export default function OverviewView() {
               navigate('tools');
             }}
           />
+        ) : usageShifted ? (
+          <UsageDetailView analytics={analytics} initialTab={usageParam} onBack={closeUsage} />
         ) : (
           <>
             {/* ── Header ── */}
@@ -537,6 +672,7 @@ export default function OverviewView() {
                     <CustomizeButton
                       active={catalogOpen}
                       onClick={() => setCatalogOpen(!catalogOpen)}
+                      kbd="c"
                     />
                   )}
                   <RangePills value={rangeDays} onChange={setRangeDays} options={RANGES} />
@@ -560,17 +696,7 @@ export default function OverviewView() {
                 slots={activeSlots}
                 editing={editing && !isMobile}
                 recentlyAddedId={recentlyAddedId}
-                renderWidget={(id) => (
-                  <WidgetRenderer
-                    widgetId={id}
-                    analytics={analytics}
-                    conversationData={conversationData}
-                    summaries={sortedSummaries as Array<Record<string, unknown>>}
-                    liveAgents={liveAgents}
-                    locks={[]}
-                    selectTeam={selectTeam}
-                  />
-                )}
+                renderWidget={renderWidget}
                 onReorder={reorderWidgets}
                 onRemove={removeWidget}
                 onSlotSize={setSlotSize}
@@ -613,11 +739,26 @@ export default function OverviewView() {
           clearAll={clearAll}
           viewScope="overview"
         />
+
+        {/* Floating exit affordance when rearranging without the catalog. */}
+        {editing && !catalogOpen && !isMobile && !liveShifted && !usageShifted && (
+          <EditModePill onDone={() => setEditing(false)} />
+        )}
       </div>
-      <DragOverlay dropAnimation={null} modifiers={[snapChipToCursor]}>
+      <DragOverlay
+        dropAnimation={null}
+        modifiers={catalogDragging ? [snapChipToCursor] : undefined}
+      >
         {catalogDragging ? (
           <div className={styles.dragOverlayCard}>
             <span className={styles.dragOverlayName}>{catalogDragging.name}</span>
+          </div>
+        ) : sortableDragging ? (
+          <div
+            className={styles.dragOverlayWidget}
+            style={{ width: sortableDragging.w, height: sortableDragging.h }}
+          >
+            {renderWidget(sortableDragging.id)}
           </div>
         ) : null}
       </DragOverlay>

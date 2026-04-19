@@ -1,0 +1,379 @@
+/*
+ * Usage Detail shares the visual contract with LiveNowView — header, tab
+ * selectors, tabbed panel — but these stats are historical. Accent blue is
+ * reserved for live data per the design language, so tab values stay on the
+ * ink/soft axis and never switch to accent.
+ */
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: 48px;
+  animation: detailFadeIn 0.25s var(--motion) both;
+}
+
+@keyframes detailFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-sm);
+}
+
+.title {
+  font-family: var(--display);
+  font-size: var(--display-page);
+  font-weight: 300;
+  line-height: var(--display-line);
+  letter-spacing: var(--display-spacing);
+  color: var(--ink);
+  margin: 0;
+}
+
+.subtitle {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  letter-spacing: 0.01em;
+}
+
+/* ── Tab selectors (stat values double as tabs) ── */
+
+.tabsRow {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-xs);
+}
+
+.tabButton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  animation: fadeSlideIn 0.35s var(--motion) both;
+  animation-delay: calc(var(--tab-index, 0) * 60ms);
+  outline: none;
+  min-width: 0;
+}
+
+.tabLabel {
+  position: relative;
+  display: inline-flex;
+  align-self: flex-start;
+  padding: var(--space-xs) var(--space-sm);
+  margin-left: calc(-1 * var(--space-sm));
+  border-radius: var(--radius-xs);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  background: transparent;
+  white-space: nowrap;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
+}
+
+.tabButton:hover .tabLabel {
+  background: var(--hover-bg);
+}
+
+.tabActive .tabLabel {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.tabValue {
+  font-size: 2.1rem;
+  font-weight: 200;
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--soft);
+  transition: color var(--motion-base) var(--motion);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tabActive .tabValue {
+  color: var(--ink);
+}
+
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Panel (tab content) ── */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  animation: detailFadeIn 0.2s var(--motion) both;
+}
+
+.empty {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+}
+
+/* ── Drill-down sections ── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.sectionLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+/* ── Outcome split bar (sessions tab) ── */
+
+.outcomeBar {
+  display: flex;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: var(--hover-bg);
+}
+
+.outcomeSegment {
+  height: 100%;
+}
+
+.outcomeLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+}
+
+.outcomeItem {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+
+.outcomeDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.outcomeValue {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.outcomeLabel {
+  color: var(--soft);
+  font-size: var(--text-xs);
+}
+
+/* ── Breakdown list (by-tool, by-model, by-directory, etc.) ── */
+
+.breakdownList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.breakdownRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 180px) 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 10px 14px;
+  margin: 0 -14px;
+  border-radius: var(--radius-xs);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 35ms);
+}
+
+.breakdownLabel {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.breakdownTrack {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hover-bg);
+  overflow: hidden;
+}
+
+.breakdownFill {
+  height: 100%;
+  background: var(--ink);
+  opacity: var(--opacity-bar-fill);
+}
+
+.breakdownValue {
+  font-family: var(--mono);
+  font-size: var(--text-11);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.breakdownMeta {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: 0.01em;
+}
+
+@keyframes rowReveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ── Trend block (sparkline wrapper) ── */
+
+.trendBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trendFrame {
+  width: 100%;
+  height: 96px;
+}
+
+/* ── Bucket row (duration distribution) ── */
+
+.bucketList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.bucketRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 120px) 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 8px 14px;
+  margin: 0 -14px;
+  border-radius: var(--radius-xs);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 35ms);
+}
+
+.bucketLabel {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  letter-spacing: 0.01em;
+}
+
+.bucketCount {
+  font-family: var(--mono);
+  font-size: var(--text-11);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── File rows (reused pattern from LiveNowView files tab) ── */
+
+.fileList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fileRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 14px;
+  margin: 0 -14px;
+  border-radius: var(--radius-xs);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 35ms);
+}
+
+.fileName {
+  flex: 1;
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileMeta {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .tabsRow {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    row-gap: 16px;
+  }
+
+  .tabValue {
+    font-size: 1.6rem;
+  }
+}

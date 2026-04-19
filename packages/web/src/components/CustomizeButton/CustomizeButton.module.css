@@ -28,9 +28,23 @@
   color: var(--accent);
 }
 
-.customizeIcon {
-  width: 14px;
-  height: 14px;
-  opacity: 0.5;
+/* Persistent shortcut hint. Same visual weight as the kbd badges in the
+ * customize strip so the two read as one keyboard vocabulary. Hidden when
+ * active (pressed) — the button is already the visible affordance, and
+ * showing the open-shortcut while the menu is open suggests the wrong
+ * action. */
+.kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--ghost);
+  border-radius: 3px;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--soft);
+  line-height: 1;
   flex-shrink: 0;
 }

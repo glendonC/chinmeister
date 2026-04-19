@@ -3,6 +3,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useSyncExternalStore,
   type CSSProperties,
 } from 'react';
@@ -31,6 +32,7 @@ import StatusState from '../../components/StatusState/StatusState.jsx';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import KeyboardHint from '../../components/KeyboardHint/KeyboardHint.jsx';
 import CustomizeButton from '../../components/CustomizeButton/CustomizeButton.jsx';
+import EditModePill from '../../components/EditModePill/EditModePill.js';
 import RangePills from '../../components/RangePills/RangePills.jsx';
 import {
   ShimmerText,
@@ -137,18 +139,33 @@ export default function ProjectView(_props: Props) {
     useSensor(KeyboardSensor),
   );
   const [catalogDragging, setCatalogDragging] = useState<CatalogDragPayload | null>(null);
+  // Sortable reorder state — captured at drag start so the DragOverlay
+  // can render the dragged widget at its real cell dimensions. Same
+  // rationale as in OverviewView: keeps the moving widget sized exactly
+  // to what the user grabbed instead of inflating past its grid track.
+  const [sortableDragging, setSortableDragging] = useState<{
+    id: string;
+    w: number;
+    h: number;
+  } | null>(null);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     const activeId = String(event.active.id);
     if (activeId.startsWith('catalog:')) {
       const data = event.active.data.current as CatalogDragPayload | undefined;
       if (data) setCatalogDragging(data);
+      return;
+    }
+    const rect = event.active.rect.current.initial;
+    if (rect) {
+      setSortableDragging({ id: activeId, w: rect.width, h: rect.height });
     }
   }, []);
 
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       setCatalogDragging(null);
+      setSortableDragging(null);
       const { active, over } = event;
       if (!over) return;
       const activeId = String(active.id);
@@ -177,7 +194,55 @@ export default function ProjectView(_props: Props) {
 
   const handleDragCancel = useCallback(() => {
     setCatalogDragging(null);
+    setSortableDragging(null);
   }, []);
+
+  // `c` opens the customize menu, `r` toggles rearrange mode, `Esc`
+  // exits rearrange when the user is stranded without the catalog open.
+  // Gated to analytical tabs because that's where the Customize button
+  // itself renders — wiring the shortcuts on the Memory tab would
+  // surface controls whose affordance isn't visible.
+  //
+  // Refs (not deps) for `catalogOpen` / `editing` so toggling either
+  // doesn't re-mount the window listener — listener churn during a drag
+  // (e.g., the user hits R mid-flow) was a candidate jank source.
+  const catalogOpenRef = useRef(catalogOpen);
+  const editingRef = useRef(editing);
+  useEffect(() => {
+    catalogOpenRef.current = catalogOpen;
+  }, [catalogOpen]);
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
+  useEffect(() => {
+    if (isMobile || !isAnalytical) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (target.isContentEditable) return;
+      }
+      if (e.key === 'c' || e.key === 'C') {
+        e.preventDefault();
+        setCatalogOpen((p) => !p);
+        return;
+      }
+      if (!catalogOpenRef.current && (e.key === 'r' || e.key === 'R')) {
+        e.preventDefault();
+        setEditing((p) => !p);
+        return;
+      }
+      if (!catalogOpenRef.current && editingRef.current && e.key === 'Escape') {
+        e.preventDefault();
+        setEditing(false);
+        return;
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, [isMobile, isAnalytical]);
 
   const handleDeleteMemory = useCallback(
     async (id: string) => {
@@ -188,17 +253,19 @@ export default function ProjectView(_props: Props) {
   );
 
   // Derive LiveAgent shape from project members for widgets that consume it.
-  // Empty array is acceptable — analytical widgets don't require it.
+  // files live under m.activity.files on project-scope Members (distinct from
+  // the flat shape used by Overview's ActiveMemberSummary).
   const liveAgents: LiveAgent[] = useMemo(() => {
     if (!activeTeamId) return [];
     return activeAgents.map((m) => ({
       agent_id: m.agent_id,
       handle: m.handle,
       host_tool: m.host_tool || 'unknown',
-      agent_surface: (m as { agent_surface?: string | null }).agent_surface ?? null,
-      files: (m as { files?: string[] }).files ?? [],
-      summary: (m as { summary?: string | null }).summary ?? null,
-      session_minutes: (m as { session_minutes?: number | null }).session_minutes ?? null,
+      agent_surface: m.agent_surface ?? null,
+      files: m.activity?.files ?? [],
+      summary: m.activity?.summary ?? null,
+      session_minutes: m.session_minutes ?? null,
+      seconds_since_update: m.seconds_since_update ?? null,
       teamName: projectLabel,
       teamId: activeTeamId,
     }));
@@ -210,6 +277,28 @@ export default function ProjectView(_props: Props) {
     teamActions.selectTeam(id);
     navigate('project', id);
   }, []);
+
+  // Stable render callback for WidgetGrid. Placed here, after the data
+  // dependencies it captures, because they're declared further down the
+  // component body. Without useCallback, this arrow is a new reference on
+  // every render, which busts WidgetGrid's outer memo and re-creates
+  // every WidgetRenderer JSX wrapper inside. WidgetRenderer is memo'd, so
+  // shallow-stable prop references let it skip rendering when only
+  // unrelated state changes.
+  const renderWidget = useCallback(
+    (id: string) => (
+      <WidgetRenderer
+        widgetId={id}
+        analytics={analytics}
+        conversationData={conversationData}
+        summaries={summaries}
+        liveAgents={liveAgents}
+        locks={locks}
+        selectTeam={selectTeam}
+      />
+    ),
+    [analytics, conversationData, summaries, liveAgents, locks, selectTeam],
+  );
 
   const stats: StatEntry[] = [
     {
@@ -357,6 +446,7 @@ export default function ProjectView(_props: Props) {
                 <CustomizeButton
                   active={catalogOpen}
                   onClick={() => setCatalogOpen(!catalogOpen)}
+                  kbd="c"
                 />
               )}
               {activeTab === 'activity' && activeTeamId && (
@@ -412,17 +502,7 @@ export default function ProjectView(_props: Props) {
                 <WidgetGrid
                   slots={activeSlots}
                   editing={editing && !isMobile}
-                  renderWidget={(id) => (
-                    <WidgetRenderer
-                      widgetId={id}
-                      analytics={analytics}
-                      conversationData={conversationData}
-                      summaries={summaries}
-                      liveAgents={liveAgents}
-                      locks={locks}
-                      selectTeam={selectTeam}
-                    />
-                  )}
+                  renderWidget={renderWidget}
                   onReorder={currentLayout.reorderWidgets}
                   onRemove={currentLayout.removeWidget}
                   onSlotSize={currentLayout.setSlotSize}
@@ -456,11 +536,26 @@ export default function ProjectView(_props: Props) {
             viewScope="project"
           />
         )}
+
+        {/* Floating exit affordance when rearranging without the catalog. */}
+        {editing && !catalogOpen && !isMobile && isAnalytical && (
+          <EditModePill onDone={() => setEditing(false)} />
+        )}
       </div>
-      <DragOverlay dropAnimation={null} modifiers={[snapChipToCursor]}>
+      <DragOverlay
+        dropAnimation={null}
+        modifiers={catalogDragging ? [snapChipToCursor] : undefined}
+      >
         {catalogDragging ? (
           <div className={overviewStyles.dragOverlayCard}>
             <span className={overviewStyles.dragOverlayName}>{catalogDragging.name}</span>
+          </div>
+        ) : sortableDragging ? (
+          <div
+            className={overviewStyles.dragOverlayWidget}
+            style={{ width: sortableDragging.w, height: sortableDragging.h }}
+          >
+            {renderWidget(sortableDragging.id)}
           </div>
         ) : null}
       </DragOverlay>

@@ -91,6 +91,16 @@ function resolveAliases(slots: WidgetSlot[]): WidgetSlot[] {
   return out;
 }
 
+// 2026-04: catalog `w` for live-agents was 12 until we narrowed it to 6 to
+// match DEFAULT_LAYOUT. Users who toggled live-agents off/on (or who
+// drag-added it from the catalog) before the fix have it persisted at
+// colSpan: 12 — full width — even though the curated default has always
+// placed it at half-width next to live-conflicts. Snap that one slot back.
+// Removable once enough time has passed that stale storage has cycled out.
+function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => (s.id === 'live-agents' && s.colSpan === 12 ? { ...s, colSpan: 6 } : s));
+}
+
 function migrateFromLegacyKeys(): DashboardLayout | null {
   try {
     const idsRaw = localStorage.getItem(LEGACY_IDS_KEY);
@@ -131,12 +141,16 @@ function loadDashboard(): DashboardLayout {
         return migrated;
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
-        const valid = resolveAliases(parsed.widgets as WidgetSlot[]);
-        // Persist alias expansion so it only runs once per load path.
-        if (valid.length !== (parsed.widgets as WidgetSlot[]).length) {
-          saveDashboard({ version: STORAGE_VERSION, widgets: valid });
+        const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
+        const healed = healLiveAgentsWidth(expanded);
+        const stored = parsed.widgets as WidgetSlot[];
+        const changed =
+          healed.length !== stored.length ||
+          healed.some((s, i) => s.id !== stored[i]?.id || s.colSpan !== stored[i]?.colSpan);
+        if (changed) {
+          saveDashboard({ version: STORAGE_VERSION, widgets: healed });
         }
-        return { version: STORAGE_VERSION, widgets: valid };
+        return { version: STORAGE_VERSION, widgets: healed };
       }
     }
   } catch {

@@ -5,9 +5,22 @@ interface Props {
   active?: boolean;
   onClick: () => void;
   label?: string;
+  /**
+   * Optional keyboard shortcut to surface as a small kbd badge inside the
+   * button. Persistent across the active state so the button doesn't shift
+   * when toggled and so the shortcut stays discoverable while the user is
+   * mid-flow. The shortcut is expected to act as a toggle (open AND close)
+   * rather than open-only.
+   */
+  kbd?: string;
 }
 
-export default function CustomizeButton({ active = false, onClick, label = 'Customize' }: Props) {
+export default function CustomizeButton({
+  active = false,
+  onClick,
+  label = 'Customize',
+  kbd,
+}: Props) {
   return (
     <button
       type="button"
@@ -16,27 +29,7 @@ export default function CustomizeButton({ active = false, onClick, label = 'Cust
       aria-pressed={active}
     >
       {label}
-      <svg
-        className={styles.customizeIcon}
-        width="14"
-        height="14"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        stroke="currentColor"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path
-          d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z"
-          stroke="none"
-        />
-        <path d="M20 3v4" fill="none" />
-        <path d="M22 5h-4" fill="none" />
-        <path d="M4 17v2" fill="none" />
-        <path d="M5 18H3" fill="none" />
-      </svg>
+      {kbd && <kbd className={styles.kbd}>{kbd}</kbd>}
     </button>
   );
 }
