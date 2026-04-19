@@ -6,6 +6,7 @@ import { teamJsonRoute, teamRoute, doResult } from '../../lib/middleware.js';
 import { createLogger } from '../../lib/logger.js';
 import { requireString, validateTagsArray, withTeamRateLimit } from '../../lib/validation.js';
 import { generateEmbedding } from '../../lib/ai.js';
+import { detectSecrets } from '@chinwag/shared/secret-detector.js';
 import {
   MAX_MEMORY_TEXT_LENGTH,
   MAX_TAGS_PER_MEMORY,
@@ -25,6 +26,35 @@ export const handleTeamSaveMemory = teamJsonRoute(async ({ body, user, env, team
   if (!text) return json({ error: 'text is required' }, 400);
   if (text.length > MAX_MEMORY_TEXT_LENGTH)
     return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
+
+  // Secret detection: block writes containing recognised credential formats.
+  // Memory is team-shared and durable; one leaked credential reaches everyone
+  // until explicit deletion. Caller can pass `force: true` to override for
+  // legitimate "documenting the pattern" memories (logged for audit).
+  const force = body.force === true;
+  if (!force) {
+    const secrets = detectSecrets(text);
+    if (secrets.length > 0) {
+      return json(
+        {
+          error: 'Memory contains potential secret(s); refusing to store',
+          code: 'SECRET_DETECTED',
+          secrets: secrets.map((s) => ({ type: s.type, preview: s.preview })),
+          hint: 'If this is intentional documentation, retry with force: true',
+        },
+        422,
+      );
+    }
+  } else {
+    const secrets = detectSecrets(text);
+    if (secrets.length > 0) {
+      log.warn('memory save with force=true bypassed secret detection', {
+        handle: user.handle,
+        types: secrets.map((s) => s.type),
+        count: secrets.length,
+      });
+    }
+  }
 
   // Validate tags before moderation — no point running AI on invalid input
   const tagsResult = validateTagsArray(body.tags, MAX_TAGS_PER_MEMORY);
@@ -163,6 +193,32 @@ export const handleTeamUpdateMemory = teamJsonRoute(
         return json({ error: `text must be ${MAX_MEMORY_TEXT_LENGTH} characters or less` }, 400);
       text = parsed;
     }
+    // Secret detection (same policy as save). force: true bypasses with audit log.
+    const force = body.force === true;
+    if (text !== undefined && !force) {
+      const secrets = detectSecrets(text);
+      if (secrets.length > 0) {
+        return json(
+          {
+            error: 'Memory contains potential secret(s); refusing to update',
+            code: 'SECRET_DETECTED',
+            secrets: secrets.map((s) => ({ type: s.type, preview: s.preview })),
+            hint: 'If this is intentional documentation, retry with force: true',
+          },
+          422,
+        );
+      }
+    } else if (text !== undefined && force) {
+      const secrets = detectSecrets(text);
+      if (secrets.length > 0) {
+        log.warn('memory update with force=true bypassed secret detection', {
+          handle: user.handle,
+          types: secrets.map((s) => s.type),
+          count: secrets.length,
+        });
+      }
+    }
+
     // Moderation: full AI check on updated text (same pattern as save)
     if (text !== undefined) {
       const modResult = await checkContent(text, env);

@@ -59,6 +59,9 @@ export {
 // error-utils
 export { formatError, formatErrorChain, getHttpStatus, getErrorCode } from './error-utils.js';
 
+// secret-detector
+export { detectSecrets, type SecretMatch } from './secret-detector.js';
+
 // logger
 export { createLogger, type Logger } from './logger.js';
 

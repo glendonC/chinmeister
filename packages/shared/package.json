@@ -109,6 +109,10 @@
     "./budget-config.js": {
       "types": "./dist/budget-config.d.ts",
       "import": "./dist/budget-config.js"
+    },
+    "./secret-detector.js": {
+      "types": "./dist/secret-detector.d.ts",
+      "import": "./dist/secret-detector.js"
     }
   },
   "scripts": {
