@@ -144,8 +144,45 @@ function FilesInPlayWidget({ liveAgents }: WidgetBodyProps) {
   );
 }
 
+function ClaimedFilesWidget({ locks }: WidgetBodyProps) {
+  const sorted = useMemo(
+    () => [...locks].sort((a, b) => (b.minutes_held ?? 0) - (a.minutes_held ?? 0)),
+    [locks],
+  );
+
+  if (sorted.length === 0) {
+    return <SectionEmpty>No claimed files</SectionEmpty>;
+  }
+
+  return (
+    <div className={styles.dataList}>
+      {sorted.map((lock, i) => {
+        const meta = getToolMeta(lock.host_tool ?? 'unknown');
+        const minutes = lock.minutes_held ?? 0;
+        return (
+          <div
+            key={`${lock.agent_id ?? lock.handle}\u0000${lock.file_path}`}
+            className={styles.dataRow}
+            style={{ '--row-index': i } as CSSProperties}
+            title={lock.file_path}
+          >
+            <span className={styles.dataName}>{lock.file_path}</span>
+            <div className={styles.dataMeta}>
+              <span className={styles.dataStat} style={{ color: meta.color }}>
+                {lock.handle}
+              </span>
+              <span className={styles.dataStat}>{formatDuration(minutes)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export const liveWidgets: WidgetRegistry = {
   'live-agents': LiveAgentsWidget,
   'live-conflicts': LiveConflictsWidget,
   'files-in-play': FilesInPlayWidget,
+  'claimed-files': ClaimedFilesWidget,
 };

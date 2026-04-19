@@ -1,5 +1,6 @@
 import type { ComponentType } from 'react';
 import type { UserAnalytics, ConversationAnalytics } from '../../lib/apiSchemas.js';
+import type { Lock } from '../../lib/apiSchemas.js';
 import type { LiveAgent } from '../../views/OverviewView/useOverviewData.js';
 
 export interface WidgetBodyProps {
@@ -7,6 +8,8 @@ export interface WidgetBodyProps {
   conversationData: ConversationAnalytics;
   summaries: Array<Record<string, unknown>>;
   liveAgents: LiveAgent[];
+  /** File claims from the team context. Empty in cross-project (Overview) scope. */
+  locks: Lock[];
   selectTeam: (teamId: string) => void;
 }
 

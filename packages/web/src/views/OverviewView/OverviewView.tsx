@@ -280,6 +280,7 @@ function GridContainer({
                   conversationData={conversationData}
                   summaries={summaries}
                   liveAgents={liveAgents}
+                  locks={[]}
                   selectTeam={selectTeam}
                 />
               </div>

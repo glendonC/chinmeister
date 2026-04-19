@@ -39,7 +39,7 @@ import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
 import { WidgetCatalog } from '../../widgets/WidgetCatalog.js';
 import { getWidget } from '../../widgets/widget-catalog.js';
 import type { LiveAgent } from '../OverviewView/useOverviewData.js';
-import type { UserAnalytics, ConversationAnalytics } from '../../lib/apiSchemas.js';
+import type { UserAnalytics, ConversationAnalytics, Lock } from '../../lib/apiSchemas.js';
 
 import overviewStyles from '../OverviewView/OverviewView.module.css';
 import styles from './ProjectView.module.css';
@@ -106,6 +106,7 @@ interface ProjectGridContainerProps {
   conversationData: ConversationAnalytics;
   summaries: Array<Record<string, unknown>>;
   liveAgents: LiveAgent[];
+  locks: Lock[];
   selectTeam: (id: string) => void;
   removeWidget: (id: string) => void;
 }
@@ -121,6 +122,7 @@ function ProjectGridContainer({
   conversationData,
   summaries,
   liveAgents,
+  locks,
   selectTeam,
   removeWidget,
 }: ProjectGridContainerProps) {
@@ -210,6 +212,7 @@ function ProjectGridContainer({
                   conversationData={conversationData}
                   summaries={summaries}
                   liveAgents={liveAgents}
+                  locks={locks}
                   selectTeam={selectTeam}
                 />
               </div>
@@ -251,6 +254,7 @@ export default function ProjectView(_props: Props) {
     memories,
     memoryBreakdown,
     availableSpawnTools,
+    locks,
   } = useProjectData();
 
   const { activeTab, setActiveTab, hint, ref: statsRef } = useTabs(PROJECT_TABS);
@@ -505,6 +509,7 @@ export default function ProjectView(_props: Props) {
                 conversationData={conversationData}
                 summaries={summaries}
                 liveAgents={liveAgents}
+                locks={locks}
                 selectTeam={selectTeam}
                 onLayoutChange={(current) => currentLayout.updatePositions(current)}
                 onInteractionStart={currentLayout.beginInteraction}

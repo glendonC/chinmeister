@@ -125,6 +125,19 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 2,
     dataKeys: ['dashboard'],
   },
+  {
+    id: 'claimed-files',
+    name: 'claimed files',
+    description: 'Files reserved by agents via chinwag_claim_files',
+    category: 'live',
+    scope: 'project',
+    viz: 'data-list',
+    w: 6,
+    h: 3,
+    minW: 4,
+    minH: 2,
+    dataKeys: ['dashboard'],
+  },
 
   // ── Usage (KPI stats) ─────────────────
   {
