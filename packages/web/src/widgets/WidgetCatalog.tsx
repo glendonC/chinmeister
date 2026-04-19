@@ -8,14 +8,75 @@ import React, {
 } from 'react';
 import { createPortal } from 'react-dom';
 import clsx from 'clsx';
+import { useDraggable } from '@dnd-kit/core';
 import {
   WIDGET_CATALOG,
   CATEGORIES,
   getWidget,
+  type WidgetDef,
   type WidgetViz,
   type WidgetCategory,
 } from './widget-catalog.js';
 import styles from './WidgetCatalog.module.css';
+
+/** dnd-kit draggable id for a catalog row. Prefixed so other app draggables
+ *  don't collide with catalog ids. */
+export const catalogDraggableId = (widgetId: string) => `catalog:${widgetId}`;
+
+// CatalogRow is defined here (not at the bottom of the file) so the
+// useDraggable import has a consumer in the same edit — otherwise on-save
+// "remove unused imports" strips it between edits.
+function CatalogRow({
+  widget,
+  active,
+  showDescs,
+  onToggle,
+  onHover,
+  onHoverEnd,
+}: {
+  widget: WidgetDef;
+  active: boolean;
+  showDescs: boolean;
+  onToggle: () => void;
+  onHover: (el: HTMLElement) => void;
+  onHoverEnd: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
+    id: catalogDraggableId(widget.id),
+    data: { widgetId: widget.id, w: widget.w, h: widget.h, name: widget.name },
+    disabled: active,
+  });
+  const canDrag = !active;
+  return (
+    <div
+      ref={setNodeRef}
+      className={clsx(
+        styles.panelRow,
+        canDrag && styles.panelRowDraggable,
+        isDragging && styles.panelRowDragging,
+      )}
+      onClick={onToggle}
+      onMouseEnter={(e) => onHover(e.currentTarget)}
+      onMouseLeave={onHoverEnd}
+      {...(canDrag ? listeners : {})}
+      {...(canDrag ? attributes : {})}
+    >
+      <div className={styles.panelRowInfo}>
+        <div className={styles.panelRowName}>{widget.name}</div>
+        {showDescs && <div className={styles.panelRowDesc}>{widget.description}</div>}
+      </div>
+      <button
+        type="button"
+        className={clsx(styles.toggle, active && styles.toggleOn)}
+        aria-label={active ? `Remove ${widget.name}` : `Add ${widget.name}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggle();
+        }}
+      />
+    </div>
+  );
+}
 
 // ── Metadata labels ───────────────────────────────
 
@@ -684,27 +745,15 @@ export function WidgetCatalog({
             filteredWidgets.map((w) => {
               const active = widgetIds.includes(w.id);
               return (
-                <div
+                <CatalogRow
                   key={w.id}
-                  className={styles.panelRow}
-                  onClick={() => toggleWidget(w.id)}
-                  onMouseEnter={(e) => handleRowHover(w.id, e.currentTarget)}
-                  onMouseLeave={() => handleRowHover(null)}
-                >
-                  <div className={styles.panelRowInfo}>
-                    <div className={styles.panelRowName}>{w.name}</div>
-                    {showDescs && <div className={styles.panelRowDesc}>{w.description}</div>}
-                  </div>
-                  <button
-                    type="button"
-                    className={clsx(styles.toggle, active && styles.toggleOn)}
-                    aria-label={active ? `Remove ${w.name}` : `Add ${w.name}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      toggleWidget(w.id);
-                    }}
-                  />
-                </div>
+                  widget={w}
+                  active={active}
+                  showDescs={showDescs}
+                  onToggle={() => toggleWidget(w.id)}
+                  onHover={(el) => handleRowHover(w.id, el)}
+                  onHoverEnd={() => handleRowHover(null)}
+                />
               );
             })
           )}

@@ -1,8 +1,172 @@
-import { useMemo, useState, useCallback, useRef, useEffect, useSyncExternalStore } from 'react';
+import {
+  useMemo,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useSyncExternalStore,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import clsx from 'clsx';
 import { useShallow } from 'zustand/react/shallow';
 import { Responsive } from 'react-grid-layout';
 import 'react-grid-layout/css/styles.css';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  pointerWithin,
+  useSensor,
+  useSensors,
+  useDroppable,
+  useDndMonitor,
+  type DragStartEvent,
+  type DragMoveEvent,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+
+// ── Drag-from-catalog (dnd-kit) ──────────────────
+// Every import above has a consumer in the helpers below so on-save
+// "remove unused imports" doesn't strip them between edits.
+
+type DragPayload = { widgetId: string; w: number; h: number; name: string };
+export const GRID_DROPPABLE_ID = 'overview-grid';
+
+// Grid math at the lg/md breakpoint. sm/xs/xxs are stacked and the catalog
+// is hidden on mobile, so we only support snap on the 12-col desktop layout.
+const DND_GRID_COLS = 12;
+const DND_MARGIN_X = 24;
+const DND_MARGIN_Y = 24;
+const DND_ROW_HEIGHT = 80;
+
+// Hook mounted inside the droppable container. Returns the droppable ref +
+// the currently-snapped cell so the consumer can render a preview.
+function useGridDrop(
+  containerRef: RefObject<HTMLDivElement | null>,
+  width: number,
+  onDrop: (id: string, x: number, y: number) => void,
+) {
+  const { setNodeRef } = useDroppable({ id: GRID_DROPPABLE_ID });
+  const [snap, setSnap] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
+  const snapRef = useRef(snap);
+  useEffect(() => {
+    snapRef.current = snap;
+  }, [snap]);
+
+  const cellPx = useMemo(() => {
+    const colWidth = Math.max(0, (width - (DND_GRID_COLS - 1) * DND_MARGIN_X) / DND_GRID_COLS);
+    return {
+      colWidth,
+      cellFullW: colWidth + DND_MARGIN_X,
+      cellFullH: DND_ROW_HEIGHT + DND_MARGIN_Y,
+    };
+  }, [width]);
+
+  // Compute the snap cell from a cursor position. Always returns a clamped
+  // valid cell — no rect hit-test here. Whether to *render* the preview is
+  // gated separately on dnd-kit's pointerWithin collision via event.over.
+  const computeSnap = useCallback(
+    (pointerX: number, pointerY: number, w: number, h: number) => {
+      const el = containerRef.current;
+      if (!el) return null;
+      const rect = el.getBoundingClientRect();
+      const relX = pointerX - rect.left;
+      const relY = pointerY - rect.top;
+      let x = Math.round((relX - (w / 2) * cellPx.cellFullW) / cellPx.cellFullW);
+      let y = Math.round((relY - (h / 2) * cellPx.cellFullH) / cellPx.cellFullH);
+      x = Math.max(0, Math.min(x, DND_GRID_COLS - w));
+      y = Math.max(0, y);
+      return { x, y, w, h };
+    },
+    [containerRef, cellPx],
+  );
+
+  useDndMonitor({
+    onDragStart() {
+      setIsDragActive(true);
+    },
+    onDragMove(event: DragMoveEvent) {
+      const data = event.active.data.current as DragPayload | undefined;
+      if (!data) return;
+      // Gate on dnd-kit's own hit-test (pointerWithin). If the cursor isn't
+      // over the grid droppable, clear the preview.
+      if (event.over?.id !== GRID_DROPPABLE_ID) {
+        setSnap(null);
+        return;
+      }
+      const activator = event.activatorEvent as MouseEvent | TouchEvent;
+      const sx =
+        'clientX' in activator
+          ? (activator as MouseEvent).clientX
+          : ((activator as TouchEvent).touches?.[0]?.clientX ?? 0);
+      const sy =
+        'clientY' in activator
+          ? (activator as MouseEvent).clientY
+          : ((activator as TouchEvent).touches?.[0]?.clientY ?? 0);
+      setSnap(computeSnap(sx + event.delta.x, sy + event.delta.y, data.w, data.h));
+    },
+    onDragEnd(event: DragEndEvent) {
+      const data = event.active.data.current as DragPayload | undefined;
+      const cur = snapRef.current;
+      if (data && cur && event.over?.id === GRID_DROPPABLE_ID) {
+        onDrop(data.widgetId, cur.x, cur.y);
+      }
+      setSnap(null);
+      setIsDragActive(false);
+    },
+    onDragCancel() {
+      setSnap(null);
+      setIsDragActive(false);
+    },
+  });
+
+  return { setDroppableRef: setNodeRef, snap, cellPx, isDragActive };
+}
+
+// Card rendered inside dnd-kit's DragOverlay — chromeless, mono label.
+function WidgetDragPreview({ name, w, h }: { name: string; w: number; h: number }) {
+  return (
+    <div className={styles.dragOverlayCard}>
+      <span className={styles.dragOverlayName}>{name}</span>
+      <span className={styles.dragOverlayMeta}>
+        {w}×{h}
+      </span>
+    </div>
+  );
+}
+
+// Provider that wraps the dashboard tree. Owns `dragging` state for the
+// DragOverlay; actual drop handling lives in useGridDrop inside GridContainer.
+function OverviewDnd({
+  children,
+}: {
+  children: (state: { dragging: DragPayload | null }) => ReactNode;
+}) {
+  const pointer = useSensor(PointerSensor, { activationConstraint: { distance: 5 } });
+  const keyboard = useSensor(KeyboardSensor);
+  const sensors = useSensors(pointer, keyboard);
+  const [dragging, setDragging] = useState<DragPayload | null>(null);
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={pointerWithin}
+      onDragStart={(event: DragStartEvent) => {
+        const data = event.active.data.current as DragPayload | undefined;
+        if (data) setDragging(data);
+      }}
+      onDragEnd={() => setDragging(null)}
+      onDragCancel={() => setDragging(null)}
+    >
+      {children({ dragging })}
+      <DragOverlay dropAnimation={null}>
+        {dragging ? <WidgetDragPreview name={dragging.name} w={dragging.w} h={dragging.h} /> : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
 
 interface RGLLayout {
   i: string;
@@ -121,6 +285,7 @@ function GridContainer({
   selectTeam,
   removeWidget,
   recentlyAddedId,
+  onDropWidget,
 }: {
   editing: boolean;
   gridLayout: RGLLayout[];
@@ -136,9 +301,25 @@ function GridContainer({
   selectTeam: (id: string) => void;
   removeWidget: (id: string) => void;
   recentlyAddedId: string | null;
+  onDropWidget: (id: string, x: number, y: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(1200);
+
+  // Wire the grid as a dnd-kit drop target. Returns snap cell + cell px so we
+  // can render the preview ghost at the target location.
+  const { setDroppableRef, snap, cellPx, isDragActive } = useGridDrop(
+    containerRef,
+    width,
+    onDropWidget,
+  );
+  const setContainerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      containerRef.current = el;
+      setDroppableRef(el);
+    },
+    [setDroppableRef],
+  );
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -226,7 +407,25 @@ function GridContainer({
   }, [highlightedId]);
 
   return (
-    <div ref={containerRef} className={clsx(editing && styles.widgetEditing)}>
+    <div
+      ref={setContainerRef}
+      className={clsx(editing && styles.widgetEditing)}
+      // Extend the droppable's hit area below the last widget ONLY while a
+      // drag is in progress — otherwise the extra height would leak into the
+      // page's scroll geometry at rest.
+      style={{ position: 'relative', paddingBottom: isDragActive ? 240 : 0 }}
+    >
+      {snap && cellPx.colWidth > 0 && (
+        <div
+          className={styles.snapPreview}
+          style={{
+            width: snap.w * cellPx.colWidth + (snap.w - 1) * DND_MARGIN_X,
+            height: snap.h * DND_ROW_HEIGHT + (snap.h - 1) * DND_MARGIN_Y,
+            transform: `translate(${snap.x * cellPx.cellFullW}px, ${snap.y * cellPx.cellFullH}px)`,
+          }}
+          aria-hidden="true"
+        />
+      )}
       {width > 0 && (
         <Responsive
           {...({
@@ -501,6 +700,7 @@ export default function OverviewView() {
     widgetIds,
     gridLayout: storedGridLayout,
     toggleWidget: toggleWidgetRaw,
+    addWidgetAt,
     removeWidget: removeWidgetRaw,
     updatePositions,
     beginInteraction,
@@ -559,6 +759,16 @@ export default function OverviewView() {
     clearAllRaw();
     announce('Cleared all widgets');
   }, [clearAllRaw, announce]);
+
+  const handleDropWidget = useCallback(
+    (id: string, x: number, y: number) => {
+      const def = getWidget(id);
+      addWidgetAt(id, x, y);
+      if (def) announce(`Added ${def.name}`);
+      setRecentlyAddedId(id);
+    },
+    [addWidgetAt, announce],
+  );
 
   const handleLayoutChange = useCallback(
     (currentLayout: RGLLayout[], _allLayouts: RGLLayouts) => {
@@ -666,135 +876,140 @@ export default function OverviewView() {
   const gridLayout = storedGridLayout.filter((l) => activeWidgets.includes(l.i));
 
   return (
-    <div className={styles.overview}>
-      {liveShifted ? (
-        <LiveNowView
-          liveAgents={liveAgents}
-          focusAgentId={focusAgentId}
-          onBack={closeLive}
-          onOpenProject={(teamId) => {
-            closeLive();
-            selectTeam(teamId);
-            navigate('project', teamId);
-          }}
-          onOpenTools={() => {
-            closeLive();
-            navigate('tools');
-          }}
-        />
-      ) : (
-        <>
-          {/* ── Header ── */}
-          <section className={styles.header}>
-            <ViewHeader
-              eyebrow="Overview"
-              title={
-                <>
-                  Welcome back
-                  {user?.handle ? (
-                    <>
-                      {', '}
-                      <span style={{ color: userColor }}>{user.handle}</span>
-                    </>
-                  ) : null}
-                  .
-                </>
-              }
+    <OverviewDnd>
+      {() => (
+        <div className={styles.overview}>
+          {liveShifted ? (
+            <LiveNowView
+              liveAgents={liveAgents}
+              focusAgentId={focusAgentId}
+              onBack={closeLive}
+              onOpenProject={(teamId) => {
+                closeLive();
+                selectTeam(teamId);
+                navigate('project', teamId);
+              }}
+              onOpenTools={() => {
+                closeLive();
+                navigate('tools');
+              }}
             />
-
-            {failedTeams.length > 0 && (
-              <div className={styles.summaryNotice}>
-                <span className={styles.summaryNoticeLabel}>
-                  {failedTeams.length} {failedTeams.length === 1 ? 'project' : 'projects'}{' '}
-                  unavailable
-                </span>
-                <span className={styles.summaryNoticeText}>{failedLabel}</span>
-              </div>
-            )}
-
-            <div className={styles.rangeRow}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <ProjectFilter
-                  teams={teams}
-                  projectFilter={projectFilter}
-                  selectTeam={selectTeam}
+          ) : (
+            <>
+              {/* ── Header ── */}
+              <section className={styles.header}>
+                <ViewHeader
+                  eyebrow="Overview"
+                  title={
+                    <>
+                      Welcome back
+                      {user?.handle ? (
+                        <>
+                          {', '}
+                          <span style={{ color: userColor }}>{user.handle}</span>
+                        </>
+                      ) : null}
+                      .
+                    </>
+                  }
                 />
-                {!isMobile && (
-                  <CustomizeButton
-                    active={catalogOpen}
-                    onClick={() => setCatalogOpen(!catalogOpen)}
-                  />
-                )}
-                <RangePills value={rangeDays} onChange={setRangeDays} options={RANGES} />
-              </div>
-            </div>
-          </section>
 
-          {analytics.degraded && (
-            <div className={styles.summaryNotice}>
-              <span className={styles.summaryNoticeLabel}>Partial data</span>
-              <span className={styles.summaryNoticeText}>
-                Analytics from {analytics.teams_included} of your projects. Some projects could not
-                be reached.
-              </span>
-            </div>
+                {failedTeams.length > 0 && (
+                  <div className={styles.summaryNotice}>
+                    <span className={styles.summaryNoticeLabel}>
+                      {failedTeams.length} {failedTeams.length === 1 ? 'project' : 'projects'}{' '}
+                      unavailable
+                    </span>
+                    <span className={styles.summaryNoticeText}>{failedLabel}</span>
+                  </div>
+                )}
+
+                <div className={styles.rangeRow}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <ProjectFilter
+                      teams={teams}
+                      projectFilter={projectFilter}
+                      selectTeam={selectTeam}
+                    />
+                    {!isMobile && (
+                      <CustomizeButton
+                        active={catalogOpen}
+                        onClick={() => setCatalogOpen(!catalogOpen)}
+                      />
+                    )}
+                    <RangePills value={rangeDays} onChange={setRangeDays} options={RANGES} />
+                  </div>
+                </div>
+              </section>
+
+              {analytics.degraded && (
+                <div className={styles.summaryNotice}>
+                  <span className={styles.summaryNoticeLabel}>Partial data</span>
+                  <span className={styles.summaryNoticeText}>
+                    Analytics from {analytics.teams_included} of your projects. Some projects could
+                    not be reached.
+                  </span>
+                </div>
+              )}
+
+              {/* ── Widget Grid ── */}
+              <div className={styles.gridBleed}>
+                <GridContainer
+                  editing={editing && !isMobile}
+                  gridLayout={gridLayout}
+                  onLayoutChange={handleLayoutChange}
+                  onInteractionStart={beginInteraction}
+                  onInteractionStop={commitLayout}
+                  activeWidgets={activeWidgets}
+                  analytics={analytics}
+                  conversationData={conversationData}
+                  summaries={sortedSummaries as Array<Record<string, unknown>>}
+                  liveAgents={liveAgents}
+                  selectTeam={selectTeam}
+                  removeWidget={removeWidget}
+                  recentlyAddedId={recentlyAddedId}
+                  onDropWidget={handleDropWidget}
+                />
+              </div>
+
+              {/* ── Single-project hint (floating, bottom-center of content column) ── */}
+              {teams.length === 1 &&
+                !catalogOpen &&
+                !editing &&
+                !singleProjectHint.isDismissed(teams[0].team_id) && (
+                  <InlineHint
+                    actionLabel="Open dashboard"
+                    onAction={() => {
+                      selectTeam(teams[0].team_id);
+                      navigate('project', teams[0].team_id);
+                    }}
+                    onDismiss={() => singleProjectHint.dismiss(teams[0].team_id)}
+                  >
+                    For a single project, the project dashboard has deeper detail.
+                  </InlineHint>
+                )}
+            </>
           )}
 
-          {/* ── Widget Grid ── */}
-          <div className={styles.gridBleed}>
-            <GridContainer
-              editing={editing && !isMobile}
-              gridLayout={gridLayout}
-              onLayoutChange={handleLayoutChange}
-              onInteractionStart={beginInteraction}
-              onInteractionStop={commitLayout}
-              activeWidgets={activeWidgets}
-              analytics={analytics}
-              conversationData={conversationData}
-              summaries={sortedSummaries as Array<Record<string, unknown>>}
-              liveAgents={liveAgents}
-              selectTeam={selectTeam}
-              removeWidget={removeWidget}
-              recentlyAddedId={recentlyAddedId}
-            />
+          {/* Visually-hidden live region for layout-change announcements. */}
+          <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
+            {announcement}
           </div>
 
-          {/* ── Single-project hint (floating, bottom-center of content column) ── */}
-          {teams.length === 1 &&
-            !catalogOpen &&
-            !editing &&
-            !singleProjectHint.isDismissed(teams[0].team_id) && (
-              <InlineHint
-                actionLabel="Open dashboard"
-                onAction={() => {
-                  selectTeam(teams[0].team_id);
-                  navigate('project', teams[0].team_id);
-                }}
-                onDismiss={() => singleProjectHint.dismiss(teams[0].team_id)}
-              >
-                For a single project, the project dashboard has deeper detail.
-              </InlineHint>
-            )}
-        </>
+          {/* ── Widget catalog ── */}
+          <WidgetCatalog
+            open={catalogOpen}
+            onClose={() => setCatalogOpen(false)}
+            widgetIds={widgetIds}
+            toggleWidget={toggleWidget}
+            editing={editing}
+            setEditing={setEditing}
+            resetToDefault={resetToDefault}
+            clearAll={clearAll}
+            viewScope="overview"
+          />
+        </div>
       )}
-
-      {/* Visually-hidden live region for layout-change announcements. */}
-      <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
-        {announcement}
-      </div>
-
-      {/* ── Widget catalog ── */}
-      <WidgetCatalog
-        open={catalogOpen}
-        onClose={() => setCatalogOpen(false)}
-        widgetIds={widgetIds}
-        toggleWidget={toggleWidget}
-        editing={editing}
-        setEditing={setEditing}
-        resetToDefault={resetToDefault}
-        clearAll={clearAll}
-        viewScope="overview"
-      />
-    </div>
+    </OverviewDnd>
   );
 }

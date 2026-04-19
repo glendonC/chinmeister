@@ -328,6 +328,25 @@
   background: var(--ghost);
 }
 
+/* Draggable rows (not yet in layout). dnd-kit handles pointer events; we
+   just provide the grab affordance + keep text-selection from fighting. */
+.panelRowDraggable {
+  cursor: grab;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+
+.panelRowDraggable:active {
+  cursor: grabbing;
+}
+
+/* While this row is the active drag source, fade it so the DragOverlay
+   reads as the moving element. */
+.panelRowDragging {
+  opacity: 0.35;
+}
+
 .panelRowInfo {
   flex: 1;
   min-width: 0;

@@ -71,7 +71,10 @@
 
 /* ── Layout ── */
 .layout {
-  height: 100vh;
+  /* Min-height (not fixed height) so the layout fills the viewport when
+     content is short but grows with content when it's long. Document-level
+     scroll replaces the nested .main scroller. */
+  min-height: 100vh;
   display: grid;
   position: relative;
   grid-template-columns: calc(var(--sidebar-width-expanded) + var(--sidebar-margin)) 1fr;
@@ -85,7 +88,6 @@
 /* ── Main ── */
 .main {
   min-width: 0;
-  overflow-y: auto;
   background: var(--page-bg);
 }
 

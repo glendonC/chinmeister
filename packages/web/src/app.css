@@ -117,8 +117,9 @@
 
 html,
 body {
-  height: 100%;
-  overflow: hidden;
+  /* Body-level scroll. The sidebar is sticky within .layout; the page
+     header is always at scrollTop=0. Avoid nested scroll on .main. */
+  min-height: 100%;
 }
 
 body {
@@ -134,7 +135,7 @@ body {
 }
 
 #app {
-  height: 100%;
+  min-height: 100%;
 }
 
 code {
