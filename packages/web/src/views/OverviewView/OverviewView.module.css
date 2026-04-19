@@ -395,17 +395,17 @@
 .liveTableRow {
   display: grid;
   /* First three tracks match LiveNowView.agentsHeader/agentsRow so widget
-   * and detail columns align on the same data. Last track is `1fr` and
-   * holds the View pill (with justify-self: end inside). Using a single
-   * `1fr` (instead of `1fr auto`) keeps header and row tracks identical:
-   * an `auto` track would size to the row's View pill but collapse to 0
-   * in the empty header slot, shifting the earlier tracks and breaking
-   * header/data alignment. */
+   * and detail columns align on the same data. Last track holds the View
+   * pill with justify-self: end. `minmax(64px, 1fr)` (not plain `1fr` or
+   * `auto`) pins an explicit min so header and row resolve to the same
+   * track sizes: with plain `1fr` the implicit min is `auto`, which
+   * collapses to 0 for the empty header slot but ~50px for the row's
+   * View pill, throwing off the preceding columns. */
   grid-template-columns:
     minmax(180px, 220px)
     minmax(150px, 180px)
     minmax(160px, 220px)
-    1fr;
+    minmax(64px, 1fr);
   gap: var(--space-md);
   align-items: center;
   margin: 0 -14px;
