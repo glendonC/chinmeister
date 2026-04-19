@@ -96,6 +96,25 @@ const unmergeSchema = z.object({
 });
 type UnmergeArgs = z.infer<typeof unmergeSchema>;
 
+const formationSweepSchema = z.object({
+  limit: z
+    .number()
+    .min(1)
+    .max(50)
+    .optional()
+    .describe('How many recent un-classified memories to process (default 20, max 50)'),
+});
+type FormationSweepArgs = z.infer<typeof formationSweepSchema>;
+
+const formationListSchema = z.object({
+  recommendation: z
+    .enum(['keep', 'merge', 'evolve', 'discard'])
+    .optional()
+    .describe('Filter by what the LLM recommended'),
+  limit: z.number().min(1).max(200).optional().describe('Max observations to return (default 50)'),
+});
+type FormationListArgs = z.infer<typeof formationListSchema>;
+
 export function registerMemoryTools(
   addTool: AddToolFn,
   deps: Pick<ToolDeps, 'team' | 'state'>,
@@ -351,6 +370,89 @@ export function registerMemoryTools(
         ],
       };
     }),
+  );
+
+  addTool(
+    'chinwag_run_formation_sweep',
+    {
+      description:
+        'Run shadow-mode formation auditor on recent memories. For each unclassified memory, an LLM looks at the top-5 cosine-similar neighbours and records whether the new memory should be kept, merged, evolved, or discarded. Recommendations are observability only — nothing applies automatically. Use this periodically to audit memory quality and tune consolidation thresholds.',
+      inputSchema: formationSweepSchema,
+    },
+    withTeam(deps, async (args, { preamble }) => {
+      const { limit } = args as FormationSweepArgs;
+      const result = await withTimeout(
+        team.runFormationSweep(state.teamId!, limit),
+        API_TIMEOUT_MS * 6, // sweeps over multiple memories with LLM calls
+      );
+      if (!result.ok) {
+        return {
+          content: [{ type: 'text' as const, text: `Formation sweep failed: ${result.error}` }],
+          isError: true,
+        };
+      }
+      const processed = result.processed ?? 0;
+      const skipped = result.skipped ?? 0;
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `${preamble}Formation sweep: ${processed} processed, ${skipped} skipped.`,
+          },
+        ],
+      };
+    }),
+  );
+
+  addTool(
+    'chinwag_review_formation_observations',
+    {
+      description:
+        'List recent formation observations — what the auditor LLM thought about each memory (keep / merge / evolve / discard). Filter by recommendation to focus on flagged cases. Recommendations are observability; apply consolidation explicitly via chinwag_apply_consolidation if you agree.',
+      inputSchema: formationListSchema,
+    },
+    withTeam(
+      deps,
+      async (args) => {
+        const { recommendation, limit } = args as FormationListArgs;
+        const filter: { recommendation?: 'keep' | 'merge' | 'evolve' | 'discard'; limit?: number } =
+          {};
+        if (recommendation) filter.recommendation = recommendation;
+        if (limit) filter.limit = limit;
+        const result = await withTimeout(
+          team.listFormationObservations(state.teamId!, filter),
+          API_TIMEOUT_MS,
+        );
+        if (!result.ok) {
+          return {
+            content: [
+              { type: 'text' as const, text: `Failed to load observations: ${result.error}` },
+            ],
+            isError: true,
+          };
+        }
+        const obs = result.observations || [];
+        if (obs.length === 0) {
+          const filtered = recommendation ? ` matching ${recommendation}` : '';
+          return {
+            content: [
+              {
+                type: 'text' as const,
+                text: `No formation observations${filtered}. Run chinwag_run_formation_sweep to populate.`,
+              },
+            ],
+          };
+        }
+        const lines = obs.map((o) => {
+          const target = o.target_id ? ` -> ${o.target_id}` : '';
+          const conf = typeof o.confidence === 'number' ? ` (conf ${o.confidence.toFixed(2)})` : '';
+          const reason = o.llm_reason ? ` — ${o.llm_reason}` : '';
+          return `[${o.recommendation}${conf}] memory ${o.memory_id}${target}${reason}`;
+        });
+        return { content: [{ type: 'text' as const, text: lines.join('\n') }] };
+      },
+      { skipPreamble: true },
+    ),
   );
 
   addTool(

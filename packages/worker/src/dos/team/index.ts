@@ -69,6 +69,12 @@ import {
   unmergeMemory as unmergeMemoryFn,
 } from './consolidation.js';
 import {
+  runFormationPass as runFormationPassFn,
+  runFormationOnRecent as runFormationOnRecentFn,
+  listFormationObservations as listFormationObservationsFn,
+  type FormationRecommendation,
+} from './formation.js';
+import {
   createCategory as createCategoryFn,
   listCategories as listCategoriesFn,
   updateCategory as updateCategoryFn,
@@ -826,6 +832,28 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
   ): Promise<ReturnType<typeof unmergeMemoryFn> | DOError> {
     return this.#withMember(agentId, ownerId, () => unmergeMemoryFn(this.sql, memoryId));
+  }
+
+  // -- Formation (shadow-mode auditor: classifies but never applies) --
+
+  async runFormationOnRecent(
+    limit: number = 20,
+  ): Promise<{ ok: true; processed: number; skipped: number }> {
+    const result = await runFormationOnRecentFn(this.sql, this.env, limit);
+    return { ok: true, ...result };
+  }
+
+  async runFormationOnMemory(memoryId: string): Promise<{ ok: true }> {
+    await runFormationPassFn(this.sql, this.env, memoryId);
+    return { ok: true };
+  }
+
+  async listFormationObservations(
+    agentId: string,
+    filter: { recommendation?: FormationRecommendation; limit?: number } = {},
+    ownerId: string | null = null,
+  ): Promise<ReturnType<typeof listFormationObservationsFn> | DOError> {
+    return this.#withMember(agentId, ownerId, () => listFormationObservationsFn(this.sql, filter));
   }
 
   // -- Memory Categories --

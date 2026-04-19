@@ -354,6 +354,48 @@ export const handleTeamUnmergeMemory = teamJsonRoute(async ({ body, user, team, 
   return doResult(team.unmergeMemory(agentId, memoryId, user.id), 'unmergeMemory');
 });
 
+// --- Shadow-mode formation (auditor) ---
+//
+// Formation is the LLM-side counterpart to consolidation: it classifies a
+// memory as keep / merge / evolve / discard against top-K cosine
+// neighbours. Recommendations land in formation_observations as
+// observability — never auto-applied. Surfaces in the dashboard so the
+// reviewer can decide whether to tighten consolidation thresholds or
+// (eventually) opt-in to enforcement.
+
+export const handleTeamRunFormationSweep = teamJsonRoute(async ({ body, team }) => {
+  const limit = typeof body.limit === 'number' ? body.limit : 20;
+  return doResult(team.runFormationOnRecent(limit), 'runFormationOnRecent');
+});
+
+export const handleTeamRunFormationOne = teamJsonRoute(async ({ body, team }) => {
+  const memoryId = requireString(body, 'memory_id');
+  if (!memoryId) return json({ error: 'memory_id is required' }, 400);
+  return doResult(team.runFormationOnMemory(memoryId), 'runFormationOnMemory');
+});
+
+export const handleTeamListFormationObservations = teamRoute(
+  async ({ request, agentId, team, user }) => {
+    const url = new URL(request.url);
+    const recParam = url.searchParams.get('recommendation');
+    const allowed = ['keep', 'merge', 'evolve', 'discard'] as const;
+    const recommendation =
+      recParam && (allowed as readonly string[]).includes(recParam)
+        ? (recParam as (typeof allowed)[number])
+        : undefined;
+    const parsedLimit = parseInt(url.searchParams.get('limit') || '50', 10);
+    const limit = Math.min(Math.max(1, isNaN(parsedLimit) ? 50 : parsedLimit), 200);
+    const filter: { recommendation?: 'keep' | 'merge' | 'evolve' | 'discard'; limit?: number } = {
+      limit,
+    };
+    if (recommendation) filter.recommendation = recommendation;
+    return doResult(
+      team.listFormationObservations(agentId, filter, user.id),
+      'listFormationObservations',
+    );
+  },
+);
+
 export const handleTeamDeleteMemoryBatch = teamJsonRoute(
   async ({ body, user, env, teamId, request }) => {
     const filter: Record<string, unknown> = {};

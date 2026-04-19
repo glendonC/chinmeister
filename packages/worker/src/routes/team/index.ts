@@ -33,6 +33,9 @@ export {
   handleTeamApplyConsolidation,
   handleTeamRejectConsolidation,
   handleTeamUnmergeMemory,
+  handleTeamRunFormationSweep,
+  handleTeamRunFormationOne,
+  handleTeamListFormationObservations,
 } from './memory.js';
 export {
   handleTeamCreateCategory,

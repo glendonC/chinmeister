@@ -109,6 +109,31 @@ export interface TeamConsolidationHandlers {
   unmergeMemory(teamId: string, memoryId: string): Promise<OkResult>;
 }
 
+/** Shadow-mode formation auditor — classifies but never applies. */
+export type FormationRecommendation = 'keep' | 'merge' | 'evolve' | 'discard';
+
+export interface FormationObservation {
+  id: string;
+  memory_id: string;
+  recommendation: FormationRecommendation;
+  target_id: string | null;
+  confidence: number | null;
+  llm_reason: string | null;
+  model: string | null;
+  created_at: string;
+}
+
+export interface TeamFormationHandlers {
+  runFormationSweep(
+    teamId: string,
+    limit?: number,
+  ): Promise<OkResult & { processed?: number; skipped?: number }>;
+  listFormationObservations(
+    teamId: string,
+    filter?: { recommendation?: FormationRecommendation; limit?: number },
+  ): Promise<OkResult & { observations: FormationObservation[] }>;
+}
+
 /** Coordination: file locks, messaging, sessions. */
 export interface TeamCoordinationHandlers {
   claimFiles(teamId: string, files: string[]): Promise<ClaimResult>;
@@ -165,6 +190,7 @@ export type TeamHandlers = TeamMemberHandlers &
   TeamActivityHandlers &
   TeamMemoryHandlers &
   TeamConsolidationHandlers &
+  TeamFormationHandlers &
   TeamCoordinationHandlers;
 
 /**
@@ -293,6 +319,21 @@ export function teamHandlers(client: ApiClient): TeamHandlers {
     async unmergeMemory(teamId, memoryId) {
       validateTeam(teamId);
       return client.post(`/teams/${teamId}/memory/unmerge`, { memory_id: memoryId });
+    },
+
+    async runFormationSweep(teamId, limit) {
+      validateTeam(teamId);
+      const body = typeof limit === 'number' ? { limit } : {};
+      return client.post(`/teams/${teamId}/memory/formation/sweep`, body);
+    },
+
+    async listFormationObservations(teamId, filter) {
+      validateTeam(teamId);
+      const params = new URLSearchParams();
+      if (filter?.recommendation) params.set('recommendation', filter.recommendation);
+      if (filter?.limit) params.set('limit', String(filter.limit));
+      const qs = params.toString();
+      return client.get(`/teams/${teamId}/memory/formation/observations${qs ? '?' + qs : ''}`);
     },
 
     async claimFiles(teamId, files) {

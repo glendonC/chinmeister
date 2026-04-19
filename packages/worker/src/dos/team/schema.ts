@@ -664,6 +664,36 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    name: '021_formation_observations',
+    up(sql) {
+      // Shadow-mode formation: after each save, an LLM classifies the new
+      // memory as keep / merge / evolve / discard against top-K cosine-
+      // similar neighbours and records the recommendation here. Nothing
+      // ever auto-applies; the table is observability for tuning the
+      // consolidation funnel and (eventually) for opt-in enforcement.
+      // Mem0 v3 reversed write-time auto-merge for this exact reason.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS formation_observations (
+          id TEXT PRIMARY KEY,
+          memory_id TEXT NOT NULL,
+          recommendation TEXT NOT NULL,
+          target_id TEXT DEFAULT NULL,
+          confidence REAL DEFAULT NULL,
+          llm_reason TEXT DEFAULT NULL,
+          model TEXT DEFAULT NULL,
+          status TEXT NOT NULL DEFAULT 'observed',
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+      `);
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_formation_obs_memory ON formation_observations(memory_id)',
+      );
+      sql.exec(
+        "CREATE INDEX IF NOT EXISTS idx_formation_obs_recommendation ON formation_observations(recommendation, created_at) WHERE status = 'observed'",
+      );
+    },
+  },
 ];
 
 export function ensureSchema(
