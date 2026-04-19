@@ -447,6 +447,21 @@
   margin-bottom: 12px;
 }
 
+/* Time-scope note: rendered only for `live` and `all-time` widgets. Clear
+ * full sentence (not a cryptic label) so the user understands why this
+ * widget's numbers won't change when they toggle the global date picker.
+ * Thin accent left-border distinguishes it from the main description
+ * without introducing a card box — same airy treatment as the rest of the
+ * tooltip, just visibly demarcated as a caveat. */
+.tooltipScope {
+  font-size: 11px;
+  color: var(--soft);
+  line-height: 1.5;
+  margin: -4px 0 12px;
+  padding: 2px 0 2px 10px;
+  border-left: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
 .tooltipMeta {
   display: grid;
   grid-template-columns: 1fr 1fr;

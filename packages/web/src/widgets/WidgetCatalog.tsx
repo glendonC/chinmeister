@@ -16,6 +16,7 @@ import {
   type WidgetDef,
   type WidgetViz,
   type WidgetCategory,
+  type WidgetTimeScope,
 } from './widget-catalog.js';
 import styles from './WidgetCatalog.module.css';
 
@@ -103,6 +104,17 @@ const SIZE_LABELS: Record<number, string> = {
   6: 'half width',
   8: 'two-thirds width',
   12: 'full width',
+};
+
+// Full-sentence caption rendered in the hover tooltip when a widget doesn't
+// follow the global 7/30/90 date picker. Phrased as a concrete statement
+// (not a cryptic label like "real-time") so a user hovering the widget can
+// read it and understand why this widget's numbers won't change when they
+// toggle the picker. Period widgets render nothing — the RangePills at the
+// top of the page already communicate period semantics.
+const TIME_SCOPE_NOTES: Record<Exclude<WidgetTimeScope, 'period'>, string> = {
+  live: "Real-time data — the 7/30/90 day picker doesn't apply.",
+  'all-time': "Lifetime totals — the 7/30/90 day picker doesn't apply.",
 };
 
 const DATA_KEY_LABELS: Record<string, string> = {
@@ -769,6 +781,9 @@ export function WidgetCatalog({
         >
           <span className={styles.tooltipName}>{displayWidget.name}</span>
           <p className={styles.tooltipDesc}>{displayWidget.description}</p>
+          {displayWidget.timeScope && displayWidget.timeScope !== 'period' && (
+            <p className={styles.tooltipScope}>{TIME_SCOPE_NOTES[displayWidget.timeScope]}</p>
+          )}
           <div className={styles.tooltipMeta}>
             <div>
               <span className={styles.tooltipMetaLabel}>Type</span>
