@@ -93,6 +93,24 @@ function computeDataCoverage(a: UserAnalytics, conv: ConversationAnalytics): Cov
       hint: 'Save or search shared memories',
     },
     {
+      id: 'memory-safety',
+      label: 'Memory pipeline',
+      total: 4,
+      active: [
+        a.memory_usage.pending_consolidation_proposals > 0,
+        a.memory_usage.formation_observations_by_recommendation
+          ? (a.memory_usage.formation_observations_by_recommendation.keep ?? 0) +
+              (a.memory_usage.formation_observations_by_recommendation.merge ?? 0) +
+              (a.memory_usage.formation_observations_by_recommendation.evolve ?? 0) +
+              (a.memory_usage.formation_observations_by_recommendation.discard ?? 0) >
+            0
+          : false,
+        a.memory_usage.secrets_blocked_period > 0,
+        a.memory_usage.merged_memories > 0,
+      ].filter(Boolean).length,
+      hint: 'Fills in as the consolidator, auditor, and secret detector run',
+    },
+    {
       id: 'multitool',
       label: 'Multi-tool analysis',
       total: 3,

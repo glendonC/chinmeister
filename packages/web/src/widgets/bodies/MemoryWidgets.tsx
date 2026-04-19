@@ -32,23 +32,15 @@ function MemoryActivityWidget({ analytics }: WidgetBodyProps) {
 // All-time: none of these respond to the date picker. Widget renders the
 // 'all-time' scope tag in its header (see WidgetRenderer).
 //
-// Surfaces the four lifetime + live signals plus three period-scoped
-// substrate signals from the memory pipeline:
-//   memories  — live count (excludes soft-merged)
-//   avg age   — over live memories only
-//   stale     — last_accessed > 30d, live only
-//   reviews   — live consolidation proposals awaiting decision
-//   flagged   — formation observations recommending merge/evolve/discard
-//   blocked   — secret-detector blocks this period
-//   merged    — lifetime soft-merge total (audit signal)
+// Kept lean on purpose: three blocks for lifetime memory health. The
+// protection-signal counters (consolidation queue, auditor flags, secret
+// blocks, soft-merges) are in the sibling MemorySafetyWidget — separating
+// health from safety keeps each widget readable at 6-col width and avoids
+// the 7-block density problem the 04-19 audit flagged.
 function MemoryHealthWidget({ analytics }: WidgetBodyProps) {
   const m = analytics.memory_usage;
   if (m.total_memories === 0 && m.merged_memories === 0)
     return <GhostStatRow labels={['memories', 'avg age', 'stale']} />;
-  const formation = m.formation_observations_by_recommendation;
-  const flagged = formation
-    ? (formation.merge ?? 0) + (formation.evolve ?? 0) + (formation.discard ?? 0)
-    : 0;
   return (
     <div className={styles.statRow}>
       <div className={styles.statBlock}>
@@ -67,28 +59,54 @@ function MemoryHealthWidget({ analytics }: WidgetBodyProps) {
           <span className={styles.statBlockLabel}>stale</span>
         </div>
       )}
+    </div>
+  );
+}
+
+// Period-scoped + lifetime safety signals from the memory pipeline:
+//   review queue    — live consolidation proposals awaiting decision
+//   auditor-flagged — formation observations recommending merge/evolve/discard
+//   secrets caught  — secret-detector blocks this period
+//   soft-merged     — lifetime soft-merge total (audit signal, enables unmerge)
+// Labels are plain-English per the 04-19 audit's E4 copy rework — "blocked"
+// was too ambiguous, "merged" gave no hint about recourse.
+function MemorySafetyWidget({ analytics }: WidgetBodyProps) {
+  const m = analytics.memory_usage;
+  const formation = m.formation_observations_by_recommendation;
+  const flagged = formation
+    ? (formation.merge ?? 0) + (formation.evolve ?? 0) + (formation.discard ?? 0)
+    : 0;
+  const hasAny =
+    m.pending_consolidation_proposals > 0 ||
+    flagged > 0 ||
+    m.secrets_blocked_period > 0 ||
+    m.merged_memories > 0;
+  if (!hasAny)
+    return <GhostStatRow labels={['review queue', 'auditor-flagged', 'secrets caught']} />;
+  return (
+    <div className={styles.statRow}>
       {m.pending_consolidation_proposals > 0 && (
         <div className={styles.statBlock}>
           <span className={styles.statBlockValue}>{m.pending_consolidation_proposals}</span>
-          <span className={styles.statBlockLabel}>reviews</span>
+          <span className={styles.statBlockLabel}>review queue</span>
         </div>
       )}
       {flagged > 0 && (
         <div className={styles.statBlock}>
           <span className={styles.statBlockValue}>{flagged}</span>
-          <span className={styles.statBlockLabel}>flagged</span>
+          <span className={styles.statBlockLabel}>auditor-flagged</span>
         </div>
       )}
       {m.secrets_blocked_period > 0 && (
         <div className={styles.statBlock}>
           <span className={styles.statBlockValue}>{m.secrets_blocked_period}</span>
-          <span className={styles.statBlockLabel}>blocked</span>
+          <span className={styles.statBlockLabel}>secrets caught</span>
         </div>
       )}
       {m.merged_memories > 0 && (
         <div className={styles.statBlock}>
           <span className={styles.statBlockValue}>{m.merged_memories}</span>
-          <span className={styles.statBlockLabel}>merged</span>
+          <span className={styles.statBlockLabel}>soft-merged</span>
         </div>
       )}
     </div>
@@ -122,50 +140,56 @@ function MemoryOutcomesWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// Period-scoped: shows what the formation auditor flagged in the current
-// date window. The four recommendation buckets (keep / merge / evolve /
-// discard) come from analytics.memory_usage; no extra fetch needed.
-//
-// 'keep' is the trivial case (most writes), so it's shown as the muted
-// baseline. The non-keep buckets are the actionable signal — those are
-// the writes a reviewer should look at via chinwag_review_formation_
-// observations or the (eventually) interactive feed widget.
+// Period-scoped. Shows what the formation auditor flagged for review this
+// period. 'keep' is the trivial common case (most writes) — rendering it
+// as a bar segment drowns the actionable merge/evolve/discard buckets at
+// 90%+ of width. Per the 04-19 audit's C1 rework: drop keep from the bar,
+// render only the three actionable buckets proportional to each other,
+// show 'keep' as text above so the denominator is honest.
 function FormationSummaryWidget({ analytics }: WidgetBodyProps) {
   const f = analytics.memory_usage.formation_observations_by_recommendation;
-  const total = (f?.keep ?? 0) + (f?.merge ?? 0) + (f?.evolve ?? 0) + (f?.discard ?? 0);
-  if (!f || total === 0) {
+  const keep = f?.keep ?? 0;
+  const merge = f?.merge ?? 0;
+  const evolve = f?.evolve ?? 0;
+  const discard = f?.discard ?? 0;
+  const actionable = merge + evolve + discard;
+  const classified = keep + actionable;
+  if (!f || classified === 0) {
     return (
       <SectionEmpty>
-        Run formation sweep to populate. Auditor classifies new memories as keep / merge / evolve /
-        discard.
+        Auditor hasn&apos;t flagged any memories this period — nothing to review.
       </SectionEmpty>
     );
   }
   const buckets: Array<{ label: string; value: number; color: string }> = [
-    { label: 'keep', value: f.keep ?? 0, color: 'var(--text-muted)' },
-    { label: 'merge', value: f.merge ?? 0, color: 'var(--accent)' },
-    { label: 'evolve', value: f.evolve ?? 0, color: 'var(--warning)' },
-    { label: 'discard', value: f.discard ?? 0, color: 'var(--danger)' },
+    { label: 'merge', value: merge, color: 'var(--accent)' },
+    { label: 'evolve', value: evolve, color: 'var(--warning)' },
+    { label: 'discard', value: discard, color: 'var(--danger)' },
   ];
   return (
-    <div className={styles.metricBars}>
-      {buckets.map((b) => (
-        <div key={b.label} className={styles.metricRow}>
-          <span className={styles.metricLabel}>{b.label}</span>
-          <div className={styles.metricBarTrack}>
-            <div
-              className={styles.metricBarFill}
-              style={{
-                width: `${total > 0 ? (b.value / total) * 100 : 0}%`,
-                background: b.color,
-                opacity: 'var(--opacity-bar-fill)',
-              }}
-            />
+    <>
+      <div className={styles.coverageNote} style={{ marginTop: 0, marginBottom: 12 }}>
+        {classified} classified, {actionable} flagged for review
+      </div>
+      <div className={styles.metricBars}>
+        {buckets.map((b) => (
+          <div key={b.label} className={styles.metricRow}>
+            <span className={styles.metricLabel}>{b.label}</span>
+            <div className={styles.metricBarTrack}>
+              <div
+                className={styles.metricBarFill}
+                style={{
+                  width: `${actionable > 0 ? (b.value / actionable) * 100 : 0}%`,
+                  background: b.color,
+                  opacity: 'var(--opacity-bar-fill)',
+                }}
+              />
+            </div>
+            <span className={styles.metricValue}>{b.value}</span>
           </div>
-          <span className={styles.metricValue}>{b.value}</span>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </>
   );
 }
 
@@ -210,6 +234,7 @@ function TopMemoriesWidget({ analytics }: WidgetBodyProps) {
 export const memoryWidgets: WidgetRegistry = {
   'memory-activity': MemoryActivityWidget,
   'memory-health': MemoryHealthWidget,
+  'memory-safety': MemorySafetyWidget,
   'memory-outcomes': MemoryOutcomesWidget,
   'top-memories': TopMemoriesWidget,
   'formation-summary': FormationSummaryWidget,
