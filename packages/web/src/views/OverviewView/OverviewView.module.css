@@ -1357,7 +1357,7 @@
   }
 }
 
-/* ── Widget (inside react-grid-layout cells) ── */
+/* ── Widget (inside CSS-Grid cells rendered by WidgetGrid) ── */
 
 .widget {
   position: relative;
@@ -1368,11 +1368,48 @@
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
   transition:
     outline 0.15s ease,
     opacity 0.18s ease,
     box-shadow 0.18s ease;
+}
+
+/* Explicit widget zones. Head is a fixed strip at the top; body fills
+ * the rest of the cell and decides its own internal layout per viz.
+ * Using zones (instead of a flat flex-column gap between every child)
+ * is what keeps a stat value visually centered in a tall cell and
+ * keeps a list flush-filling, regardless of what each body returns. */
+.widgetHead {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.widgetBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Stat-family widgets: vertically center the value inside the body so
+ * a sparse cell doesn't leave an orphaned number near the top. Applies
+ * to plain `stat` and the multi-stat `stat-row` viz. */
+[data-widget-viz='stat'] .widgetBody,
+[data-widget-viz='stat-row'] .widgetBody {
+  justify-content: center;
+}
+
+/* Coverage note on a stat widget anchors to the bottom of the cell so
+ * it doesn't pull the hero value up or down — each stat's value sits
+ * at the same y-position regardless of whether a note is present. */
+[data-widget-viz='stat'] .coverageNote,
+[data-widget-viz='stat-row'] .coverageNote {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 20px;
+  margin-top: 0;
 }
 
 /* scroll-margin lives on the RGL wrapper (the scrollIntoView target),
@@ -1576,49 +1613,8 @@
   border: 0;
 }
 
-/*
- * react-grid-layout customization. RGL emits global class names; CSS
- * Modules would hash them and break the selectors, so we wrap them in
- * :global(...) and qualify with the parent .widgetEditing scope so the
- * polish only applies inside our grid.
- */
-
-/* Replace RGL's default red placeholder with a calm dashed accent box. */
-:global(.react-grid-item.react-grid-placeholder) {
-  background: var(--accent-bg) !important;
-  border: 1.5px dashed var(--accent);
-  border-radius: 8px;
-  opacity: 1 !important;
-  transition-duration: 120ms;
-  box-shadow: 0 0 0 1px var(--accent-bg);
-  z-index: 2;
-}
-
-/* Snap preview shown while a catalog widget is being dragged (dnd-kit) over
- * the grid. Absolutely positioned inside the grid container; coords come
- * from the drag monitor. Matches the .react-grid-placeholder vocabulary. */
-.snapPreview {
-  position: absolute;
-  background: var(--accent-bg);
-  border: 1.5px dashed var(--accent);
-  border-radius: 8px;
-  box-shadow: 0 0 0 1px var(--accent-bg);
-  pointer-events: none;
-  z-index: 3;
-  transition:
-    transform 120ms ease-out,
-    width 120ms,
-    height 120ms;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .snapPreview {
-    transition: none;
-  }
-}
-
-/* Ghost preview rendered inside the dnd-kit DragOverlay. Minimal card with
- * the widget name — chromeless, one line of meta in mono. */
+/* Ghost preview rendered inside the dnd-kit DragOverlay while a catalog
+ * widget is being dragged toward the grid. Minimal card, one line. */
 .dragOverlayCard {
   display: inline-flex;
   align-items: center;
@@ -1641,67 +1637,22 @@
   color: var(--ink);
 }
 
-.dragOverlayMeta {
-  color: var(--soft);
-}
-
 /*
- * Soften RGL's reflow easing on non-dragged items. The dragged item
- * already has `transition: none` from RGL's default stylesheet (via the
- * .react-draggable-dragging class), so this only affects the neighbours
- * being pushed out of the way.
- */
-:global(.react-grid-item.cssTransforms):not(:global(.react-draggable-dragging)):not(
-    :global(.resizing)
-  ) {
-  transition-property: transform, width, height;
-  transition-duration: 220ms;
-  transition-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1);
-}
-
-/*
- * Promote items to their own GPU layers only while a drag is in progress.
- * Avoids leaving 50 always-on layers in memory at rest.
- */
-.widgetEditing[data-dragging] :global(.react-grid-item) {
-  will-change: transform;
-}
-
-/*
- * Ghost the dragged widget itself: subtle opacity drop + lifted shadow on
- * the inner .widget child (NOT on the outer grid item — that one carries
- * RGL's translate transform and any rotate would clobber it).
- */
-:global(.react-draggable-dragging) .widget {
-  opacity: 0.92;
-  box-shadow: 0 18px 40px -12px rgba(0, 0, 0, 0.35);
-}
-
-/*
- * Forced colors / Windows High Contrast: tinted fills are erased, so use
- * system semantic colors for the placeholder and outline.
+ * Forced colors / Windows High Contrast: keep the edit-mode outline legible.
  */
 @media (forced-colors: active) {
   .widgetEditing .widget {
     outline-color: CanvasText;
   }
-  :global(.react-grid-item.react-grid-placeholder) {
-    background: Highlight !important;
-    border-color: HighlightText;
-  }
 }
 
 /*
- * Reduced motion: disable the bumped easing and ghost transitions; the
- * dashboard still works, just without the polish.
+ * Reduced motion: disable widget-level transitions; the dashboard still
+ * works, just without the polish.
  */
 @media (prefers-reduced-motion: reduce) {
-  .widget,
-  :global(.react-grid-item.cssTransforms):not(:global(.react-draggable-dragging)) {
+  .widget {
     transition: none !important;
-  }
-  :global(.react-draggable-dragging) .widget {
-    box-shadow: none;
   }
 }
 

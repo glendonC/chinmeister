@@ -1,26 +1,48 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { getWidget } from '../../widgets/widget-catalog.js';
+import {
+  defaultSlot,
+  type WidgetSlot,
+  type WidgetColSpan,
+  type WidgetRowSpan,
+} from '../../widgets/widget-catalog.js';
 
 // Per-tab layout persistence for the project page. Each tab (Activity, Trends)
 // has its own layout stored under a separate localStorage key so users can
-// customize each tab independently.
+// customize each tab independently. v3 shape: ordered WidgetSlots with
+// colSpan/rowSpan only. v1/v2 migrate by sorting stored widgets by (y,x)
+// and dropping positions.
 
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const UNDO_STACK_LIMIT = 25;
 
-interface RGLLayout {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
-  maxW?: number;
-  maxH?: number;
+interface DashboardLayout {
+  version: number;
+  widgets: WidgetSlot[];
 }
 
-interface WidgetPosition {
+function storageKey(tabId: string): string {
+  return `chinwag:project-${tabId}-dashboard`;
+}
+
+function buildDefaultLayout(defaults: WidgetSlot[]): DashboardLayout {
+  return { version: STORAGE_VERSION, widgets: defaults.map((s) => ({ ...s })) };
+}
+
+function mapColSpan(w: number): WidgetColSpan {
+  if (w <= 3) return 3;
+  if (w === 4) return 4;
+  if (w <= 6) return 6;
+  if (w <= 8) return 8;
+  return 12;
+}
+
+function mapRowSpan(h: number): WidgetRowSpan {
+  if (h <= 2) return 2;
+  if (h === 3) return 3;
+  return 4;
+}
+
+interface LegacyWidget {
   id: string;
   x: number;
   y: number;
@@ -28,58 +50,29 @@ interface WidgetPosition {
   h: number;
 }
 
-interface DashboardLayout {
-  version: number;
-  widgets: WidgetPosition[];
+function migrateLegacyWidgets(widgets: LegacyWidget[]): WidgetSlot[] {
+  return [...widgets]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((w) => ({ id: w.id, colSpan: mapColSpan(w.w), rowSpan: mapRowSpan(w.h) }))
+    .filter((s) => defaultSlot(s.id));
 }
 
-function storageKey(tabId: string): string {
-  return `chinwag:project-${tabId}-dashboard`;
-}
-
-function buildDefaultLayout(defaults: RGLLayout[]): DashboardLayout {
-  return {
-    version: STORAGE_VERSION,
-    widgets: defaults.map((l) => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h })),
-  };
-}
-
-// v1 → v2: live-agents shrank from w=12 to w=6 and pairs with live-conflicts.
-// Preserve the user's widget selection, rebuild positions from the new defaults.
-function migrateV1ToV2(
-  parsed: { widgets: WidgetPosition[] },
-  defaults: RGLLayout[],
-): DashboardLayout {
-  const selectedIds = new Set(parsed.widgets.map((w) => w.id));
-  const rebuilt = buildDefaultLayout(defaults);
-  rebuilt.widgets = rebuilt.widgets.filter((w) => selectedIds.has(w.id));
-  for (const wp of parsed.widgets) {
-    if (!rebuilt.widgets.some((w) => w.id === wp.id)) {
-      const def = getWidget(wp.id);
-      rebuilt.widgets.push({
-        id: wp.id,
-        x: 0,
-        y: Infinity,
-        w: def?.w ?? 6,
-        h: def?.h ?? 3,
-      });
-    }
-  }
-  return rebuilt;
-}
-
-function loadDashboard(tabId: string, defaults: RGLLayout[]): DashboardLayout {
+function loadDashboard(tabId: string, defaults: WidgetSlot[]): DashboardLayout {
   try {
     const raw = localStorage.getItem(storageKey(tabId));
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.version === 1 && Array.isArray(parsed.widgets)) {
-        const migrated = migrateV1ToV2(parsed, defaults);
+      if ((parsed?.version === 1 || parsed?.version === 2) && Array.isArray(parsed.widgets)) {
+        const migrated: DashboardLayout = {
+          version: STORAGE_VERSION,
+          widgets: migrateLegacyWidgets(parsed.widgets as LegacyWidget[]),
+        };
         saveDashboard(tabId, migrated);
         return migrated;
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
-        return parsed;
+        const valid = (parsed.widgets as WidgetSlot[]).filter((s) => defaultSlot(s.id));
+        return { version: STORAGE_VERSION, widgets: valid };
       }
     }
   } catch {
@@ -98,28 +91,7 @@ function saveDashboard(tabId: string, layout: DashboardLayout) {
   }
 }
 
-function toRGLLayout(widgets: WidgetPosition[]): RGLLayout[] {
-  return widgets.map((wp) => {
-    const def = getWidget(wp.id);
-    return {
-      i: wp.id,
-      x: wp.x,
-      y: wp.y,
-      w: wp.w,
-      h: wp.h,
-      minW: def?.minW,
-      minH: def?.minH,
-      maxW: def?.maxW,
-      maxH: def?.maxH,
-    };
-  });
-}
-
-function fromRGLLayout(rgl: RGLLayout[]): WidgetPosition[] {
-  return rgl.map((l) => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h }));
-}
-
-export function useProjectTabLayout(tabId: string, defaults: RGLLayout[]) {
+export function useProjectTabLayout(tabId: string, defaults: WidgetSlot[]) {
   const [dashboard, setDashboardInner] = useState<DashboardLayout>(() =>
     loadDashboard(tabId, defaults),
   );
@@ -156,21 +128,35 @@ export function useProjectTabLayout(tabId: string, defaults: RGLLayout[]) {
     [pushUndoSnapshot, tabId],
   );
 
-  const widgetIds = dashboard.widgets.map((w) => w.id);
-  const gridLayout = toRGLLayout(dashboard.widgets);
+  const widgetIds = dashboard.widgets.map((s) => s.id);
 
   const toggleWidget = useCallback(
     (id: string) => {
       setAndSave((prev) => {
-        const exists = prev.widgets.some((w) => w.id === id);
+        const exists = prev.widgets.some((s) => s.id === id);
         if (exists) {
-          return { ...prev, widgets: prev.widgets.filter((w) => w.id !== id) };
+          return { ...prev, widgets: prev.widgets.filter((s) => s.id !== id) };
         }
-        const def = getWidget(id);
-        return {
-          ...prev,
-          widgets: [...prev.widgets, { id, x: 0, y: 0, w: def?.w ?? 6, h: def?.h ?? 3 }],
-        };
+        const slot = defaultSlot(id);
+        if (!slot) return prev;
+        return { ...prev, widgets: [...prev.widgets, slot] };
+      });
+    },
+    [setAndSave],
+  );
+
+  // Insert a catalog widget at a specific index. Drag-from-catalog uses this
+  // so the drop location becomes the insertion point in the source order.
+  const addWidgetAt = useCallback(
+    (id: string, index: number) => {
+      setAndSave((prev) => {
+        if (prev.widgets.some((s) => s.id === id)) return prev;
+        const slot = defaultSlot(id);
+        if (!slot) return prev;
+        const widgets = [...prev.widgets];
+        const clamped = Math.max(0, Math.min(index, widgets.length));
+        widgets.splice(clamped, 0, slot);
+        return { ...prev, widgets };
       });
     },
     [setAndSave],
@@ -180,27 +166,43 @@ export function useProjectTabLayout(tabId: string, defaults: RGLLayout[]) {
     (id: string) => {
       setAndSave((prev) => ({
         ...prev,
-        widgets: prev.widgets.filter((w) => w.id !== id),
+        widgets: prev.widgets.filter((s) => s.id !== id),
       }));
     },
     [setAndSave],
   );
 
-  const updatePositions = useCallback((rglLayout: RGLLayout[]) => {
-    setDashboardInner((prev) => {
-      const idSet = new Set(prev.widgets.map((w) => w.id));
-      const updated = fromRGLLayout(rglLayout.filter((l) => idSet.has(l.i)));
-      return { ...prev, widgets: updated };
-    });
-  }, []);
+  const reorderWidgets = useCallback(
+    (ids: string[]) => {
+      setAndSave((prev) => {
+        const byId = new Map(prev.widgets.map((s) => [s.id, s]));
+        const reordered = ids.map((id) => byId.get(id)).filter((s): s is WidgetSlot => !!s);
+        for (const s of prev.widgets) {
+          if (!ids.includes(s.id)) reordered.push(s);
+        }
+        return { ...prev, widgets: reordered };
+      });
+    },
+    [setAndSave],
+  );
 
-  const beginInteraction = useCallback(() => {
-    pushUndoSnapshot();
-  }, [pushUndoSnapshot]);
-
-  const commitLayout = useCallback(() => {
-    saveDashboard(tabId, dashboardRef.current);
-  }, [tabId]);
+  const setSlotSize = useCallback(
+    (id: string, size: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan }) => {
+      setAndSave((prev) => ({
+        ...prev,
+        widgets: prev.widgets.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                colSpan: size.colSpan ?? s.colSpan,
+                rowSpan: size.rowSpan ?? s.rowSpan,
+              }
+            : s,
+        ),
+      }));
+    },
+    [setAndSave],
+  );
 
   const resetToDefault = useCallback(() => {
     pushUndoSnapshot();
@@ -226,12 +228,12 @@ export function useProjectTabLayout(tabId: string, defaults: RGLLayout[]) {
 
   return {
     widgetIds,
-    gridLayout,
+    slots: dashboard.widgets,
     toggleWidget,
+    addWidgetAt,
     removeWidget,
-    updatePositions,
-    beginInteraction,
-    commitLayout,
+    reorderWidgets,
+    setSlotSize,
     resetToDefault,
     clearAll,
     undo,

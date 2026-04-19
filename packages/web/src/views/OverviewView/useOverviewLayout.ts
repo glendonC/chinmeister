@@ -1,19 +1,54 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import { DEFAULT_WIDGET_IDS, DEFAULT_LAYOUT, getWidget } from '../../widgets/widget-catalog.js';
+import {
+  DEFAULT_LAYOUT,
+  defaultSlot,
+  resolveWidgetAlias,
+  type WidgetSlot,
+  type WidgetColSpan,
+  type WidgetRowSpan,
+} from '../../widgets/widget-catalog.js';
 
 // ── Unified layout store ─────────────────────────
-// Single source of truth: widget IDs + grid positions in one object.
-// Replaces the previous dual-store (chinwag:overview-layout + chinwag:overview-positions).
+// v3 shape: ordered list of WidgetSlots. Each slot carries only the
+// grid-axis sizes (colSpan, rowSpan) — no x/y. Rendering is CSS Grid with
+// grid-auto-flow:row, so ordering is the only placement signal.
 
 const STORAGE_KEY = 'chinwag:overview-dashboard';
-const STORAGE_VERSION = 2;
+const STORAGE_VERSION = 3;
 const UNDO_STACK_LIMIT = 25;
 
-// Migrate from legacy dual stores if they exist
 const LEGACY_IDS_KEY = 'chinwag:overview-layout';
 const LEGACY_POS_KEY = 'chinwag:overview-positions';
 
-interface WidgetPosition {
+interface DashboardLayout {
+  version: number;
+  widgets: WidgetSlot[];
+}
+
+function buildDefaultLayout(): DashboardLayout {
+  return { version: STORAGE_VERSION, widgets: DEFAULT_LAYOUT.map((s) => ({ ...s })) };
+}
+
+// Map stored RGL w/h to canonical spans. Clamping logic mirrors the catalog
+// so a user who stored a hand-customized w=5 lands on the nearest 6.
+function mapColSpan(w: number): WidgetColSpan {
+  if (w <= 3) return 3;
+  if (w === 4) return 4;
+  if (w <= 6) return 6;
+  if (w <= 8) return 8;
+  return 12;
+}
+
+function mapRowSpan(h: number): WidgetRowSpan {
+  if (h <= 2) return 2;
+  if (h === 3) return 3;
+  return 4;
+}
+
+// v1/v2 → v3: both prior shapes store {id,x,y,w,h}. We preserve reading
+// order (sort by y then x) and drop positions. Sizes collapse to canonical
+// spans. No data lost that the new renderer can use.
+interface LegacyWidget {
   id: string;
   x: number;
   y: number;
@@ -21,92 +56,67 @@ interface WidgetPosition {
   h: number;
 }
 
-interface DashboardLayout {
-  version: number;
-  widgets: WidgetPosition[];
+function migrateLegacyWidgets(widgets: LegacyWidget[]): WidgetSlot[] {
+  return [...widgets]
+    .sort((a, b) => a.y - b.y || a.x - b.x)
+    .map((w) => ({ id: w.id, colSpan: mapColSpan(w.w), rowSpan: mapRowSpan(w.h) }));
 }
 
-function buildDefaultLayout(): DashboardLayout {
-  return {
-    version: STORAGE_VERSION,
-    widgets: DEFAULT_LAYOUT.map((l) => ({
-      id: l.i,
-      x: l.x,
-      y: l.y,
-      w: l.w,
-      h: l.h,
-    })),
-  };
+// Expand deprecated widget ids (rename/split) into their replacements. An
+// unaliased id is preserved at the user's stored size. Replacements drop
+// back to catalog defaults since the old slot size may not fit the new
+// widgets. De-duplicates so a user who already has a replacement visible
+// doesn't end up with two copies after the expansion runs.
+function resolveAliases(slots: WidgetSlot[]): WidgetSlot[] {
+  const seen = new Set<string>();
+  const out: WidgetSlot[] = [];
+  for (const slot of slots) {
+    const ids = resolveWidgetAlias(slot.id);
+    if (ids.length === 1 && ids[0] === slot.id) {
+      if (!seen.has(slot.id) && defaultSlot(slot.id)) {
+        seen.add(slot.id);
+        out.push(slot);
+      }
+      continue;
+    }
+    for (const rid of ids) {
+      if (seen.has(rid)) continue;
+      const def = defaultSlot(rid);
+      if (def) {
+        seen.add(rid);
+        out.push(def);
+      }
+    }
+  }
+  return out;
 }
 
-function migrateLegacy(): DashboardLayout | null {
+function migrateFromLegacyKeys(): DashboardLayout | null {
   try {
     const idsRaw = localStorage.getItem(LEGACY_IDS_KEY);
     const posRaw = localStorage.getItem(LEGACY_POS_KEY);
     if (!idsRaw && !posRaw) return null;
 
-    const ids: string[] = idsRaw ? JSON.parse(idsRaw) : DEFAULT_WIDGET_IDS;
+    const ids: string[] = idsRaw ? JSON.parse(idsRaw) : [];
     const positions: Array<{ i: string; x: number; y: number; w: number; h: number }> = posRaw
       ? JSON.parse(posRaw)
       : [];
-
     const posMap = new Map(positions.map((p) => [p.i, p]));
-    const widgets: WidgetPosition[] = ids.map((id) => {
+    const legacy: LegacyWidget[] = ids.map((id, idx) => {
       const pos = posMap.get(id);
-      if (pos) return { id: pos.i, x: pos.x, y: pos.y, w: pos.w, h: pos.h };
-      // No stored position — use catalog defaults
-      const def = getWidget(id);
-      const defaultPos = DEFAULT_LAYOUT.find((l) => l.i === id);
-      return {
-        id,
-        x: defaultPos?.x ?? 0,
-        y: defaultPos?.y ?? Infinity,
-        w: def?.w ?? 6,
-        h: def?.h ?? 3,
-      };
+      return pos
+        ? { id, x: pos.x, y: pos.y, w: pos.w, h: pos.h }
+        : { id, x: 0, y: idx, w: 6, h: 3 };
     });
+    const slots = resolveAliases(migrateLegacyWidgets(legacy));
 
-    const layout: DashboardLayout = { version: STORAGE_VERSION, widgets };
-
-    // Clean up legacy keys
     localStorage.removeItem(LEGACY_IDS_KEY);
     localStorage.removeItem(LEGACY_POS_KEY);
 
-    return layout;
+    return { version: STORAGE_VERSION, widgets: slots };
   } catch {
     return null;
   }
-}
-
-function isLayoutValid(layout: DashboardLayout): boolean {
-  if (!layout.widgets.length) return false;
-  // Check that at least some widgets use multi-column positions (not all x=0)
-  const hasMultiCol = layout.widgets.some((w) => w.x > 0 || w.w > 4);
-  return hasMultiCol;
-}
-
-// v1 → v2: live-agents moved from w=12 to w=6, paired with live-conflicts.
-// Preserve the user's widget selection but rebuild positions from defaults
-// so the new side-by-side layout takes effect.
-function migrateV1ToV2(parsed: { widgets: WidgetPosition[] }): DashboardLayout {
-  const selectedIds = new Set(parsed.widgets.map((w) => w.id));
-  selectedIds.add('live-agents');
-  selectedIds.add('live-conflicts');
-  const rebuilt = buildDefaultLayout();
-  rebuilt.widgets = rebuilt.widgets.filter((w) => selectedIds.has(w.id));
-  for (const wp of parsed.widgets) {
-    if (!rebuilt.widgets.some((w) => w.id === wp.id)) {
-      const def = getWidget(wp.id);
-      rebuilt.widgets.push({
-        id: wp.id,
-        x: 0,
-        y: Infinity,
-        w: def?.w ?? 6,
-        h: def?.h ?? 3,
-      });
-    }
-  }
-  return rebuilt;
 }
 
 function loadDashboard(): DashboardLayout {
@@ -114,47 +124,31 @@ function loadDashboard(): DashboardLayout {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed?.version === 1 && Array.isArray(parsed.widgets)) {
-        const migrated = migrateV1ToV2(parsed);
+      if ((parsed?.version === 1 || parsed?.version === 2) && Array.isArray(parsed.widgets)) {
+        const slots = resolveAliases(migrateLegacyWidgets(parsed.widgets as LegacyWidget[]));
+        const migrated: DashboardLayout = { version: STORAGE_VERSION, widgets: slots };
         saveDashboard(migrated);
         return migrated;
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
-        if (isLayoutValid(parsed)) return parsed;
-        // Stored layout is broken (all single-column) — rebuild from defaults
-        // but keep the user's widget selection
-        const selectedIds = new Set(parsed.widgets.map((w: WidgetPosition) => w.id));
-        const rebuilt = buildDefaultLayout();
-        rebuilt.widgets = rebuilt.widgets.filter((w) => selectedIds.has(w.id));
-        // Add any user widgets not in the default layout
-        for (const wp of parsed.widgets) {
-          if (!rebuilt.widgets.some((w) => w.id === wp.id)) {
-            const def = getWidget(wp.id);
-            rebuilt.widgets.push({
-              id: wp.id,
-              x: 0,
-              y: Infinity,
-              w: def?.w ?? 6,
-              h: def?.h ?? 3,
-            });
-          }
+        const valid = resolveAliases(parsed.widgets as WidgetSlot[]);
+        // Persist alias expansion so it only runs once per load path.
+        if (valid.length !== (parsed.widgets as WidgetSlot[]).length) {
+          saveDashboard({ version: STORAGE_VERSION, widgets: valid });
         }
-        saveDashboard(rebuilt);
-        return rebuilt;
+        return { version: STORAGE_VERSION, widgets: valid };
       }
     }
   } catch {
     // Ignore corrupt storage
   }
 
-  // Try migrating from legacy stores
-  const migrated = migrateLegacy();
-  if (migrated && isLayoutValid(migrated)) {
+  const migrated = migrateFromLegacyKeys();
+  if (migrated && migrated.widgets.length > 0) {
     saveDashboard(migrated);
     return migrated;
   }
 
-  // Clean up any broken legacy data
   try {
     localStorage.removeItem(LEGACY_IDS_KEY);
     localStorage.removeItem(LEGACY_POS_KEY);
@@ -175,81 +169,18 @@ function saveDashboard(layout: DashboardLayout) {
   }
 }
 
-// ── RGL layout helpers ───────────────────────────
-
-interface RGLLayout {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
-  maxW?: number;
-  maxH?: number;
-}
-
-function toRGLLayout(widgets: WidgetPosition[]): RGLLayout[] {
-  return widgets.map((wp) => {
-    const def = getWidget(wp.id);
-    return {
-      i: wp.id,
-      x: wp.x,
-      y: wp.y,
-      w: wp.w,
-      h: wp.h,
-      minW: def?.minW,
-      minH: def?.minH,
-      maxW: def?.maxW,
-      maxH: def?.maxH,
-    };
-  });
-}
-
-function fromRGLLayout(rgl: RGLLayout[]): WidgetPosition[] {
-  return rgl.map((l) => ({ id: l.i, x: l.x, y: l.y, w: l.w, h: l.h }));
-}
-
-// First-fit gap packer on a 12-column grid. Scans top-to-bottom, left-to-right
-// and returns the first (x, y) where a w×h rectangle does not overlap any
-// existing widget. RGL's vertical compactor is a no-op on this placement
-// because first-fit already chose the lowest y that fits.
-const GRID_COLS = 12;
-
-function findFirstFit(occupied: WidgetPosition[], w: number, h: number): { x: number; y: number } {
-  const width = Math.min(Math.max(1, w), GRID_COLS);
-  const overlaps = (x: number, y: number): boolean => {
-    for (const o of occupied) {
-      if (x < o.x + o.w && x + width > o.x && y < o.y + h && y + h > o.y) {
-        return true;
-      }
-    }
-    return false;
-  };
-  const maxY = occupied.reduce((m, o) => Math.max(m, o.y + o.h), 0);
-  for (let y = 0; y <= maxY; y++) {
-    for (let x = 0; x <= GRID_COLS - width; x++) {
-      if (!overlaps(x, y)) return { x, y };
-    }
-  }
-  return { x: 0, y: maxY };
-}
-
 // ── Hook ─────────────────────────────────────────
 
 export function useOverviewLayout() {
   const [dashboard, setDashboardInner] = useState<DashboardLayout>(loadDashboard);
 
-  // Latest dashboard state, kept in a ref so commit/undo can flush without re-renders.
   const dashboardRef = useRef(dashboard);
   useEffect(() => {
     dashboardRef.current = dashboard;
   }, [dashboard]);
 
-  // Undo stack: snapshots taken before mutating actions.
   const undoStackRef = useRef<DashboardLayout[]>([]);
 
-  // Snapshot the current state into the undo stack. Caps at UNDO_STACK_LIMIT.
   const pushUndoSnapshot = useCallback(() => {
     const snap = dashboardRef.current;
     if (!snap) return;
@@ -258,7 +189,6 @@ export function useOverviewLayout() {
     if (stack.length > UNDO_STACK_LIMIT) stack.shift();
   }, []);
 
-  // Discrete user actions: snapshot for undo + setState + persist immediately.
   const setAndSave = useCallback(
     (fn: (prev: DashboardLayout) => DashboardLayout) => {
       pushUndoSnapshot();
@@ -271,90 +201,90 @@ export function useOverviewLayout() {
     [pushUndoSnapshot],
   );
 
-  // Derived: ordered widget IDs
-  const widgetIds = dashboard.widgets.map((w) => w.id);
+  const widgetIds = dashboard.widgets.map((s) => s.id);
 
-  // Derived: RGL layout with constraints
-  const gridLayout = toRGLLayout(dashboard.widgets);
-
-  // Toggle a widget on/off. New widgets are placed into the first top-left gap
-  // that fits their w×h, so the catalog fills holes in the existing layout
-  // before appending to the bottom.
+  // Toggle on: append with catalog defaults. Toggle off: remove.
   const toggleWidget = useCallback(
     (id: string) => {
       setAndSave((prev) => {
-        const exists = prev.widgets.some((w) => w.id === id);
+        const exists = prev.widgets.some((s) => s.id === id);
         if (exists) {
-          return { ...prev, widgets: prev.widgets.filter((w) => w.id !== id) };
+          return { ...prev, widgets: prev.widgets.filter((s) => s.id !== id) };
         }
-        const def = getWidget(id);
-        const w = def?.w ?? 6;
-        const h = def?.h ?? 3;
-        const { x, y } = findFirstFit(prev.widgets, w, h);
-        return {
-          ...prev,
-          widgets: [...prev.widgets, { id, x, y, w, h }],
-        };
+        const slot = defaultSlot(id);
+        if (!slot) return prev;
+        return { ...prev, widgets: [...prev.widgets, slot] };
       });
     },
     [setAndSave],
   );
 
-  // Add a widget at an explicit (x, y) position. Used by drag-from-catalog
-  // when the user chooses placement themselves; skips the first-fit packer.
-  // No-op if the widget is already in the layout.
+  // Insert a catalog widget at a specific index in the ordered list. Used by
+  // drag-from-catalog: the drop location becomes the insertion point in the
+  // CSS Grid source order (rather than an x/y coordinate). No-op if the
+  // widget is already in the layout.
   const addWidgetAt = useCallback(
-    (id: string, x: number, y: number) => {
+    (id: string, index: number) => {
       setAndSave((prev) => {
-        if (prev.widgets.some((w) => w.id === id)) return prev;
-        const def = getWidget(id);
-        const w = def?.w ?? 6;
-        const h = def?.h ?? 3;
-        const clampedX = Math.max(0, Math.min(x, GRID_COLS - Math.min(w, GRID_COLS)));
-        const clampedY = Math.max(0, y);
-        return {
-          ...prev,
-          widgets: [...prev.widgets, { id, x: clampedX, y: clampedY, w, h }],
-        };
+        if (prev.widgets.some((s) => s.id === id)) return prev;
+        const slot = defaultSlot(id);
+        if (!slot) return prev;
+        const widgets = [...prev.widgets];
+        const clamped = Math.max(0, Math.min(index, widgets.length));
+        widgets.splice(clamped, 0, slot);
+        return { ...prev, widgets };
       });
     },
     [setAndSave],
   );
 
-  // Remove a widget
   const removeWidget = useCallback(
     (id: string) => {
       setAndSave((prev) => ({
         ...prev,
-        widgets: prev.widgets.filter((w) => w.id !== id),
+        widgets: prev.widgets.filter((s) => s.id !== id),
       }));
     },
     [setAndSave],
   );
 
-  // Update positions from RGL drag/resize callback. Fires many times per
-  // second mid-drag — update in-memory state ONLY, never write to
-  // localStorage here. Persistence is deferred to commitLayout (called from
-  // onDragStop/onResizeStop in the consumer).
-  const updatePositions = useCallback((rglLayout: RGLLayout[]) => {
-    setDashboardInner((prev) => {
-      const idSet = new Set(prev.widgets.map((w) => w.id));
-      const updated = fromRGLLayout(rglLayout.filter((l) => idSet.has(l.i)));
-      return { ...prev, widgets: updated };
-    });
-  }, []);
+  // Reorder via @dnd-kit sortable. Accepts the full new ordered id list.
+  const reorderWidgets = useCallback(
+    (ids: string[]) => {
+      setAndSave((prev) => {
+        const byId = new Map(prev.widgets.map((s) => [s.id, s]));
+        const reordered = ids.map((id) => byId.get(id)).filter((s): s is WidgetSlot => !!s);
+        // Append any widgets not in `ids` to preserve data (shouldn't happen
+        // but defensive).
+        for (const s of prev.widgets) {
+          if (!ids.includes(s.id)) reordered.push(s);
+        }
+        return { ...prev, widgets: reordered };
+      });
+    },
+    [setAndSave],
+  );
 
-  // Called from onDragStart/onResizeStart: snapshot for undo before mutation.
-  const beginInteraction = useCallback(() => {
-    pushUndoSnapshot();
-  }, [pushUndoSnapshot]);
+  // Set a widget's colSpan and/or rowSpan. Both fields optional; omitted
+  // fields keep their current value.
+  const setSlotSize = useCallback(
+    (id: string, size: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan }) => {
+      setAndSave((prev) => ({
+        ...prev,
+        widgets: prev.widgets.map((s) =>
+          s.id === id
+            ? {
+                ...s,
+                colSpan: size.colSpan ?? s.colSpan,
+                rowSpan: size.rowSpan ?? s.rowSpan,
+              }
+            : s,
+        ),
+      }));
+    },
+    [setAndSave],
+  );
 
-  // Called from onDragStop/onResizeStop: persist final layout to localStorage.
-  const commitLayout = useCallback(() => {
-    saveDashboard(dashboardRef.current);
-  }, []);
-
-  // Reset to default — clear everything and rebuild
   const resetToDefault = useCallback(() => {
     pushUndoSnapshot();
     try {
@@ -368,7 +298,6 @@ export function useOverviewLayout() {
     setDashboardInner(def);
   }, [pushUndoSnapshot]);
 
-  // Clear every widget. Undo restores the prior layout.
   const clearAll = useCallback(() => {
     pushUndoSnapshot();
     const empty: DashboardLayout = { version: STORAGE_VERSION, widgets: [] };
@@ -376,7 +305,6 @@ export function useOverviewLayout() {
     setDashboardInner(empty);
   }, [pushUndoSnapshot]);
 
-  // Pop the latest snapshot and restore. Returns true if undo happened.
   const undo = useCallback((): boolean => {
     const snap = undoStackRef.current.pop();
     if (!snap) return false;
@@ -387,13 +315,12 @@ export function useOverviewLayout() {
 
   return {
     widgetIds,
-    gridLayout,
+    slots: dashboard.widgets,
     toggleWidget,
     addWidgetAt,
     removeWidget,
-    updatePositions,
-    beginInteraction,
-    commitLayout,
+    reorderWidgets,
+    setSlotSize,
     resetToDefault,
     clearAll,
     undo,

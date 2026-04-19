@@ -1,0 +1,352 @@
+/*
+ * CSS Grid dashboard surface. Replaces the former react-grid-layout usage.
+ *
+ *   12 columns × 80px row units × 24px gap.
+ *
+ * Widgets declare `grid-column: span N` (3/4/6/8/12) and `grid-row: span N`
+ * (2/3/4) via inline styles set by WidgetGrid.tsx. `grid-auto-flow: row`
+ * preserves the user's intentional order and avoids dense-pack reshuffles.
+ *
+ * Because all widgets share the same row-track height (80px), adjacent
+ * widgets in the same row land on the same y-coordinate, which structurally
+ * eliminates the staircase that mixed-h widgets produced under RGL's
+ * `compactType: 'vertical'` packer.
+ */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  grid-auto-rows: 80px;
+  /* `row dense` lets CSS Grid backfill holes left by mixed rowSpans. A short
+   * widget will slot into a gap above a row it couldn't otherwise start,
+   * which is what kills the visible dead-space between rows when a user
+   * places h=2 stats next to h=3 or h=4 lists. Visual order can diverge
+   * from the stored order — a later short widget may appear earlier if it
+   * fits — but the alternative (strict row) leaves ugly gaps whenever a
+   * user customizes. Match the industry default (Pinterest/Bento grids). */
+  grid-auto-flow: row dense;
+  gap: 24px;
+}
+
+.cell {
+  min-width: 0;
+  position: relative;
+}
+
+/*
+ * Fade dividers.
+ *
+ * Each cell draws a faint 1px line on its right and bottom edges, each
+ * with a transparent-to-solid-to-transparent gradient so the line fades
+ * before it reaches a corner. The divider sits in the middle of the 24px
+ * grid gap (offset -12px from the cell edge), so it reads as a boundary
+ * hint BETWEEN widgets rather than an outline AROUND them.
+ *
+ * Cells on the outer edge of the grid still draw their dividers — the
+ * gradient's end-fades naturally prevent them from forming hard page
+ * corners, so we don't need JS to identify "which widget is on the
+ * edge" (hard to do under grid-auto-flow:row dense anyway).
+ *
+ * Hidden in edit mode; the dashed outline on .widgetEditing already
+ * communicates widget bounds and a second divider layer would read as
+ * noise while dragging.
+ */
+.cell::after,
+.cell::before {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+
+.cell::after {
+  /* bottom divider */
+  left: 0;
+  right: 0;
+  bottom: -12px;
+  height: 1px;
+  background: linear-gradient(
+    to right,
+    transparent,
+    color-mix(in srgb, var(--soft) 28%, transparent) 20%,
+    color-mix(in srgb, var(--soft) 28%, transparent) 80%,
+    transparent
+  );
+}
+
+.cell::before {
+  /* right divider */
+  top: 0;
+  bottom: 0;
+  right: -12px;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent,
+    color-mix(in srgb, var(--soft) 28%, transparent) 20%,
+    color-mix(in srgb, var(--soft) 28%, transparent) 80%,
+    transparent
+  );
+}
+
+/* Edit mode: suppress dividers so the dashed .widgetEditing outline
+ * is the only boundary signal during drag-reorder. */
+.cell:has(.widgetEditing)::after,
+.cell:has(.widgetEditing)::before {
+  display: none;
+}
+
+/* ── Drag-from-catalog affordances ──────────────── */
+
+/* Subtle hint that the grid is a drop target while a catalog drag is in
+ * flight. Soft outline pulled inward so it doesn't shift layout. */
+.gridCatalogDrag {
+  outline: 1px dashed color-mix(in srgb, var(--accent) 55%, transparent);
+  outline-offset: 8px;
+  border-radius: 12px;
+}
+
+/* When the cursor is over empty grid area (below the last widget) the
+ * catalog drop will APPEND. Highlight the whole grid container's outline
+ * a little brighter so the user knows the end-append is armed. */
+.gridAppendHover {
+  outline-color: var(--accent);
+}
+
+/* When the cursor is over a specific widget during a catalog drag the drop
+ * will INSERT that catalog widget BEFORE this widget in source order.
+ * Render a thin accent bar on the widget's left edge as the drop marker.
+ * Vertical position: full cell height, 3px wide, inset slightly into the
+ * gap so it reads as "insert BETWEEN the previous widget and this one". */
+.cellDropTarget::before,
+.cellDropTarget::after {
+  display: none; /* hide fade dividers while drop marker is active */
+}
+
+.cellDropTarget {
+  box-shadow: inset 3px 0 0 var(--accent);
+  border-radius: 2px;
+  transition: box-shadow 80ms ease-out;
+}
+
+/*
+ * `.widget` is the visible inner box. It fills the cell and carries the
+ * 20px internal padding that shared OverviewView.module.css already expects
+ * on the outer wrapper (our replacement inherits the same zone rules —
+ * .widgetHead / .widgetBody / [data-widget-viz='stat'] overrides — because
+ * the data attrs live on `.cell`).
+ */
+.widget {
+  height: 100%;
+  min-width: 0;
+  padding: 20px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  transition:
+    outline 0.15s ease,
+    opacity 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+/*
+ * Edit mode: the whole widget is the grab target. Dashed outline + grab
+ * cursor are the affordances. Interactive chrome (buttons, etc.) inside the
+ * edit header use onPointerDown/onClick stopPropagation to keep clicks from
+ * starting drags.
+ */
+.widgetEditing {
+  outline: 1px dashed var(--soft);
+  outline-offset: -1px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.widgetEditing:active {
+  cursor: grabbing;
+}
+
+.editChrome {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 3;
+}
+
+.sizeControl {
+  display: inline-flex;
+  gap: 4px;
+  padding: 2px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.1));
+  background: var(--surface, rgba(20, 20, 22, 0.75));
+}
+
+.sizeButton {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--soft);
+  padding: 2px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  letter-spacing: var(--tracking-stat);
+}
+
+.sizeButton:hover {
+  color: var(--ink);
+}
+
+.removeButton {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: color-mix(in srgb, var(--danger) 10%, white);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  padding: 0 12px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid color-mix(in srgb, var(--danger) 55%, transparent);
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--danger) 88%, white) 0%,
+    var(--danger) 100%
+  );
+  cursor: pointer;
+}
+
+/* ── Just-added border sweep ──────────────────── */
+
+.borderSweep {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 5;
+  border-radius: 8px;
+  overflow: hidden;
+  animation: borderFade 1.4s ease-out forwards;
+}
+
+.borderSweep > span {
+  position: absolute;
+  background: var(--accent);
+  display: block;
+}
+
+.borderSide1 {
+  top: 0;
+  left: 0;
+  height: 2px;
+  width: 0;
+  animation: borderSide1 0.22s ease-out 0s forwards;
+}
+.borderSide2 {
+  top: 0;
+  right: 0;
+  width: 2px;
+  height: 0;
+  animation: borderSide2 0.22s ease-out 0.2s forwards;
+}
+.borderSide3 {
+  bottom: 0;
+  right: 0;
+  height: 2px;
+  width: 0;
+  animation: borderSide3 0.22s ease-out 0.4s forwards;
+}
+.borderSide4 {
+  bottom: 0;
+  left: 0;
+  width: 2px;
+  height: 0;
+  animation: borderSide4 0.22s ease-out 0.6s forwards;
+}
+
+@keyframes borderSide1 {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes borderSide2 {
+  from {
+    height: 0;
+  }
+  to {
+    height: 100%;
+  }
+}
+@keyframes borderSide3 {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+@keyframes borderSide4 {
+  from {
+    height: 0;
+  }
+  to {
+    height: 100%;
+  }
+}
+
+@keyframes borderFade {
+  0%,
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .borderSweep,
+  .borderSweep > span {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* ── Responsive collapse ─────────────────────── */
+
+/* Tablet: collapse the 12-col grid to 6-col. Wide widgets (>6 cols) wrap
+ * to full-width. Mid widgets (4 cols) effectively become half-width. */
+@media (max-width: 996px) {
+  .grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  .cell {
+    grid-column: span min(var(--tablet-span, 6), 6);
+  }
+}
+
+/* Mobile: stack every widget full-width, one per row. The edit chrome hides
+ * at this breakpoint because touch drag-reorder UX needs its own pass. */
+@media (max-width: 767px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .grid > .cell {
+    grid-column: 1 / -1 !important;
+  }
+  .editChrome {
+    display: none;
+  }
+}

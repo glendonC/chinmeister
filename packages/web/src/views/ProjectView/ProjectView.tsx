@@ -3,13 +3,25 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useSyncExternalStore,
   type CSSProperties,
 } from 'react';
 import clsx from 'clsx';
-import { Responsive } from 'react-grid-layout';
-import 'react-grid-layout/css/styles.css';
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
+import {
+  GRID_DROPPABLE_ID,
+  type CatalogDragPayload,
+} from '../../components/WidgetGrid/WidgetGrid.js';
 
 import { forceRefresh } from '../../lib/stores/polling.js';
 import { teamActions } from '../../lib/stores/teams.js';
@@ -35,35 +47,16 @@ import { ACTIVITY_DEFAULT_LAYOUT, TRENDS_DEFAULT_LAYOUT } from './projectTabDefa
 import ProjectMemoryTab from './ProjectMemoryTab.jsx';
 import SpawnForm from '../../components/SpawnAgentModal/SpawnAgentModal.jsx';
 
+import { WidgetGrid } from '../../components/WidgetGrid/WidgetGrid.js';
 import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
 import { WidgetCatalog } from '../../widgets/WidgetCatalog.js';
 import { getWidget } from '../../widgets/widget-catalog.js';
 import type { LiveAgent } from '../../widgets/types.js';
-import type { UserAnalytics, ConversationAnalytics, Lock } from '../../lib/apiSchemas.js';
 
 import overviewStyles from '../OverviewView/OverviewView.module.css';
 import styles from './ProjectView.module.css';
 
-// ── Grid constants (matched to OverviewView) ──────
-
-const GRID_COLS = { lg: 12, md: 12, sm: 6, xs: 4, xxs: 2 };
-const GRID_BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 };
-const GRID_MARGIN: [number, number] = [24, 24];
-const GRID_ROW_HEIGHT = 80;
-const GRAB_AREA_CLASS = 'widget-grab-area';
 const MOBILE_QUERY = '(max-width: 767px)';
-
-interface RGLLayout {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
-  maxW?: number;
-  maxH?: number;
-}
 
 function useMediaQuery(query: string): boolean {
   const subscribe = useCallback(
@@ -80,148 +73,6 @@ function useMediaQuery(query: string): boolean {
     return window.matchMedia(query).matches;
   }, [query]);
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
-}
-
-function deriveStackedLayout(layout: RGLLayout[], cols: number): RGLLayout[] {
-  const sorted = [...layout].sort((a, b) => a.y - b.y || a.x - b.x);
-  let y = 0;
-  return sorted.map((item) => {
-    const stacked: RGLLayout = { ...item, x: 0, w: Math.min(item.w, cols), y };
-    y += item.h;
-    return stacked;
-  });
-}
-
-// ── Grid container (mirrors OverviewView GridContainer) ──────
-
-interface ProjectGridContainerProps {
-  editing: boolean;
-  gridLayout: RGLLayout[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onLayoutChange: (current: any, all: any) => void;
-  onInteractionStart: () => void;
-  onInteractionStop: () => void;
-  activeWidgets: string[];
-  analytics: UserAnalytics;
-  conversationData: ConversationAnalytics;
-  summaries: Array<Record<string, unknown>>;
-  liveAgents: LiveAgent[];
-  locks: Lock[];
-  selectTeam: (id: string) => void;
-  removeWidget: (id: string) => void;
-}
-
-function ProjectGridContainer({
-  editing,
-  gridLayout,
-  onLayoutChange,
-  onInteractionStart,
-  onInteractionStop,
-  activeWidgets,
-  analytics,
-  conversationData,
-  summaries,
-  liveAgents,
-  locks,
-  selectTeam,
-  removeWidget,
-}: ProjectGridContainerProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [width, setWidth] = useState(1200);
-
-  useEffect(() => {
-    if (!containerRef.current) return;
-    const obs = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        setWidth(entry.contentRect.width);
-      }
-    });
-    obs.observe(containerRef.current);
-    setWidth(containerRef.current.offsetWidth);
-    return () => obs.disconnect();
-  }, []);
-
-  const layouts = useMemo(
-    () => ({
-      lg: gridLayout,
-      md: gridLayout,
-      sm: deriveStackedLayout(gridLayout, GRID_COLS.sm),
-      xs: deriveStackedLayout(gridLayout, GRID_COLS.xs),
-      xxs: deriveStackedLayout(gridLayout, GRID_COLS.xxs),
-    }),
-    [gridLayout],
-  );
-
-  const handleDragStart = useCallback(() => {
-    if (containerRef.current) containerRef.current.dataset.dragging = 'true';
-    onInteractionStart();
-  }, [onInteractionStart]);
-
-  const handleDragStop = useCallback(() => {
-    if (containerRef.current) delete containerRef.current.dataset.dragging;
-    onInteractionStop();
-  }, [onInteractionStop]);
-
-  return (
-    <div ref={containerRef} className={clsx(editing && overviewStyles.widgetEditing)}>
-      {width > 0 && (
-        <Responsive
-          {...({
-            className: 'overview-grid',
-            width,
-            layouts,
-            breakpoints: GRID_BREAKPOINTS,
-            cols: GRID_COLS,
-            margin: GRID_MARGIN,
-            // Zero edge padding so widget content aligns with page text.
-            // Inter-widget spacing is still controlled by `margin` above.
-            containerPadding: [0, 0] as [number, number],
-            rowHeight: GRID_ROW_HEIGHT,
-            isDraggable: editing,
-            isResizable: editing,
-            onLayoutChange,
-            onDragStart: handleDragStart,
-            onDragStop: handleDragStop,
-            onResizeStart: handleDragStart,
-            onResizeStop: handleDragStop,
-            compactType: 'vertical',
-            dragConfig: {
-              handle: `.${GRAB_AREA_CLASS}`,
-              cancel: 'button, a, input, select, textarea, [role="button"]',
-              threshold: 5,
-            },
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          } as any)}
-        >
-          {activeWidgets.map((id) => (
-            <div key={id}>
-              <div className={clsx(overviewStyles.widget, GRAB_AREA_CLASS)}>
-                {editing && (
-                  <button
-                    type="button"
-                    className={overviewStyles.widgetRemove}
-                    onClick={() => removeWidget(id)}
-                    aria-label={`Remove ${getWidget(id)?.name ?? 'widget'}`}
-                  >
-                    Remove
-                  </button>
-                )}
-                <WidgetRenderer
-                  widgetId={id}
-                  analytics={analytics}
-                  conversationData={conversationData}
-                  summaries={summaries}
-                  liveAgents={liveAgents}
-                  locks={locks}
-                  selectTeam={selectTeam}
-                />
-              </div>
-            </div>
-          ))}
-        </Responsive>
-      )}
-    </div>
-  );
 }
 
 // ── Tab definitions ─────────────────────────────
@@ -278,6 +129,54 @@ export default function ProjectView(_props: Props) {
   const activityLayout = useProjectTabLayout('activity', ACTIVITY_DEFAULT_LAYOUT);
   const trendsLayout = useProjectTabLayout('trends', TRENDS_DEFAULT_LAYOUT);
   const currentLayout = activeTab === 'activity' ? activityLayout : trendsLayout;
+
+  // ── Drag context for the active tab (catalog drop + reorder) ──
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor),
+  );
+  const [catalogDragging, setCatalogDragging] = useState<CatalogDragPayload | null>(null);
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    const activeId = String(event.active.id);
+    if (activeId.startsWith('catalog:')) {
+      const data = event.active.data.current as CatalogDragPayload | undefined;
+      if (data) setCatalogDragging(data);
+    }
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      setCatalogDragging(null);
+      const { active, over } = event;
+      if (!over) return;
+      const activeId = String(active.id);
+      const overId = String(over.id);
+      const slots = currentLayout.slots;
+
+      if (activeId.startsWith('catalog:')) {
+        const data = active.data.current as CatalogDragPayload | undefined;
+        if (!data) return;
+        const insertIndex =
+          overId === GRID_DROPPABLE_ID ? slots.length : slots.findIndex((s) => s.id === overId);
+        if (insertIndex < 0) return;
+        currentLayout.addWidgetAt(data.widgetId, insertIndex);
+        return;
+      }
+
+      if (activeId === overId) return;
+      const ids = slots.map((s) => s.id);
+      const oldIndex = ids.indexOf(activeId);
+      const newIndex = ids.indexOf(overId);
+      if (oldIndex < 0 || newIndex < 0) return;
+      currentLayout.reorderWidgets(arrayMove(ids, oldIndex, newIndex));
+    },
+    [currentLayout],
+  );
+
+  const handleDragCancel = useCallback(() => {
+    setCatalogDragging(null);
+  }, []);
 
   const handleDeleteMemory = useCallback(
     async (id: string) => {
@@ -387,164 +286,183 @@ export default function ProjectView(_props: Props) {
     );
   }
 
-  const activeWidgets = currentLayout.widgetIds.filter((id) => getWidget(id));
-  const gridLayout = currentLayout.gridLayout.filter((l) => activeWidgets.includes(l.i));
+  const activeSlots = currentLayout.slots.filter((s) => getWidget(s.id));
 
   return (
-    <div className={styles.page}>
-      <ViewHeader eyebrow="Project" title={activeTeam?.team_name || 'Project'} />
+    <DndContext
+      sensors={sensors}
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      onDragCancel={handleDragCancel}
+    >
+      <div className={styles.page}>
+        <ViewHeader eyebrow="Project" title={activeTeam?.team_name || 'Project'} />
 
-      {/* Global alert chrome — visible across tabs */}
-      {conflicts.length > 0 && (
-        <button
-          type="button"
-          className={styles.conflictBanner}
-          onClick={() => setActiveTab('activity')}
-        >
-          <span className={styles.conflictText}>
-            {conflicts.length} {conflicts.length === 1 ? 'file' : 'files'} with overlapping edits
-          </span>
-          <span className={styles.conflictAction}>View</span>
-        </button>
-      )}
+        {/* Global alert chrome — visible across tabs */}
+        {conflicts.length > 0 && (
+          <button
+            type="button"
+            className={styles.conflictBanner}
+            onClick={() => setActiveTab('activity')}
+          >
+            <span className={styles.conflictText}>
+              {conflicts.length} {conflicts.length === 1 ? 'file' : 'files'} with overlapping edits
+            </span>
+            <span className={styles.conflictAction}>View</span>
+          </button>
+        )}
 
-      {/* Tab nav (preserves the big-number aesthetic from the original) */}
-      <section className={styles.header}>
-        <div
-          className={styles.statsRow}
-          ref={statsRef}
-          role="tablist"
-          aria-label="Project sections"
-        >
-          {stats.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              role="tab"
-              aria-selected={activeTab === s.id}
-              aria-controls={`panel-${s.id}`}
-              data-tab={s.id}
-              tabIndex={activeTab === s.id ? 0 : -1}
-              className={clsx(styles.statButton, activeTab === s.id && styles.statActive)}
-              style={{ '--stat-index': i } as CSSProperties}
-              onClick={(e) => {
-                e.currentTarget.focus();
-                setActiveTab(s.id);
-              }}
-            >
-              <span className={styles.statLabel}>
-                {s.label}
-                {activeTab === s.id && <KeyboardHint {...hint} />}
-              </span>
-              <span className={clsx(styles.statValue, s.tone === 'accent' && styles.statAccent)}>
-                {s.value}
-              </span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      {/* Customize bar (analytical tabs only) */}
-      {isAnalytical && (
-        <div className={overviewStyles.rangeRow}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-            {!isMobile && (
-              <CustomizeButton active={catalogOpen} onClick={() => setCatalogOpen(!catalogOpen)} />
-            )}
-            {activeTab === 'activity' && activeTeamId && (
+        {/* Tab nav (preserves the big-number aesthetic from the original) */}
+        <section className={styles.header}>
+          <div
+            className={styles.statsRow}
+            ref={statsRef}
+            role="tablist"
+            aria-label="Project sections"
+          >
+            {stats.map((s, i) => (
               <button
+                key={s.id}
                 type="button"
-                className={styles.spawnBtn}
-                onClick={() => setShowSpawn((v) => !v)}
-                aria-expanded={showSpawn}
+                role="tab"
+                aria-selected={activeTab === s.id}
+                aria-controls={`panel-${s.id}`}
+                data-tab={s.id}
+                tabIndex={activeTab === s.id ? 0 : -1}
+                className={clsx(styles.statButton, activeTab === s.id && styles.statActive)}
+                style={{ '--stat-index': i } as CSSProperties}
+                onClick={(e) => {
+                  e.currentTarget.focus();
+                  setActiveTab(s.id);
+                }}
               >
-                {showSpawn ? 'Cancel' : 'Spawn agent'}
-                <span className={styles.spawnBtnArrow}>
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
-                    {showSpawn ? (
-                      <path
-                        d="M3 3l6 6M9 3l-6 6"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    ) : (
-                      <path
-                        d="M6 2.5v7M3 6.5l3 3 3-3"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    )}
-                  </svg>
+                <span className={styles.statLabel}>
+                  {s.label}
+                  {activeTab === s.id && <KeyboardHint {...hint} />}
+                </span>
+                <span className={clsx(styles.statValue, s.tone === 'accent' && styles.statAccent)}>
+                  {s.value}
                 </span>
               </button>
-            )}
+            ))}
           </div>
-          <RangePills value={rangeDays} onChange={setRangeDays} />
-        </div>
-      )}
+        </section>
 
-      {/* Inline spawn form (Activity tab only, toggled by the spawn pill) */}
-      {activeTab === 'activity' && showSpawn && activeTeamId && (
-        <SpawnForm
-          teamId={activeTeamId}
-          availableTools={availableSpawnTools}
-          onClose={() => setShowSpawn(false)}
-        />
-      )}
-
-      {/* Tab content */}
-      <section className={styles.vizArea}>
+        {/* Customize bar (analytical tabs only) */}
         {isAnalytical && (
-          <div className={styles.vizPanel} role="tabpanel" id={`panel-${activeTab}`}>
-            <div className={styles.gridBleed}>
-              <ProjectGridContainer
-                editing={editing && !isMobile}
-                gridLayout={gridLayout}
-                activeWidgets={activeWidgets}
-                analytics={analytics}
-                conversationData={conversationData}
-                summaries={summaries}
-                liveAgents={liveAgents}
-                locks={locks}
-                selectTeam={selectTeam}
-                onLayoutChange={(current) => currentLayout.updatePositions(current)}
-                onInteractionStart={currentLayout.beginInteraction}
-                onInteractionStop={currentLayout.commitLayout}
-                removeWidget={currentLayout.removeWidget}
+          <div className={overviewStyles.rangeRow}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {!isMobile && (
+                <CustomizeButton
+                  active={catalogOpen}
+                  onClick={() => setCatalogOpen(!catalogOpen)}
+                />
+              )}
+              {activeTab === 'activity' && activeTeamId && (
+                <button
+                  type="button"
+                  className={styles.spawnBtn}
+                  onClick={() => setShowSpawn((v) => !v)}
+                  aria-expanded={showSpawn}
+                >
+                  {showSpawn ? 'Cancel' : 'Spawn agent'}
+                  <span className={styles.spawnBtnArrow}>
+                    <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden="true">
+                      {showSpawn ? (
+                        <path
+                          d="M3 3l6 6M9 3l-6 6"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      ) : (
+                        <path
+                          d="M6 2.5v7M3 6.5l3 3 3-3"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      )}
+                    </svg>
+                  </span>
+                </button>
+              )}
+            </div>
+            <RangePills value={rangeDays} onChange={setRangeDays} />
+          </div>
+        )}
+
+        {/* Inline spawn form (Activity tab only, toggled by the spawn pill) */}
+        {activeTab === 'activity' && showSpawn && activeTeamId && (
+          <SpawnForm
+            teamId={activeTeamId}
+            availableTools={availableSpawnTools}
+            onClose={() => setShowSpawn(false)}
+          />
+        )}
+
+        {/* Tab content */}
+        <section className={styles.vizArea}>
+          {isAnalytical && (
+            <div className={styles.vizPanel} role="tabpanel" id={`panel-${activeTab}`}>
+              <div className={styles.gridBleed}>
+                <WidgetGrid
+                  slots={activeSlots}
+                  editing={editing && !isMobile}
+                  renderWidget={(id) => (
+                    <WidgetRenderer
+                      widgetId={id}
+                      analytics={analytics}
+                      conversationData={conversationData}
+                      summaries={summaries}
+                      liveAgents={liveAgents}
+                      locks={locks}
+                      selectTeam={selectTeam}
+                    />
+                  )}
+                  onReorder={currentLayout.reorderWidgets}
+                  onRemove={currentLayout.removeWidget}
+                  onSlotSize={currentLayout.setSlotSize}
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'memory' && (
+            <div className={styles.vizPanel} role="tabpanel" id="panel-memory">
+              <ProjectMemoryTab
+                memories={memories}
+                memoryBreakdown={memoryBreakdown}
+                onDeleteMemory={handleDeleteMemory}
               />
             </div>
-          </div>
-        )}
+          )}
+        </section>
 
-        {activeTab === 'memory' && (
-          <div className={styles.vizPanel} role="tabpanel" id="panel-memory">
-            <ProjectMemoryTab
-              memories={memories}
-              memoryBreakdown={memoryBreakdown}
-              onDeleteMemory={handleDeleteMemory}
-            />
-          </div>
+        {/* Customize panel (analytical tabs only) */}
+        {isAnalytical && (
+          <WidgetCatalog
+            open={catalogOpen}
+            onClose={() => setCatalogOpen(false)}
+            widgetIds={currentLayout.widgetIds}
+            toggleWidget={currentLayout.toggleWidget}
+            editing={editing}
+            setEditing={setEditing}
+            resetToDefault={currentLayout.resetToDefault}
+            clearAll={currentLayout.clearAll}
+            viewScope="project"
+          />
         )}
-      </section>
-
-      {/* Customize panel (analytical tabs only) */}
-      {isAnalytical && (
-        <WidgetCatalog
-          open={catalogOpen}
-          onClose={() => setCatalogOpen(false)}
-          widgetIds={currentLayout.widgetIds}
-          toggleWidget={currentLayout.toggleWidget}
-          editing={editing}
-          setEditing={setEditing}
-          resetToDefault={currentLayout.resetToDefault}
-          clearAll={currentLayout.clearAll}
-          viewScope="project"
-        />
-      )}
-    </div>
+      </div>
+      <DragOverlay dropAnimation={null}>
+        {catalogDragging ? (
+          <div className={overviewStyles.dragOverlayCard}>
+            <span className={overviewStyles.dragOverlayName}>{catalogDragging.name}</span>
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
   );
 }

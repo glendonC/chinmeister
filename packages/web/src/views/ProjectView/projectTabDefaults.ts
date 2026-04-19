@@ -1,42 +1,36 @@
 // Default widget layouts for each project tab. These are starter sets
 // that suggest the intent of each tab. Users can customize freely.
 
-interface RGLLayout {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
+import type { WidgetSlot } from '../../widgets/widget-catalog.js';
 
 // Activity tab — live operational surface. Who's working in this repo
 // right now, what files are contested, what's in play. KPI strip below
 // for at-a-glance project health. Trends tab owns the historical charts.
-export const ACTIVITY_DEFAULT_LAYOUT: RGLLayout[] = [
+export const ACTIVITY_DEFAULT_LAYOUT: WidgetSlot[] = [
   // Live presence + conflicts side by side
-  { i: 'live-agents', x: 0, y: 0, w: 6, h: 3 },
-  { i: 'live-conflicts', x: 6, y: 0, w: 6, h: 3 },
+  { id: 'live-agents', colSpan: 6, rowSpan: 3 },
+  { id: 'live-conflicts', colSpan: 6, rowSpan: 3 },
   // Files in play (full width)
-  { i: 'files-in-play', x: 0, y: 3, w: 12, h: 3 },
+  { id: 'files-in-play', colSpan: 12, rowSpan: 3 },
   // At-a-glance KPI strip
-  { i: 'sessions', x: 0, y: 6, w: 3, h: 2 },
-  { i: 'edits', x: 3, y: 6, w: 3, h: 2 },
-  { i: 'cost', x: 6, y: 6, w: 3, h: 2 },
-  { i: 'files-touched', x: 9, y: 6, w: 3, h: 2 },
+  { id: 'sessions', colSpan: 3, rowSpan: 2 },
+  { id: 'edits', colSpan: 3, rowSpan: 2 },
+  { id: 'cost', colSpan: 3, rowSpan: 2 },
+  { id: 'files-touched', colSpan: 3, rowSpan: 2 },
 ];
 
 // Trends tab — historical reflection. Bigger charts, full coverage.
-export const TRENDS_DEFAULT_LAYOUT: RGLLayout[] = [
-  { i: 'session-trend', x: 0, y: 0, w: 8, h: 3 },
-  { i: 'outcomes', x: 8, y: 0, w: 4, h: 3 },
-  { i: 'heatmap', x: 0, y: 3, w: 8, h: 4 },
-  { i: 'work-types', x: 8, y: 3, w: 4, h: 3 },
-  { i: 'directories', x: 0, y: 7, w: 6, h: 4 },
-  { i: 'files', x: 6, y: 7, w: 6, h: 4 },
-  { i: 'tools', x: 0, y: 11, w: 6, h: 3 },
-  { i: 'models', x: 6, y: 11, w: 6, h: 3 },
-  { i: 'stuckness', x: 0, y: 14, w: 6, h: 3 },
-  { i: 'first-edit', x: 6, y: 14, w: 6, h: 3 },
-  { i: 'topics', x: 0, y: 17, w: 6, h: 3 },
-  { i: 'sentiment-outcomes', x: 6, y: 17, w: 6, h: 3 },
+export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
+  { id: 'session-trend', colSpan: 8, rowSpan: 3 },
+  { id: 'outcomes', colSpan: 4, rowSpan: 3 },
+  { id: 'heatmap', colSpan: 8, rowSpan: 4 },
+  { id: 'work-types', colSpan: 4, rowSpan: 3 },
+  { id: 'directories', colSpan: 6, rowSpan: 4 },
+  { id: 'files', colSpan: 6, rowSpan: 4 },
+  { id: 'tools', colSpan: 6, rowSpan: 3 },
+  { id: 'models', colSpan: 6, rowSpan: 3 },
+  { id: 'stuckness', colSpan: 6, rowSpan: 3 },
+  { id: 'first-edit', colSpan: 6, rowSpan: 3 },
+  { id: 'topics', colSpan: 6, rowSpan: 3 },
+  { id: 'sentiment-outcomes', colSpan: 6, rowSpan: 3 },
 ];

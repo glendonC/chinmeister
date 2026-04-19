@@ -1,26 +1,46 @@
 /**
  * Widget catalog: every data point that can appear on the overview.
  *
- * 12-column grid. Each widget specifies w (columns) and h (row units).
- * Row height is ~80px. Widgets snap to these grid positions.
+ * 12-column CSS Grid. Each widget declares `w` (columns it spans: 3/4/6/8/12)
+ * and `h` (80px row units it spans: 2/3/4). Rows auto-fit via
+ * grid-auto-flow:row so staggering is structurally impossible — short
+ * widgets align at the top of their row and tall ones extend downward.
  *
  * Sizes:
  *   KPI stat card:    3 cols × 2 rows  (quarter width, compact)
+ *   Enriched stat:    4 cols × 2 rows  (third width)
  *   Half chart:       6 cols × 3 rows  (half width, standard chart)
  *   Wide chart:       8 cols × 3 rows  (two-thirds)
  *   Full-width:      12 cols × 3 rows  (tables, timelines)
  *   Tall full-width: 12 cols × 4 rows  (heatmap, large viz)
  */
 
-/** Layout item for react-grid-layout */
-interface RGLLayout {
-  i: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-  minW?: number;
-  minH?: number;
+export type WidgetColSpan = 3 | 4 | 6 | 8 | 12;
+export type WidgetRowSpan = 2 | 3 | 4;
+
+/**
+ * Layout slot persisted in localStorage. `colSpan` maps to grid-column:span,
+ * `rowSpan` to grid-row:span. The grid is 12-column with 80px row units and
+ * 24px gaps, so a rowSpan of 2 paints a 184px cell, 3 = 288px, 4 = 392px.
+ */
+export interface WidgetSlot {
+  id: string;
+  colSpan: WidgetColSpan;
+  rowSpan: WidgetRowSpan;
+}
+
+function clampColSpan(n: number): WidgetColSpan {
+  if (n <= 3) return 3;
+  if (n === 4) return 4;
+  if (n <= 6) return 6;
+  if (n <= 8) return 8;
+  return 12;
+}
+
+function clampRowSpan(n: number): WidgetRowSpan {
+  if (n <= 2) return 2;
+  if (n === 3) return 3;
+  return 4;
 }
 
 export type WidgetViz =
@@ -49,6 +69,20 @@ export type WidgetCategory =
   | 'conversations'
   | 'memory'
   | 'team';
+
+/**
+ * Time-semantics bucket. Drives whether a widget responds to the global date
+ * picker and what label (if any) appears in its header.
+ *
+ *   'period'   — every number responds to the picker (default, most widgets)
+ *   'live'     — real-time snapshot, picker does not apply
+ *   'all-time' — lifetime values, picker does not apply
+ *
+ * Rule: a widget is exactly one scope. If a design needs mixed scopes, split
+ * into two widgets so users can tell which numbers the picker controls.
+ * See .internal/OVERVIEW_ARCH.md item #1.
+ */
+export type WidgetTimeScope = 'period' | 'live' | 'all-time';
 
 /**
  * Which view surfaces a widget should appear in:
@@ -80,6 +114,11 @@ export interface WidgetDef {
   maxH?: number;
   /** Data keys on UserAnalytics or ConversationAnalytics */
   dataKeys: string[];
+  /**
+   * Time-semantics scope. Omit for the default ('period') — only set
+   * explicitly for 'live' or 'all-time' widgets. See WidgetTimeScope.
+   */
+  timeScope?: WidgetTimeScope;
 }
 
 // ── The catalog ──────────────────────────────────
@@ -98,6 +137,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 4,
     minH: 2,
     dataKeys: ['dashboard'],
+    timeScope: 'live',
   },
   {
     id: 'live-conflicts',
@@ -111,6 +151,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 3,
     minH: 2,
     dataKeys: ['dashboard'],
+    timeScope: 'live',
   },
   {
     id: 'files-in-play',
@@ -124,6 +165,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 4,
     minH: 2,
     dataKeys: ['dashboard'],
+    timeScope: 'live',
   },
   {
     id: 'claimed-files',
@@ -137,6 +179,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 4,
     minH: 2,
     dataKeys: ['dashboard'],
+    timeScope: 'live',
   },
 
   // ── Usage (KPI stats) ─────────────────
@@ -428,9 +471,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
 
   // ── Memory ────────────────────────────
   {
-    id: 'memory-stats',
-    name: 'memory usage',
-    description: 'Shared memories, searches, and freshness',
+    id: 'memory-activity',
+    name: 'memory activity',
+    description: 'Searches, hit rate, and new memories this period',
     category: 'memory',
     scope: 'both',
     viz: 'stat-row',
@@ -439,6 +482,20 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 3,
     minH: 2,
     dataKeys: ['memory_usage'],
+  },
+  {
+    id: 'memory-health',
+    name: 'memory health',
+    description: 'Total memories, average age, and stale count across all time',
+    category: 'memory',
+    scope: 'both',
+    viz: 'stat-row',
+    w: 6,
+    h: 2,
+    minW: 3,
+    minH: 2,
+    dataKeys: ['memory_usage'],
+    timeScope: 'all-time',
   },
 
   // ── Team ──────────────────────────────
@@ -592,6 +649,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 4,
     minH: 2,
     dataKeys: ['audit_staleness'],
+    timeScope: 'all-time',
   },
   {
     id: 'concurrent-edits',
@@ -724,6 +782,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 4,
     minH: 3,
     dataKeys: ['data_coverage'],
+    timeScope: 'live',
   },
 
   // ── Conversations (extended) ────────
@@ -863,6 +922,59 @@ export function getWidget(id: string): WidgetDef | undefined {
   return WIDGET_MAP.get(id);
 }
 
+/**
+ * Resolve a widget's default column span for the CSS Grid layout. Maps the
+ * catalog's `w` (RGL grid units) to one of the canonical spans 3/4/6/8/12.
+ * Used by views that render widgets via grid-column:span.
+ */
+export function widgetColSpan(def: WidgetDef): WidgetColSpan {
+  return clampColSpan(def.w);
+}
+
+/**
+ * Resolve a widget's default row span for the CSS Grid layout. Maps the
+ * catalog's `h` (80px units) to one of 2/3/4 row spans.
+ */
+export function widgetRowSpan(def: WidgetDef): WidgetRowSpan {
+  return clampRowSpan(def.h);
+}
+
+/**
+ * Build a WidgetSlot for an id using catalog defaults. Returns null when the
+ * id isn't in the catalog.
+ */
+export function defaultSlot(id: string): WidgetSlot | null {
+  const def = getWidget(id);
+  if (!def) return null;
+  return { id, colSpan: widgetColSpan(def), rowSpan: widgetRowSpan(def) };
+}
+
+/**
+ * ID aliases for widgets that have been renamed, removed, or split. When a
+ * saved layout contains a deprecated ID, the loader replaces it in place
+ * with the target IDs at their catalog default sizes.
+ *
+ * Empty array means "the widget was removed with no replacement" — the slot
+ * is dropped from the layout.
+ *
+ * Single-entry array = rename. Multi-entry array = split.
+ */
+export const WIDGET_ALIASES: Record<string, string[]> = {
+  // 2026-04: memory-stats mixed period + lifetime fields. Split so each
+  // widget has one clear time scope. See .internal/OVERVIEW_ARCH.md item #1.
+  'memory-stats': ['memory-activity', 'memory-health'],
+};
+
+/**
+ * Resolve a widget id through the alias map. Returns the replacement ids
+ * (one or many), or the original id if it has no alias. Does not validate
+ * that the returned ids exist in the catalog — callers still need to run
+ * through `defaultSlot` or `getWidget`.
+ */
+export function resolveWidgetAlias(id: string): string[] {
+  return WIDGET_ALIASES[id] ?? [id];
+}
+
 // ── Category metadata ───────────────────────────
 
 export const CATEGORIES: Array<{ id: WidgetCategory; label: string }> = [
@@ -878,40 +990,43 @@ export const CATEGORIES: Array<{ id: WidgetCategory; label: string }> = [
 ];
 
 // ── Default layout for new users ────────────────
-// x/y positions on the 12-column grid
+// Ordered widget slots on the 12-col CSS Grid. Widgets pack via
+// grid-auto-flow:row so the visual rhythm below depends only on the
+// (colSpan, rowSpan) sum per row totalling 12 cols.
 
-export const DEFAULT_LAYOUT: RGLLayout[] = [
-  // Row 0: Live presence + conflicts side by side
-  { i: 'live-agents', x: 0, y: 0, w: 6, h: 3 },
-  { i: 'live-conflicts', x: 6, y: 0, w: 6, h: 3 },
+export const DEFAULT_LAYOUT: WidgetSlot[] = [
+  // Live presence + conflicts — 6 + 6
+  { id: 'live-agents', colSpan: 6, rowSpan: 3 },
+  { id: 'live-conflicts', colSpan: 6, rowSpan: 3 },
 
-  // Row 3: KPI stats — edits, cost, cost-per-edit (4-col each)
-  { i: 'edits', x: 0, y: 3, w: 4, h: 2 },
-  { i: 'cost', x: 4, y: 3, w: 4, h: 2 },
-  { i: 'cost-per-edit', x: 8, y: 3, w: 4, h: 2 },
+  // KPI strip — 4 + 4 + 4
+  { id: 'edits', colSpan: 4, rowSpan: 2 },
+  { id: 'cost', colSpan: 4, rowSpan: 2 },
+  { id: 'cost-per-edit', colSpan: 4, rowSpan: 2 },
 
-  // Row 5: Trend chart (wide) + Outcomes (narrow)
-  { i: 'session-trend', x: 0, y: 5, w: 8, h: 3 },
-  { i: 'outcomes', x: 8, y: 5, w: 4, h: 3 },
+  // Trend chart + outcomes — 8 + 4
+  { id: 'session-trend', colSpan: 8, rowSpan: 3 },
+  { id: 'outcomes', colSpan: 4, rowSpan: 3 },
 
-  // Row 8: Heatmap (wide) + Work types (narrow)
-  { i: 'heatmap', x: 0, y: 8, w: 8, h: 4 },
-  { i: 'work-types', x: 8, y: 8, w: 4, h: 3 },
+  // Heatmap + work types — 8 + 4
+  { id: 'heatmap', colSpan: 8, rowSpan: 4 },
+  { id: 'work-types', colSpan: 4, rowSpan: 3 },
 
-  // Row 12: Codebase — dirs + files side by side
-  { i: 'directories', x: 0, y: 12, w: 6, h: 4 },
-  { i: 'files', x: 6, y: 12, w: 6, h: 4 },
+  // Codebase — 6 + 6
+  { id: 'directories', colSpan: 6, rowSpan: 4 },
+  { id: 'files', colSpan: 6, rowSpan: 4 },
 
-  // Row 16: Tools + Models side by side
-  { i: 'tools', x: 0, y: 16, w: 6, h: 3 },
-  { i: 'models', x: 6, y: 16, w: 6, h: 3 },
+  // Tools + models — 6 + 6
+  { id: 'tools', colSpan: 6, rowSpan: 3 },
+  { id: 'models', colSpan: 6, rowSpan: 3 },
 
-  // Row 19: Health signals
-  { i: 'memory-stats', x: 0, y: 19, w: 6, h: 2 },
-  { i: 'stuckness', x: 6, y: 19, w: 6, h: 2 },
+  // Health signals — 4 + 4 + 4 (memory split into activity + health)
+  { id: 'memory-activity', colSpan: 4, rowSpan: 2 },
+  { id: 'memory-health', colSpan: 4, rowSpan: 2 },
+  { id: 'stuckness', colSpan: 4, rowSpan: 2 },
 
-  // Row 21: Projects (full width)
-  { i: 'projects', x: 0, y: 21, w: 12, h: 3 },
+  // Projects — 12
+  { id: 'projects', colSpan: 12, rowSpan: 3 },
 ];
 
-export const DEFAULT_WIDGET_IDS = DEFAULT_LAYOUT.map((l) => l.i);
+export const DEFAULT_WIDGET_IDS = DEFAULT_LAYOUT.map((s) => s.id);
