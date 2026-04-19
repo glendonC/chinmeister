@@ -28,7 +28,40 @@ export interface FixedPathDiscovery {
   relativePath: string;
 }
 
-export type FileDiscovery = ProjectHashDiscovery | GlobDiscovery | FixedPathDiscovery;
+export interface PerOsPathDiscovery {
+  strategy: 'per-os-path';
+  /** Absolute path per platform; `~` expanded to homedir at discovery time. */
+  paths: {
+    darwin: string;
+    linux: string;
+    win32: string;
+  };
+}
+
+/**
+ * Tools that shard sessions into `{baseDir}/{sessionId}/{filename}` (e.g.
+ * Copilot's `~/.copilot/session-state/<id>/events.jsonl`). The discoverer
+ * walks every subdir of `baseDir`, checks whether `filename` exists inside,
+ * and returns the newest such file that has been touched since `startedAt`.
+ *
+ * Projection by cwd is intentionally NOT done here — Copilot's session-ids
+ * are opaque UUIDs with no project-linking naming convention, so the
+ * mtime-after-startedAt gate is what identifies the active session.
+ */
+export interface PerSessionSubdirDiscovery {
+  strategy: 'per-session-subdir';
+  /** e.g. `~/.copilot/session-state/` */
+  baseDir: string;
+  /** e.g. `events.jsonl` */
+  filename: string;
+}
+
+export type FileDiscovery =
+  | ProjectHashDiscovery
+  | GlobDiscovery
+  | FixedPathDiscovery
+  | PerOsPathDiscovery
+  | PerSessionSubdirDiscovery;
 
 // ── Token extraction ──────────────────────────────
 
@@ -120,13 +153,83 @@ export interface MarkdownExtractionSpec {
   assistantMarker: string;
 }
 
+// ── SQLite source ─────────────────────────────────
+//
+// SQLite is a *source*, not a separate extraction paradigm. The engine opens
+// the DB, runs the query, and each row becomes an entry object (column name →
+// value). From there, the existing conversation / tokens / toolCalls specs
+// extract fields via dot-notation paths against those entries, identical to
+// JSONL flow. If a tool's log lives in a table with nested JSON, lift the
+// nested fields into flat result columns via `json_extract()` in the SQL.
+
+export interface SqliteSource {
+  /**
+   * Expected table name. The engine does not use it for extraction — the
+   * `query` is the source of truth — but it is kept as a documented field so
+   * the validator (and future healer) can detect when a tool renames or drops
+   * the table before wasting a query round-trip.
+   */
+  table: string;
+  /**
+   * Full SELECT statement. Must be a single statement (no `;` terminators, no
+   * DDL, no DML). May use `json_extract()` and other scalar functions. Each
+   * result row becomes an entry; column names become keys on that entry.
+   *
+   * Specs are shipped with chinwag and validated before execution, so raw SQL
+   * is acceptable here. Do NOT interpolate user input into the query; if
+   * parameterisation is ever needed, extend this shape with a typed params
+   * array rather than string concatenation.
+   */
+  query: string;
+}
+
+// ── Conversation pre-pass hints ───────────────────
+
+/**
+ * Narrow, Option-A hint for tools whose per-message `model` field lives on a
+ * different prior line (e.g. Copilot emits `session.model_change` events
+ * once, and every subsequent `user.message`/`assistant.message` inherits
+ * that model implicitly). The engine runs a pre-pass that walks entries in
+ * order, tracks the carried value, and attaches it to subsequent entries at
+ * `carryTargetPath` before normal extraction runs.
+ *
+ * If a second tool ships a similar stateful pattern (e.g. Cline or Amp
+ * carrying a session-wide field) this narrow hint should be generalised to
+ * a multi-field carry map rather than copy-pasted.
+ */
+export interface ModelStateCarry {
+  /** Value on the source entry's role/type field that marks a carry event. */
+  carryFromEvent: string;
+  /** Dot-notation path on the source entry for the value to carry. */
+  carryFromPath: string;
+  /**
+   * Dot-notation path at which to *inject* the carried value on subsequent
+   * entries before extraction runs. Defaults to `model` — matching the flat
+   * conversation entry shape used by simpler tools like Copilot.
+   */
+  carryTargetPath?: string;
+}
+
 // ── Top-level spec ────────────────────────────────
 
 export interface ParserSpec {
   version: 1;
   tool: string;
-  format: 'jsonl' | 'json' | 'markdown';
+  format: 'jsonl' | 'json' | 'markdown' | 'sqlite';
   discovery: FileDiscovery;
+  /**
+   * Required when `format === 'sqlite'`. Describes how to obtain entries from
+   * the DB file located by `discovery`.
+   */
+  sqlite?: SqliteSource;
+  /**
+   * Optional pre-pass hint that rewrites entries before extraction. Currently
+   * supports one carry (see `ModelStateCarry`). Applies only to JSONL-shaped
+   * sources (JSONL and SQLite); ignored for markdown.
+   */
+  prepass?: {
+    modelState?: ModelStateCarry;
+  };
   extractions: {
     conversation?: ConversationExtractionSpec | MarkdownExtractionSpec;
     tokens?: TokenExtractionSpec;

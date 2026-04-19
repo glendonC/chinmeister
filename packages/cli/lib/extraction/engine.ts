@@ -11,7 +11,7 @@
 
 import { readFile, readdir, stat } from 'fs/promises';
 import { join, resolve } from 'path';
-import { homedir } from 'os';
+import { homedir, platform } from 'os';
 import { createLogger } from '@chinwag/shared';
 import type {
   ParserSpec,
@@ -20,6 +20,8 @@ import type {
   ConversationExtractionSpec,
   ToolCallExtractionSpec,
   MarkdownExtractionSpec,
+  ModelStateCarry,
+  SqliteSource,
   NormalizedTokens,
   ExtractedConversation,
   ExtractedToolCall,
@@ -49,6 +51,57 @@ async function discoverFile(
       return discoverGlob(discovery.pattern, startedAt);
     case 'fixed-path':
       return discoverFixed(discovery.relativePath, cwd, startedAt);
+    case 'per-os-path':
+      return discoverPerOsPath(discovery.paths, startedAt);
+    case 'per-session-subdir':
+      return discoverPerSessionSubdir(discovery.baseDir, discovery.filename, startedAt);
+  }
+}
+
+async function discoverPerSessionSubdir(
+  baseDir: string,
+  filename: string,
+  startedAt: number,
+): Promise<string | null> {
+  const resolvedBase = baseDir.replace('~', homedir());
+  try {
+    await stat(resolvedBase);
+  } catch {
+    return null;
+  }
+
+  const dirs = await readdir(resolvedBase).catch(() => []);
+  let newestFile: string | null = null;
+  let newestMtime = 0;
+
+  for (const dir of dirs) {
+    const candidate = join(resolvedBase, dir, filename);
+    const s = await stat(candidate).catch(() => null);
+    if (!s || !s.isFile()) continue;
+    if (s.mtimeMs > startedAt && s.mtimeMs > newestMtime) {
+      newestMtime = s.mtimeMs;
+      newestFile = candidate;
+    }
+  }
+
+  return newestFile;
+}
+
+async function discoverPerOsPath(
+  paths: { darwin: string; linux: string; win32: string },
+  startedAt: number,
+): Promise<string | null> {
+  const os = platform() as 'darwin' | 'linux' | 'win32' | string;
+  const raw = os === 'darwin' ? paths.darwin : os === 'win32' ? paths.win32 : paths.linux;
+  if (!raw) return null;
+  const full = raw.replace('~', homedir());
+  try {
+    const s = await stat(full);
+    // SQLite DBs update the file mtime on every write, so the startedAt gate
+    // still filters out stale DBs from before the session began.
+    return s.mtimeMs > startedAt ? full : null;
+  } catch {
+    return null;
   }
 }
 
@@ -158,6 +211,172 @@ async function discoverFixed(
   } catch {
     return null;
   }
+}
+
+// ── SQLite source ─────────────────────────────────
+
+/**
+ * Guard against queries that could do anything other than SELECT. Specs ship
+ * with chinwag and AI-healed specs must pass the validator, but cheap
+ * defense-in-depth is free: reject anything with a statement terminator, any
+ * DDL/DML keyword, or PRAGMA/ATTACH/DETACH. Comments are stripped first so a
+ * `-- DROP TABLE foo` comment is not flagged.
+ */
+function isSafeReadOnlyQuery(query: string): boolean {
+  const stripped = query
+    .replace(/--[^\n]*/g, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .trim();
+  if (/;\s*\S/.test(stripped)) return false; // multi-statement
+  if (!/^\s*SELECT\b/i.test(stripped)) return false;
+  const forbidden =
+    /\b(INSERT|UPDATE|DELETE|DROP|ALTER|CREATE|REPLACE|ATTACH|DETACH|PRAGMA|VACUUM|REINDEX|BEGIN|COMMIT|ROLLBACK|TRIGGER)\b/i;
+  if (forbidden.test(stripped)) return false;
+  return true;
+}
+
+/**
+ * Open the SQLite DB at `file`, run `source.query`, and return each row as a
+ * plain object. Column names become entry keys — downstream extraction uses
+ * the same dot-notation path resolver as JSONL, so `json_extract()` in the
+ * query is the right place to flatten nested fields before they hit the
+ * extraction specs.
+ *
+ * Module load is dynamic: `better-sqlite3` is an optional runtime dep. If it
+ * is missing, we warn once and return an empty array so callers degrade to
+ * "no data" gracefully rather than blowing up the whole extraction pipeline.
+ *
+ * Long-term: when Node 24's stable `node:sqlite` becomes our minimum runtime,
+ * swap the dynamic import target and drop the dep. No other call sites.
+ */
+// Minimal structural type for the subset of the better-sqlite3 surface we use.
+// Keeping this inline (rather than depending on `@types/better-sqlite3`) means
+// the optional dep can be missing at install time without breaking typecheck.
+type SqliteDatabaseLike = {
+  prepare(sql: string): { all(): unknown[] };
+  close(): void;
+};
+type SqliteCtor = new (
+  path: string,
+  options?: { readonly?: boolean; fileMustExist?: boolean },
+) => SqliteDatabaseLike;
+
+async function runSqliteQuery(file: string, source: SqliteSource): Promise<unknown[]> {
+  if (!isSafeReadOnlyQuery(source.query)) {
+    log.warn(`rejecting unsafe SQLite query for ${file}`, {
+      file,
+      table: source.table,
+    });
+    return [];
+  }
+
+  let Database: SqliteCtor;
+  try {
+    // Dynamic import so builds/tests without the native module still work.
+    // When we move to Node 24's stable `node:sqlite` as minimum runtime, swap
+    // the specifier here — no other call sites.
+    const mod = (await import('better-sqlite3' as string)) as { default: SqliteCtor };
+    Database = mod.default;
+  } catch (err) {
+    log.warn('better-sqlite3 not available; SQLite extraction skipped', {
+      file,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  }
+
+  let db: SqliteDatabaseLike | null = null;
+  try {
+    // readonly + fileMustExist avoids accidentally creating an empty DB if the
+    // path resolves to a missing file (e.g. first run on a fresh machine).
+    db = new Database(file, { readonly: true, fileMustExist: true });
+    return db.prepare(source.query).all();
+  } catch (err) {
+    log.warn(`SQLite query failed for ${file}`, {
+      file,
+      table: source.table,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return [];
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // ignore close errors
+    }
+  }
+}
+
+// ── Pre-pass: carried state across entries ────────
+
+/**
+ * Some tools (Copilot today) emit stateful context on their own line — e.g. a
+ * `session.model_change` event sets the model for every subsequent message
+ * until the next change. The extraction engine is otherwise stateless per
+ * entry, so the pre-pass walks entries in order, tracks the carry value, and
+ * injects it into later entries at `carryTargetPath` before extraction runs.
+ *
+ * The carry event is detected on the same field used for role detection
+ * (`ConversationExtractionSpec.roleDetection.field`). This is correct for
+ * Copilot and keeps the spec surface narrow. If a future tool separates the
+ * carry-event field from the role field, add a dedicated `carryFromField` to
+ * `ModelStateCarry` rather than repurposing this helper.
+ *
+ * Entries whose carry target is already populated are left untouched — a
+ * tool-emitted value always wins over an inferred carry.
+ */
+function applyModelStateCarry(
+  entries: unknown[],
+  carry: ModelStateCarry,
+  conversationSpec: ConversationExtractionSpec | undefined,
+): unknown[] {
+  if (!conversationSpec) return entries;
+  const roleField = conversationSpec.roleDetection.field;
+  const targetPath = carry.carryTargetPath ?? 'model';
+  let current: string | undefined;
+  const out: unknown[] = [];
+
+  for (const entry of entries) {
+    if (entry == null || typeof entry !== 'object') {
+      out.push(entry);
+      continue;
+    }
+    const typeVal = String(resolvePath(entry, roleField) ?? '');
+    if (typeVal === carry.carryFromEvent) {
+      const val = resolvePath(entry, carry.carryFromPath);
+      if (typeof val === 'string' && val.length > 0) current = val;
+      out.push(entry);
+      continue;
+    }
+    if (current && resolvePath(entry, targetPath) == null) {
+      out.push(injectPath(entry, targetPath, current));
+    } else {
+      out.push(entry);
+    }
+  }
+  return out;
+}
+
+/**
+ * Return a shallow-cloned copy of `obj` with `value` set at `dotPath`. Nested
+ * objects along the path are created lazily. Does not mutate the input.
+ */
+function injectPath(obj: object, dotPath: string, value: unknown): object {
+  const keys = dotPath.split('.');
+  const root: Record<string, unknown> = { ...(obj as Record<string, unknown>) };
+  let cursor: Record<string, unknown> = root;
+  for (let i = 0; i < keys.length - 1; i++) {
+    const k = keys[i];
+    if (k === undefined) continue;
+    const next = cursor[k];
+    const nextObj: Record<string, unknown> =
+      next && typeof next === 'object' ? { ...(next as Record<string, unknown>) } : {};
+    cursor[k] = nextObj;
+    cursor = nextObj;
+  }
+  const last = keys[keys.length - 1];
+  if (last !== undefined) cursor[last] = value;
+  return root;
 }
 
 // ── Field resolution ──────────────────────────────
@@ -445,19 +664,30 @@ export async function extract(
   const file = await discoverFile(spec.discovery, cwd, startedAt);
   if (!file) return { conversations: [], tokens: null, toolCalls: [] };
 
-  const content = await readFile(file, 'utf-8');
-
+  // Markdown and SQLite follow distinct content paths; JSONL/JSON share the
+  // "read text, parse, then extract" flow so they're handled together below.
   if (spec.format === 'markdown') {
+    const content = await readFile(file, 'utf-8');
     const convSpec = spec.extractions.conversation;
     const conversations =
       convSpec && isMarkdownSpec(convSpec) ? extractMarkdownConversations(content, convSpec) : [];
     return { conversations, tokens: null, toolCalls: [] };
   }
 
-  // JSONL or JSON: parse entries
+  // Collect entries from whichever source the spec declares. Downstream
+  // extraction is source-agnostic — each entry is just a plain object.
   let entries: unknown[];
   let parseHealth: ExtractionResult['parseHealth'];
-  if (spec.format === 'jsonl') {
+  if (spec.format === 'sqlite') {
+    if (!spec.sqlite) {
+      log.warn(`sqlite spec missing 'sqlite' source config for ${spec.tool}`, {
+        tool: spec.tool,
+      });
+      return { conversations: [], tokens: null, toolCalls: [] };
+    }
+    entries = await runSqliteQuery(file, spec.sqlite);
+  } else if (spec.format === 'jsonl') {
+    const content = await readFile(file, 'utf-8');
     entries = [];
     let totalLines = 0;
     let malformedLines = 0;
@@ -485,6 +715,7 @@ export async function extract(
       );
     }
   } else {
+    const content = await readFile(file, 'utf-8');
     try {
       const parsed = JSON.parse(content);
       entries = Array.isArray(parsed) ? parsed : [parsed];
@@ -496,6 +727,14 @@ export async function extract(
       });
       return { conversations: [], tokens: null, toolCalls: [] };
     }
+  }
+
+  // Pre-pass: apply any declared carry-forward state (e.g. Copilot's
+  // session.model_change). Must run before extraction so conversation, token,
+  // and tool-call specs see rewritten entries consistently.
+  const convSpecForPrepass = spec.extractions.conversation;
+  if (spec.prepass?.modelState && convSpecForPrepass && !isMarkdownSpec(convSpecForPrepass)) {
+    entries = applyModelStateCarry(entries, spec.prepass.modelState, convSpecForPrepass);
   }
 
   // Conversations

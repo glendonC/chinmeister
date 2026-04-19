@@ -7,13 +7,21 @@ describe('shared MCP tool registry', () => {
     expect(new Set(ids).size).toBe(ids.length);
   });
 
-  it('includes discovery metadata for every configurable tool', () => {
+  it('includes discovery metadata for every tool, and configurability invariants for MCP-compatible ones', () => {
     for (const tool of MCP_TOOLS) {
+      // Every registered tool needs basic catalog metadata — this is what the
+      // install/catalog UI renders regardless of MCP compatibility.
       expect(tool.catalog?.name ?? tool.name).toBeTruthy();
       expect(tool.catalog?.description).toBeTruthy();
       expect(tool.catalog?.website).toBeTruthy();
-      expect(tool.catalog?.mcpCompatible).toBe(true);
-      expect(tool.catalog?.mcpConfigurable).toBe(true);
+      // Non-MCP tools (e.g. Copilot) legitimately live in the registry for
+      // clientInfo attribution without supporting MCP configuration. The
+      // invariant we actually want: claiming `mcpCompatible` implies being
+      // `mcpConfigurable` (can't say "works with MCP" if `chinwag add` has
+      // nothing to write).
+      if (tool.catalog?.mcpCompatible) {
+        expect(tool.catalog?.mcpConfigurable, `${tool.id}`).toBe(true);
+      }
     }
   });
 

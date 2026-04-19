@@ -405,6 +405,15 @@ export function configureHostIntegration(
 ): ConfigureResult {
   const host = getHostIntegrationById(hostId);
   if (!host) return { error: `Unknown host integration: ${hostId}` };
+  // Tools that don't speak MCP (e.g. Copilot) register with an empty
+  // `mcpConfig`. They still belong in the registry for clientInfo attribution
+  // but `chinwag add <tool>` has nothing to configure for them — surface a
+  // clear message rather than writing to the project root.
+  if (!host.mcpConfig) {
+    return {
+      error: `${host.name} does not support MCP configuration via chinwag. Sessions will still be attributed to ${host.id} when detected.`,
+    };
+  }
 
   const mcpResult = writeMcpConfig(cwd, host.mcpConfig, {
     channel: host.channel,

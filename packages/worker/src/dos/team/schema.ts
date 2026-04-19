@@ -705,6 +705,53 @@ const migrations: Migration[] = [
       addColumnIfMissing(sql, 'sessions', 'memories_search_hits INTEGER DEFAULT 0');
     },
   },
+  {
+    name: '023_memory_bi_temporal_supersession',
+    up(sql) {
+      // Bi-temporal supersession, adapted from Graphiti
+      // (edge_operations.py:537-572, MIT-licensed, Apache-2.0 core).
+      //
+      // `valid_at`   — when the real-world fact became true. Set at save
+      //                time; backfilled to `created_at` for existing rows so
+      //                every row has a non-null value and contradiction
+      //                detection can rely on a full temporal interval.
+      // `invalid_at` — when the fact stopped being true. Null means still
+      //                valid. Set by `applyConsolidationProposal` when a
+      //                newer superseding memory is applied with
+      //                `kind='invalidate'` (see migration note on the
+      //                `kind` column below).
+      //
+      // Dual-mode rollout: this ships ALONGSIDE the existing `merged_into`
+      // soft-delete mechanism (migration 020). Nothing auto-migrates
+      // `merged_into` rows to `invalid_at` — merge still absorbs content,
+      // invalidate preserves both rows with the older one hidden from
+      // default search. Different semantics, kept separate.
+      //
+      // We deliberately do NOT add `expired_at` (DB-action time) at this
+      // point. Chinwag has no callers that distinguish ingestion time from
+      // fact-validity time today; when one appears, add the column then.
+      addColumnIfMissing(
+        sql,
+        'memories',
+        'valid_at TEXT DEFAULT NULL',
+        'UPDATE memories SET valid_at = created_at WHERE valid_at IS NULL',
+      );
+      addColumnIfMissing(sql, 'memories', 'invalid_at TEXT DEFAULT NULL');
+      // Partial index so default search (WHERE invalid_at IS NULL) stays
+      // cheap as the history of invalidated memories grows.
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_memories_invalid_at ON memories(invalid_at) WHERE invalid_at IS NOT NULL',
+      );
+
+      // Proposal kind. `'merge'` (existing behaviour) absorbs source into
+      // target via `merged_into`. `'invalidate'` sets
+      // target.invalid_at = source.valid_at without touching merged_into —
+      // the older fact stays queryable as history but falls out of default
+      // search. Existing rows default to `'merge'` so legacy proposals
+      // apply unchanged.
+      addColumnIfMissing(sql, 'consolidation_proposals', "kind TEXT DEFAULT 'merge'");
+    },
+  },
 ];
 
 export function ensureSchema(

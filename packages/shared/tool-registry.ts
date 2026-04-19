@@ -210,7 +210,14 @@ export const MCP_TOOLS: McpTool[] = [
     hooksConfig: '.cursor/hooks.json',
     hooksFormat: 'claude',
     dataCapabilities: {
+      // cursor.json parser now extracts user prompts, per-message tokens, and
+      // model info from the cursorDiskKV SQLite table, so these get flipped
+      // on alongside the long-standing hook-driven tool-call capture.
+      conversationLogs: true,
+      tokenUsage: true,
       toolCallLogs: true,
+      costSource: 'derived',
+      tokenFormat: 'anthropic',
       hooks: true,
       commitTracking: true,
     },
@@ -253,6 +260,48 @@ export const MCP_TOOLS: McpTool[] = [
     },
   },
   {
+    // GitHub Copilot is registered before `vscode` so `inferToolFromClientInfo`
+    // matches "github copilot" to this entry first. Copilot is a distinct
+    // product, not "just VS Code" — keeping them separate lets analytics
+    // attribute cost, tokens, and conversation signals to the right tool.
+    id: 'copilot',
+    name: 'GitHub Copilot',
+    color: 'magenta',
+    detect: { dirs: ['.copilot'] },
+    processDetection: {
+      executables: [],
+      aliases: [],
+      // Copilot runs as an extension inside VS Code / JetBrains / Neovim, not
+      // a standalone CLI. A `copilot` substring in the host's full command
+      // line (e.g. the language-server child process) is the only reliable
+      // process-level inference hint we have.
+      commandPatterns: ['copilot'],
+    },
+    clientInfoNames: ['github copilot', 'copilot'],
+    // Copilot itself doesn't host MCP servers — it runs inside VS Code. When a
+    // user wants MCP, they configure it at the VS Code level (.vscode/mcp.json).
+    // Keeping mcpConfig empty signals to the init writer "don't try to scaffold
+    // a Copilot-specific MCP config."
+    mcpConfig: '',
+    dataCapabilities: {
+      // copilot.json parser extracts messages + model (via session.model_change
+      // pre-pass) + output tokens from ~/.copilot/session-state/<id>/events.jsonl.
+      // Input tokens aren't logged by Copilot; cost stays unattributed (credits).
+      conversationLogs: true,
+      tokenUsage: true,
+      costSource: null,
+      tokenFormat: 'openai',
+    },
+    catalog: {
+      description: 'AI pair programmer from GitHub, available in VS Code and other IDEs',
+      category: 'coding-agent',
+      website: 'https://github.com/features/copilot',
+      mcpCompatible: false,
+      mcpConfigurable: false,
+      featured: true,
+    },
+  },
+  {
     id: 'vscode',
     name: 'VS Code',
     color: 'blueBright',
@@ -261,7 +310,7 @@ export const MCP_TOOLS: McpTool[] = [
       executables: ['code'],
       aliases: ['code helper'],
     },
-    clientInfoNames: ['visual studio code', 'vscode', 'vs code', 'github copilot'],
+    clientInfoNames: ['visual studio code', 'vscode', 'vs code'],
     mcpConfig: '.vscode/mcp.json',
     catalog: {
       description: 'Code editor with Copilot, Cline, and Continue extensions',

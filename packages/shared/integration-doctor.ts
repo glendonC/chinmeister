@@ -87,12 +87,19 @@ export function summarizeIntegrationScan(
 export function scanHostIntegrations(cwd: string): IntegrationScanResult[] {
   return HOST_INTEGRATIONS.map((host) => {
     const detected = detectHost(cwd, host);
-    const mcpPath = join(cwd, host.mcpConfig);
-    const mcpConfig = readJson(mcpPath);
-    const mcpConfigured = hasMatchingMcpEntry(mcpConfig, host.id, {
-      channel: Boolean(host.channel),
-      sharedRoot: host.mcpConfig === '.mcp.json' || host.mcpConfig === 'mcp.json',
-    });
+    // Tools without an MCP config file (e.g. Copilot) still detect and report
+    // but have nothing to "configure" — treat them as ready-when-detected and
+    // skip the config-path reads entirely.
+    let mcpConfigured: boolean;
+    if (host.mcpConfig) {
+      const mcpConfig = readJson(join(cwd, host.mcpConfig));
+      mcpConfigured = hasMatchingMcpEntry(mcpConfig, host.id, {
+        channel: Boolean(host.channel),
+        sharedRoot: host.mcpConfig === '.mcp.json' || host.mcpConfig === 'mcp.json',
+      });
+    } else {
+      mcpConfigured = true;
+    }
 
     const hooksPath = host.hooks && host.hooksConfig ? join(cwd, host.hooksConfig) : null;
     const hooksConfig = hooksPath ? readJson(hooksPath) : null;
@@ -101,7 +108,8 @@ export function scanHostIntegrations(cwd: string): IntegrationScanResult[] {
       : true;
 
     const issues: string[] = [];
-    if (detected && !mcpConfigured) issues.push(`Missing or outdated config at ${host.mcpConfig}`);
+    if (detected && host.mcpConfig && !mcpConfigured)
+      issues.push(`Missing or outdated config at ${host.mcpConfig}`);
     if (detected && host.hooks && !hooksConfigured) issues.push('Hooks are missing or outdated');
 
     let status: IntegrationScanResult['status'] = 'not_detected';

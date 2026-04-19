@@ -7,7 +7,7 @@
  * before hot-swapping.
  */
 
-import { readFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
 import { extract } from './engine.js';
 import type { ParserSpec, ExtractionResult } from './types.js';
 
@@ -52,31 +52,69 @@ export async function validateSpec(
     };
   }
 
-  // Check if the sample file has content
-  let sampleContent: string;
-  try {
-    sampleContent = await readFile(sampleFilePath, 'utf-8');
-  } catch {
-    errors.push(`cannot read sample file: ${sampleFilePath}`);
-    return {
-      valid: false,
-      conversationsExtracted: 0,
-      tokensExtracted: false,
-      toolCallsExtracted: 0,
-      errors,
-    };
-  }
+  // Check if the sample file has content. SQLite DBs are binary, so we can't
+  // validate "non-empty" via UTF-8 read — stat the file and let `extract()`
+  // surface query errors through its own warn path instead.
+  if (candidate.format === 'sqlite') {
+    // Spec must declare how to query the DB before we can evaluate it.
+    if (!candidate.sqlite) {
+      errors.push("sqlite spec missing 'sqlite' source config");
+      return {
+        valid: false,
+        conversationsExtracted: 0,
+        tokensExtracted: false,
+        toolCallsExtracted: 0,
+        errors,
+      };
+    }
+    try {
+      const s = await stat(sampleFilePath);
+      if (s.size === 0) {
+        errors.push('sample file is empty');
+        return {
+          valid: false,
+          conversationsExtracted: 0,
+          tokensExtracted: false,
+          toolCallsExtracted: 0,
+          errors,
+        };
+      }
+    } catch {
+      errors.push(`cannot stat sample file: ${sampleFilePath}`);
+      return {
+        valid: false,
+        conversationsExtracted: 0,
+        tokensExtracted: false,
+        toolCallsExtracted: 0,
+        errors,
+      };
+    }
+  } else {
+    let sampleContent: string;
+    try {
+      sampleContent = await readFile(sampleFilePath, 'utf-8');
+    } catch {
+      errors.push(`cannot read sample file: ${sampleFilePath}`);
+      return {
+        valid: false,
+        conversationsExtracted: 0,
+        tokensExtracted: false,
+        toolCallsExtracted: 0,
+        errors,
+      };
+    }
 
-  const hasContent = sampleContent.trim().length > 0;
-  if (!hasContent) {
-    errors.push('sample file is empty');
-    return {
-      valid: false,
-      conversationsExtracted: 0,
-      tokensExtracted: false,
-      toolCallsExtracted: 0,
-      errors,
-    };
+    const hasContent = sampleContent.trim().length > 0;
+    if (!hasContent) {
+      errors.push('sample file is empty');
+      return {
+        valid: false,
+        conversationsExtracted: 0,
+        tokensExtracted: false,
+        toolCallsExtracted: 0,
+        errors,
+      };
+    }
   }
 
   // Run extraction

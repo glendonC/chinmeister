@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "tool": "copilot",
+  "format": "jsonl",
+  "discovery": {
+    "strategy": "per-session-subdir",
+    "baseDir": "~/.copilot/session-state/",
+    "filename": "events.jsonl"
+  },
+  "prepass": {
+    "modelState": {
+      "carryFromEvent": "session.model_change",
+      "carryFromPath": "data.newModel",
+      "carryTargetPath": "model"
+    }
+  },
+  "extractions": {
+    "conversation": {
+      "roleDetection": {
+        "field": "type",
+        "userValues": ["user.message"],
+        "assistantValues": ["assistant.message"]
+      },
+      "contentPaths": ["data.content"],
+      "timestampPath": "timestamp",
+      "tokenPaths": {
+        "input_tokens": "data.inputTokens",
+        "output_tokens": "data.outputTokens"
+      },
+      "modelPath": "model"
+    },
+    "tokens": {
+      "usagePath": "data",
+      "fieldMapping": {
+        "input_tokens": "inputTokens",
+        "output_tokens": "outputTokens"
+      },
+      "normalization": "anthropic"
+    }
+  },
+  "generatedAt": "2026-04-19",
+  "source": "manual"
+}

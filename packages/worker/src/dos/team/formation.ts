@@ -104,7 +104,7 @@ export async function runFormationPass(sql: SqlStorage, env: Env, memoryId: stri
 
     const newRow = sql
       .exec(
-        'SELECT id, text, embedding FROM memories WHERE id = ? AND merged_into IS NULL',
+        'SELECT id, text, embedding FROM memories WHERE id = ? AND merged_into IS NULL AND invalid_at IS NULL',
         memoryId,
       )
       .toArray()[0] as Record<string, unknown> | undefined;
@@ -120,7 +120,7 @@ export async function runFormationPass(sql: SqlStorage, env: Env, memoryId: stri
       .exec(
         `SELECT id, text, embedding
          FROM memories
-         WHERE id != ? AND embedding IS NOT NULL AND merged_into IS NULL
+         WHERE id != ? AND embedding IS NOT NULL AND merged_into IS NULL AND invalid_at IS NULL
          ORDER BY created_at DESC`,
         memoryId,
       )
@@ -246,7 +246,7 @@ export async function runFormationOnRecent(
     .exec(
       `SELECT m.id FROM memories m
        LEFT JOIN formation_observations fo ON fo.memory_id = m.id
-       WHERE m.merged_into IS NULL AND m.embedding IS NOT NULL AND fo.id IS NULL
+       WHERE m.merged_into IS NULL AND invalid_at IS NULL AND m.embedding IS NOT NULL AND fo.id IS NULL
        ORDER BY m.created_at DESC
        LIMIT ?`,
       cap,

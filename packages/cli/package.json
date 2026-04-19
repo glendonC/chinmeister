@@ -7,7 +7,7 @@
     "chinwag": "./dist/cli.js"
   },
   "scripts": {
-    "build": "esbuild cli.tsx --bundle --platform=node --format=esm --banner:js='#!/usr/bin/env node' --outfile=dist/cli.js --sourcemap --external:ink --external:react --external:ink-text-input --external:node-pty --resolve-extensions=.ts,.tsx,.js,.jsx,.json",
+    "build": "esbuild cli.tsx --bundle --platform=node --format=esm --banner:js='#!/usr/bin/env node' --outfile=dist/cli.js --sourcemap --external:ink --external:react --external:ink-text-input --external:node-pty --external:better-sqlite3 --resolve-extensions=.ts,.tsx,.js,.jsx,.json",
     "dev": "npm run build && node dist/cli.js",
     "start": "node dist/cli.js",
     "typecheck": "tsc --noEmit",
@@ -22,6 +22,9 @@
     "ink-text-input": "^6.0.0",
     "node-pty": "^1.1.0",
     "react": "^18.3.1"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^11.7.0"
   },
   "engines": {
     "node": ">=22.0.0"

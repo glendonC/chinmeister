@@ -117,7 +117,7 @@ export function consolidateMemories(sql: SqlStorage): DOResult<{ ok: true } & Co
     .exec(
       `SELECT id, text, tags, embedding, access_count, created_at
        FROM memories
-       WHERE merged_into IS NULL AND embedding IS NOT NULL
+       WHERE merged_into IS NULL AND invalid_at IS NULL AND embedding IS NOT NULL
        ORDER BY access_count DESC, created_at DESC`,
     )
     .toArray() as Record<string, unknown>[];
@@ -210,6 +210,81 @@ export function consolidateMemories(sql: SqlStorage): DOResult<{ ok: true } & Co
   return { ok: true, ...stats };
 }
 
+// ── Bi-temporal supersession (Graphiti-derived) ────────────────────────────
+//
+// Port of the contradiction-resolution algorithm from
+// getzep/graphiti `edge_operations.py:537-572` (Apache-2.0). Pure temporal
+// interval algebra — no LLM, no graph. Given a newer memory and an older
+// candidate, decides whether the older memory should be invalidated and at
+// what timestamp.
+//
+// Contract: the older memory's `invalid_at` becomes the newer memory's
+// `valid_at` iff the two temporal intervals overlap AND the older fact
+// genuinely started earlier. If the older memory already ended before the
+// newer one began, or the newer one ends before the older one starts, no
+// invalidation is proposed.
+//
+// Both memories MUST have non-null `valid_at` — enforced by the save-time
+// default in memory.ts and migration 023's backfill. `invalid_at` is
+// nullable on either side; null = open-ended ("still valid").
+
+export interface SupersessionCandidate {
+  id: string;
+  valid_at: string;
+  invalid_at: string | null;
+}
+
+export interface SupersessionDecision {
+  shouldInvalidate: boolean;
+  /** ISO timestamp to assign to candidate.invalid_at when shouldInvalidate is true. */
+  newInvalidAt: string | null;
+}
+
+/**
+ * Decide whether `candidate` (the older fact) is superseded by `incoming`
+ * (the newer fact) given their temporal intervals.
+ *
+ * Returns `shouldInvalidate: true` only when:
+ *   1. Both intervals overlap (neither candidate.invalid_at <= incoming.valid_at
+ *      nor incoming.invalid_at <= candidate.valid_at),
+ *   2. Candidate started strictly before incoming (candidate.valid_at
+ *      < incoming.valid_at).
+ *
+ * When true, the returned `newInvalidAt` is the string-valued
+ * `incoming.valid_at` — assigning it to `candidate.invalid_at` truncates
+ * the candidate's validity at the exact moment the superseding fact began.
+ */
+export function resolveSupersession(
+  incoming: SupersessionCandidate,
+  candidate: SupersessionCandidate,
+): SupersessionDecision {
+  const incomingValid = new Date(incoming.valid_at).getTime();
+  const candidateValid = new Date(candidate.valid_at).getTime();
+  if (Number.isNaN(incomingValid) || Number.isNaN(candidateValid)) {
+    // Corrupt timestamps — refuse to make a supersession call rather than
+    // guess. The caller keeps the candidate active.
+    return { shouldInvalidate: false, newInvalidAt: null };
+  }
+
+  const candidateInvalid = candidate.invalid_at
+    ? new Date(candidate.invalid_at).getTime()
+    : Number.POSITIVE_INFINITY;
+  const incomingInvalid = incoming.invalid_at
+    ? new Date(incoming.invalid_at).getTime()
+    : Number.POSITIVE_INFINITY;
+
+  // Non-overlap: the two intervals don't share any wall-clock moment.
+  if (candidateInvalid <= incomingValid) return { shouldInvalidate: false, newInvalidAt: null };
+  if (incomingInvalid <= candidateValid) return { shouldInvalidate: false, newInvalidAt: null };
+
+  // Overlap exists. Only invalidate if candidate is strictly older — a
+  // newer candidate overlapping with an even-newer incoming is not
+  // supersession, it's concurrent knowledge.
+  if (candidateValid >= incomingValid) return { shouldInvalidate: false, newInvalidAt: null };
+
+  return { shouldInvalidate: true, newInvalidAt: incoming.valid_at };
+}
+
 /**
  * List pending consolidation proposals for review. Newest first — agents
  * triaging the queue see most recent proposals at the top.
@@ -223,6 +298,10 @@ export interface ProposalRow {
   cosine: number;
   jaccard: number;
   proposed_at: string;
+  /** 'merge' (soft-delete source into target) or 'invalidate' (supersede target). */
+  kind: 'merge' | 'invalidate';
+  source_valid_at: string;
+  target_valid_at: string;
 }
 
 export function listConsolidationProposals(
@@ -231,14 +310,15 @@ export function listConsolidationProposals(
 ): DOResult<{ ok: true; proposals: ProposalRow[] }> {
   const rows = sql
     .exec(
-      `SELECT p.id, p.source_id, p.target_id, p.cosine, p.jaccard, p.proposed_at,
-              s.text as source_text, t.text as target_text
+      `SELECT p.id, p.source_id, p.target_id, p.cosine, p.jaccard, p.proposed_at, p.kind,
+              s.text as source_text, t.text as target_text,
+              s.valid_at as source_valid_at, t.valid_at as target_valid_at
        FROM consolidation_proposals p
        JOIN memories s ON s.id = p.source_id
        JOIN memories t ON t.id = p.target_id
        WHERE p.status = 'pending'
-         AND s.merged_into IS NULL
-         AND t.merged_into IS NULL
+         AND s.merged_into IS NULL AND s.invalid_at IS NULL
+         AND t.merged_into IS NULL AND t.invalid_at IS NULL
        ORDER BY p.proposed_at DESC
        LIMIT ?`,
       Math.min(Math.max(1, limit), 200),
@@ -248,17 +328,28 @@ export function listConsolidationProposals(
 }
 
 /**
- * Apply a pending proposal: set source.merged_into = target, mark the
- * proposal applied. Reversible via unmergeMemory(source_id).
+ * Apply a pending proposal. Dispatches on `kind`:
+ *
+ * - `kind = 'merge'` (existing, default) sets `source.merged_into = target`,
+ *   soft-deleting source while target absorbs its content. Reversible via
+ *   `unmergeMemory(source_id)`.
+ * - `kind = 'invalidate'` (migration 023) sets `target.invalid_at = source.valid_at`,
+ *   truncating the target's validity interval at the moment the superseding
+ *   source became true. Target stays in the DB queryable as history but
+ *   falls out of default search. Reversible via `unmergeMemory(target_id)`,
+ *   which clears both `merged_into` and `invalid_at`.
+ *
+ * Proposals without a `kind` column (pre-migration-023 rows) are treated as
+ * 'merge' for back-compat.
  */
 export function applyConsolidationProposal(
   sql: SqlStorage,
   proposalId: string,
   reviewerHandle: string,
-): DOResult<{ ok: true; applied: true; source_id: string; target_id: string }> {
+): DOResult<{ ok: true; applied: true; source_id: string; target_id: string; kind: string }> {
   const proposal = sql
     .exec(
-      'SELECT source_id, target_id, status FROM consolidation_proposals WHERE id = ?',
+      'SELECT source_id, target_id, status, kind FROM consolidation_proposals WHERE id = ?',
       proposalId,
     )
     .toArray()[0] as Record<string, unknown> | undefined;
@@ -269,18 +360,37 @@ export function applyConsolidationProposal(
 
   const sourceId = proposal.source_id as string;
   const targetId = proposal.target_id as string;
+  const kind = ((proposal.kind as string) || 'merge') as 'merge' | 'invalidate';
 
-  sql.exec(
-    "UPDATE memories SET merged_into = ?, merged_at = datetime('now') WHERE id = ? AND merged_into IS NULL",
-    targetId,
-    sourceId,
-  );
+  if (kind === 'invalidate') {
+    // For supersession: the source is the newer fact, target is the older
+    // one being invalidated. Apply target.invalid_at = source.valid_at so
+    // the target's validity interval closes at the exact moment the source
+    // became true. Falls back to NOW if source.valid_at is somehow null
+    // (shouldn't happen post-migration-023 but keeps the write total).
+    const source = sql.exec('SELECT valid_at FROM memories WHERE id = ?', sourceId).toArray()[0] as
+      | Record<string, unknown>
+      | undefined;
+    const invalidAt = (source?.valid_at as string) || new Date().toISOString();
+    sql.exec(
+      'UPDATE memories SET invalid_at = ? WHERE id = ? AND invalid_at IS NULL',
+      invalidAt,
+      targetId,
+    );
+  } else {
+    sql.exec(
+      "UPDATE memories SET merged_into = ?, merged_at = datetime('now') WHERE id = ? AND merged_into IS NULL",
+      targetId,
+      sourceId,
+    );
+  }
+
   sql.exec(
     "UPDATE consolidation_proposals SET status = 'applied', resolved_at = datetime('now'), resolved_by = ? WHERE id = ?",
     reviewerHandle,
     proposalId,
   );
-  return { ok: true, applied: true, source_id: sourceId, target_id: targetId };
+  return { ok: true, applied: true, source_id: sourceId, target_id: targetId, kind };
 }
 
 export function rejectConsolidationProposal(
@@ -304,21 +414,38 @@ export function rejectConsolidationProposal(
 }
 
 /**
- * Restore a soft-merged memory: clear merged_into so search picks it up
- * again. Counterpart to applyConsolidationProposal — gives the agent
- * recourse when consolidation absorbed something it shouldn't have.
+ * Restore a hidden memory so search picks it up again. Counterpart to
+ * applyConsolidationProposal — gives the agent/operator recourse when
+ * consolidation absorbed or invalidated something it shouldn't have.
+ *
+ * Clears whichever hiding mechanism is active:
+ * - If the memory was soft-merged (merged_into set), clears merged_into
+ *   and merged_at.
+ * - If the memory was invalidated by supersession (invalid_at set),
+ *   clears invalid_at.
+ *
+ * If both somehow ended up set via separate paths, both are cleared —
+ * restoration should be unambiguous.
  */
 export function unmergeMemory(
   sql: SqlStorage,
   memoryId: string,
-): DOResult<{ ok: true; unmerged: true }> {
-  const row = sql.exec('SELECT merged_into FROM memories WHERE id = ?', memoryId).toArray()[0] as
-    | Record<string, unknown>
-    | undefined;
+): DOResult<{ ok: true; unmerged: true; restored: Array<'merged' | 'invalidated'> }> {
+  const row = sql
+    .exec('SELECT merged_into, invalid_at FROM memories WHERE id = ?', memoryId)
+    .toArray()[0] as Record<string, unknown> | undefined;
   if (!row) return { error: 'Memory not found', code: 'NOT_FOUND' };
-  if (row.merged_into === null) {
-    return { error: 'Memory is not merged', code: 'INVALID_STATE' };
+  const wasMerged = row.merged_into !== null;
+  const wasInvalidated = row.invalid_at !== null;
+  if (!wasMerged && !wasInvalidated) {
+    return { error: 'Memory is not hidden', code: 'INVALID_STATE' };
   }
-  sql.exec('UPDATE memories SET merged_into = NULL, merged_at = NULL WHERE id = ?', memoryId);
-  return { ok: true, unmerged: true };
+  const restored: Array<'merged' | 'invalidated'> = [];
+  if (wasMerged) restored.push('merged');
+  if (wasInvalidated) restored.push('invalidated');
+  sql.exec(
+    'UPDATE memories SET merged_into = NULL, merged_at = NULL, invalid_at = NULL WHERE id = ?',
+    memoryId,
+  );
+  return { ok: true, unmerged: true, restored };
 }

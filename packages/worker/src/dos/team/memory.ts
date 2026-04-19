@@ -79,7 +79,10 @@ export function saveMemory(
   // --- Exact dedup: hash lookup ---
   if (textHash) {
     const existing = sql
-      .exec('SELECT id, text FROM memories WHERE text_hash = ? AND merged_into IS NULL', textHash)
+      .exec(
+        'SELECT id, text FROM memories WHERE text_hash = ? AND merged_into IS NULL AND invalid_at IS NULL',
+        textHash,
+      )
       .toArray();
     if (existing.length > 0) {
       const row = existing[0] as Record<string, unknown>;
@@ -97,7 +100,7 @@ export function saveMemory(
     const queryVec = new Float32Array(embedding);
     const rows = sql
       .exec(
-        'SELECT id, text, embedding FROM memories WHERE embedding IS NOT NULL AND merged_into IS NULL',
+        'SELECT id, text, embedding FROM memories WHERE embedding IS NOT NULL AND merged_into IS NULL AND invalid_at IS NULL',
       )
       .toArray();
 
@@ -137,9 +140,13 @@ export function saveMemory(
   // Transaction ensures insert + pruning + tag stats + session update are atomic.
   let evicted = 0;
   withTransaction(transact, () => {
+    // valid_at mirrors created_at at save time. Once bi-temporal supersession
+    // flows (migration 023) land an `invalidate` proposal kind,
+    // applyConsolidationProposal may set `invalid_at` on older rows — but
+    // `valid_at` is always "when the fact was recorded" and stays immutable.
     sql.exec(
-      `INSERT INTO memories (id, text, tags, categories, agent_id, handle, host_tool, agent_surface, agent_model, session_id, text_hash, embedding, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+      `INSERT INTO memories (id, text, tags, categories, agent_id, handle, host_tool, agent_surface, agent_model, session_id, text_hash, embedding, created_at, updated_at, valid_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))`,
       id,
       text,
       JSON.stringify(normalizedTags),
@@ -440,7 +447,7 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
   // Exclude soft-merged memories from search by default. Consolidation
   // marks the source memory's merged_into pointer; the target stays
   // canonical. Restored via unmergeMemory() in consolidation.ts.
-  conditions.push('merged_into IS NULL');
+  conditions.push('merged_into IS NULL AND invalid_at IS NULL');
 
   const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
   // is_stale is computed in SQL so the throttle decision stays in SQLite's
@@ -514,7 +521,7 @@ export function searchMemories(sql: SqlStorage, filters: SearchFilters): SearchM
       nonFtsParams.push(before);
     }
     nonFtsConditions.push('embedding IS NOT NULL');
-    nonFtsConditions.push('merged_into IS NULL');
+    nonFtsConditions.push('merged_into IS NULL AND invalid_at IS NULL');
     const vecWhere = `WHERE ${nonFtsConditions.join(' AND ')}`;
 
     const vecRows = sql

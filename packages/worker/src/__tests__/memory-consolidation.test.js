@@ -4,7 +4,7 @@
 
 import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
-import { jaccardTrigrams, tagsAgree } from '../dos/team/consolidation.js';
+import { jaccardTrigrams, tagsAgree, resolveSupersession } from '../dos/team/consolidation.js';
 
 function getTeam(id) {
   return env.TEAM.get(env.TEAM.idFromName(id));
@@ -62,6 +62,64 @@ describe('tagsAgree', () => {
 
   it('is case-insensitive', () => {
     expect(tagsAgree(['ACCEPTED'], ['Rejected'])).toBe(false);
+  });
+});
+
+describe('resolveSupersession (bi-temporal interval algebra, Graphiti port)', () => {
+  // Fact intervals for the six-case fixture suite. Dates are chosen so the
+  // interval relationships are obvious at a glance rather than having to
+  // compute epoch offsets mentally.
+  const incoming = (valid_at, invalid_at = null) => ({ id: 'new', valid_at, invalid_at });
+  const candidate = (valid_at, invalid_at = null) => ({ id: 'old', valid_at, invalid_at });
+
+  it('does not invalidate when intervals do not overlap (candidate ended before incoming began)', () => {
+    const result = resolveSupersession(
+      incoming('2026-03-01T00:00:00Z'),
+      candidate('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
+    );
+    expect(result.shouldInvalidate).toBe(false);
+  });
+
+  it('does not invalidate when incoming ends before candidate begins', () => {
+    const result = resolveSupersession(
+      incoming('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
+      candidate('2026-03-01T00:00:00Z'),
+    );
+    expect(result.shouldInvalidate).toBe(false);
+  });
+
+  it('does not invalidate when intervals are identical (duplicates, not supersession)', () => {
+    const result = resolveSupersession(
+      incoming('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
+      candidate('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
+    );
+    // Same start time — not strictly older, so no supersession.
+    expect(result.shouldInvalidate).toBe(false);
+  });
+
+  it('invalidates the older fact on partial overlap (old started earlier, still open)', () => {
+    const result = resolveSupersession(
+      incoming('2026-02-01T00:00:00Z'),
+      candidate('2026-01-01T00:00:00Z'),
+    );
+    expect(result.shouldInvalidate).toBe(true);
+    // Candidate's validity truncates at the moment the new fact began.
+    expect(result.newInvalidAt).toBe('2026-02-01T00:00:00Z');
+  });
+
+  it('invalidates on partial overlap with bounded intervals', () => {
+    const result = resolveSupersession(
+      incoming('2026-02-01T00:00:00Z', '2026-04-01T00:00:00Z'),
+      candidate('2026-01-01T00:00:00Z', '2026-03-01T00:00:00Z'),
+    );
+    expect(result.shouldInvalidate).toBe(true);
+    expect(result.newInvalidAt).toBe('2026-02-01T00:00:00Z');
+  });
+
+  it('does not invalidate when timestamps are malformed — refuses to guess', () => {
+    const result = resolveSupersession(incoming('not-a-date'), candidate('2026-01-01T00:00:00Z'));
+    expect(result.shouldInvalidate).toBe(false);
+    expect(result.newInvalidAt).toBe(null);
   });
 });
 

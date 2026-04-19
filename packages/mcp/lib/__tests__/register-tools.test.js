@@ -117,8 +117,11 @@ describe('registerTools', () => {
     registerTools(server, { team, state, profile, integrationDoctor });
   });
 
-  it('registers all 19 tools', () => {
-    expect(server._tools.size).toBe(19);
+  it('registers the full MCP tool surface', () => {
+    // When the tool surface grows, add the new name to `expected` below so
+    // this test keeps acting as a canary against accidental deregistration.
+    // The count is derived so we fail loudly when someone adds a tool without
+    // updating the expectation — don't hard-code the number.
     const expected = [
       'chinwag_scan_integrations',
       'chinwag_configure_integration',
@@ -139,7 +142,13 @@ describe('registerTools', () => {
       'chinwag_record_tokens',
       'chinwag_record_tool_call',
       'chinwag_configure_budget',
+      'chinwag_apply_consolidation',
+      'chinwag_review_consolidation_proposals',
+      'chinwag_review_formation_observations',
+      'chinwag_run_formation_sweep',
+      'chinwag_unmerge_memory',
     ];
+    expect(server._tools.size).toBe(expected.length);
     for (const name of expected) {
       expect(server._tools.has(name)).toBe(true);
     }

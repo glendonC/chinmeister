@@ -16,7 +16,7 @@ export function queryMemoryUsage(sql: SqlStorage, days: number): MemoryUsageStat
     // search would actually return. The merged rows stay in the table for
     // unmerge recourse but are not "live" memory.
     const totalRow = sql
-      .exec('SELECT COUNT(*) AS cnt FROM memories WHERE merged_into IS NULL')
+      .exec('SELECT COUNT(*) AS cnt FROM memories WHERE merged_into IS NULL AND invalid_at IS NULL')
       .one() as Record<string, unknown>;
     const total = (totalRow?.cnt as number) || 0;
 
@@ -28,7 +28,7 @@ export function queryMemoryUsage(sql: SqlStorage, days: number): MemoryUsageStat
            SUM(CASE WHEN updated_at > datetime('now', '-' || ? || ' days')
                       AND updated_at != created_at THEN 1 ELSE 0 END) AS updated
          FROM memories
-         WHERE merged_into IS NULL`,
+         WHERE merged_into IS NULL AND invalid_at IS NULL`,
         days,
         days,
       )
@@ -38,7 +38,7 @@ export function queryMemoryUsage(sql: SqlStorage, days: number): MemoryUsageStat
     const staleRow = sql
       .exec(
         `SELECT COUNT(*) AS cnt FROM memories
-         WHERE merged_into IS NULL
+         WHERE merged_into IS NULL AND invalid_at IS NULL
            AND ((last_accessed_at IS NULL AND created_at < datetime('now', '-30 days'))
                 OR (last_accessed_at IS NOT NULL AND last_accessed_at < datetime('now', '-30 days')))`,
       )
@@ -48,7 +48,7 @@ export function queryMemoryUsage(sql: SqlStorage, days: number): MemoryUsageStat
     const ageRow = sql
       .exec(
         `SELECT ROUND(AVG(julianday('now') - julianday(created_at)), 1) AS avg_age
-         FROM memories WHERE merged_into IS NULL`,
+         FROM memories WHERE merged_into IS NULL AND invalid_at IS NULL`,
       )
       .one() as Record<string, unknown>;
 
@@ -228,7 +228,7 @@ export function queryTopMemories(sql: SqlStorage, days: number): MemoryAccessEnt
       .exec(
         `SELECT id, text, access_count, last_accessed_at, created_at
          FROM memories
-         WHERE merged_into IS NULL
+         WHERE merged_into IS NULL AND invalid_at IS NULL
            AND access_count > 0
            AND (last_accessed_at IS NOT NULL AND last_accessed_at > datetime('now', '-' || ? || ' days'))
          ORDER BY access_count DESC

@@ -1,0 +1,43 @@
+{
+  "version": 1,
+  "tool": "cursor",
+  "format": "sqlite",
+  "discovery": {
+    "strategy": "per-os-path",
+    "paths": {
+      "darwin": "~/Library/Application Support/Cursor/User/globalStorage/state.vscdb",
+      "linux": "~/.config/Cursor/User/globalStorage/state.vscdb",
+      "win32": "~/AppData/Roaming/Cursor/User/globalStorage/state.vscdb"
+    }
+  },
+  "sqlite": {
+    "table": "cursorDiskKV",
+    "query": "SELECT 'user' AS role, json_extract(value, '$.conversationId') AS session_id, datetime(json_extract(value, '$.createdAt')/1000, 'unixepoch') AS timestamp, json_extract(value, '$.text') AS content, json_extract(value, '$.modelInfo.modelName') AS model, json_extract(value, '$.tokenCount.inputTokens') AS input_tokens, json_extract(value, '$.tokenCount.outputTokens') AS output_tokens FROM cursorDiskKV WHERE key LIKE 'bubbleId:%' AND json_extract(value, '$.createdAt') > (strftime('%s','now') - 3024000) * 1000 ORDER BY json_extract(value, '$.createdAt') ASC"
+  },
+  "extractions": {
+    "conversation": {
+      "roleDetection": {
+        "field": "role",
+        "userValues": ["user"],
+        "assistantValues": []
+      },
+      "contentPaths": ["content"],
+      "timestampPath": "timestamp",
+      "tokenPaths": {
+        "input_tokens": "input_tokens",
+        "output_tokens": "output_tokens"
+      },
+      "modelPath": "model"
+    },
+    "tokens": {
+      "usagePath": "",
+      "fieldMapping": {
+        "input_tokens": "input_tokens",
+        "output_tokens": "output_tokens"
+      },
+      "normalization": "anthropic"
+    }
+  },
+  "generatedAt": "2026-04-19",
+  "source": "manual"
+}
