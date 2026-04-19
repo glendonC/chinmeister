@@ -54,6 +54,7 @@ export {
 export { handleTeamSendMessage, handleTeamGetMessages } from './messages.js';
 export { handleTeamSubmitCommand, handleTeamGetCommands } from './commands.js';
 export { handleTeamAnalytics } from './analytics.js';
+export { handleTeamBillingBlocks } from './billing-blocks.js';
 export {
   handleTeamRecordConversation,
   handleTeamGetConversation,

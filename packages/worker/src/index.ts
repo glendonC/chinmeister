@@ -96,6 +96,7 @@ import {
   handleTeamToolCalls,
   handleTeamRecordCommits,
   handleTeamAnalytics,
+  handleTeamBillingBlocks,
   handleTeamRecordConversation,
   handleTeamGetConversation,
   handleTeamConversationAnalytics,
@@ -333,6 +334,7 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'GET', path: `/teams/${TID}/history`, handler: handleTeamHistory },
   { method: 'GET', path: `/teams/${TID}/edits`, handler: handleTeamEditHistory },
   { method: 'GET', path: `/teams/${TID}/analytics`, handler: handleTeamAnalytics },
+  { method: 'GET', path: `/teams/${TID}/billing-blocks`, handler: handleTeamBillingBlocks },
   { method: 'POST', path: `/teams/${TID}/conversations`, handler: handleTeamRecordConversation },
   { method: 'GET', path: `/teams/${TID}/conversations`, handler: handleTeamGetConversation },
   {

@@ -38,6 +38,10 @@
       "types": "./dist/contracts/analytics.d.ts",
       "import": "./dist/contracts/analytics.js"
     },
+    "./contracts/billing-blocks.js": {
+      "types": "./dist/contracts/billing-blocks.d.ts",
+      "import": "./dist/contracts/billing-blocks.js"
+    },
     "./contracts/conversation.js": {
       "types": "./dist/contracts/conversation.d.ts",
       "import": "./dist/contracts/conversation.js"

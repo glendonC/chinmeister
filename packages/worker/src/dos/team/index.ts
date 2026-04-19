@@ -108,6 +108,7 @@ import {
   getAnalytics as getAnalyticsFn,
   getExtendedAnalytics as getExtendedAnalyticsFn,
 } from './analytics/index.js';
+import { getBillingBlocksForOwner as getBillingBlocksForOwnerFn } from './analytics/billing-blocks.js';
 import { sendMessage as sendMessageFn, getMessages as getMessagesFn } from './messages.js';
 import {
   batchRecordConversationEvents as batchRecordConversationEventsFn,
@@ -1126,6 +1127,26 @@ export class TeamDO extends DurableObject<Env> {
       this.#maybeCleanup();
       return queryTeamSummary(this.sql);
     });
+  }
+
+  // -- Billing blocks (5h Anthropic rate-limit windows) --
+
+  /**
+   * Return the caller's billing-block history for this team's sessions.
+   * Scoped by `ownerId` (the caller's user id) so a single user gets
+   * their own window state regardless of which agent they were using —
+   * the Anthropic limit is billed to the account, not the session.
+   *
+   * When chinwag eventually grows a cross-team aggregator for Pro
+   * windows, this DO method is the per-team primitive it should call.
+   * Today, multi-team users get per-team views; the algorithm itself
+   * works on any pre-collected event stream so merging across teams is
+   * a route-level concern, not a DO change.
+   */
+  async getBillingBlocks(
+    ownerId: string,
+  ): Promise<ReturnType<typeof getBillingBlocksForOwnerFn> | DOError> {
+    return this.#withOwner(ownerId, () => getBillingBlocksForOwnerFn(this.sql, ownerId));
   }
 }
 
