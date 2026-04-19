@@ -401,6 +401,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 3,
     minH: 2,
     dataKeys: ['work_type_distribution'],
+    fitContent: true,
   },
 
   // ── Codebase ──────────────────────────
@@ -485,6 +486,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 3,
     minH: 2,
     dataKeys: ['conversation'],
+    fitContent: true,
   },
 
   // ── Memory ────────────────────────────
@@ -788,6 +790,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 4,
     minH: 3,
     dataKeys: ['tool_work_type'],
+    fitContent: true,
   },
   {
     id: 'data-coverage',
@@ -802,6 +805,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 3,
     dataKeys: ['data_coverage'],
     timeScope: 'live',
+    fitContent: true,
   },
 
   // ── Conversations (extended) ────────

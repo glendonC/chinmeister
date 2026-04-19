@@ -1,0 +1,35 @@
+/*
+ * Widget content zones.
+ *
+ * Every widget body rendered by WidgetRenderer is split into a fixed-height
+ * head strip and a body that fills the remaining cell. Using zones (instead
+ * of a flat flex column) keeps a stat value vertically centered in a tall
+ * cell and lets a list flush-fill, regardless of what the body returns.
+ *
+ * The visual frame (.widget, .widgetEditing, border sweep, edit chrome)
+ * lives in components/WidgetGrid/WidgetGrid.module.css — that's the file
+ * that owns the cell wrapper. This module owns only the *content* zones
+ * inside the wrapper.
+ */
+
+.widgetHead {
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.widgetBody {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Stat-family widgets: vertically center the value inside the body so a
+ * sparse cell doesn't leave an orphaned number near the top. Applies to
+ * plain `stat` and the multi-stat `stat-row` viz. The data attr is set on
+ * the cell wrapper by WidgetGrid; the descendant class is hashed in this
+ * module, so this rule selects only WidgetRenderer-rendered bodies. */
+[data-widget-viz='stat'] .widgetBody,
+[data-widget-viz='stat-row'] .widgetBody {
+  justify-content: center;
+}

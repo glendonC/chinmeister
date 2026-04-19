@@ -1,7 +1,8 @@
 import type { CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
-import styles from '../../views/OverviewView/OverviewView.module.css';
+import shared from '../widget-shared.module.css';
+import styles from './TeamWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { GhostRows } from './shared.js';
 
@@ -9,33 +10,33 @@ function TeamMembersWidget({ analytics }: WidgetBodyProps) {
   const members = analytics.member_analytics;
   if (members.length <= 1) return <GhostRows count={2} />;
   return (
-    <div className={styles.dataList}>
+    <div className={shared.dataList}>
       {members.map((m, i) => {
         const meta = m.primary_tool ? getToolMeta(m.primary_tool) : null;
         return (
           <div
             key={m.handle}
-            className={styles.dataRow}
+            className={shared.dataRow}
             style={{ '--row-index': i } as CSSProperties}
           >
-            <span className={styles.dataName}>
+            <span className={shared.dataName}>
               {m.handle}
               {meta && (
-                <span className={styles.dataStat} style={{ marginLeft: 8 }}>
+                <span className={shared.dataStat} style={{ marginLeft: 8 }}>
                   {meta.label}
                 </span>
               )}
             </span>
-            <div className={styles.dataMeta}>
-              <span className={styles.dataStat}>
-                <span className={styles.dataStatValue}>{m.sessions}</span> sessions
+            <div className={shared.dataMeta}>
+              <span className={shared.dataStat}>
+                <span className={shared.dataStatValue}>{m.sessions}</span> sessions
               </span>
-              <span className={styles.dataStat}>
-                <span className={styles.dataStatValue}>{m.total_edits.toLocaleString()}</span> edits
+              <span className={shared.dataStat}>
+                <span className={shared.dataStatValue}>{m.total_edits.toLocaleString()}</span> edits
               </span>
               {m.completion_rate > 0 && (
-                <span className={styles.dataStat}>
-                  <span className={styles.dataStatValue}>{m.completion_rate}%</span>
+                <span className={shared.dataStat}>
+                  <span className={shared.dataStatValue}>{m.completion_rate}%</span>
                 </span>
               )}
             </div>

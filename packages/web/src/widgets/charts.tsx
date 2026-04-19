@@ -1,4 +1,4 @@
-import styles from '../views/OverviewView/OverviewView.module.css';
+import styles from './widget-shared.module.css';
 
 export function Sparkline({
   data,

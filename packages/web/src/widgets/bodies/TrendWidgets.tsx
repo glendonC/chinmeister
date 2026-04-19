@@ -1,6 +1,6 @@
 import { Sparkline } from '../charts.js';
 import { completionColor } from '../utils.js';
-import styles from '../../views/OverviewView/OverviewView.module.css';
+import styles from '../widget-shared.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { CoverageNote, GhostBars, GhostSparkline, capabilityCoverageNote } from './shared.js';
 

@@ -3,7 +3,8 @@ import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { workTypeColor } from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
-import styles from '../../views/OverviewView/OverviewView.module.css';
+import shared from '../widget-shared.module.css';
+import styles from './OutcomeWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import {
   GhostBars,
@@ -71,7 +72,7 @@ function StucknessWidget({ analytics }: WidgetBodyProps) {
           const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
           const color = d === 0 ? 'var(--muted)' : d < 0 ? 'var(--success)' : 'var(--danger)';
           return (
-            <span className={styles.statInlineDelta} style={{ color }}>
+            <span className={shared.statInlineDelta} style={{ color }}>
               {arrow}
               {Math.abs(Math.round(d * 10) / 10)}
             </span>
@@ -79,21 +80,21 @@ function StucknessWidget({ analytics }: WidgetBodyProps) {
         })()
       : null;
   return (
-    <div className={styles.statRow}>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>
+    <div className={shared.statRow}>
+      <div className={shared.statBlock}>
+        <span className={shared.statBlockValue}>
           {s.stuckness_rate}%{stuckDelta}
         </span>
-        <span className={styles.statBlockLabel}>stuck rate</span>
+        <span className={shared.statBlockLabel}>stuck rate</span>
       </div>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{s.stuck_sessions}</span>
-        <span className={styles.statBlockLabel}>stuck sessions</span>
+      <div className={shared.statBlock}>
+        <span className={shared.statBlockValue}>{s.stuck_sessions}</span>
+        <span className={shared.statBlockLabel}>stuck sessions</span>
       </div>
       {s.stuck_sessions > 0 && (
-        <div className={styles.statBlock}>
-          <span className={styles.statBlockValue}>{s.stuck_completion_rate}%</span>
-          <span className={styles.statBlockLabel}>stuck completed</span>
+        <div className={shared.statBlock}>
+          <span className={shared.statBlockValue}>{s.stuck_completion_rate}%</span>
+          <span className={shared.statBlockLabel}>stuck completed</span>
         </div>
       )}
     </div>
@@ -104,13 +105,13 @@ function WorkTypeOutcomesWidget({ analytics }: WidgetBodyProps) {
   const wto = analytics.work_type_outcomes;
   if (wto.length === 0) return <GhostBars count={4} />;
   return (
-    <div className={styles.metricBars}>
+    <div className={shared.metricBars}>
       {wto.map((w) => (
-        <div key={w.work_type} className={styles.metricRow}>
-          <span className={styles.metricLabel}>{w.work_type}</span>
-          <div className={styles.metricBarTrack}>
+        <div key={w.work_type} className={shared.metricRow}>
+          <span className={shared.metricLabel}>{w.work_type}</span>
+          <div className={shared.metricBarTrack}>
             <div
-              className={styles.metricBarFill}
+              className={shared.metricBarFill}
               style={{
                 width: `${w.completion_rate}%`,
                 background: workTypeColor(w.work_type),
@@ -118,7 +119,7 @@ function WorkTypeOutcomesWidget({ analytics }: WidgetBodyProps) {
               }}
             />
           </div>
-          <span className={styles.metricValue}>
+          <span className={shared.metricValue}>
             {w.completion_rate}% · {w.sessions}
           </span>
         </div>
@@ -147,13 +148,13 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
     .sort((a, b) => b.total - a.total);
   const maxT = Math.max(...tools.map((t) => t.total), 1);
   return (
-    <div className={styles.metricBars}>
+    <div className={shared.metricBars}>
       {tools.map((t) => (
-        <div key={t.tool} className={styles.metricRow}>
-          <span className={styles.metricLabel}>{getToolMeta(t.tool).label}</span>
-          <div className={styles.metricBarTrack}>
+        <div key={t.tool} className={shared.metricRow}>
+          <span className={shared.metricLabel}>{getToolMeta(t.tool).label}</span>
+          <div className={shared.metricBarTrack}>
             <div
-              className={styles.metricBarFill}
+              className={shared.metricBarFill}
               style={{
                 width: `${(t.completed / maxT) * 100}%`,
                 background: 'var(--success)',
@@ -161,7 +162,7 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
               }}
             />
             <div
-              className={styles.metricBarFill}
+              className={shared.metricBarFill}
               style={{
                 width: `${(t.abandoned / maxT) * 100}%`,
                 background: 'var(--warn)',
@@ -169,7 +170,7 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
               }}
             />
             <div
-              className={styles.metricBarFill}
+              className={shared.metricBarFill}
               style={{
                 width: `${(t.failed / maxT) * 100}%`,
                 background: 'var(--danger)',
@@ -177,7 +178,7 @@ function ToolOutcomesWidget({ analytics }: WidgetBodyProps) {
               }}
             />
           </div>
-          <span className={styles.metricValue}>
+          <span className={shared.metricValue}>
             {t.completed}/{t.abandoned}/{t.failed}
           </span>
         </div>
@@ -190,11 +191,11 @@ function ConflictImpactWidget({ analytics }: WidgetBodyProps) {
   const cc = analytics.conflict_correlation;
   if (cc.length === 0) return <GhostStatRow labels={['with conflicts', 'without']} />;
   return (
-    <div className={styles.statRow}>
+    <div className={shared.statRow}>
       {cc.map((c) => (
-        <div key={c.bucket} className={styles.statBlock}>
-          <span className={styles.statBlockValue}>{c.completion_rate}%</span>
-          <span className={styles.statBlockLabel}>
+        <div key={c.bucket} className={shared.statBlock}>
+          <span className={shared.statBlockValue}>{c.completion_rate}%</span>
+          <span className={shared.statBlockLabel}>
             {c.bucket} ({c.sessions})
           </span>
         </div>
@@ -207,22 +208,22 @@ function RetryPatternsWidget({ analytics }: WidgetBodyProps) {
   const rp = analytics.retry_patterns;
   if (rp.length === 0) return <SectionEmpty>No retry patterns</SectionEmpty>;
   return (
-    <div className={styles.dataList}>
+    <div className={shared.dataList}>
       {rp.slice(0, 10).map((r, i) => (
         <div
           key={`${r.handle}-${r.file}`}
-          className={styles.dataRow}
+          className={shared.dataRow}
           style={{ '--row-index': i } as CSSProperties}
         >
-          <span className={styles.dataName} title={r.file}>
+          <span className={shared.dataName} title={r.file}>
             {r.file.split('/').slice(-2).join('/')}
           </span>
-          <div className={styles.dataMeta}>
-            <span className={styles.dataStat}>
-              <span className={styles.dataStatValue}>{r.attempts}</span> attempts
+          <div className={shared.dataMeta}>
+            <span className={shared.dataStat}>
+              <span className={shared.dataStatValue}>{r.attempts}</span> attempts
             </span>
             <span
-              className={styles.dataStat}
+              className={shared.dataStat}
               style={{ color: r.resolved ? 'var(--success)' : 'var(--danger)' }}
             >
               {r.resolved ? 'resolved' : r.final_outcome}

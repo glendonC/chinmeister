@@ -1,4 +1,4 @@
-import styles from '../../views/OverviewView/OverviewView.module.css';
+import styles from '../widget-shared.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { GhostBars, SENTIMENT_COLORS, CoverageNote, capabilityCoverageNote } from './shared.js';
 

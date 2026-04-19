@@ -1,0 +1,169 @@
+/* LiveWidgets-only viz: the directory-style live-agents subgrid table.
+ * Shared list/data primitives come from widget-shared.module.css. */
+
+/*
+ * Single grid container owns the column tracks. Header + rows are subgrids
+ * so their cells share the same x-coords — prevents the drift that happens
+ * when separate grids each compute `auto` tracks against their own content
+ * (header's "MEMBER" ≠ row's handle width).
+ *
+ * Column distribution: Member hugs the left edge with all leftover space
+ * absorbed as dead track on its right, which pushes Tool, Project, and
+ * View into a tight cluster against the right edge. Identity on the left,
+ * metadata + action on the right — clear reading axis, no drifting middle
+ * column. `minmax(0, 1fr)` on Member lets the handle ellipsis on narrow
+ * widgets rather than overflowing.
+ */
+.liveTable {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto 56px;
+  column-gap: var(--space-md);
+  row-gap: 0;
+  /* Keep rows content-sized. Without this, the grid's default align-content
+   * resolves to `stretch`, which would inflate auto-sized row tracks to fill
+   * the widget body — making a single row look like it has 30px of vertical
+   * padding. `start` anchors rows to the top at their natural height. */
+  align-content: start;
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * margin: 0 -14px combined with padding: 12px 14px makes the row content
+ * align flush with the widget body edge while the hover pill still gets
+ * its 14px inset breathing room. The negative margin extends the row's
+ * border box 14px into the widget's own 20px internal padding — still
+ * inside the visible bounds, so nothing gets clipped.
+ */
+.liveTableHeader,
+.liveTableRow {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  margin: 0 -14px;
+}
+
+.liveTableHeader {
+  padding: 0 14px 10px;
+  font-family: var(--mono);
+  font-size: var(--text-10);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-table);
+  color: var(--soft);
+}
+
+.liveTableHeaderNum {
+  text-align: right;
+}
+
+.liveTableBody {
+  /* `display: contents` dissolves this wrapper so each row becomes a direct
+   * child of `.liveTable` and can subgrid onto its tracks. Row count is
+   * capped by LIVE_AGENTS_CAP + SectionOverflow, so scrolling isn't needed. */
+  display: contents;
+}
+
+.liveTableOverflow {
+  grid-column: 1 / -1;
+}
+
+.liveTableRow {
+  padding: 12px 14px;
+  background: none;
+  border: none;
+  border-radius: var(--radius-md);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 35ms);
+  transition: background 0.12s ease;
+}
+
+.liveTableRow:hover {
+  background: var(--hover-bg);
+}
+
+.liveViewButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: var(--text-11);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background: var(--ink);
+  color: var(--page-bg);
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.liveTableRow:hover .liveViewButton {
+  background: var(--accent);
+  color: white;
+}
+
+.liveAgentName {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveCell {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveCellTool {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.liveCellTool > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.liveCellNum {
+  font-family: var(--mono);
+  font-size: var(--text-11);
+  color: var(--ink);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.liveCellMuted {
+  color: var(--soft);
+}
+
+@keyframes rowReveal {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveTableRow {
+    animation: none !important;
+  }
+}

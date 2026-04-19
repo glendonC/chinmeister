@@ -3,7 +3,8 @@ import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { DAY_LABELS, buildHeatmapData, workTypeColor } from '../utils.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
-import styles from '../../views/OverviewView/OverviewView.module.css';
+import shared from '../widget-shared.module.css';
+import styles from './ActivityWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { GhostBars, GhostStatRow } from './shared.js';
 
@@ -79,13 +80,13 @@ function WorkTypesWidget({ analytics }: WidgetBodyProps) {
   }
   return (
     <>
-      <div className={styles.workBar}>
+      <div className={shared.workBar}>
         {workTypes.map((w) => {
           const pct = (w.sessions / total) * 100;
           return pct < 1 ? null : (
             <div
               key={w.work_type}
-              className={styles.workSegment}
+              className={shared.workSegment}
               style={{
                 width: `${pct}%`,
                 background: workTypeColor(w.work_type),
@@ -95,14 +96,14 @@ function WorkTypesWidget({ analytics }: WidgetBodyProps) {
           );
         })}
       </div>
-      <div className={styles.workLegend}>
+      <div className={shared.workLegend}>
         {workTypes.map((w) => {
           const pct = Math.round((w.sessions / total) * 100);
           return pct < 1 ? null : (
-            <div key={w.work_type} className={styles.workLegendItem}>
-              <span className={styles.workDot} style={{ background: workTypeColor(w.work_type) }} />
-              <span className={styles.workLegendLabel}>{w.work_type}</span>
-              <span className={styles.workLegendValue}>
+            <div key={w.work_type} className={shared.workLegendItem}>
+              <span className={shared.workDot} style={{ background: workTypeColor(w.work_type) }} />
+              <span className={shared.workLegendLabel}>{w.work_type}</span>
+              <span className={shared.workLegendValue}>
                 {pct}% · {w.sessions}
               </span>
             </div>
@@ -118,14 +119,14 @@ function DurationDistWidget({ analytics }: WidgetBodyProps) {
   if (dd.length === 0) return <GhostBars count={4} />;
   const maxD = Math.max(...dd.map((d) => d.count), 1);
   return (
-    <div className={styles.metricBars}>
+    <div className={shared.metricBars}>
       {dd.map((d) => (
-        <div key={d.bucket} className={styles.metricRow}>
-          <span className={styles.metricLabel}>{d.bucket}</span>
-          <div className={styles.metricBarTrack}>
-            <div className={styles.metricBarFill} style={{ width: `${(d.count / maxD) * 100}%` }} />
+        <div key={d.bucket} className={shared.metricRow}>
+          <span className={shared.metricLabel}>{d.bucket}</span>
+          <div className={shared.metricBarTrack}>
+            <div className={shared.metricBarFill} style={{ width: `${(d.count / maxD) * 100}%` }} />
           </div>
-          <span className={styles.metricValue}>{d.count}</span>
+          <span className={shared.metricValue}>{d.count}</span>
         </div>
       ))}
     </div>
@@ -136,13 +137,13 @@ function ScopeComplexityWidget({ analytics }: WidgetBodyProps) {
   const sc = analytics.scope_complexity;
   if (sc.length === 0) return <GhostBars count={4} />;
   return (
-    <div className={styles.metricBars}>
+    <div className={shared.metricBars}>
       {sc.map((b) => (
-        <div key={b.bucket} className={styles.metricRow}>
-          <span className={styles.metricLabel}>{b.bucket}</span>
-          <div className={styles.metricBarTrack}>
+        <div key={b.bucket} className={shared.metricRow}>
+          <span className={shared.metricLabel}>{b.bucket}</span>
+          <div className={shared.metricBarTrack}>
             <div
-              className={styles.metricBarFill}
+              className={shared.metricBarFill}
               style={{
                 width: `${b.completion_rate}%`,
                 background: 'var(--success)',
@@ -150,7 +151,7 @@ function ScopeComplexityWidget({ analytics }: WidgetBodyProps) {
               }}
             />
           </div>
-          <span className={styles.metricValue}>
+          <span className={shared.metricValue}>
             {b.completion_rate}% · {b.sessions}
           </span>
         </div>
@@ -164,20 +165,20 @@ function FirstEditWidget({ analytics }: WidgetBodyProps) {
   if (!fe || fe.avg_minutes_to_first_edit === 0)
     return <GhostStatRow labels={['avg first edit', 'median']} />;
   return (
-    <div className={styles.statRow}>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{fe.avg_minutes_to_first_edit.toFixed(1)}m</span>
-        <span className={styles.statBlockLabel}>avg first edit</span>
+    <div className={shared.statRow}>
+      <div className={shared.statBlock}>
+        <span className={shared.statBlockValue}>{fe.avg_minutes_to_first_edit.toFixed(1)}m</span>
+        <span className={shared.statBlockLabel}>avg first edit</span>
       </div>
-      <div className={styles.statBlock}>
-        <span className={styles.statBlockValue}>{fe.median_minutes_to_first_edit.toFixed(1)}m</span>
-        <span className={styles.statBlockLabel}>median</span>
+      <div className={shared.statBlock}>
+        <span className={shared.statBlockValue}>{fe.median_minutes_to_first_edit.toFixed(1)}m</span>
+        <span className={shared.statBlockLabel}>median</span>
       </div>
       {fe.by_tool.length > 1 &&
         fe.by_tool.slice(0, 2).map((t) => (
-          <div key={t.host_tool} className={styles.statBlock}>
-            <span className={styles.statBlockValue}>{t.avg_minutes.toFixed(1)}m</span>
-            <span className={styles.statBlockLabel}>{getToolMeta(t.host_tool).label}</span>
+          <div key={t.host_tool} className={shared.statBlock}>
+            <span className={shared.statBlockValue}>{t.avg_minutes.toFixed(1)}m</span>
+            <span className={shared.statBlockLabel}>{getToolMeta(t.host_tool).label}</span>
           </div>
         ))}
     </div>
