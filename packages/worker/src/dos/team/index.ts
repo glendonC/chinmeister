@@ -84,6 +84,7 @@ import {
 } from './categories.js';
 import {
   claimFiles as claimFilesFn,
+  checkFileConflicts as checkFileConflictsFn,
   releaseFiles as releaseFilesFn,
   getLockedFiles as getLockedFilesFn,
 } from './locks.js';
@@ -943,11 +944,13 @@ export class TeamDO extends DurableObject<Env> {
     handle: string,
     runtimeOrTool: string | Record<string, unknown> | null | undefined,
     ownerId: string | null = null,
+    options: { ttlSeconds?: number } = {},
   ): Promise<ReturnType<typeof claimFilesFn> | DOError> {
     return this.#op(
       agentId,
       ownerId,
-      (resolved) => claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool, ownerId!),
+      (resolved) =>
+        claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool, ownerId!, options),
       {
         broadcast: (_r, resolved) => ({
           type: 'lock_change',
@@ -957,6 +960,23 @@ export class TeamDO extends DurableObject<Env> {
         }),
       },
     );
+  }
+
+  /**
+   * Read-only conflict check for a batch of concrete paths. Used by the
+   * pre-commit hook and any would-be-editor that wants to know whether
+   * proceeding would collide with a peer's lock (exact-path or glob
+   * umbrella) without actually claiming. Globs in the input are skipped.
+   */
+  async checkFileConflicts(
+    agentId: string,
+    files: string[],
+    ownerId: string | null = null,
+  ): Promise<{ ok: true; blocked: ReturnType<typeof checkFileConflictsFn> } | DOError> {
+    return this.#withMember(agentId, ownerId, (resolved) => ({
+      ok: true,
+      blocked: checkFileConflictsFn(this.sql, resolved, files),
+    }));
   }
 
   async releaseFiles(

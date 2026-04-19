@@ -136,7 +136,7 @@ export interface TeamFormationHandlers {
 
 /** Coordination: file locks, messaging, sessions. */
 export interface TeamCoordinationHandlers {
-  claimFiles(teamId: string, files: string[]): Promise<ClaimResult>;
+  claimFiles(teamId: string, files: string[], ttlSeconds?: number): Promise<ClaimResult>;
   releaseFiles(teamId: string, files?: string[]): Promise<OkResult>;
   sendMessage(teamId: string, text: string, target?: string): Promise<OkResult>;
   startSession(teamId: string, framework?: string): Promise<SessionResult>;
@@ -336,9 +336,11 @@ export function teamHandlers(client: ApiClient): TeamHandlers {
       return client.get(`/teams/${teamId}/memory/formation/observations${qs ? '?' + qs : ''}`);
     },
 
-    async claimFiles(teamId, files) {
+    async claimFiles(teamId, files, ttlSeconds) {
       validateTeam(teamId);
-      return client.post(`/teams/${teamId}/locks`, { files });
+      const payload: { files: string[]; ttl_seconds?: number } = { files };
+      if (typeof ttlSeconds === 'number') payload.ttl_seconds = ttlSeconds;
+      return client.post(`/teams/${teamId}/locks`, payload);
     },
 
     async releaseFiles(teamId, files) {

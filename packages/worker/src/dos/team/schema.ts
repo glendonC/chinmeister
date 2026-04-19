@@ -752,6 +752,40 @@ const migrations: Migration[] = [
       addColumnIfMissing(sql, 'consolidation_proposals', "kind TEXT DEFAULT 'merge'");
     },
   },
+  {
+    name: '024_lock_glob_patterns_and_ttl',
+    up(sql) {
+      // Advisory locks gain glob-pattern intent claims + optional TTL,
+      // adapted from mcp_agent_mail's `FileReservation` model. Motivation:
+      // an agent refactoring `src/auth/**/*.ts` should be able to declare
+      // the whole scope as one claim rather than hammering the lock table
+      // with every touched file. Conflict detection then checks both
+      // exact-path claims and glob claims before allowing an edit.
+      //
+      // `path_glob` is non-null when `file_path` is itself a glob pattern
+      // (e.g. "src/auth/**") — the column exists so the conflict-check
+      // fast path can filter `WHERE path_glob IS NOT NULL` and only run
+      // the pattern matcher against genuine globs. Keeping `file_path`
+      // as the primary key means concurrent identical glob claims still
+      // conflict cleanly through the existing ON CONFLICT machinery.
+      //
+      // `expires_ts` is the wall-clock time after which the lock is stale
+      // and may be reaped. NULL = no explicit TTL; the heartbeat-based
+      // liveness check still governs cleanup. Claims with explicit TTLs
+      // (e.g. "reserve this scope for 30 minutes while I refactor") are
+      // the primary use case.
+      addColumnIfMissing(sql, 'locks', 'path_glob TEXT DEFAULT NULL');
+      addColumnIfMissing(sql, 'locks', 'expires_ts TEXT DEFAULT NULL');
+      // Partial indexes so the hot path (concrete-file claim checking all
+      // active globs, and periodic TTL sweeps) stays cheap.
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_locks_glob ON locks(path_glob) WHERE path_glob IS NOT NULL',
+      );
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_locks_expires ON locks(expires_ts) WHERE expires_ts IS NOT NULL',
+      );
+    },
+  },
 ];
 
 export function ensureSchema(

@@ -58,6 +58,7 @@ import { runPulseCheck } from './lib/pulse.js';
 import { runRefreshModelPrices } from './lib/refresh-model-prices.js';
 import {
   handleTeamActivity,
+  handleTeamCheckLocks,
   handleTeamClaimFiles,
   handleTeamConflicts,
   handleTeamContext,
@@ -316,6 +317,7 @@ const routeDefinitions: RouteDefinition[] = [
   { method: 'POST', path: `/teams/${TID}/locks`, handler: handleTeamClaimFiles },
   { method: 'DELETE', path: `/teams/${TID}/locks`, handler: handleTeamReleaseFiles },
   { method: 'GET', path: `/teams/${TID}/locks`, handler: handleTeamGetLocks },
+  { method: 'POST', path: `/teams/${TID}/locks/check`, handler: handleTeamCheckLocks },
   { method: 'POST', path: `/teams/${TID}/messages`, handler: handleTeamSendMessage },
   { method: 'GET', path: `/teams/${TID}/messages`, handler: handleTeamGetMessages },
   { method: 'POST', path: `/teams/${TID}/commands`, handler: handleTeamSubmitCommand },

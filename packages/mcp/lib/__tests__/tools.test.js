@@ -504,7 +504,35 @@ describe('lock tools (unit)', () => {
     it('calls API with teamId and files', async () => {
       team.claimFiles.mockResolvedValue({ claimed: ['auth.js'], blocked: [] });
       await collector.callTool('chinwag_claim_files', { files: ['auth.js'] });
-      expect(team.claimFiles).toHaveBeenCalledWith('t_lock', ['auth.js']);
+      // Third arg is ttlSeconds; omitted by the caller → undefined.
+      expect(team.claimFiles).toHaveBeenCalledWith('t_lock', ['auth.js'], undefined);
+    });
+
+    it('forwards ttl_seconds when provided', async () => {
+      team.claimFiles.mockResolvedValue({ claimed: ['src/auth/**/*.ts'], blocked: [] });
+      await collector.callTool('chinwag_claim_files', {
+        files: ['src/auth/**/*.ts'],
+        ttl_seconds: 1800,
+      });
+      expect(team.claimFiles).toHaveBeenCalledWith('t_lock', ['src/auth/**/*.ts'], 1800);
+    });
+
+    it('surfaces blocked_by_glob in the blocked message', async () => {
+      team.claimFiles.mockResolvedValue({
+        claimed: [],
+        blocked: [
+          {
+            file: 'src/auth/tokens.ts',
+            held_by: 'alice',
+            tool: 'cursor',
+            blocked_by_glob: 'src/auth/**/*.ts',
+          },
+        ],
+      });
+      const result = await collector.callTool('chinwag_claim_files', {
+        files: ['src/auth/tokens.ts'],
+      });
+      expect(result.content[0].text).toMatch(/via scope src\/auth\/\*\*\/\*\.ts/);
     });
 
     it('returns claimed files', async () => {

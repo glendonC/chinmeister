@@ -245,3 +245,110 @@ describe('Lock edge cases — empty arrays', () => {
     expect(myLocks).toHaveLength(0);
   });
 });
+
+// --- Glob-pattern leases (migration 024) ---
+
+describe('Glob-pattern scope claims', () => {
+  const team = () => getTeam('glob-leases');
+  const agent1 = 'cursor:g1';
+  const agent2 = 'claude:g2';
+  const owner1 = 'user-g1';
+  const owner2 = 'user-g2';
+
+  it('setup: join two agents', async () => {
+    await team().join(agent1, owner1, 'alice', 'cursor');
+    await team().join(agent2, owner2, 'bob', 'claude');
+  });
+
+  it('agent1 claims a glob scope; the pattern round-trips in getLockedFiles', async () => {
+    const claim = await team().claimFiles(agent1, ['src/auth/**/*.ts'], 'alice', 'cursor', owner1);
+    expect(claim.ok).toBe(true);
+    expect(claim.claimed).toEqual(['src/auth/**/*.ts']);
+    expect(claim.blocked).toHaveLength(0);
+
+    const locks = await team().getLockedFiles(agent1, owner1);
+    const globLock = locks.locks.find((l) => l.agent_id === agent1);
+    expect(globLock).toBeDefined();
+    expect(globLock.path_glob).toBe('src/auth/**/*.ts');
+  });
+
+  it('agent2 is blocked trying to claim a concrete file inside agent1 scope', async () => {
+    const claim = await team().claimFiles(agent2, ['src/auth/tokens.ts'], 'bob', 'claude', owner2);
+    expect(claim.ok).toBe(true);
+    expect(claim.claimed).toHaveLength(0);
+    expect(claim.blocked).toHaveLength(1);
+    expect(claim.blocked[0].file).toBe('src/auth/tokens.ts');
+    expect(claim.blocked[0].held_by).toBe('alice');
+    // The umbrella glob should be surfaced so clients can explain the conflict
+    expect(claim.blocked[0].blocked_by_glob).toBe('src/auth/**/*.ts');
+  });
+
+  it('agent2 can still claim files outside the scope', async () => {
+    const claim = await team().claimFiles(
+      agent2,
+      ['src/unrelated/helper.ts'],
+      'bob',
+      'claude',
+      owner2,
+    );
+    expect(claim.claimed).toEqual(['src/unrelated/helper.ts']);
+    expect(claim.blocked).toHaveLength(0);
+  });
+
+  it('checkFileConflicts (read-only) sees the same umbrella block without writing', async () => {
+    const res = await team().checkFileConflicts(
+      agent2,
+      ['src/auth/tokens.ts', 'src/unrelated/helper.ts'],
+      owner2,
+    );
+    expect(res.ok).toBe(true);
+    expect(res.blocked).toHaveLength(1);
+    expect(res.blocked[0].file).toBe('src/auth/tokens.ts');
+    expect(res.blocked[0].blocked_by_glob).toBe('src/auth/**/*.ts');
+  });
+
+  it('agent1 releases the scope; previously-blocked file is now claimable', async () => {
+    const rel = await team().releaseFiles(agent1, ['src/auth/**/*.ts'], owner1);
+    expect(rel.ok).toBe(true);
+
+    const retry = await team().claimFiles(agent2, ['src/auth/tokens.ts'], 'bob', 'claude', owner2);
+    expect(retry.claimed).toEqual(['src/auth/tokens.ts']);
+    expect(retry.blocked).toHaveLength(0);
+  });
+});
+
+describe('Lock TTL (migration 024)', () => {
+  const team = () => getTeam('lock-ttl');
+  const agent1 = 'cursor:ttl1';
+  const agent2 = 'claude:ttl2';
+  const owner1 = 'user-ttl1';
+  const owner2 = 'user-ttl2';
+
+  it('setup: join two agents', async () => {
+    await team().join(agent1, owner1, 'alice', 'cursor');
+    await team().join(agent2, owner2, 'bob', 'claude');
+  });
+
+  it('claim with an already-expired TTL is reaped on the next lock read', async () => {
+    // ttlSeconds = -1 → expires_ts is in the past, so the very next reap
+    // sweeps it. Lets us exercise the TTL path deterministically without
+    // waiting on real wall-clock time.
+    await team().claimFiles(agent1, ['src/temp.ts'], 'alice', 'cursor', owner1, { ttlSeconds: -1 });
+
+    // Next read triggers reapExpiredLocks at the head of claimFiles
+    const claim = await team().claimFiles(agent2, ['src/temp.ts'], 'bob', 'claude', owner2);
+    expect(claim.claimed).toEqual(['src/temp.ts']);
+    expect(claim.blocked).toHaveLength(0);
+  });
+
+  it('TTL is surfaced in getLockedFiles so clients can render "reserved for Nm"', async () => {
+    await team().claimFiles(agent1, ['src/long-lived.ts'], 'alice', 'cursor', owner1, {
+      ttlSeconds: 3600,
+    });
+    const locks = await team().getLockedFiles(agent1, owner1);
+    const row = locks.locks.find((l) => l.file_path === 'src/long-lived.ts');
+    expect(row).toBeDefined();
+    expect(row.expires_ts).toBeDefined();
+    expect(typeof row.expires_ts).toBe('string');
+  });
+});

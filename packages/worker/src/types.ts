@@ -185,7 +185,7 @@ export interface LockClaim {
  * Note: uses `held_by` (not `handle`) for the owning agent's handle.
  */
 export interface BlockedLock {
-  /** The contested file path */
+  /** The contested file path (or the glob the caller tried to claim) */
   file: string;
   /** Handle of the agent holding the lock */
   held_by: string;
@@ -196,6 +196,13 @@ export interface BlockedLock {
   /** Agent surface of the lock holder */
   agent_surface: string | null;
   claimed_at: string;
+  /**
+   * If the block came from a glob-umbrella claim rather than an exact-path
+   * conflict, the specific glob pattern that matched. Null for exact-path
+   * conflicts. Lets clients surface a more honest "held by agent X's
+   * src/auth/** claim" message instead of the raw path.
+   */
+  blocked_by_glob?: string | null;
 }
 
 /**
@@ -217,6 +224,14 @@ export interface LockEntry {
   claimed_at: string;
   /** Computed elapsed time since claim */
   minutes_held: number;
+  /**
+   * Glob pattern if this lock is a scope claim (e.g. "src/auth/**"). Null
+   * when the lock is for a concrete file path. Clients can render differently
+   * ("Alice reserved src/auth/** for 30m") when this is set.
+   */
+  path_glob?: string | null;
+  /** Explicit TTL timestamp; null = governed only by heartbeat liveness. */
+  expires_ts?: string | null;
 }
 
 /**
@@ -321,6 +336,8 @@ export interface ActiveMemberSummary {
   files: string[];
   summary: string | null;
   session_minutes: number | null;
+  /** Seconds since the member's last heartbeat. 0–60 for any returned row. */
+  seconds_since_update: number | null;
 }
 
 export interface TeamSummary {
