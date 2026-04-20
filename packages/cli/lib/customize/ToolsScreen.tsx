@@ -3,9 +3,8 @@
  */
 import React from 'react';
 import { Box, Text } from 'ink';
-import { DetectedToolsList, RecommendationsList } from '../tool-display.jsx';
+import { DetectedToolsList } from '../tool-display.jsx';
 import type { IntegrationScanResult } from '@chinwag/shared/integration-doctor.js';
-import type { CatalogToolLike } from '../utils/tool-catalog.js';
 
 interface FlashMessage {
   type: string;
@@ -20,16 +19,12 @@ interface IntegrationSummary {
 interface ToolsScreenProps {
   detected: IntegrationScanResult[];
   integrationSummary: IntegrationSummary | null;
-  recommendations: CatalogToolLike[];
-  cols: number;
   message: FlashMessage | null;
 }
 
 export function ToolsScreen({
   detected,
   integrationSummary,
-  recommendations,
-  cols,
   message,
 }: ToolsScreenProps): React.ReactNode {
   return (
@@ -44,13 +39,12 @@ export function ToolsScreen({
         integrationSummary={detected.length > 0 ? integrationSummary : null}
       />
 
-      {recommendations.length > 0 && (
-        <>
-          <Box marginBottom={1}>
-            <Text bold>Recommended</Text>
-          </Box>
-          <RecommendationsList recommendations={recommendations} cols={cols} />
-        </>
+      {detected.length === 0 && (
+        <Box marginBottom={1}>
+          <Text dimColor>Run </Text>
+          <Text color="cyan">npx chinwag add &lt;tool&gt;</Text>
+          <Text dimColor> to connect a tool.</Text>
+        </Box>
       )}
 
       {message && (
@@ -59,17 +53,7 @@ export function ToolsScreen({
         </Box>
       )}
 
-      <Text>
-        {recommendations.length > 0 && (
-          <>
-            <Text color="cyan" bold>
-              [1-{recommendations.length}]
-            </Text>
-            <Text dimColor> add </Text>
-          </>
-        )}
-        <Text dimColor>[esc] back</Text>
-      </Text>
+      <Text dimColor>[esc] back</Text>
     </Box>
   );
 }

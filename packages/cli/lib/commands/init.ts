@@ -180,7 +180,7 @@ export async function runInit(): Promise<void> {
   } else if (detected.length === 0) {
     console.log('');
     console.log(
-      `  ${dim('No tools detected.')} Run ${chalk.cyan('npx chinwag add --list')} to see available tools.`,
+      `  ${dim('No tools detected.')} Install an AI coding tool and re-run ${chalk.cyan('npx chinwag init')}.`,
     );
   }
 

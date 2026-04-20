@@ -155,7 +155,7 @@ describe('cli command flow integration', () => {
     }
   });
 
-  it('runAdd --list fetches the tool directory from the configured API', async () => {
+  it('runAdd prints the MCP_TOOLS list when called with no tool arg', async () => {
     const homeDir = mkdtempSync(join(tmpdir(), 'chinwag-cli-home-'));
     const repoDir = mkdtempSync(join(tmpdir(), 'chinwag-cli-repo-'));
     tempDirs.push(homeDir, repoDir);
@@ -171,11 +171,13 @@ describe('cli command flow integration', () => {
     try {
       const { runAdd } = await loadCliCommands(homeDir, fakeApi.baseUrl);
       process.chdir(repoDir);
-      await runAdd('--list');
+      await runAdd(undefined);
 
-      expect(fakeApi.state.directoryCalls).toBe(1);
-      expect(logs.join('\n')).toContain('cursor');
-      expect(logs.join('\n')).toContain('AI-native code editor');
+      // No API call — the simplified add uses MCP_TOOLS only.
+      expect(fakeApi.state.directoryCalls).toBe(0);
+      const output = logs.join('\n');
+      expect(output).toContain('Usage: npx chinwag add <tool>');
+      expect(output).toContain('cursor');
       logSpy.mockRestore();
     } finally {
       await fakeApi.close();

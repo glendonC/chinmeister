@@ -2,7 +2,7 @@
  * Main Customize component that routes between sub-screens.
  */
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Box, Text, useInput, useStdout } from 'ink';
+import { Box, Text, useInput } from 'ink';
 import { cpSync, existsSync, mkdirSync, readFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { homedir } from 'os';
@@ -13,16 +13,7 @@ import type { ChinwagConfig } from '../config.js';
 import { getInkColor, getColorList } from '../colors.js';
 import { scanIntegrationHealth, summarizeIntegrationScan } from '../mcp-config.js';
 import { classifyError } from '../utils/errors.js';
-import { addToolToProject } from '../utils/tool-actions.js';
-import { computeToolRecommendations } from '../utils/tool-recommendations.js';
-import { evalToTool } from '../utils/tool-catalog.js';
-import type { CatalogToolLike } from '../utils/tool-catalog.js';
 import type { IntegrationScanResult } from '@chinwag/shared/integration-doctor.js';
-import type {
-  ToolCatalogEntry,
-  ToolDirectoryResponse,
-  ToolCatalogResponse,
-} from '@chinwag/shared/contracts/tools.js';
 import type { HandleUpdateResponse } from '../types/api.js';
 import { formatError, createLogger } from '@chinwag/shared';
 import { FLASH_MIN_DURATION_MS, FLASH_MS_PER_CHAR } from '../constants/timings.js';
@@ -88,8 +79,6 @@ interface NavState {
 }
 
 interface ToolsState {
-  loading: boolean;
-  catalog: CatalogToolLike[];
   statuses: IntegrationScanResult[];
 }
 
@@ -101,8 +90,6 @@ export function Customize({
   navigate,
   refreshUser,
 }: CustomizeProps): React.ReactNode {
-  const { stdout } = useStdout();
-  const cols = stdout?.columns || 80;
   const [handleInput, setHandleInput] = useState('');
   const colors = getColorList();
 
@@ -123,7 +110,7 @@ export function Customize({
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Tools state ─────────────────────────────────────
-  const [tools, setTools] = useState<ToolsState>({ loading: false, catalog: [], statuses: [] });
+  const [tools, setTools] = useState<ToolsState>({ statuses: [] });
 
   const menuItems = useMemo(
     () => [
@@ -156,39 +143,13 @@ export function Customize({
       return;
     }
     if (action === 'tools') {
-      loadTools();
+      setTools({ statuses: scanIntegrationHealth(process.cwd()) });
     }
     if (action === 'ide') {
       installIdeExtension();
       return; // Action, not a sub-screen
     }
     setMode(action);
-  }
-
-  function loadTools(): void {
-    setTools((prev) => ({
-      ...prev,
-      loading: true,
-      statuses: scanIntegrationHealth(process.cwd()),
-    }));
-
-    async function fetchCatalog(): Promise<void> {
-      try {
-        const result = await api(config).get<ToolDirectoryResponse>('/tools/directory?limit=200');
-        setTools((prev) => ({ ...prev, catalog: (result.evaluations || []).map(evalToTool) }));
-      } catch (err: unknown) {
-        log.error(formatError(err));
-        try {
-          const fallback = await api(config).get<ToolCatalogResponse>('/tools/catalog');
-          setTools((prev) => ({ ...prev, catalog: fallback.tools || [] }));
-        } catch (err2: unknown) {
-          log.error('Fallback catalog fetch failed: ' + formatError(err2));
-          showFlash(`Could not fetch tool catalog: ${formatError(err2)}`, 'error');
-        }
-      }
-      setTools((prev) => ({ ...prev, loading: false }));
-    }
-    fetchCatalog();
   }
 
   function installIdeExtension(): void {
@@ -221,21 +182,7 @@ export function Customize({
     }
   }
 
-  function addTool(tool: CatalogToolLike): void {
-    const result = addToolToProject(tool, process.cwd());
-    if (result.ok) {
-      showFlash(result.message);
-      setTools((prev) => ({ ...prev, statuses: scanIntegrationHealth(process.cwd()) }));
-    } else {
-      showFlash(result.message, 'error');
-    }
-  }
-
-  // Compute recommendations for tools mode
-  const { detected, recommendations } = computeToolRecommendations(
-    tools.catalog as ToolCatalogEntry[],
-    tools.statuses,
-  );
+  const detected = tools.statuses.filter((s) => s.detected);
   const integrationSummary = summarizeIntegrationScan(tools.statuses, { onlyDetected: true });
 
   async function submitHandle(): Promise<void> {
@@ -330,15 +277,6 @@ export function Customize({
         return;
       }
     }
-
-    if (nav.mode === 'tools') {
-      const num = parseInt(ch, 10);
-      if (num >= 1 && num <= recommendations.length) {
-        const tool = recommendations[num - 1];
-        if (tool) addTool(tool);
-        return;
-      }
-    }
   });
 
   const handle = user?.handle || config?.handle;
@@ -370,22 +308,8 @@ export function Customize({
 
   // ── Tools mode ───────────────────────────────────────
   if (nav.mode === 'tools') {
-    if (tools.loading) {
-      return (
-        <Box flexDirection="column" padding={1}>
-          <Text dimColor>Loading tools...</Text>
-        </Box>
-      );
-    }
-
     return (
-      <ToolsScreen
-        detected={detected}
-        integrationSummary={integrationSummary}
-        recommendations={recommendations}
-        cols={cols}
-        message={flash}
-      />
+      <ToolsScreen detected={detected} integrationSummary={integrationSummary} message={flash} />
     );
   }
 

@@ -11,7 +11,6 @@ import { Welcome } from './lib/init.jsx';
 import { Chat } from './lib/chat.jsx';
 import { Customize } from './lib/customize.jsx';
 import { Dashboard } from './lib/dashboard/index.jsx';
-import { Discover } from './lib/discover.jsx';
 import { ControlShell } from './lib/shell.jsx';
 import type { ModeItem, ShellDimensions } from './lib/shell.jsx';
 import { useTerminalControl } from './lib/terminal-control.js';
@@ -176,7 +175,6 @@ const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', 
 const SPINNER_INTERVAL_MS = 80;
 const PRIMARY_MODES: ModeItem[] = [
   { key: 'dashboard', label: 'dashboard', shortLabel: 'dashboard', accent: 'cyan' },
-  { key: 'discover', label: 'tools', shortLabel: 'tools', accent: 'yellow' },
   { key: 'chat', label: 'chat', shortLabel: 'chat', accent: 'magenta' },
   { key: 'customize', label: 'settings', shortLabel: 'settings', accent: 'green' },
 ];
@@ -303,8 +301,6 @@ function App(): React.ReactNode {
             setFooterHints={setFooterHints}
           />
         );
-      case 'discover':
-        return <Discover config={config} navigate={navigate} />;
       default:
         return null;
     }
