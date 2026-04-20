@@ -16,30 +16,7 @@
   }
 }
 
-.header {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-sm);
-}
-
-.title {
-  font-family: var(--display);
-  font-size: var(--display-page);
-  font-weight: 300;
-  line-height: var(--display-line);
-  letter-spacing: var(--display-spacing);
-  color: var(--ink);
-  margin: 0;
-}
-
-.subtitle {
-  display: block;
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: var(--soft);
-  letter-spacing: 0.01em;
-}
+/* Header styles moved to DetailHeader component. */
 
 /* ── Tab selectors (stat values double as tabs) ── */
 

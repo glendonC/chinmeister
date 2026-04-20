@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import clsx from 'clsx';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { formatDuration } from '../../lib/utils.js';
-import BackLink from '../../components/BackLink/BackLink.js';
+import DetailHeader from '../../components/DetailHeader/DetailHeader.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import KeyboardHint from '../../components/KeyboardHint/KeyboardHint.jsx';
 import { useTabs } from '../../hooks/useTabs.js';
@@ -11,6 +11,7 @@ import { groupFilesByTeam } from '../../widgets/live-data.js';
 import type { Lock } from '../../lib/apiSchemas.js';
 import { FileRow } from '../../widgets/bodies/LiveWidgets.js';
 import widgetStyles from '../../widgets/bodies/LiveWidgets.module.css';
+import { formatScope } from './overview-utils.js';
 import styles from './LiveNowView.module.css';
 
 const LIVE_TABS = ['agents', 'conflicts', 'files'] as const;
@@ -99,14 +100,24 @@ export default function LiveNowView({
   if (totalAgents === 0) {
     return (
       <div className={styles.detail}>
-        <header className={styles.header}>
-          <BackLink label="Overview" onClick={onBack} />
-          <h1 className={styles.title}>live</h1>
-          <span className={styles.subtitle}>No one working right now across your projects.</span>
-        </header>
+        <DetailHeader
+          backLabel="Overview"
+          onBack={onBack}
+          title="live"
+          subtitle="No one working right now across your projects."
+        />
       </div>
     );
   }
+
+  // One-line subtitle — shared formatScope keeps it in sync with Usage.
+  const teamsRepresented = new Set(liveAgents.map((a) => a.teamId).filter(Boolean)).size;
+  const liveSubtitle = formatScope([
+    { count: totalAgents, singular: 'agent' },
+    { count: totalConflicts, singular: 'conflict' },
+    { count: totalFilesInPlay, singular: 'file in play', plural: 'files in play' },
+    { count: teamsRepresented, singular: 'project' },
+  ]);
 
   const tabs: Array<{ id: LiveTab; label: string; value: string | number; tone: '' | 'accent' }> = [
     {
@@ -131,10 +142,7 @@ export default function LiveNowView({
 
   return (
     <div className={styles.detail}>
-      <header className={styles.header}>
-        <BackLink label="Overview" onClick={onBack} />
-        <h1 className={styles.title}>live</h1>
-      </header>
+      <DetailHeader backLabel="Overview" onBack={onBack} title="live" subtitle={liveSubtitle} />
 
       <div className={styles.tabsRow} ref={statsRef} role="tablist" aria-label="Live sections">
         {tabs.map((t, i) => (

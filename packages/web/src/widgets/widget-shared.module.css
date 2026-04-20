@@ -30,8 +30,9 @@
 }
 
 /* Stat widget wrapped in a button — opens a shared category detail view.
- * Preserves the heroStatValue display at rest. A subtle mono hint reveals
- * under the value on hover/focus so the resting state stays chromeless. */
+ * A muted trailing arrow glyph sits inline next to the value as an
+ * always-visible drill-in affordance. Persistent (works on touch, readable
+ * on first glance) but chromeless — it's a single character, not a button. */
 .statButton {
   appearance: none;
   background: transparent;
@@ -44,6 +45,7 @@
   cursor: pointer;
   display: inline-flex;
   align-items: baseline;
+  gap: 10px;
   position: relative;
   transition: transform var(--motion-fast) var(--motion);
   transform-origin: left center;
@@ -59,34 +61,27 @@
   border-radius: var(--radius-xs);
 }
 
-.statDetailHint {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
+.statDetailArrow {
   font-family: var(--mono);
-  font-size: var(--text-2xs);
-  font-weight: 500;
+  font-size: var(--text-sm);
+  font-weight: 400;
+  line-height: 1;
   color: var(--soft);
-  letter-spacing: var(--tracking-stat);
-  text-transform: uppercase;
-  white-space: nowrap;
-  opacity: 0;
-  transform: translateY(-2px);
-  pointer-events: none;
+  opacity: 0.55;
   transition:
     opacity var(--motion-fast) ease,
-    transform var(--motion-fast) var(--motion);
+    color var(--motion-fast) ease;
 }
 
-.statButton:hover .statDetailHint,
-.statButton:focus-visible .statDetailHint {
+.statButton:hover .statDetailArrow,
+.statButton:focus-visible .statDetailArrow {
   opacity: 1;
-  transform: translateY(0);
+  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .statButton,
-  .statDetailHint {
+  .statDetailArrow {
     transition: none;
   }
   .statButton:hover {

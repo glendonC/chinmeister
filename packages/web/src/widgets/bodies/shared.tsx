@@ -55,8 +55,8 @@ export function StatWidget({
       aria-label={detailAriaLabel}
     >
       {inner}
-      <span className={styles.statDetailHint} aria-hidden="true">
-        → detail
+      <span className={styles.statDetailArrow} aria-hidden="true">
+        ↗
       </span>
     </button>
   );

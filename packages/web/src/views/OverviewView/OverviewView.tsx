@@ -615,7 +615,13 @@ export default function OverviewView() {
             }}
           />
         ) : usageShifted ? (
-          <UsageDetailView analytics={analytics} initialTab={usageParam} onBack={closeUsage} />
+          <UsageDetailView
+            analytics={analytics}
+            initialTab={usageParam}
+            onBack={closeUsage}
+            rangeDays={rangeDays}
+            onRangeChange={setRangeDays}
+          />
         ) : (
           <>
             {/* ── Header ── */}
