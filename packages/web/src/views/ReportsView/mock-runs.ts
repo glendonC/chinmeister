@@ -1,6 +1,6 @@
-// Mock past runs across the 4 reports for the skeleton. Varied statuses
-// (some complete, one running, one queued) and varied paths (primary vs
-// secondary) so the UI can show the full range of states.
+// Mock past runs across the 8 reports for the skeleton. Varied statuses
+// (complete, running, queued, failed) and varied paths so the UI can show
+// the full range of catalog states.
 
 import type { MockRun } from './types.js';
 
@@ -14,6 +14,12 @@ function daysAgo(days: number, hour = 10): string {
 function minutesAgo(mins: number): string {
   const d = new Date();
   d.setMinutes(d.getMinutes() - mins);
+  return d.toISOString();
+}
+
+function hoursAgo(hours: number): string {
+  const d = new Date();
+  d.setHours(d.getHours() - hours);
   return d.toISOString();
 }
 
@@ -44,31 +50,19 @@ export const MOCK_RUNS: MockRun[] = [
     criticalCount: 3,
   },
 
-  // Prompt Patterns — one running right now, one past
+  // Coordination Audit — one complete, one queued
   {
-    id: 'run-pp-002',
-    reportId: 'prompt-patterns',
-    project: 'chinwag',
-    status: 'running',
-    path: 'primary',
-    startedAt: minutesAgo(2),
-    currentPhase: 'Reading your session history',
-    progress: 0.35,
-  },
-  {
-    id: 'run-pp-001',
-    reportId: 'prompt-patterns',
+    id: 'run-ca-002',
+    reportId: 'coordination-audit',
     project: 'chinwag',
     status: 'complete',
     path: 'primary',
-    startedAt: daysAgo(14, 13),
-    completedAt: daysAgo(14, 13),
-    durationMs: 6 * 60 * 1000 + 28 * 1000,
-    findingsCount: 5,
+    startedAt: daysAgo(5, 11),
+    completedAt: daysAgo(5, 11),
+    durationMs: 4 * 60 * 1000 + 52 * 1000,
+    findingsCount: 3,
     criticalCount: 0,
   },
-
-  // Coordination Audit — queued waiting for CLI
   {
     id: 'run-ca-001',
     reportId: 'coordination-audit',
@@ -76,6 +70,122 @@ export const MOCK_RUNS: MockRun[] = [
     status: 'queued',
     path: 'primary',
     startedAt: minutesAgo(8),
+  },
+
+  // Cost Leak — two past runs
+  {
+    id: 'run-cl-002',
+    reportId: 'cost-leak',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: daysAgo(1, 16),
+    completedAt: daysAgo(1, 16),
+    durationMs: 3 * 60 * 1000 + 18 * 1000,
+    findingsCount: 4,
+    criticalCount: 1,
+  },
+  {
+    id: 'run-cl-001',
+    reportId: 'cost-leak',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: daysAgo(8, 12),
+    completedAt: daysAgo(8, 12),
+    durationMs: 2 * 60 * 1000 + 47 * 1000,
+    findingsCount: 3,
+    criticalCount: 0,
+  },
+
+  // Cross-Tool Effectiveness — one past run
+  {
+    id: 'run-ct-001',
+    reportId: 'cross-tool-effectiveness',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: daysAgo(6, 13),
+    completedAt: daysAgo(6, 13),
+    durationMs: 5 * 60 * 1000 + 22 * 1000,
+    findingsCount: 3,
+    criticalCount: 0,
+  },
+
+  // Test-Edit Gap — one running now, one past
+  {
+    id: 'run-te-002',
+    reportId: 'test-edit-gap',
+    project: 'chinwag',
+    status: 'running',
+    path: 'primary',
+    startedAt: minutesAgo(3),
+    currentPhase: 'Reading the repo file tree',
+    progress: 0.42,
+  },
+  {
+    id: 'run-te-001',
+    reportId: 'test-edit-gap',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: daysAgo(16, 10),
+    completedAt: daysAgo(16, 10),
+    durationMs: 6 * 60 * 1000 + 9 * 1000,
+    findingsCount: 5,
+    criticalCount: 1,
+  },
+
+  // Architecture Drift — one past run
+  {
+    id: 'run-ad-001',
+    reportId: 'architecture-drift',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: daysAgo(11, 15),
+    completedAt: daysAgo(11, 15),
+    durationMs: 9 * 60 * 1000 + 34 * 1000,
+    findingsCount: 4,
+    criticalCount: 1,
+  },
+
+  // Failure Forensics — one past run (on-demand, so a single recent run)
+  {
+    id: 'run-ff-001',
+    reportId: 'failure-forensics',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: hoursAgo(1),
+    completedAt: hoursAgo(1),
+    durationMs: 3 * 60 * 1000 + 41 * 1000,
+    findingsCount: 3,
+    criticalCount: 1,
+  },
+
+  // Memory Hygiene — one past run, one older failed
+  {
+    id: 'run-mh-001',
+    reportId: 'memory-hygiene',
+    project: 'chinwag',
+    status: 'complete',
+    path: 'primary',
+    startedAt: daysAgo(4, 9),
+    completedAt: daysAgo(4, 9),
+    durationMs: 4 * 60 * 1000 + 12 * 1000,
+    findingsCount: 3,
+    criticalCount: 0,
+  },
+  {
+    id: 'run-mh-000',
+    reportId: 'memory-hygiene',
+    project: 'chinwag',
+    status: 'failed',
+    path: 'primary',
+    startedAt: daysAgo(32, 14),
+    completedAt: daysAgo(32, 14),
+    durationMs: 47 * 1000,
   },
 ];
 

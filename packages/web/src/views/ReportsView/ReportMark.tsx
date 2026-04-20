@@ -4,13 +4,27 @@
 // feel performative.
 
 import type { ReactNode } from 'react';
-import { Compass, Flame, GitMerge, Radio, type LucideIcon } from 'lucide-react';
+import {
+  Brain,
+  CircleDollarSign,
+  Flame,
+  FlaskConical,
+  GitMerge,
+  Microscope,
+  Network,
+  Shuffle,
+  type LucideIcon,
+} from 'lucide-react';
 
 const MARKS: Record<string, LucideIcon> = {
   'failure-analysis': Flame,
-  'prompt-patterns': Radio,
   'coordination-audit': GitMerge,
-  'onboarding-brief': Compass,
+  'cost-leak': CircleDollarSign,
+  'cross-tool-effectiveness': Shuffle,
+  'test-edit-gap': FlaskConical,
+  'architecture-drift': Network,
+  'failure-forensics': Microscope,
+  'memory-hygiene': Brain,
 };
 
 export function ReportMark({

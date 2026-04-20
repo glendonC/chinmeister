@@ -17,26 +17,11 @@ import { projectGradient } from '../../lib/projectGradient.js';
 import { REPORT_CATALOG, reportHex, type ReportDef } from './report-catalog.js';
 import { ReportMark } from './ReportMark.js';
 import { getLatestRun, getRunsForReport } from './mock-runs.js';
-import { getCompletedReportFor } from './mock-findings.js';
 import { computeFreshness, formatFreshness } from './freshness.js';
 import type { MockRun } from './types.js';
 import ReportRunView from './ReportRunView.js';
 import ReportDetailView from './ReportDetailView.js';
 import styles from './ReportsView.module.css';
-
-// ── format helpers ──
-
-// One-line hint for the collapsed hover. Adapts to run state. Never
-// claims more than the data: "N findings last run" is honest; "N
-// critical" is not until severity has a real rubric per report.
-function formatHoverHint(latestRun: MockRun | undefined): string {
-  if (!latestRun) return 'Not yet run';
-  if (latestRun.status === 'running') return 'Running now';
-  if (latestRun.status === 'queued') return 'Queued';
-  if (latestRun.status === 'failed') return 'Last run failed';
-  const n = latestRun.findingsCount ?? 0;
-  return `${n} finding${n === 1 ? '' : 's'} last run`;
-}
 
 // ── Column header row (matches the row grid template) ──
 
@@ -102,42 +87,24 @@ const ReportRow = memo(function ReportRow({
 
 // ── Hover preview tooltip (positioned adjacent to card) ──
 //
-// Two states, one panel. Collapsed by default: title, description,
-// one-line hint, action bar. `D` expands to reveal Reads, the latest
-// finding (real when a run exists, template-only before any run),
-// and a runs-total microline. `D` again or hovering a different
-// report resets to collapsed.
-//
-// Nothing here fabricates: no cost estimate, no "quality" claim, no
-// severity count without a rubric. The hint line says what the
-// backend can honestly report.
+// Two states, one panel. Collapsed: title, description, action bar.
+// `D` expands to reveal Reads and a runs-total microline. `D` again
+// or hovering a different report resets to collapsed.
 
 function HoverTooltip({
   report,
   pastRuns,
-  latestRun,
   expanded,
   style,
   visible,
 }: {
   report: ReportDef;
   pastRuns: MockRun[];
-  latestRun: MockRun | undefined;
   expanded: boolean;
   style: CSSProperties | undefined;
   visible: boolean;
 }): ReactNode {
   const hex = reportHex(report);
-  const completed = getCompletedReportFor(report.id);
-
-  // Latest finding surfaces only when a completed run has real findings.
-  // Before first run, the expanded state just shows Reads — no template
-  // masquerading as a live result.
-  const hasLatest = latestRun?.status === 'complete' && completed && completed.findings.length > 0;
-  const latestTitle = hasLatest ? completed.findings[0].title : null;
-  const moreCount = hasLatest
-    ? Math.max(0, (latestRun.findingsCount ?? completed.findings.length) - 1)
-    : 0;
 
   return (
     <div
@@ -158,8 +125,6 @@ function HoverTooltip({
 
       <p className={styles.tooltipDescription}>{report.description}</p>
 
-      {!expanded && <span className={styles.tooltipHint}>{formatHoverHint(latestRun)}</span>}
-
       {expanded && (
         <>
           <div className={styles.tooltipBlock}>
@@ -168,18 +133,6 @@ function HoverTooltip({
               {report.reads.map((r) => r.toLowerCase()).join(', ')}.
             </p>
           </div>
-
-          {latestTitle && (
-            <div className={styles.tooltipBlock}>
-              <span className={styles.tooltipBlockLabel}>Latest finding</span>
-              <p className={styles.tooltipLatestTitle}>{latestTitle}</p>
-              {moreCount > 0 && (
-                <span className={styles.tooltipLatestMore}>
-                  + {moreCount} more finding{moreCount === 1 ? '' : 's'}
-                </span>
-              )}
-            </div>
-          )}
 
           {pastRuns.length > 0 && (
             <span className={styles.tooltipHint}>
@@ -376,7 +329,6 @@ function CatalogView(): ReactNode {
           <HoverTooltip
             report={displayReport}
             pastRuns={getRunsForReport(displayReport.id)}
-            latestRun={getLatestRun(displayReport.id)}
             expanded={isExpanded}
             style={tooltipStyle}
             visible={!!hoveredId}
