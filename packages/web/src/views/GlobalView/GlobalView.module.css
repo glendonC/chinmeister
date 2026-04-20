@@ -1,10 +1,28 @@
 /* ═══════════════════════════════════════════
    GlobalView — QOVES-inspired analytics
    Clinical precision, generous space, card surfaces
+
+   Sections (search for "── NAME ──" to jump):
+     Hero                            | line ~10
+     Section rhythm                  | line ~90
+     Gated-section message           | line ~125
+     Composite scores (headline row) | line ~135
+     Gauge rail                      | line ~215
+     Axis glossary                   | line ~315
+     Radar chart                     | line ~355
+     User-vs-community spark         | line ~455
+     Outcome bar                     | line ~520
+     Distribution histogram          | line ~645
+     1-D percentile bar              | line ~700
+     Ghost leaderboard               | line ~880
+
+   When this crosses ~1200 lines, consider extracting region-specific modules
+   alongside matching sub-components from GlobalView.tsx rather than growing
+   this file further.
    ═══════════════════════════════════════════ */
 
 .global {
-  animation: viewFadeIn 0.3s var(--motion) both;
+  animation: dashboardViewFadeIn 0.3s var(--motion) both;
 }
 
 /* ── Hero (text left, map right) ── */
@@ -20,27 +38,31 @@
 .heroContent {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 36px;
 }
 
 .onlinePulse {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 12px;
 }
 
 .onlineCount {
   font-family: var(--display);
-  font-size: 2.5rem;
+  font-size: 4rem;
   font-weight: 300;
   line-height: 1;
   letter-spacing: -0.04em;
-  color: var(--ink);
+  /* Live data — per the design brief, accent is reserved for real-time
+     counts. This number updates on every heartbeat cycle (60s poll) while
+     the user is on the page, so it earns the color. Everything else on
+     this view is historical and stays in ink. */
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
 }
 
 .onlineLabel {
-  font-size: var(--text-sm);
+  font-size: var(--text-md);
   color: var(--soft);
   letter-spacing: -0.01em;
 }
@@ -48,19 +70,19 @@
 .heroStats {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 32px;
+  gap: 16px 44px;
 }
 
 .heroStat {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
 }
 
 .heroStatValue {
   font-family: var(--display);
-  font-size: var(--text-xl);
-  font-weight: 400;
+  font-size: 2.25rem;
+  font-weight: 300;
   line-height: 1;
   letter-spacing: -0.03em;
   color: var(--ink);
@@ -68,9 +90,9 @@
 }
 
 .heroStatLabel {
-  font-size: var(--text-2xs);
+  font-size: var(--text-sm);
   color: var(--soft);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.03em;
 }
 
 .mapWrap {
@@ -119,21 +141,231 @@
    Percentile rank section
    ═══════════════════════════════════════════ */
 
-.scoreSection {
+/* ── Gated-section message (shown when user hasn't hit sample threshold) ── */
+
+.gateMessage {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  letter-spacing: -0.01em;
+  margin: 8px 0 24px;
+}
+
+/* ── Composite scores (headline row) ── */
+/* Column template mirrors .scoreSection so the composites sit in the same
+   two-column rhythm as the radar + axis glossary below. Without this, the
+   composites used a 1fr/1fr split while the radar row used minmax(320px,
+   460px)/1fr, which meant Productivity's big number and the glossary's
+   COMPLETION/VELOCITY/… rows rendered at different x-coordinates. */
+
+.compositeRow {
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) 1fr;
+  gap: 48px;
+  margin: 8px 0 40px;
+}
+
+.composite {
   display: flex;
-  justify-content: center;
-  align-items: start;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compositeLabel {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compositeScoreRow {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.compositeScore {
+  font-family: var(--display);
+  font-size: 4.5rem;
+  font-weight: 200;
+  line-height: 1;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  animation: compositeCountUp 0.8s var(--motion) both;
+}
+
+@keyframes compositeCountUp {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .compositeScore {
+    animation: none;
+  }
+}
+
+.compositeSuffix {
+  font-family: var(--display);
+  font-size: 1.25rem;
+  font-weight: 300;
+  color: var(--soft);
+  letter-spacing: -0.02em;
+}
+
+.compositeDenom {
+  margin-left: 10px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  opacity: 0.5;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Gauge rail under the composite score ── */
+
+.compositeGauge {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  max-width: 320px;
+}
+
+.compositeGaugeTrack {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hairline);
+}
+
+.compositeGaugeFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.08), var(--ink));
+  opacity: 0.85;
+  transition: width 0.8s var(--motion);
+}
+
+/* 50th-percentile reference tick. Light accent-blue so the median reads as
+   "where the community center is," distinct from the user's own marker. */
+.compositeGaugeMedian {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 1px;
+  height: 12px;
+  background: var(--accent);
+  opacity: 0.35;
+  transform: translateX(-50%);
+}
+
+.compositeGaugeMarker {
+  position: absolute;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--ink);
+  border: 2.5px solid var(--page-bg);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.14);
+  transform: translate(-50%, -50%);
+  transition: left 0.8s var(--motion);
+  z-index: 1;
+}
+
+.compositeGaugeEnds {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  color: var(--soft);
+  opacity: 0.7;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.compositeCaption {
+  font-size: var(--text-sm);
+  color: var(--soft);
+  letter-spacing: -0.01em;
+}
+
+.compositeParts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 4px;
+}
+
+.compositePart {
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  letter-spacing: 0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.compositeWeight {
+  color: var(--soft);
+  opacity: 0.7;
+  margin-left: 2px;
+}
+
+.scoreSection {
+  display: grid;
+  grid-template-columns: minmax(320px, 460px) 1fr;
+  align-items: center;
+  gap: 48px;
   margin-top: 8px;
 }
 
-.sectionHint {
+/* ── Axis glossary (right of radar) ── */
+
+.axisList {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.axisRow {
+  display: grid;
+  grid-template-columns: 110px 1fr;
+  gap: 16px;
+  align-items: baseline;
+}
+
+.axisName {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.axisDesc {
+  font-size: var(--text-sm);
+  color: var(--soft);
+  line-height: 1.5;
+}
+
+.axisFooter {
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--hairline);
   font-size: var(--text-2xs);
   color: var(--muted);
-  text-align: center;
-  margin-top: 16px;
-  max-width: 520px;
-  margin-left: auto;
-  margin-right: auto;
+  letter-spacing: 0.02em;
 }
 
 /* ── Radar chart ── */
@@ -150,7 +382,7 @@
 
 .radarWrap {
   width: 100%;
-  max-width: 340px;
+  max-width: 380px;
 }
 
 .radarSvg {
@@ -160,11 +392,48 @@
 }
 
 .radarLabel {
-  font-family: var(--sans);
+  font-family: var(--mono);
   font-size: 6px;
   font-weight: 500;
   fill: var(--muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Live percentile value printed under each axis label. Larger ink-weight
+   number so users see their rank per-axis without tracing the polygon
+   back to a ring. */
+.radarLabelValue {
+  font-family: var(--display);
+  font-size: var(--text-3xs);
+  font-weight: 400;
+  fill: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.radarLegend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  justify-content: center;
+}
+
+.radarLegendDashed {
+  display: inline-block;
+  width: 22px;
+  height: 1px;
+  background-image: linear-gradient(to right, var(--accent) 50%, transparent 50%);
+  background-size: 4px 1px;
+  opacity: 0.6;
+}
+
+.radarLegendText {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 /* ═══════════════════════════════════════════
@@ -203,6 +472,70 @@
   letter-spacing: 0.03em;
 }
 
+/* ── User-vs-community spark (per-stat comparison bar) ──
+   The stat's number is your value, the thin bar under it encodes "how you
+   compare to the average developer" at real scale. Accent tick = community
+   mean. Ink fill = your value on the same axis. Caption names the direction
+   so it reads without needing to decode the bar. */
+
+.personalSpark {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.personalSparkTrack {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--hairline);
+}
+
+.personalSparkUserFill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--ink);
+  opacity: 0.65;
+  transition: width 0.6s var(--motion);
+}
+
+.personalSparkCommunity {
+  position: absolute;
+  top: -3px;
+  width: 1px;
+  height: 9px;
+  background: var(--accent);
+  opacity: 0.55;
+  transform: translateX(-50%);
+  transition: left 0.6s var(--motion);
+}
+
+.personalSparkCaption {
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+}
+
+.personalSpark_above {
+  color: var(--success);
+  opacity: 0.85;
+}
+
+.personalSpark_below {
+  color: var(--soft);
+  opacity: 0.75;
+}
+
+.personalSpark_neutral {
+  color: var(--soft);
+  opacity: 0.55;
+}
+
 /* ── Outcome bar ── */
 
 .outcomeBreakdown {
@@ -218,14 +551,14 @@
 .outcomeBar {
   display: flex;
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   overflow: hidden;
   gap: 2px;
 }
 
 .outcomeSegment {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   opacity: 0.6;
   transition: width 0.6s var(--motion);
 }
@@ -248,88 +581,6 @@
   height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
-}
-
-/* ═══════════════════════════════════════════
-   You vs Community — comparison cards
-   ═══════════════════════════════════════════ */
-
-.compareGrid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
-  margin-top: 8px;
-}
-
-.compareCard {
-  background: var(--ghost);
-  border-radius: var(--radius);
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.compareMetric {
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  color: var(--muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.compareValues {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.compareYours {
-  font-family: var(--display);
-  font-size: 1.75rem;
-  font-weight: 300;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-}
-
-.compareVs {
-  font-size: var(--text-2xs);
-  color: var(--soft);
-}
-
-.compareCommunity {
-  font-family: var(--display);
-  font-size: 1.1rem;
-  font-weight: 300;
-  line-height: 1;
-  letter-spacing: -0.02em;
-  color: var(--soft);
-}
-
-.compareDelta {
-  font-size: var(--text-2xs);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.compareDeltaGood {
-  color: var(--success);
-}
-
-.compareDeltaBad {
-  color: var(--danger);
-  opacity: 0.8;
-}
-
-.compareDeltaNeutral {
-  color: var(--soft);
-}
-
-.compareInsight {
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  line-height: 1.5;
 }
 
 /* ═══════════════════════════════════════════
@@ -384,12 +635,6 @@
   margin-left: 1px;
 }
 
-.cardViz {
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
 .cardValueRow {
   display: flex;
   align-items: baseline;
@@ -416,74 +661,7 @@
   line-height: 1.5;
 }
 
-/* ── 1. Bell curve ── */
-
-.bellSvg {
-  width: 100%;
-  height: 64px;
-  display: block;
-}
-
-/* ── 2. Thermometer ── */
-
-.thermoWrap {
-  display: flex;
-  gap: 10px;
-  flex: 1;
-  align-items: stretch;
-}
-
-.thermoLabels {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 2px 0;
-}
-
-.thermoLabel {
-  font-size: 0.55rem;
-  color: var(--soft);
-  letter-spacing: 0.02em;
-}
-
-.thermoTrack {
-  position: relative;
-  width: 10px;
-  border-radius: 5px;
-  background: var(--hairline);
-  overflow: visible;
-}
-
-.thermoFill {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  border-radius: 5px;
-  background: linear-gradient(to top, var(--danger), var(--warn), var(--success));
-  opacity: 0.3;
-  transition: height 0.8s var(--motion);
-}
-
-.thermoMarker {
-  position: absolute;
-  left: 50%;
-  transform: translate(-50%, 50%);
-  transition: bottom 0.8s var(--motion);
-  z-index: 1;
-}
-
-.thermoMarkerDot {
-  display: block;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--ink);
-  border: 2.5px solid var(--page-bg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-}
-
-/* ── 3. Histogram ── */
+/* ── Distribution histogram (DistCard) ── */
 
 .histoWrap {
   display: flex;
@@ -533,172 +711,13 @@
   font-weight: 600;
 }
 
-/* ── 4. Spectrum ── */
-
-.spectrumWrap {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+.histoEmpty {
   flex: 1;
-  justify-content: center;
+  border-bottom: 1px dashed var(--hairline);
+  opacity: 0.4;
 }
 
-.spectrumQual {
-  font-family: var(--display);
-  font-size: 1rem;
-  font-weight: 400;
-  color: var(--ink);
-  letter-spacing: -0.02em;
-}
-
-.spectrumTrack {
-  position: relative;
-  height: 4px;
-  border-radius: 2px;
-  background: linear-gradient(90deg, var(--hairline), var(--faint), var(--hairline));
-}
-
-.spectrumDot {
-  position: absolute;
-  top: 50%;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--ink);
-  border: 2px solid var(--page-bg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
-  transform: translate(-50%, -50%);
-  transition: left 0.6s var(--motion);
-}
-
-.spectrumEnds {
-  display: flex;
-  justify-content: space-between;
-}
-
-.spectrumEndLabel {
-  font-size: 0.55rem;
-  color: var(--soft);
-  letter-spacing: 0.02em;
-}
-
-/* ── 5. Arc ── */
-
-.arcCenter {
-  position: relative;
-  width: 100%;
-  max-width: 130px;
-  margin: 0 auto;
-  flex: 1;
-  display: flex;
-  align-items: center;
-}
-
-.arcSvg {
-  width: 100%;
-  display: block;
-}
-
-.arcFill {
-  transition: stroke-dashoffset 0.8s var(--motion);
-}
-
-.arcLabel {
-  position: absolute;
-  bottom: 2px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: baseline;
-  gap: 1px;
-}
-
-.arcNum {
-  font-family: var(--display);
-  font-size: 1.5rem;
-  font-weight: 200;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-}
-
-.arcSuffixInner {
-  font-size: 0.65rem;
-  font-weight: 300;
-  color: var(--soft);
-}
-
-/* ── 6. Ring ── */
-
-.ringCenter {
-  position: relative;
-  width: 80px;
-  height: 80px;
-  margin: 0 auto;
-}
-
-.ringSvg {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.ringFill {
-  transition: stroke-dashoffset 0.8s var(--motion);
-}
-
-.ringLabel {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: baseline;
-  gap: 1px;
-}
-
-.ringNum {
-  font-family: var(--display);
-  font-size: 1.25rem;
-  font-weight: 200;
-  line-height: 1;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-}
-
-.ringSuffixInner {
-  font-size: 0.55rem;
-  font-weight: 300;
-  color: var(--soft);
-}
-
-/* ── 7. Dots ── */
-
-.dotsRow {
-  display: flex;
-  gap: 7px;
-  padding: 8px 0;
-  flex: 1;
-  align-items: center;
-}
-
-.dotFilled {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--ink);
-  opacity: 0.55;
-}
-
-.dotEmpty {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  border: 1.5px dashed var(--hairline);
-  background: transparent;
-}
-
-/* ── 8. Bar ── */
+/* ── 1-D percentile bar (BarCard) ── */
 
 .barWrap {
   display: flex;
@@ -739,6 +758,21 @@
   transform: translate(-50%, -50%);
   transition: left 0.6s var(--motion);
   z-index: 1;
+}
+
+/* 50th-percentile reference tick. Anchored at left: 50% and rendered behind
+   the user marker so collision at the median still reads user-first. Accent
+   blue keeps it visually related to the live/reference-data treatment
+   elsewhere on this view (median ring in radar, gauge median tick). */
+.barMedianTick {
+  position: absolute;
+  top: -3px;
+  left: 50%;
+  width: 1px;
+  height: 12px;
+  background: var(--accent);
+  opacity: 0.35;
+  transform: translateX(-50%);
 }
 
 .barLabels {
@@ -793,7 +827,7 @@
   gap: 12px;
   padding: 8px 4px;
   border-radius: var(--radius-xs);
-  animation: viewFadeIn 0.3s var(--motion) both;
+  animation: dashboardViewFadeIn 0.3s var(--motion) both;
 }
 
 .leaderboardRow:nth-child(odd) {
@@ -813,10 +847,17 @@
 }
 
 .leaderboardName {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: var(--text-sm);
   font-weight: 500;
   color: var(--ink);
   white-space: nowrap;
+  overflow: hidden;
+}
+
+.leaderboardNameText {
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -881,134 +922,86 @@
 }
 
 /* ═══════════════════════════════════════════
-   Tool combinations
+   Tool co-occurrence matrix
    ═══════════════════════════════════════════ */
 
-.combosGrid {
+.matrix {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-top: 8px;
-}
-
-.comboCard {
-  background: var(--ghost);
-  border-radius: var(--radius);
-  padding: 16px 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.comboTools {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.comboTool {
-  font-size: var(--text-sm);
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.comboPlus {
-  font-size: var(--text-2xs);
-  color: var(--soft);
-}
-
-.comboUsers {
-  font-size: var(--text-2xs);
-  color: var(--soft);
-}
-
-/* ── Ghost combos ── */
-
-.ghostCombo {
-  opacity: 0.5;
-}
-
-.ghostComboTools {
-  display: flex;
-  gap: 8px;
+  gap: 4px;
   align-items: center;
-}
-
-.ghostComboText {
-  height: 12px;
-  width: 60px;
-  border-radius: 3px;
-  background: var(--hairline);
-}
-
-.ghostComboSub {
-  height: 8px;
-  width: 80px;
-  border-radius: 3px;
-  background: var(--hairline);
-}
-
-/* ═══════════════════════════════════════════
-   Trending
-   ═══════════════════════════════════════════ */
-
-.trendingGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 24px;
   margin-top: 8px;
-}
-
-.trendingList {
-  background: var(--ghost);
-  border-radius: var(--radius);
   padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  background: var(--ghost);
+  border-radius: var(--radius);
+  overflow-x: auto;
 }
 
-.trendingListTitle {
+.matrixCorner {
+  /* top-left spacer for the label column */
+}
+
+.matrixColLabel {
   font-size: var(--text-2xs);
-  font-weight: 500;
   color: var(--muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.trendingItems {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.trendingItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  letter-spacing: 0.04em;
+  text-align: center;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
   padding: 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: 90px;
 }
 
-.trendingName {
-  font-size: var(--text-sm);
+.matrixRowLabel {
+  font-size: var(--text-2xs);
   color: var(--ink);
   font-weight: 500;
+  padding-right: 10px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.trendingCount {
+.matrixCell,
+.matrixMirror,
+.matrixDiag {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  min-width: 20px;
+  min-height: 20px;
+}
+
+.matrixCell {
+  /* Cell background is set inline — color is the blend of the two tools'
+     brand colors and alpha encodes pair density. Default to a faint ink so
+     React renders a shape even before the hook populates data. */
+  background: rgba(18, 19, 23, 0.05);
+  transition: background 0.4s var(--motion);
+  cursor: default;
+}
+
+.matrixMirror {
+  background: var(--hairline);
+  opacity: 0.3;
+}
+
+.matrixDiag {
+  background: transparent;
+  border: 1px dashed var(--hairline);
+  opacity: 0.5;
+}
+
+.matrixEmpty {
+  margin-top: 8px;
+  padding: 40px 20px;
+  background: var(--ghost);
+  border-radius: var(--radius);
+  text-align: center;
   font-size: var(--text-2xs);
   color: var(--soft);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ── Ghost trending ── */
-
-.ghostTrendingItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 4px 0;
-  opacity: 0.5;
+  letter-spacing: 0.02em;
 }
 
 /* ═══════════════════════════════════════════
@@ -1020,28 +1013,37 @@
     grid-template-columns: 1fr;
   }
 
+  .onlineCount {
+    font-size: 3rem;
+  }
+
+  .heroStatValue {
+    font-size: 1.75rem;
+  }
+
   .scoreSection {
     grid-template-columns: 1fr;
     gap: 24px;
+  }
+
+  .compositeRow {
+    gap: 28px;
+    margin-bottom: 32px;
+  }
+
+  .compositeScore {
+    font-size: 3.5rem;
+  }
+
+  .axisRow {
+    grid-template-columns: 100px 1fr;
   }
 
   .percentileGrid {
     grid-template-columns: repeat(2, 1fr);
   }
 
-  .compareGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
   .leaderboardGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .combosGrid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .trendingGrid {
     grid-template-columns: 1fr;
   }
 }
@@ -1059,14 +1061,6 @@
   .card {
     min-height: 180px;
     padding: 16px;
-  }
-
-  .compareGrid {
-    grid-template-columns: 1fr;
-  }
-
-  .combosGrid {
-    grid-template-columns: 1fr;
   }
 
   .leaderboardRow {

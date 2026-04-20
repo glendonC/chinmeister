@@ -18,6 +18,7 @@ import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import type { ToolWorkTypeBreakdown } from '../../lib/apiSchemas.js';
 import { WORK_TYPE_COLORS, WORK_TYPES, type WorkType } from '../../widgets/utils.js';
 import { PREVIEW_TOOL_WORK_TYPE } from './previewData.js';
+import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './StackWorkTypeMatrix.module.css';
 
 interface Props {
@@ -77,7 +78,7 @@ export default function StackWorkTypeMatrix({ breakdown, onToolClick }: Props) {
     return (
       <section className={styles.section}>
         <header className={styles.header}>
-          <span className={styles.eyebrow}>Stack × work type</span>
+          <Eyebrow label="Stack × work type" />
           <h2 className={styles.title}>Which tool for which job</h2>
         </header>
         <div className={styles.empty}>
@@ -91,10 +92,7 @@ export default function StackWorkTypeMatrix({ breakdown, onToolClick }: Props) {
   return (
     <section className={styles.section}>
       <header className={styles.header}>
-        <div className={styles.eyebrowRow}>
-          <span className={styles.eyebrow}>Stack × work type</span>
-          {isPreview && <span className={styles.previewBadge}>Preview</span>}
-        </div>
+        <Eyebrow label="Stack × work type" showPreview={isPreview} />
         <h2 className={styles.title}>Which tool for which job</h2>
         <p className={styles.subtitle}>
           {isPreview

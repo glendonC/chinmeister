@@ -22,7 +22,7 @@
 }
 
 .fallback {
-  color: #fff;
+  color: var(--on-accent);
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: -0.02em;

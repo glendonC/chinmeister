@@ -14,34 +14,6 @@
   max-width: 72ch;
 }
 
-.eyebrowRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.eyebrow {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-eyebrow);
-  color: var(--soft);
-}
-
-.previewBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-}
-
 .sectionTitle {
   margin: 0;
   font-family: var(--display);
@@ -89,14 +61,14 @@
 
 .ratioLabel {
   font-family: var(--mono);
-  font-size: var(--text-10);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-eyebrow);
   color: var(--soft);
 }
 
 .ratioHint {
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
   line-height: 1.4;
   margin-top: 4px;
@@ -141,20 +113,20 @@
 .usageBarWrap {
   height: 6px;
   background: var(--ghost);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
 .usageBar {
   height: 100%;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
 }
 
 .usageCount,
 .usageErr,
 .usageDur {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -204,7 +176,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -254,20 +226,20 @@
 .pairingVolWrap {
   height: 6px;
   background: var(--ghost);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
 }
 
 .pairingVol {
   height: 100%;
   background: var(--ink);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   opacity: 0.75;
 }
 
 .pairingSessions {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
   text-align: right;
   font-variant-numeric: tabular-nums;
@@ -320,20 +292,20 @@
 
 .scopeLabel {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--ink);
   margin-top: 4px;
 }
 
 .scopeSessions {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--muted);
 }
 
 .scopeRate {
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--soft);
 }
 
@@ -359,7 +331,7 @@
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .usageGrid {
     grid-template-columns: 1fr;
   }

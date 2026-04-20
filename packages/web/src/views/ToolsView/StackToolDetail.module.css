@@ -69,7 +69,7 @@
 
 .statLabel {
   font-family: var(--mono);
-  font-size: var(--text-10);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-eyebrow);
   color: var(--soft);
@@ -85,7 +85,7 @@
 }
 
 .statHint {
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
 }
 
@@ -107,7 +107,7 @@
   display: flex;
   width: 100%;
   height: 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   background: var(--ghost);
 }
@@ -148,7 +148,7 @@
 
 .workLegendValue {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
@@ -240,12 +240,12 @@
 .handoffMeta,
 .memberMeta {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 768px) {
   .statGrid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

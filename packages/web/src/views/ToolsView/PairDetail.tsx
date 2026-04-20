@@ -15,6 +15,7 @@ import BackLink from '../../components/BackLink/BackLink.js';
 import SectionTitle from '../../components/SectionTitle/SectionTitle.js';
 import type { ToolHandoff, ToolHandoffRecentFile } from '../../lib/apiSchemas.js';
 import { PREVIEW_TOOL_HANDOFFS } from './previewData.js';
+import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './PairDetail.module.css';
 
 interface Props {
@@ -97,10 +98,7 @@ export default function PairDetail({ fromToolId, toToolId, handoffs, onBack, onF
       <header className={styles.header}>
         <BackLink label="Tools" onClick={onBack} />
         <div className={styles.titleBlock}>
-          <div className={styles.eyebrowRow}>
-            <span className={styles.eyebrow}>Handoff pair</span>
-            {isPreview && <span className={styles.previewBadge}>Preview</span>}
-          </div>
+          <Eyebrow label="Handoff pair" showPreview={isPreview} />
           <div className={styles.pairRow}>
             <span className={styles.pairSide}>
               <ToolIcon tool={fromToolId} size={20} />

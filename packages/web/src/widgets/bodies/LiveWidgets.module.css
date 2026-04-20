@@ -50,7 +50,7 @@
 .liveTableHeader {
   padding: 0 14px 10px;
   font-family: var(--mono);
-  font-size: var(--text-10);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-table);
   color: var(--soft);
@@ -94,9 +94,9 @@
   justify-content: center;
   justify-self: end;
   padding: 4px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-family: var(--sans);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   font-weight: 600;
   letter-spacing: 0.01em;
   background: var(--ink);
@@ -108,7 +108,7 @@
 
 .liveTableRow:hover .liveViewButton {
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
 }
 
 .liveAgentName {
@@ -144,25 +144,10 @@
 
 .liveCellNum {
   font-family: var(--mono);
-  font-size: var(--text-11);
+  font-size: var(--text-xs);
   color: var(--ink);
   text-align: right;
   font-variant-numeric: tabular-nums;
-}
-
-.liveCellMuted {
-  color: var(--soft);
-}
-
-@keyframes rowReveal {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -204,7 +189,7 @@
 .conflictTableHeader {
   padding: 0 14px 10px;
   font-family: var(--mono);
-  font-size: var(--text-10);
+  font-size: var(--text-2xs);
   text-transform: uppercase;
   letter-spacing: var(--tracking-table);
   color: var(--soft);

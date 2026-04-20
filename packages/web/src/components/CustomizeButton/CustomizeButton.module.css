@@ -5,12 +5,12 @@
   height: 28px;
   padding: 0 10px;
   border: 1px solid var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: var(--tracking-stat);
   transition:
     border-color 0.15s ease,
@@ -43,7 +43,7 @@
   background: var(--ghost);
   border-radius: 3px;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-3xs);
   color: var(--soft);
   line-height: 1;
   flex-shrink: 0;

@@ -23,20 +23,25 @@
   --github-bg: #24292f;
   --github-bg-hover: #1b1f23;
 
-  /* ── Font sizes (aliases for raw px values used in module CSS) ── */
-  --text-10: 10px;
-  --text-11: 11px;
-  --text-12: 12px;
-  --text-14: 14px;
-
   /* ── Letter spacing patterns ── */
   --tracking-eyebrow: 0.14em;
   --tracking-stat: 0.12em;
   --tracking-action: 0.08em;
   --tracking-table: 0.1em;
 
-  /* ── Breakpoints (for documentation — CSS can't use vars in @media) ── */
-  /* Mobile: 480px | Small: 640px | Medium: 768px | Large: 900px | Wide: 980px */
+  /* ── Breakpoints ──
+     CSS can't use custom props inside @media, so these are the source-of-truth
+     values copy-pasted into rules. Use EXACTLY these values:
+
+       --bp-mobile:  480px   (narrow phone)
+       --bp-small:   640px   (large phone / small tablet)
+       --bp-medium:  768px   (tablet — sidebar collapse threshold)
+       --bp-large:   900px   (small laptop)
+       --bp-wide:    980px   (standard desktop grid)
+
+     Any other value is a code smell; document the exception next to the @media
+     if you truly need it (e.g. a chart that only splits at 1100px because of
+     its intrinsic aspect ratio). */
 
   /* ── Bar fill opacity ──
      Single source of truth for the muted look that applies to the fill

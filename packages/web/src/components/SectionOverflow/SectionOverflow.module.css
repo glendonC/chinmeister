@@ -34,7 +34,7 @@
 .label {
   padding: 0 10px;
   font-family: var(--mono);
-  font-size: var(--text-10);
+  font-size: var(--text-2xs);
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: var(--tracking-eyebrow);
@@ -42,7 +42,7 @@
 
 .icon {
   width: 26px;
-  font-size: 13px;
+  font-size: var(--text-base);
   font-family: var(--sans);
 }
 

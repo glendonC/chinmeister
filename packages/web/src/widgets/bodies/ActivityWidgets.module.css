@@ -19,7 +19,7 @@
 
 .heatmapYLabel {
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-3xs);
   color: var(--soft);
   height: 14px;
   display: flex;
@@ -62,7 +62,7 @@
 .heatmapXLabel {
   flex: 1;
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-3xs);
   color: var(--soft);
   letter-spacing: var(--tracking-stat);
   text-align: center;

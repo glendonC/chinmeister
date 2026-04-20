@@ -5,7 +5,7 @@
 .outcomeBar {
   display: flex;
   height: 8px;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   overflow: hidden;
   gap: 2px;
   flex: 1;
@@ -14,7 +14,7 @@
 
 .outcomeSegment {
   height: 100%;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   transition: width 0.4s var(--motion);
 }
 

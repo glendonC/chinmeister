@@ -3,7 +3,7 @@
   align-items: stretch;
   height: 28px;
   border: 1px solid var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: transparent;
   transition: border-color 0.15s ease;
 }
@@ -20,7 +20,7 @@
   border: none;
   background: transparent;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--soft);
   letter-spacing: var(--tracking-stat);
   cursor: pointer;

@@ -39,7 +39,7 @@
 .toolIcon {
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -55,14 +55,14 @@
 .toolIconLetter {
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   display: flex;
   align-items: center;
   justify-content: center;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   font-weight: 700;
-  color: white;
+  color: var(--on-accent);
 }
 
 .toolDepthBars {

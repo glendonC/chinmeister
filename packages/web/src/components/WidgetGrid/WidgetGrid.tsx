@@ -189,9 +189,12 @@ function SortableWidget({
   // shift-preview animation. With the no-shift strategy, transform stays
   // identity for non-dragged items so this is mostly belt-and-suspenders;
   // explicitly omitting the transition makes the intent obvious.
+  // Span is passed via custom properties rather than `gridColumn`/`gridRow`
+  // directly so the mobile media query in the CSS module can stack cells
+  // (`grid-column: 1 / -1`) without needing `!important` to beat inline.
   const style: CSSProperties = {
-    gridColumn: `span ${slot.colSpan}`,
-    gridRow: `span ${effectiveRowSpan}`,
+    ['--cell-col-span' as string]: slot.colSpan,
+    ['--cell-row-span' as string]: effectiveRowSpan,
     transform: CSS.Transform.toString(transform),
     zIndex: isDragging ? 2 : undefined,
   };
@@ -295,7 +298,12 @@ function GridPlaceholder({ w, h }: { w: number; h: number }) {
   return (
     <div
       className={styles.placeholder}
-      style={{ gridColumn: `span ${w}`, gridRow: `span ${h}` }}
+      style={
+        {
+          ['--cell-col-span' as string]: w,
+          ['--cell-row-span' as string]: h,
+        } as CSSProperties
+      }
       aria-hidden="true"
     />
   );

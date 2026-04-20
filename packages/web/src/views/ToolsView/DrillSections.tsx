@@ -17,6 +17,7 @@ import {
   PREVIEW_TOOL_MODEL,
   type SessionEvent,
 } from './previewData.js';
+import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './DrillSections.module.css';
 
 // Each drill section is framed in a local `drillSection` wrapper so the
@@ -35,10 +36,7 @@ function SectionFrame({ eyebrow, title, subtitle, isPreview, children }: Section
   return (
     <section className={styles.drillSection}>
       <header className={styles.sectionHeader}>
-        <div className={styles.eyebrowRow}>
-          <span className={styles.eyebrow}>{eyebrow}</span>
-          {isPreview && <span className={styles.previewBadge}>Preview</span>}
-        </div>
+        <Eyebrow label={eyebrow} showPreview={isPreview} />
         <h3 className={styles.sectionTitle}>{title}</h3>
         {subtitle && <p className={styles.sectionSubtitle}>{subtitle}</p>}
       </header>

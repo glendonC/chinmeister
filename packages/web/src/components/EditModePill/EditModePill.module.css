@@ -19,7 +19,7 @@
   gap: 8px;
   padding: 0 16px;
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--ink);
   letter-spacing: var(--tracking-stat);
   cursor: pointer;
@@ -40,9 +40,9 @@
   height: 18px;
   padding: 0 5px;
   background: var(--ghost);
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   font-family: var(--mono);
-  font-size: 9px;
+  font-size: var(--text-3xs);
   color: var(--soft);
   line-height: 1;
 }

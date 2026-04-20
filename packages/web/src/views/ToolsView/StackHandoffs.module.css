@@ -14,34 +14,6 @@
   max-width: 72ch;
 }
 
-.eyebrowRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.eyebrow {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  text-transform: uppercase;
-  letter-spacing: var(--tracking-eyebrow);
-  color: var(--soft);
-}
-
-.previewBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
-  font-family: var(--mono);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: var(--tracking-eyebrow);
-  text-transform: uppercase;
-}
-
 .title {
   margin: 0;
   font-family: var(--display);
@@ -168,7 +140,7 @@
 
 .axisArrow {
   font-family: var(--sans);
-  font-size: 11px;
+  font-size: var(--text-xs);
   color: var(--soft);
   line-height: 1;
 }
@@ -249,7 +221,7 @@
 
 .compactArrow {
   color: var(--soft);
-  font-size: 12px;
+  font-size: var(--text-sm);
   line-height: 1;
 }
 
@@ -276,7 +248,7 @@
 
 .compactGap {
   color: var(--soft);
-  font-size: 10px;
+  font-size: var(--text-2xs);
 }
 
 @keyframes fadeSlideIn {

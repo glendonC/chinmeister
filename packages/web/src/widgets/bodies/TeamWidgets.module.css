@@ -62,29 +62,12 @@
   color: var(--accent);
 }
 
-.projectConflict {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: var(--danger);
-}
-
 .liveDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
   animation: pulseGlow 2s ease-in-out infinite;
-}
-
-@keyframes rowReveal {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
 }
 
 @keyframes pulseGlow {

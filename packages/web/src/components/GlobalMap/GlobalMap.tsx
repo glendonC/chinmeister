@@ -83,11 +83,7 @@ export default function GlobalMap({ countries, online }: Props): ReactNode {
           {online === 1 ? 'Developer Online' : 'Developers Online'}
         </span>
       </div>
-      <canvas
-        ref={canvasRef}
-        className={styles.globe}
-        style={{ width: GLOBE_PX, height: GLOBE_PX, opacity: 0 }}
-      />
+      <canvas ref={canvasRef} className={styles.globe} style={{ opacity: 0 }} />
     </div>
   );
 }

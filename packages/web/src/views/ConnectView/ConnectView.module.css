@@ -1,7 +1,7 @@
 /* ── Split layout ── */
 
 .connectScreen {
-  height: 100%;
+  min-height: 100dvh;
   display: grid;
   grid-template-columns: minmax(280px, 0.45fr) minmax(320px, 0.55fr);
   position: relative;
@@ -85,7 +85,7 @@
   font-family: var(--sans);
   font-size: var(--text-md);
   font-weight: 500;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--github-bg);
   border: none;
   border-radius: var(--radius-sm);
@@ -272,7 +272,7 @@
   font-family: var(--sans);
   font-size: var(--text-sm);
   font-weight: 400;
-  color: #fff;
+  color: var(--on-accent);
   background: var(--accent);
   border: none;
   border-radius: var(--radius-sm);

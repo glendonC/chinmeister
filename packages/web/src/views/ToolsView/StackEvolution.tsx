@@ -15,6 +15,7 @@ import { getToolMeta, normalizeToolId } from '../../lib/toolMeta.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import type { ToolDailyTrend } from '../../lib/apiSchemas.js';
 import { PREVIEW_TOOL_DAILY } from './previewData.js';
+import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './StackEvolution.module.css';
 
 interface Props {
@@ -138,9 +139,7 @@ export default function StackEvolution({ daily, rangeDays = 30 }: Props) {
     return (
       <section className={styles.section}>
         <header className={styles.header}>
-          <div className={styles.eyebrowRow}>
-            <span className={styles.eyebrow}>Stack evolution · last {rangeDays} days</span>
-          </div>
+          <Eyebrow label={`Stack evolution · last ${rangeDays} days`} />
           <h2 className={styles.title}>Your stack over time</h2>
         </header>
         <div className={styles.empty}>
@@ -188,10 +187,7 @@ export default function StackEvolution({ daily, rangeDays = 30 }: Props) {
   return (
     <section className={styles.section}>
       <header className={styles.header}>
-        <div className={styles.eyebrowRow}>
-          <span className={styles.eyebrow}>Stack evolution · last {rangeDays} days</span>
-          {isPreview && <span className={styles.previewBadge}>Preview</span>}
-        </div>
+        <Eyebrow label={`Stack evolution · last ${rangeDays} days`} showPreview={isPreview} />
         <h2 className={styles.title}>Your stack over time</h2>
         <p className={styles.subtitle}>
           {isPreview

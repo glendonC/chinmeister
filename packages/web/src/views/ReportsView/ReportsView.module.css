@@ -55,11 +55,11 @@
   height: 28px;
   padding: 0 12px 0 6px;
   border: 1px solid var(--muted);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--muted);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--text-xs);
   letter-spacing: var(--tracking-stat);
   max-width: 240px;
 }
@@ -97,7 +97,7 @@
 
 .headerLabel {
   font-family: var(--mono);
-  font-size: var(--text-10);
+  font-size: var(--text-2xs);
   font-weight: 500;
   color: var(--soft);
   letter-spacing: var(--tracking-table);
@@ -237,7 +237,7 @@
 }
 
 .row:hover .rowView {
-  color: #fff;
+  color: var(--on-accent);
   background: var(--report-color);
   transform: scale(1.04);
 }
@@ -397,9 +397,9 @@
   height: 20px;
   padding: 0 5px;
   background: var(--ghost);
-  border-radius: 4px;
+  border-radius: var(--radius-2xs);
   font-family: var(--mono);
-  font-size: 10px;
+  font-size: var(--text-2xs);
   color: var(--muted);
   line-height: 1;
 }

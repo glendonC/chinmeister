@@ -1,4 +1,4 @@
-import styles from './BackLink.module.css';
+import SplitPillLink from '../SplitPillLink/SplitPillLink.js';
 
 interface Props {
   label: string;
@@ -7,16 +7,13 @@ interface Props {
 
 export default function BackLink({ label, onClick }: Props) {
   return (
-    <button
-      type="button"
-      className={styles.backLink}
+    <SplitPillLink
+      label={label}
+      icon={'\u2190'}
+      iconPosition="leading"
+      tone="muted"
       onClick={onClick}
-      aria-label={`Back to ${label}`}
-    >
-      <span className={styles.icon} aria-hidden="true">
-        {'\u2190'}
-      </span>
-      <span className={styles.label}>{label}</span>
-    </button>
+      ariaLabel={`Back to ${label}`}
+    />
   );
 }

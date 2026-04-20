@@ -14,6 +14,7 @@ import { getToolMeta, normalizeToolId } from '../../lib/toolMeta.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import type { ToolHandoff } from '../../lib/apiSchemas.js';
 import { PREVIEW_TOOL_HANDOFFS } from './previewData.js';
+import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './StackHandoffs.module.css';
 
 interface Props {
@@ -63,7 +64,7 @@ export default function StackHandoffs({ breakdown, onPairClick }: Props) {
     return (
       <section className={styles.section}>
         <header className={styles.header}>
-          <span className={styles.eyebrow}>Handoffs · last 30 days</span>
+          <Eyebrow label="Handoffs · last 30 days" />
           <h2 className={styles.title}>Who passes work to whom</h2>
         </header>
         <div className={styles.empty}>
@@ -77,10 +78,7 @@ export default function StackHandoffs({ breakdown, onPairClick }: Props) {
   return (
     <section className={styles.section}>
       <header className={styles.header}>
-        <div className={styles.eyebrowRow}>
-          <span className={styles.eyebrow}>Handoffs · last 30 days</span>
-          {isPreview && <span className={styles.previewBadge}>Preview</span>}
-        </div>
+        <Eyebrow label="Handoffs · last 30 days" showPreview={isPreview} />
         <h2 className={styles.title}>Who passes work to whom</h2>
         <p className={styles.subtitle}>
           {isPreview

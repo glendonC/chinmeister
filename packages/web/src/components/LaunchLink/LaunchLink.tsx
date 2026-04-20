@@ -1,4 +1,4 @@
-import styles from './LaunchLink.module.css';
+import SplitPillLink from '../SplitPillLink/SplitPillLink.js';
 
 interface Props {
   label?: string;
@@ -7,16 +7,14 @@ interface Props {
 
 export default function LaunchLink({ label = 'Launch', onClick }: Props) {
   return (
-    <button
-      type="button"
-      className={styles.launchLink}
+    <SplitPillLink
+      label={label}
+      icon={'\u2192'}
+      iconPosition="trailing"
+      tone="accent"
+      accentColor="var(--report-color, var(--ink))"
       onClick={onClick}
-      aria-label={`Launch ${label}`}
-    >
-      <span className={styles.label}>{label}</span>
-      <span className={styles.icon} aria-hidden="true">
-        {'\u2192'}
-      </span>
-    </button>
+      ariaLabel={`Launch ${label}`}
+    />
   );
 }

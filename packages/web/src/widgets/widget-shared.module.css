@@ -193,39 +193,6 @@ button.dataRow {
   font-weight: 500;
 }
 
-.dataStatDanger {
-  color: var(--danger);
-  font-weight: 500;
-}
-
-.dataStatSuccess {
-  color: var(--success);
-  font-weight: 500;
-}
-
-.dataStatWarn {
-  color: var(--warn);
-  font-weight: 500;
-}
-
-/* Inline pill for cross-referencing row state — e.g. a file in `files-in-play`
- * that also appears in `locks` (claimed but may not be actively edited). The
- * pill is the surface decoration; the data sources stay separate to preserve
- * the intent-vs-action distinction between claim and edit. */
-.statusPill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 8px;
-  border-radius: 999px;
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--accent);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  letter-spacing: var(--tracking-stat);
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
 /* ── Horizontal metric bars ───────────────────────── */
 
 .metricBars {
@@ -267,21 +234,6 @@ button.dataRow {
   background: var(--ink);
   opacity: 0.4;
   transition: width 0.4s var(--motion);
-}
-
-.metricBarDanger {
-  background: var(--danger);
-  opacity: 0.5;
-}
-
-.metricBarSuccess {
-  background: var(--success);
-  opacity: 0.5;
-}
-
-.metricBarWarn {
-  background: var(--warn);
-  opacity: 0.5;
 }
 
 .metricValue {
@@ -343,50 +295,10 @@ button.dataRow {
   font-weight: 500;
 }
 
-/* ── Duration bars ───────────────────────────────── */
-
-.durationBars {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.durationRow {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.durationLabel {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: var(--soft);
-  letter-spacing: var(--tracking-stat);
-  width: 44px;
-  flex-shrink: 0;
-  text-align: right;
-}
-
-.durationBarTrack {
-  flex: 1;
-  height: 16px;
-  border-radius: 3px;
-  background: var(--ghost);
-  overflow: hidden;
-}
-
-.durationBarFill {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--ink);
-  opacity: 0.35;
-  transition: width 0.4s var(--motion);
-}
-
-.durationBarPeak {
-  opacity: 0.65;
-}
-
+/* durationCount is used by ConversationWidgets topic-list rows. The
+   companion `durationBars/Row/Label/BarTrack/BarFill/BarPeak` block was
+   removed (unused in TSX). Reintroduce if a new duration-strip widget
+   is built. */
 .durationCount {
   font-family: var(--mono);
   font-size: var(--text-xs);
@@ -497,17 +409,6 @@ button.dataRow {
 
 /* ── Shared animations ───────────────────────────── */
 
-@keyframes rowReveal {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes ghostPulse {
   0%,
   100% {
@@ -538,7 +439,7 @@ button.dataRow {
   }
   .metricLabel {
     width: 60px;
-    font-size: 10px;
+    font-size: var(--text-2xs);
   }
   .heroStatValue {
     font-size: 2rem;
@@ -564,7 +465,6 @@ button.dataRow {
   .ghostStatRow {
     opacity: 0.3;
   }
-  .durationBarFill,
   .workSegment,
   .metricBarFill {
     transition: none !important;
