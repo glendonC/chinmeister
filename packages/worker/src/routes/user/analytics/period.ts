@@ -77,9 +77,13 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
       memory_hit_rate: cs > 0 ? round1(acc.current.memory_hit_sum / cs) : 0,
       edit_velocity: cs > 0 ? round1(acc.current.velocity_sum / cs) : 0,
       total_sessions: cs,
-      // Cost fields nulled out at the cross-team merge site — the pricing
-      // enrichment step (enrichPeriodComparisonCost) runs downstream with
-      // the merged token aggregate and overwrites these with real values.
+      // Cost fields pass through as null — the cross-team route does not
+      // invoke enrichPeriodComparisonCost today (the function exists + is
+      // unit-tested but has no production caller and no widget consumer).
+      // If a period-over-period cost delta ships, add a cross-team window
+      // token aggregate and call enrichPeriodComparisonCost before
+      // returning. Leaving the fields as null keeps the shape honest
+      // ("unknown") rather than implying a measured $0.
       total_estimated_cost_usd: null,
       total_edits_in_token_sessions: 0,
       cost_per_edit: null,
@@ -93,6 +97,7 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
             memory_hit_rate: ps > 0 ? round1(acc.previous.memory_hit_sum / ps) : 0,
             edit_velocity: ps > 0 ? round1(acc.previous.velocity_sum / ps) : 0,
             total_sessions: ps,
+            // Same "null = unknown, not measured" discipline as current.
             total_estimated_cost_usd: null,
             total_edits_in_token_sessions: 0,
             cost_per_edit: null,

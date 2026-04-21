@@ -20,7 +20,7 @@ import { STDIN_TIMEOUT_MS, STDIN_MAX_BYTES } from './dist/constants.js';
 import {
   parseHookArgs,
   extractFilePath,
-  extractEditLineCounts,
+  extractEdits,
   extractBashCommand,
   extractBashResult,
   rawLooksLikeGitCommit,
@@ -124,18 +124,40 @@ async function checkConflict(team, teamId, input) {
 
 async function reportEdit(team, teamId, input) {
   const filePath = extractFilePath(input, hostId);
-  if (!filePath) process.exit(0);
+  if (!filePath) {
+    // Silent exit used to hide capture gaps (unknown host payload shape,
+    // malformed JSON, stdin cutoff). Log so operators can see *why* the
+    // edit didn't land — the hook still exits 0 to avoid blocking.
+    const shape = input && typeof input === 'object' ? Object.keys(input).join(',') : typeof input;
+    log.warn(`report-edit: no file_path for host=${hostId} (payload keys: ${shape})`);
+    process.exit(0);
+  }
 
-  const { linesAdded, linesRemoved } = extractEditLineCounts(input, hostId);
+  // Windsurf packs N edits into one hook call; Claude Code / Cursor always one.
+  // Record one edit_count increment per element so the count matches the edits
+  // table. Fall back to a single zero-line edit when extraction returns empty
+  // (malformed payload / unknown shape) so the hook invocation isn't lost.
+  const edits = extractEdits(input, hostId);
+  const editList = edits.length > 0 ? edits : [{ linesAdded: 0, linesRemoved: 0 }];
 
   try {
-    // Update current activity + record in session history with diff stats (parallel)
-    await Promise.all([
+    const [, ...results] = await Promise.all([
       team.reportFile(teamId, filePath),
-      team.recordEdit(teamId, filePath, linesAdded, linesRemoved),
+      ...editList.map(({ linesAdded, linesRemoved }) =>
+        team.recordEdit(teamId, filePath, linesAdded, linesRemoved),
+      ),
     ]);
+    // recordEdit returns { ok: true, skipped: true } when there's no active
+    // session for this agent. Without this warn the edit just disappears —
+    // surface it so the operator knows to check session-start.
+    const skipped = results.filter((r) => r && r.skipped).length;
+    if (skipped > 0) {
+      log.warn(
+        `report-edit: ${skipped}/${editList.length} edit(s) for ${filePath} dropped — no active session for this agent`,
+      );
+    }
   } catch (err) {
-    log.warn(`Activity report failed: ${err.message}`);
+    log.warn(`report-edit: RPC failed for host=${hostId} file=${filePath}: ${err.message}`);
   }
 
   process.exit(0);
@@ -148,7 +170,7 @@ async function reportRead(team, teamId, input) {
   try {
     await team.reportFile(teamId, filePath);
   } catch (err) {
-    log.warn(`Read report failed: ${err.message}`);
+    log.warn(`report-read: RPC failed for host=${hostId} file=${filePath}: ${err.message}`);
   }
 
   process.exit(0);

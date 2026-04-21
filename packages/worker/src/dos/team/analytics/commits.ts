@@ -11,7 +11,11 @@ import type {
 
 const log = createLogger('TeamDO.analytics');
 
-export function queryCommitStats(sql: SqlStorage, days: number): CommitStats {
+export function queryCommitStats(
+  sql: SqlStorage,
+  days: number,
+  tzOffsetMinutes: number = 0,
+): CommitStats {
   const empty: CommitStats = {
     total_commits: 0,
     commits_per_session: 0,
@@ -94,15 +98,18 @@ export function queryCommitStats(sql: SqlStorage, days: number): CommitStats {
       };
     });
 
-    // Daily commits — substantive only.
+    // Daily commits — substantive only. Day buckets follow the caller's
+    // timezone via the offset modifier so a commit made at 11:55pm PT lands
+    // on the same local day the user sees in the rest of the dashboard.
     const dailyRows = sql
       .exec(
-        `SELECT date(committed_at) AS day, COUNT(*) AS commits
+        `SELECT date(datetime(committed_at, ? || ' minutes')) AS day, COUNT(*) AS commits
          FROM commits
          WHERE created_at > datetime('now', '-' || ? || ' days')
            AND is_noise = 0
          GROUP BY day
          ORDER BY day ASC`,
+        tzOffsetMinutes,
         days,
       )
       .toArray();

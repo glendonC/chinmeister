@@ -87,7 +87,11 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
       sessions_with_token_data: 0,
       sessions_without_token_data: 0,
       total_edits_in_token_sessions: 0,
-      total_estimated_cost_usd: 0,
+      // null = "we have no data capability assertion for cost" (no teams,
+      // no enrichment ran). Matches shared contract .default(null) and the
+      // `hasCostData` gate renders `--`. Using 0 here would read as
+      // measured-zero cost to any consumer that bypasses the gate.
+      total_estimated_cost_usd: null,
       pricing_refreshed_at: null,
       pricing_is_stale: false,
       models_without_pricing: [],

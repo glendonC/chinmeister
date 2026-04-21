@@ -140,6 +140,7 @@ describe('registerTools', () => {
       'chinwag_report_outcome',
       'chinwag_report_commits',
       'chinwag_record_tokens',
+      'chinwag_record_edit',
       'chinwag_record_tool_call',
       'chinwag_configure_budget',
       'chinwag_apply_consolidation',

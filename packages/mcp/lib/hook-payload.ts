@@ -91,44 +91,74 @@ export function extractFilePath(input: unknown, hostId: string): string | null {
   return asString(asObject(obj.tool_input).file_path);
 }
 
+export interface EditDiff {
+  linesAdded: number;
+  linesRemoved: number;
+}
+
 /**
- * Extract diff line counts from an edit/write payload.
+ * Extract per-edit diff line counts from an edit/write payload.
  *
- * Claude Code: `tool_input.old_string`/`new_string` (Edit) or `tool_input.content` (Write).
- * Windsurf:    `tool_info.edits[]` (may contain multiple edits, summed).
+ * Returns one entry per logical edit so the caller can record one edit_count
+ * increment per element. Windsurf's Cascade hook packs N edits into a single
+ * `tool_info.edits[]` array — summing to a single pair silently under-reports
+ * Windsurf edit counts by a factor of N while leaving lines_added/removed
+ * correct, breaking any cross-tool comparison and the
+ * `sessions.edit_count == COUNT(*) FROM edits` invariant.
+ *
+ * Claude Code: `tool_input.old_string`/`new_string` (Edit) or `tool_input.content` (Write)
+ *              — always returns a single-entry array.
+ * Windsurf:    `tool_info.edits[]` — one entry per array element, empty array
+ *              if the payload carries no edits.
  */
-export function extractEditLineCounts(
-  input: unknown,
-  hostId: string,
-): { linesAdded: number; linesRemoved: number } {
+export function extractEdits(input: unknown, hostId: string): EditDiff[] {
   const obj = asObject(input);
 
   if (hostId === 'windsurf') {
     const info = asObject(obj.tool_info);
     const edits = Array.isArray(info.edits) ? info.edits : [];
-    let linesAdded = 0;
-    let linesRemoved = 0;
-    for (const raw of edits) {
+    return edits.map((raw) => {
       const edit = asObject(raw);
-      linesRemoved += countLines(asString(edit.old_string));
-      linesAdded += countLines(asString(edit.new_string));
-    }
-    return { linesAdded, linesRemoved };
+      return {
+        linesAdded: countLines(asString(edit.new_string)),
+        linesRemoved: countLines(asString(edit.old_string)),
+      };
+    });
   }
 
-  // Claude Code / Cursor shape.
+  // Claude Code / Cursor shape — one edit per hook invocation.
   const ti = asObject(obj.tool_input);
   const oldStr = asString(ti.old_string);
   const newStr = asString(ti.new_string);
   const content = asString(ti.content);
 
   if (oldStr !== null && newStr !== null) {
-    return { linesAdded: countLines(newStr), linesRemoved: countLines(oldStr) };
+    return [{ linesAdded: countLines(newStr), linesRemoved: countLines(oldStr) }];
   }
   if (content !== null) {
-    return { linesAdded: countLines(content), linesRemoved: 0 };
+    return [{ linesAdded: countLines(content), linesRemoved: 0 }];
   }
-  return { linesAdded: 0, linesRemoved: 0 };
+  return [{ linesAdded: 0, linesRemoved: 0 }];
+}
+
+/**
+ * Back-compat shim: older hook consumers expect a summed pair. Internally
+ * delegates to `extractEdits` and sums; kept so a half-reverted state (the
+ * .ts source updated but the built dist/ still referencing the old name)
+ * continues to compile while both versions settle.
+ */
+export function extractEditLineCounts(
+  input: unknown,
+  hostId: string,
+): { linesAdded: number; linesRemoved: number } {
+  const edits = extractEdits(input, hostId);
+  return edits.reduce(
+    (acc, e) => ({
+      linesAdded: acc.linesAdded + e.linesAdded,
+      linesRemoved: acc.linesRemoved + e.linesRemoved,
+    }),
+    { linesAdded: 0, linesRemoved: 0 },
+  );
 }
 
 /**

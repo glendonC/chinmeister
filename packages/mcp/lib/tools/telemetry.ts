@@ -37,6 +37,21 @@ const recordToolCallSchema = z.object({
   error: z.string().max(200).optional().describe('Error message if the call failed'),
 });
 
+const recordEditSchema = z.object({
+  file: z
+    .string()
+    .min(1)
+    .max(500)
+    .describe('Path of the file that was edited, relative to the repo root'),
+  lines_added: z.number().int().min(0).optional().describe('Number of lines added by this edit'),
+  lines_removed: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Number of lines removed by this edit'),
+});
+
 export function registerTelemetryTools(
   addTool: AddToolFn,
   deps: Pick<ToolDeps, 'team' | 'state'>,
@@ -74,6 +89,41 @@ export function registerTelemetryTools(
           {
             type: 'text' as const,
             text: `${preamble}Token usage recorded: ${parsed.input_tokens} in, ${parsed.output_tokens} out.`,
+          },
+        ],
+      };
+    }),
+  );
+
+  addTool(
+    'chinwag_record_edit',
+    {
+      description:
+        "Record that you edited a file. Call this each time you modify a source file so chinwag's edit count and per-file churn metrics stay accurate for tools without hook capture (Aider, Codex, Cline, Continue, JetBrains, Amazon Q). Claude Code, Cursor, and Windsurf already capture edits via hooks — don't double-report from those. Optional but closes the silent-zero gap; calling on every edit is correct.",
+      inputSchema: recordEditSchema,
+    },
+    withTeam(deps, async (args, { preamble }) => {
+      const parsed = args as z.infer<typeof recordEditSchema>;
+
+      await withTimeout(
+        team.recordEdit(
+          state.teamId!,
+          parsed.file,
+          parsed.lines_added ?? 0,
+          parsed.lines_removed ?? 0,
+        ),
+        API_TIMEOUT_MS,
+      );
+
+      const linesSuffix =
+        (parsed.lines_added ?? 0) > 0 || (parsed.lines_removed ?? 0) > 0
+          ? ` (+${parsed.lines_added ?? 0} / -${parsed.lines_removed ?? 0})`
+          : '';
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: `${preamble}Edit recorded: ${parsed.file}${linesSuffix}.`,
           },
         ],
       };
