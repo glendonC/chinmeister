@@ -70,7 +70,7 @@ export default function UsageDetailView({
     const edits = analytics.daily_trends.reduce((s, d) => s + d.edits, 0);
     const cost = analytics.token_usage.total_estimated_cost_usd;
     const cpe = analytics.token_usage.cost_per_edit;
-    const filesTouched = analytics.file_heatmap.length;
+    const filesTouched = analytics.files_touched_total;
     return { sessions, edits, cost, cpe, filesTouched };
   }, [analytics]);
 
@@ -703,6 +703,38 @@ function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
     .filter((t) => t.total_edits > 0)
     .sort((a, b) => b.total_edits - a.total_edits);
   const maxEdits = Math.max(1, ...byTool.map((t) => t.total_edits));
+
+  // Per-tool, per-teammate, and per-project velocity all reconcile with the
+  // edit-velocity widget: same completed-session denominator
+  // (total_session_hours) as queryEditVelocity. Each section is hidden when
+  // the substrate is thin (< 2 entries) — the aggregate sparkline already
+  // answers the question at that scale.
+  const byToolVelocity = byTool
+    .filter((t) => t.total_session_hours > 0)
+    .map((t) => ({
+      host_tool: t.host_tool,
+      rate: t.total_edits / t.total_session_hours,
+      hours: t.total_session_hours,
+    }))
+    .sort((a, b) => b.rate - a.rate);
+  const maxToolVelocity = Math.max(0.001, ...byToolVelocity.map((v) => v.rate));
+
+  const byMemberVelocity = [...analytics.member_analytics]
+    .filter((m) => m.total_session_hours > 0 && m.total_edits > 0)
+    .map((m) => ({
+      handle: m.handle,
+      primary_tool: m.primary_tool,
+      rate: m.total_edits / m.total_session_hours,
+      hours: m.total_session_hours,
+    }))
+    .sort((a, b) => b.rate - a.rate);
+  const maxMemberVelocity = Math.max(0.001, ...byMemberVelocity.map((v) => v.rate));
+
+  const byProjectVelocity = [...analytics.per_project_velocity]
+    .filter((p) => p.total_session_hours > 0 && p.total_edits > 0)
+    .sort((a, b) => b.edits_per_hour - a.edits_per_hour);
+  const maxProjectVelocity = Math.max(0.001, ...byProjectVelocity.map((p) => p.edits_per_hour));
+
   const topFiles = [...analytics.file_heatmap]
     .sort((a, b) => b.touch_count - a.touch_count)
     .slice(0, 10);
@@ -742,6 +774,105 @@ function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
                 </div>
               );
             })}
+          </div>
+        </section>
+      )}
+
+      {byToolVelocity.length >= 2 && (
+        <section className={styles.section}>
+          <span className={styles.sectionLabel}>Edits per hour · by tool</span>
+          <div className={styles.breakdownList}>
+            {byToolVelocity.map((v, i) => {
+              const meta = getToolMeta(v.host_tool);
+              return (
+                <div
+                  key={v.host_tool}
+                  className={styles.breakdownRow}
+                  style={{ '--row-index': i } as CSSProperties}
+                >
+                  <span className={styles.breakdownLabel}>
+                    <ToolIcon tool={v.host_tool} size={14} />
+                    {meta.label}
+                  </span>
+                  <div className={styles.breakdownTrack}>
+                    <div
+                      className={styles.breakdownFill}
+                      style={{
+                        width: `${(v.rate / maxToolVelocity) * 100}%`,
+                        background: meta.color,
+                      }}
+                    />
+                  </div>
+                  <span className={styles.breakdownValue}>
+                    {v.rate.toFixed(1)} /hr
+                    <span className={styles.breakdownMeta}> · {v.hours.toFixed(1)}h logged</span>
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {byMemberVelocity.length >= 2 && (
+        <section className={styles.section}>
+          <span className={styles.sectionLabel}>Edits per hour · by teammate</span>
+          <div className={styles.breakdownList}>
+            {byMemberVelocity.map((v, i) => (
+              <div
+                key={v.handle}
+                className={styles.breakdownRow}
+                style={{ '--row-index': i } as CSSProperties}
+              >
+                <span className={styles.breakdownLabel}>
+                  {v.primary_tool && <ToolIcon tool={v.primary_tool} size={14} />}
+                  {v.handle}
+                </span>
+                <div className={styles.breakdownTrack}>
+                  <div
+                    className={styles.breakdownFill}
+                    style={{ width: `${(v.rate / maxMemberVelocity) * 100}%` }}
+                  />
+                </div>
+                <span className={styles.breakdownValue}>
+                  {v.rate.toFixed(1)} /hr
+                  <span className={styles.breakdownMeta}> · {v.hours.toFixed(1)}h logged</span>
+                </span>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {byProjectVelocity.length >= 2 && (
+        <section className={styles.section}>
+          <span className={styles.sectionLabel}>Edits per hour · by project</span>
+          <div className={styles.breakdownList}>
+            {byProjectVelocity.map((p, i) => (
+              <div
+                key={p.team_id}
+                className={styles.breakdownRow}
+                style={{ '--row-index': i } as CSSProperties}
+              >
+                <span className={styles.breakdownLabel}>
+                  {p.primary_tool && <ToolIcon tool={p.primary_tool} size={14} />}
+                  {p.team_name ?? p.team_id}
+                </span>
+                <div className={styles.breakdownTrack}>
+                  <div
+                    className={styles.breakdownFill}
+                    style={{ width: `${(p.edits_per_hour / maxProjectVelocity) * 100}%` }}
+                  />
+                </div>
+                <span className={styles.breakdownValue}>
+                  {p.edits_per_hour.toFixed(1)} /hr
+                  <span className={styles.breakdownMeta}>
+                    {' · '}
+                    {p.total_session_hours.toFixed(1)}h logged
+                  </span>
+                </span>
+              </div>
+            ))}
           </div>
         </section>
       )}

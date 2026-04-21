@@ -29,6 +29,14 @@ export const dailyTrendSchema = z.object({
   completed: z.number().optional(),
   abandoned: z.number().optional(),
   failed: z.number().optional(),
+  // Per-day cost and cost-per-edit, populated post-query by
+  // enrichDailyTrendsWithPricing. Null on any day where cost is
+  // structurally unshowable — no token-capturing sessions that day,
+  // all-unpriced models, or stale pricing — so the trend widget can plot
+  // these metrics without emitting bogus zeros. Optional so old payloads
+  // parse cleanly.
+  cost: z.number().nullable().optional(),
+  cost_per_edit: z.number().nullable().optional(),
 });
 export type DailyTrend = z.infer<typeof dailyTrendSchema>;
 
@@ -60,6 +68,10 @@ export const teamAnalyticsSchema = z.object({
   tool_distribution: z.array(toolDistributionSchema),
   outcome_distribution: z.array(outcomeCountSchema),
   daily_metrics: z.array(dailyMetricEntrySchema),
+  // Uncapped COUNT(DISTINCT file_path) from the edits table. Distinct from
+  // file_heatmap.length, which is capped at HEATMAP_LIMIT=50 and is meant
+  // for the ranked "most-touched files" list, not a scalar total.
+  files_touched_total: z.number().default(0),
 });
 export type TeamAnalytics = z.infer<typeof teamAnalyticsSchema>;
 
@@ -126,6 +138,10 @@ export const toolComparisonSchema = z.object({
   total_edits: z.number(),
   total_lines_added: z.number(),
   total_lines_removed: z.number(),
+  // Wall-clock hours summed across completed sessions only (ended_at
+  // IS NOT NULL). Matches queryEditVelocity's denominator so per-tool
+  // rates in the Edits drill reconcile with the aggregate sparkline.
+  total_session_hours: z.number(),
 });
 export type ToolComparison = z.infer<typeof toolComparisonSchema>;
 
@@ -181,6 +197,10 @@ export const memberAnalyticsSchema = z.object({
   total_lines_removed: z.number(),
   total_commits: z.number().optional(),
   primary_tool: z.string().nullable(),
+  // Same semantics as toolComparisonSchema.total_session_hours —
+  // completed-session wall-clock sum, used as the per-teammate velocity
+  // denominator in the Edits drill.
+  total_session_hours: z.number(),
 });
 export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
 
@@ -215,7 +235,58 @@ export const editVelocityTrendSchema = z.object({
   lines_per_hour: z.number(),
   total_session_hours: z.number(),
 });
+
+// Per-project (team) velocity rollup — one entry per team the caller
+// belongs to, preserving the cross-project view that the aggregate
+// edit_velocity otherwise collapses. total_session_hours uses the same
+// `ended_at IS NOT NULL` denominator as queryEditVelocity so per-project
+// rates reconcile with the aggregate sparkline. `primary_tool` is the
+// host_tool with the most sessions in this project; null when the project
+// has no tool-identified sessions. Powers the Edits drill's per-project
+// section.
+export const projectVelocityRollupSchema = z.object({
+  team_id: z.string(),
+  team_name: z.string().nullable(),
+  sessions: z.number(),
+  total_edits: z.number(),
+  total_session_hours: z.number(),
+  edits_per_hour: z.number(),
+  primary_tool: z.string().nullable(),
+});
+export type ProjectVelocityRollup = z.infer<typeof projectVelocityRollupSchema>;
 export type EditVelocityTrend = z.infer<typeof editVelocityTrendSchema>;
+
+// Per-teammate daily timeline of lines attribution. Scoped to the top 50
+// handles by total edits in the period (matching memberAnalyticsSchema's
+// LIMIT 50 semantics so the two fields agree on which teammates exist).
+// Zero-filled across the full period via the recursive-CTE spine pattern,
+// so each handle's sparkline is dense. Powers the Lines drill's per-member
+// stacked-area view.
+export const memberDailyLineTrendSchema = z.object({
+  handle: z.string(),
+  day: z.string(),
+  sessions: z.number(),
+  edits: z.number(),
+  lines_added: z.number(),
+  lines_removed: z.number(),
+});
+export type MemberDailyLineTrend = z.infer<typeof memberDailyLineTrendSchema>;
+
+// Per-project (team) daily timeline of lines attribution, preserving team
+// identity across the cross-team aggregation that collapses `daily_trends`.
+// team_id is the same identifier exposed by GET /me/teams; team_name is
+// included so clients don't need a second round-trip to render a label.
+// Powers the Lines drill's per-project split view.
+export const projectLinesTrendSchema = z.object({
+  team_id: z.string(),
+  team_name: z.string().nullable(),
+  day: z.string(),
+  sessions: z.number(),
+  edits: z.number(),
+  lines_added: z.number(),
+  lines_removed: z.number(),
+});
+export type ProjectLinesTrend = z.infer<typeof projectLinesTrendSchema>;
 
 export const formationRecommendationCountsSchema = z.object({
   keep: z.number(),
@@ -484,6 +555,19 @@ export const periodMetricsSchema = z.object({
   memory_hit_rate: z.number(),
   edit_velocity: z.number(),
   total_sessions: z.number(),
+  /** Total USD cost for this period's token-capturing sessions. Null when
+   *  pricing is stale, no token data was captured, or every model in the
+   *  period was missing from LiteLLM pricing. Both windows are priced
+   *  against the CURRENT pricing snapshot so deltas reflect behavior
+   *  change, not Anthropic/OpenAI price movement. */
+  total_estimated_cost_usd: z.number().nullable().default(null),
+  /** Sum of edit_count across sessions where input_tokens IS NOT NULL in
+   *  this period. Denominator for cost_per_edit. Always countable (no null). */
+  total_edits_in_token_sessions: z.number().default(0),
+  /** Period-scoped cost divided by edits. See field above for the
+   *  retroactive-pricing semantic. Null under the same conditions as
+   *  total_estimated_cost_usd OR when total_edits_in_token_sessions is 0. */
+  cost_per_edit: z.number().nullable().default(null),
 });
 export type PeriodMetrics = z.infer<typeof periodMetricsSchema>;
 
@@ -532,7 +616,11 @@ export const tokenUsageStatsSchema = z.object({
    *  sessions is what prevents mixing populations (e.g. Cursor contributing
    *  edits without token data would otherwise deflate the ratio). */
   total_edits_in_token_sessions: z.number().default(0),
-  total_estimated_cost_usd: z.number(),
+  /** Total USD cost across priced models. Null when pricing is stale
+   *  (>7 days) OR no model in the period was in the LiteLLM snapshot.
+   *  Zero only when sessions exist but token totals are literally zero —
+   *  UI must distinguish null (unknown) from 0 (measured). */
+  total_estimated_cost_usd: z.number().nullable().default(null),
   // ISO timestamp of the most recent successful LiteLLM pricing refresh, or
   // null if no refresh has ever succeeded. UI reads this + pricing_is_stale
   // to decide whether to show a staleness banner.
@@ -595,6 +683,10 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   conflict_correlation: z.array(conflictCorrelationSchema),
   conflict_stats: conflictStatsSchema,
   edit_velocity: z.array(editVelocityTrendSchema),
+  // Lines drill axes. Default to [] so older producers stay compatible.
+  member_daily_lines: z.array(memberDailyLineTrendSchema).default([]),
+  per_project_lines: z.array(projectLinesTrendSchema).default([]),
+  per_project_velocity: z.array(projectVelocityRollupSchema).default([]),
   memory_usage: memoryUsageStatsSchema,
   work_type_outcomes: z.array(workTypeOutcomeSchema),
   conversation_edit_correlation: z.array(conversationEditCorrelationSchema),

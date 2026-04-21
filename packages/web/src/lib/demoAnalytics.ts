@@ -30,16 +30,23 @@ function buildDailyTrends() {
     const completed = Math.round(sessions * 0.7);
     const abandoned = Math.round(sessions * 0.15);
     const failed = Math.max(0, Math.round(sessions * 0.05));
+    const edits = wobble(i + 100, 140, 60) * (weekdayBoost > 0.5 ? 1 : 0.3);
+    // Demo cost is sized to roughly match the cost widget's scale so the
+    // retaskable trend widget has a visible signal; leaves nulls on
+    // zero-session days to honor the "no token data → --" rule.
+    const cost = sessions > 0 ? wobble(i + 400, 1.8, 0.9) * (weekdayBoost > 0.5 ? 1 : 0.4) : null;
     out.push({
       day,
       sessions,
-      edits: wobble(i + 100, 140, 60) * (weekdayBoost > 0.5 ? 1 : 0.3),
+      edits,
       lines_added: wobble(i + 200, 380, 150) * (weekdayBoost > 0.5 ? 1 : 0.3),
       lines_removed: wobble(i + 300, 95, 40) * (weekdayBoost > 0.5 ? 1 : 0.3),
       avg_duration_min: 18 + ((i * 7) % 15),
       completed,
       abandoned,
       failed,
+      cost,
+      cost_per_edit: cost != null && edits > 0 ? Math.round((cost / edits) * 10000) / 10000 : null,
     });
   }
   return out;
@@ -74,6 +81,8 @@ export function createDemoAnalytics(): UserAnalytics {
       { file: 'packages/web/src/lib/schemas/analytics.ts', touch_count: 9 },
       { file: 'docs/VISION.md', touch_count: 6 },
     ],
+    // True count, not file_heatmap.length — the heatmap is a ranked top-N.
+    files_touched_total: 47,
     daily_trends,
     tool_distribution: [
       { host_tool: 'claude-code', sessions: 98, edits: Math.round(totalEdits * 0.58) },
@@ -161,6 +170,7 @@ export function createDemoAnalytics(): UserAnalytics {
         total_edits: 2640,
         total_lines_added: 6120,
         total_lines_removed: 1480,
+        total_session_hours: 45.73,
       },
       {
         host_tool: 'cursor',
@@ -173,6 +183,7 @@ export function createDemoAnalytics(): UserAnalytics {
         total_edits: 880,
         total_lines_added: 2100,
         total_lines_removed: 520,
+        total_session_hours: 13.3,
       },
       {
         host_tool: 'codex',
@@ -185,6 +196,7 @@ export function createDemoAnalytics(): UserAnalytics {
         total_edits: 410,
         total_lines_added: 940,
         total_lines_removed: 220,
+        total_session_hours: 6.6,
       },
       {
         host_tool: 'aider',
@@ -197,6 +209,7 @@ export function createDemoAnalytics(): UserAnalytics {
         total_edits: 240,
         total_lines_added: 580,
         total_lines_removed: 140,
+        total_session_hours: 3.4,
       },
       {
         host_tool: 'cline',
@@ -209,6 +222,7 @@ export function createDemoAnalytics(): UserAnalytics {
         total_edits: 120,
         total_lines_added: 280,
         total_lines_removed: 70,
+        total_session_hours: 3.1,
       },
       {
         host_tool: 'windsurf',
@@ -221,6 +235,7 @@ export function createDemoAnalytics(): UserAnalytics {
         total_edits: 60,
         total_lines_added: 140,
         total_lines_removed: 35,
+        total_session_hours: 0.93,
       },
     ],
     work_type_distribution: [
@@ -269,6 +284,10 @@ export function createDemoAnalytics(): UserAnalytics {
     ],
     concurrent_edits: [],
     member_analytics: [],
+    // Per-project rollup is a cross-project comparison — empty here because
+    // the demo's teams_included === 1. Populate if the demo ever adopts a
+    // multi-project posture.
+    per_project_velocity: [],
     retry_patterns: [],
     conflict_correlation: [],
     conflict_stats: { blocked_period: 4, found_period: 11 },

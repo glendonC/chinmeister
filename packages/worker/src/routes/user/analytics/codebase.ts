@@ -74,6 +74,31 @@ export function projectHeatmap(acc: HeatmapAcc): FileHeatmapEntry[] {
     }));
 }
 
+// ── files_touched_total ──────────────────────────
+//
+// Each team's DO returns its own uncapped DISTINCT-file count. The
+// user-scope sum treats every team as a separate repo with its own file
+// tree, which matches chinwag's one-team-per-project model. A user with
+// matching paths across two teams (e.g., `src/index.ts` in each) sees the
+// file counted once per team — semantically correct because they are
+// different files in different projects.
+
+export interface FilesTouchedTotalAcc {
+  total: number;
+}
+
+export function createFilesTouchedTotalAcc(): FilesTouchedTotalAcc {
+  return { total: 0 };
+}
+
+export function mergeFilesTouchedTotal(acc: FilesTouchedTotalAcc, team: TeamResult): void {
+  acc.total += team.files_touched_total ?? 0;
+}
+
+export function projectFilesTouchedTotal(acc: FilesTouchedTotalAcc): number {
+  return acc.total;
+}
+
 // ── file_churn ───────────────────────────────────
 
 interface ChurnBucket {

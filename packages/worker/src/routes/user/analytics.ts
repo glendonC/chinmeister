@@ -120,6 +120,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
   const activeToolsAcc = tools.createActiveToolsAcc();
 
   const heatmapAcc = codebase.createHeatmapAcc();
+  const filesTouchedTotalAcc = codebase.createFilesTouchedTotalAcc();
   const fileChurnAcc = codebase.createFileChurnAcc();
   const fileReworkAcc = codebase.createFileReworkAcc();
   const dirHeatmapAcc = codebase.createDirHeatmapAcc();
@@ -160,10 +161,17 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
   // Iterate team results and fold each into every accumulator. Indexed
   // loop so per-project merges can correlate `results[i]` with the
-  // team_id / team_name metadata at `capped[i]`.
+  // team_id / team_name metadata at `capped[i]`. noUncheckedIndexedAccess
+  // makes both reads `| undefined` — the index math is sound (we iterate
+  // results.length, capped and results are same length), so a single
+  // defensive guard at the top keeps the rest of the body narrowed.
   for (let i = 0; i < results.length; i++) {
     const r = results[i];
     const teamEntry = capped[i];
+    if (!r || !teamEntry) {
+      failed++;
+      continue;
+    }
     if (r.status === 'rejected') {
       failed++;
       continue;
@@ -192,6 +200,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
     tools.mergeActiveTools(activeToolsAcc, team);
 
     codebase.mergeHeatmap(heatmapAcc, team);
+    codebase.mergeFilesTouchedTotal(filesTouchedTotalAcc, team);
     codebase.mergeFileChurn(fileChurnAcc, team);
     codebase.mergeFileRework(fileReworkAcc, team);
     codebase.mergeDirHeatmap(dirHeatmapAcc, team);
@@ -244,6 +253,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       outcome_distribution: outcomes.projectOutcomeDist(outcomeDistAcc),
       tool_distribution: tools.projectToolDist(toolDistAcc),
       file_heatmap: codebase.projectHeatmap(heatmapAcc),
+      files_touched_total: codebase.projectFilesTouchedTotal(filesTouchedTotalAcc),
       hourly_distribution: activity.projectHourly(hourlyAcc),
       tool_daily: tools.projectToolDaily(toolDailyAcc),
       model_outcomes: outcomes.projectModelOutcomes(modelOutcomesAcc),

@@ -22,6 +22,7 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
     tool_distribution: [],
     outcome_distribution: [],
     daily_metrics: [],
+    files_touched_total: 0,
     hourly_distribution: [],
     tool_daily: [],
     model_outcomes: [],
@@ -42,6 +43,8 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
     duration_distribution: [],
     concurrent_edits: [],
     member_analytics: [],
+    member_daily_lines: [],
+    per_project_lines: [],
     retry_patterns: [],
     conflict_correlation: [],
     conflict_stats: { blocked_period: 0, found_period: 0 },
@@ -68,6 +71,9 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
         memory_hit_rate: 0,
         edit_velocity: 0,
         total_sessions: 0,
+        total_estimated_cost_usd: null,
+        total_edits_in_token_sessions: 0,
+        cost_per_edit: null,
       },
       previous: null,
     },
@@ -145,5 +151,6 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
     tool_handoffs: [],
     teams_included: 0,
     degraded: false,
+    per_project_velocity: [],
   };
 }

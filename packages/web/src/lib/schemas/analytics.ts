@@ -26,6 +26,7 @@ import {
   conflictCorrelationSchema as baseConflictCorrelationSchema,
   conflictStatsSchema as baseConflictStatsSchema,
   editVelocityTrendSchema as baseEditVelocityTrendSchema,
+  projectVelocityRollupSchema as baseProjectVelocityRollupSchema,
   memoryUsageStatsSchema as baseMemoryUsageStatsSchema,
   workTypeOutcomeSchema as baseWorkTypeOutcomeSchema,
   conversationEditCorrelationSchema as baseConversationEditCorrelationSchema,
@@ -65,6 +66,8 @@ const dailyTrendSchema = baseDailyTrendSchema.extend({
   completed: z.number().default(0),
   abandoned: z.number().default(0),
   failed: z.number().default(0),
+  cost: z.number().nullable().default(null),
+  cost_per_edit: z.number().nullable().default(null),
 });
 
 const outcomeCountSchema = baseOutcomeCountSchema.extend({
@@ -88,6 +91,7 @@ export const teamAnalyticsSchema = z.object({
   tool_distribution: z.array(toolDistributionSchema).default([]),
   outcome_distribution: z.array(outcomeCountSchema).default([]),
   daily_metrics: z.array(dailyMetricEntrySchema).default([]),
+  files_touched_total: z.number().default(0),
 });
 
 export type TeamAnalytics = z.infer<typeof teamAnalyticsSchema>;
@@ -106,6 +110,7 @@ export function createEmptyAnalytics(): TeamAnalytics {
     tool_distribution: [],
     outcome_distribution: [],
     daily_metrics: [],
+    files_touched_total: 0,
   };
 }
 
@@ -220,6 +225,15 @@ const editVelocityTrendSchema = baseEditVelocityTrendSchema.extend({
   edits_per_hour: z.number().default(0),
   lines_per_hour: z.number().default(0),
   total_session_hours: z.number().default(0),
+});
+
+const projectVelocityRollupSchema = baseProjectVelocityRollupSchema.extend({
+  team_name: z.string().nullable().default(null),
+  sessions: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_session_hours: z.number().default(0),
+  edits_per_hour: z.number().default(0),
+  primary_tool: z.string().nullable().default(null),
 });
 
 const memoryUsageStatsSchema = baseMemoryUsageStatsSchema.extend({
@@ -455,6 +469,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   conflict_correlation: z.array(conflictCorrelationSchema).default([]),
   conflict_stats: conflictStatsSchema.default({ blocked_period: 0, found_period: 0 }),
   edit_velocity: z.array(editVelocityTrendSchema).default([]),
+  per_project_velocity: z.array(projectVelocityRollupSchema).default([]),
   memory_usage: memoryUsageStatsSchema.default({
     total_memories: 0,
     searches: 0,
@@ -621,6 +636,7 @@ export function createEmptyUserAnalytics(): UserAnalytics {
     conflict_correlation: [],
     conflict_stats: { blocked_period: 0, found_period: 0 },
     edit_velocity: [],
+    per_project_velocity: [],
     memory_usage: {
       total_memories: 0,
       searches: 0,
