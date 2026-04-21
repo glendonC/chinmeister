@@ -492,7 +492,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'topics',
     name: 'topics',
-    description: 'What you discuss: bug-fix, feature, refactor, testing',
+    description:
+      'What your prompts are about. Classified from conversation content, so it tracks intent (what you asked for) — not code changes (what landed).',
     category: 'conversations',
     scope: 'both',
     viz: 'topic-bars',
@@ -825,9 +826,10 @@ export const WIDGET_CATALOG: WidgetDef[] = [
 
   // ── Conversations (extended) ────────
   {
-    id: 'sentiment-outcomes',
-    name: 'outcomes by sentiment',
-    description: 'How conversation sentiment correlates with session success',
+    id: 'prompt-clarity',
+    name: 'prompt clarity',
+    description:
+      'How phrasing quality correlates with session outcomes. Re-asks and confused prompts often mean the agent needs more memory or scope.',
     category: 'conversations',
     scope: 'both',
     viz: 'bar-chart',
@@ -840,7 +842,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'conversation-depth',
     name: 'conversation depth',
-    description: 'How conversation length affects edit output',
+    description:
+      'Edit output and completion rate bucketed by session turn count. Snapshot view of the current period — see prompt-efficiency for the same axis trended over time.',
     category: 'conversations',
     scope: 'both',
     viz: 'bucket-chart',
@@ -1040,6 +1043,11 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
   // 2026-04: memory-stats mixed period + lifetime fields. Split so each
   // widget has one clear time scope. See .internal/OVERVIEW_ARCH.md item #1.
   'memory-stats': ['memory-activity', 'memory-health'],
+  // 2026-04: sentiment-outcomes reframed as prompt-clarity. Same data (the
+  // classifier still produces sentiment classes) under a coordination-oriented
+  // frame: "which prompt phrasings stall sessions" instead of "your mood vs
+  // your outcomes." See .internal/WIDGET_RUBRIC.md E4.
+  'sentiment-outcomes': ['prompt-clarity'],
 };
 
 /**

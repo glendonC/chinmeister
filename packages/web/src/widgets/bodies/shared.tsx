@@ -19,6 +19,21 @@ export const SENTIMENT_COLORS: Record<string, string> = {
   unclassified: 'var(--ghost)',
 };
 
+// User-facing relabel for the raw sentiment classifier output. The classifier
+// labels describe user-message sentiment (positive / frustrated / …) which
+// reads as surveillance when surfaced directly. The widget frame is
+// prompt-clarity, so the labels here describe the PROMPT rather than the user:
+// "confused" phrasing, a "re-asked" prompt, etc. Unmapped classes fall through
+// to their raw key so the widget never renders blank.
+export const PROMPT_CLARITY_LABELS: Record<string, string> = {
+  positive: 'clear',
+  neutral: 'neutral',
+  confused: 'confused',
+  frustrated: 're-asked',
+  negative: 'pushback',
+  unclassified: 'unclassified',
+};
+
 export function StatWidget({
   value,
   delta,

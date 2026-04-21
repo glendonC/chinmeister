@@ -1,6 +1,14 @@
 import styles from '../widget-shared.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostBars, SENTIMENT_COLORS, CoverageNote, capabilityCoverageNote } from './shared.js';
+import {
+  GhostBars,
+  SENTIMENT_COLORS,
+  PROMPT_CLARITY_LABELS,
+  CoverageNote,
+  capabilityCoverageNote,
+} from './shared.js';
+
+const TOPICS_VISIBLE = 8;
 
 function TopicsWidget({ conversationData, analytics }: WidgetBodyProps) {
   const data = conversationData.topic_distribution;
@@ -15,10 +23,11 @@ function TopicsWidget({ conversationData, analytics }: WidgetBodyProps) {
     );
   }
   const maxC = Math.max(...data.map((t) => t.count), 1);
+  const hidden = Math.max(0, data.length - TOPICS_VISIBLE);
   return (
     <>
       <div className={styles.metricBars}>
-        {data.slice(0, 8).map((t) => (
+        {data.slice(0, TOPICS_VISIBLE).map((t) => (
           <div key={t.topic} className={styles.metricRow}>
             <span className={styles.metricLabel}>{t.topic}</span>
             <div className={styles.metricBarTrack}>
@@ -31,12 +40,19 @@ function TopicsWidget({ conversationData, analytics }: WidgetBodyProps) {
           </div>
         ))}
       </div>
+      {hidden > 0 && (
+        <CoverageNote text={`+ ${hidden} more ${hidden === 1 ? 'topic' : 'topics'}`} />
+      )}
       <CoverageNote text={note} />
     </>
   );
 }
 
-function SentimentOutcomesWidget({ conversationData, analytics }: WidgetBodyProps) {
+function PromptClarityWidget({ conversationData, analytics }: WidgetBodyProps) {
+  // Backend name stays sentiment_outcome_correlation — the classifier produces
+  // sentiment classes. The UX frame (this widget) reads them as prompt-clarity
+  // signals: "confused" phrasing, a "re-asked" prompt, etc. See
+  // PROMPT_CLARITY_LABELS in shared.tsx for the translation.
   const soc = conversationData.sentiment_outcome_correlation;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
   const note = capabilityCoverageNote(tools, 'conversationLogs');
@@ -51,24 +67,27 @@ function SentimentOutcomesWidget({ conversationData, analytics }: WidgetBodyProp
   return (
     <>
       <div className={styles.metricBars}>
-        {soc.map((s) => (
-          <div key={s.dominant_sentiment} className={styles.metricRow}>
-            <span className={styles.metricLabel}>{s.dominant_sentiment}</span>
-            <div className={styles.metricBarTrack}>
-              <div
-                className={styles.metricBarFill}
-                style={{
-                  width: `${s.completion_rate}%`,
-                  background: SENTIMENT_COLORS[s.dominant_sentiment] || 'var(--ghost)',
-                  opacity: 'var(--opacity-bar-fill)',
-                }}
-              />
+        {soc.map((s) => {
+          const label = PROMPT_CLARITY_LABELS[s.dominant_sentiment] ?? s.dominant_sentiment;
+          return (
+            <div key={s.dominant_sentiment} className={styles.metricRow}>
+              <span className={styles.metricLabel}>{label}</span>
+              <div className={styles.metricBarTrack}>
+                <div
+                  className={styles.metricBarFill}
+                  style={{
+                    width: `${s.completion_rate}%`,
+                    background: SENTIMENT_COLORS[s.dominant_sentiment] || 'var(--ghost)',
+                    opacity: 'var(--opacity-bar-fill)',
+                  }}
+                />
+              </div>
+              <span className={styles.metricValue}>
+                {s.completion_rate}% · {s.sessions}
+              </span>
             </div>
-            <span className={styles.metricValue}>
-              {s.completion_rate}% · {s.sessions}
-            </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
       <CoverageNote text={note} />
     </>
@@ -113,6 +132,6 @@ function ConversationDepthWidget({ analytics }: WidgetBodyProps) {
 
 export const conversationWidgets: WidgetRegistry = {
   topics: TopicsWidget,
-  'sentiment-outcomes': SentimentOutcomesWidget,
+  'prompt-clarity': PromptClarityWidget,
   'conversation-depth': ConversationDepthWidget,
 };

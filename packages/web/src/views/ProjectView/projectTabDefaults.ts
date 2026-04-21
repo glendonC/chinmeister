@@ -32,5 +32,5 @@ export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'stuckness', colSpan: 6, rowSpan: 3 },
   { id: 'first-edit', colSpan: 6, rowSpan: 3 },
   { id: 'topics', colSpan: 6, rowSpan: 3 },
-  { id: 'sentiment-outcomes', colSpan: 6, rowSpan: 3 },
+  { id: 'prompt-clarity', colSpan: 6, rowSpan: 3 },
 ];

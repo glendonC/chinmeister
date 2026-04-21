@@ -5,6 +5,32 @@ import type { ConversationEditCorrelation } from '@chinwag/shared/contracts/anal
 
 const log = createLogger('TeamDO.analytics');
 
+// Conversation-depth bucketing. `max` is the inclusive upper bound for the
+// bucket; the final entry with `max: null` captures everything above the
+// previous threshold. Labels are human-readable and pass through verbatim to
+// the UI (the conversation-depth widget renders "1-5 turns" directly).
+const CONVERSATION_DEPTH_BUCKETS: Array<{ max: number | null; label: string }> = [
+  { max: 5, label: '1-5 turns' },
+  { max: 15, label: '6-15 turns' },
+  { max: 30, label: '16-30 turns' },
+  { max: null, label: '30+ turns' },
+];
+
+function buildBucketCase(column: string): string {
+  const whens = CONVERSATION_DEPTH_BUCKETS.filter((b) => b.max != null)
+    .map((b) => `WHEN ${column} <= ${b.max} THEN '${b.label}'`)
+    .join(' ');
+  const fallback = CONVERSATION_DEPTH_BUCKETS.find((b) => b.max == null)!.label;
+  return `CASE ${whens} ELSE '${fallback}' END`;
+}
+
+function buildBucketOrderCase(bucketColumn: string): string {
+  const cases = CONVERSATION_DEPTH_BUCKETS.map((b, i) => `WHEN '${b.label}' THEN ${i + 1}`).join(
+    ' ',
+  );
+  return `CASE ${bucketColumn} ${cases} END`;
+}
+
 export function queryConversationEditCorrelation(
   sql: SqlStorage,
   days: number,
@@ -20,12 +46,7 @@ export function queryConversationEditCorrelation(
            GROUP BY session_id
          )
          SELECT
-           CASE
-             WHEN t.user_turns <= 5 THEN '1-5 turns'
-             WHEN t.user_turns <= 15 THEN '6-15 turns'
-             WHEN t.user_turns <= 30 THEN '16-30 turns'
-             ELSE '30+ turns'
-           END AS bucket,
+           ${buildBucketCase('t.user_turns')} AS bucket,
            COUNT(*) AS sessions,
            ROUND(AVG(s.edit_count), 1) AS avg_edits,
            ROUND(AVG(s.lines_added + s.lines_removed), 1) AS avg_lines,
@@ -34,13 +55,7 @@ export function queryConversationEditCorrelation(
          FROM session_turns t
          JOIN sessions s ON s.id = t.session_id
          GROUP BY bucket
-         ORDER BY
-           CASE bucket
-             WHEN '1-5 turns' THEN 1
-             WHEN '6-15 turns' THEN 2
-             WHEN '16-30 turns' THEN 3
-             ELSE 4
-           END`,
+         ORDER BY ${buildBucketOrderCase('bucket')}`,
         days,
       )
       .toArray();

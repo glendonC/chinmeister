@@ -46,7 +46,7 @@
   /* ── Bar fill opacity ──
      Single source of truth for the muted look that applies to the fill
      bands of the comparative bar widgets (tool-outcomes, scope-complexity,
-     sentiment-outcomes, memory-outcomes, work-type-outcomes,
+     prompt-clarity, memory-outcomes, work-type-outcomes,
      hourly-effectiveness). Hardcoded in 7+ places before consolidation. */
   --opacity-bar-fill: 0.6;
 
