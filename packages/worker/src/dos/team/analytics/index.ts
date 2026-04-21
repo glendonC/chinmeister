@@ -76,6 +76,7 @@ import {
   queryOutcomeTags,
   queryToolHandoffs,
 } from './extended.js';
+import { buildDataCoverage, queryActiveTools } from '../../../lib/data-coverage.js';
 
 export { getAnalytics } from './core.js';
 export { classifyWorkType } from './outcomes.js';
@@ -158,5 +159,11 @@ export function getExtendedAnalytics(
     // per_project_velocity is a cross-project rollup; it's assembled at
     // the user route from each team's tool_comparison, not here.
     per_project_velocity: [],
+
+    // data_coverage on team scope lets Project-view widgets attribute
+    // partial cost/token totals to the reporting tool subset. The user
+    // route recomputes this over the cross-team union after merge, so
+    // the two scopes stay internally consistent.
+    data_coverage: buildDataCoverage(queryActiveTools(sql, days)),
   };
 }

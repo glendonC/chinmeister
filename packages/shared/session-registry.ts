@@ -226,6 +226,49 @@ export function deleteCompletedSession(
   }
 }
 
+/**
+ * List every completion record currently on disk. Used by the dashboard's
+ * orphan-sweep path: externally-launched agents (claude-code run directly,
+ * not via chinwag's managed flow) still produce `<agentId>.completed.json`
+ * via MCP cleanup, but the dashboard never observes their exit — so those
+ * files pile up until a future dashboard session picks them up. Sweeping
+ * on mount lets post-session collectors run against external agents too,
+ * closing the cost-coverage gap for the common "user launches their own
+ * editor" case.
+ *
+ * Returns the parsed records and their on-disk paths so callers can delete
+ * after successful collection. Files that fail to parse are skipped
+ * (logged by readCompletedSession-style error handling) rather than
+ * crashing the sweep.
+ */
+export function listCompletedSessions({ homeDir = homedir() }: { homeDir?: string } = {}): Array<{
+  record: CompletedSession;
+  filePath: string;
+}> {
+  const dir = getSessionsDir(homeDir);
+  if (!existsSync(dir)) return [];
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return [];
+  }
+  const out: Array<{ record: CompletedSession; filePath: string }> = [];
+  for (const name of entries) {
+    if (!name.endsWith('.completed.json')) continue;
+    const filePath = join(dir, name);
+    try {
+      const record = JSON.parse(readFileSync(filePath, 'utf-8')) as CompletedSession;
+      if (record && record.agentId && record.sessionId && record.teamId) {
+        out.push({ record, filePath });
+      }
+    } catch (err: unknown) {
+      log.error(`failed to parse completed session file ${filePath}: ${formatError(err)}`);
+    }
+  }
+  return out;
+}
+
 export function setTerminalTitle(tty: string | null, title: string): boolean {
   if (!tty) return false;
   try {

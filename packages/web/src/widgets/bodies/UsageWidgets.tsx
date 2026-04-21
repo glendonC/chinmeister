@@ -1,10 +1,30 @@
-import { setQueryParam } from '../../lib/router.js';
+import { setQueryParam, useRoute } from '../../lib/router.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { StatWidget, CoverageNote, capabilityCoverageNote } from './shared.js';
+import {
+  StatWidget,
+  CoverageNote,
+  capabilityCoverageNote,
+  hasCostData,
+  costEmptyReason,
+} from './shared.js';
+import { formatCost } from '../utils.js';
 
 function openUsage(tab: string) {
   return () => setQueryParam('usage', tab);
+}
+
+/**
+ * ProjectView doesn't mount UsageDetailView — only OverviewView does. A click
+ * from the project-scope cost widget sets `?usage=cost` but nothing renders,
+ * which reads as broken. Gating `onOpenDetail` on overview scope suppresses
+ * the drill affordance on project view until a scoped detail surface exists.
+ * Follow-up: add a project-scoped UsageDetailView rendered by ProjectView so
+ * this restriction lifts.
+ */
+function useIsDrillable(): boolean {
+  const route = useRoute();
+  return route.view === 'overview';
 }
 
 // True when no day in the period was observed — distinct from "days were
@@ -51,6 +71,7 @@ function deltaAriaSuffix(delta: { current: number; previous: number } | null): s
 }
 
 function SessionsWidget({ analytics }: WidgetBodyProps) {
+  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.sessions);
@@ -60,13 +81,16 @@ function SessionsWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={openUsage('sessions')}
-      detailAriaLabel={`Open usage detail · ${display} sessions${ariaDelta}`}
+      onOpenDetail={drillable ? openUsage('sessions') : undefined}
+      detailAriaLabel={
+        drillable ? `Open usage detail · ${display} sessions${ariaDelta}` : undefined
+      }
     />
   );
 }
 
 function EditsWidget({ analytics }: WidgetBodyProps) {
+  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.edits, 0);
   // Delta source is in-period split, not period_comparison.edit_velocity —
@@ -79,8 +103,8 @@ function EditsWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={openUsage('edits')}
-      detailAriaLabel={`Open usage detail · ${display} edits${ariaDelta}`}
+      onOpenDetail={drillable ? openUsage('edits') : undefined}
+      detailAriaLabel={drillable ? `Open usage detail · ${display} edits${ariaDelta}` : undefined}
     />
   );
 }
@@ -89,6 +113,7 @@ function EditsWidget({ analytics }: WidgetBodyProps) {
 // edits story, so they drill into the Edits tab where by-tool + most-touched
 // file breakdowns give them context.
 function LinesAddedWidget({ analytics }: WidgetBodyProps) {
+  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.lines_added, 0);
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.lines_added);
@@ -98,13 +123,16 @@ function LinesAddedWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={openUsage('edits')}
-      detailAriaLabel={`Open usage detail · ${display} lines added${ariaDelta}`}
+      onOpenDetail={drillable ? openUsage('edits') : undefined}
+      detailAriaLabel={
+        drillable ? `Open usage detail · ${display} lines added${ariaDelta}` : undefined
+      }
     />
   );
 }
 
 function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
+  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.lines_removed, 0);
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.lines_removed);
@@ -114,8 +142,10 @@ function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={openUsage('edits')}
-      detailAriaLabel={`Open usage detail · ${display} lines removed${ariaDelta}`}
+      onOpenDetail={drillable ? openUsage('edits') : undefined}
+      detailAriaLabel={
+        drillable ? `Open usage detail · ${display} lines removed${ariaDelta}` : undefined
+      }
     />
   );
 }
@@ -126,6 +156,7 @@ function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
 // gate is hook-enabled tools (Claude Code, Cursor, Windsurf); the
 // CoverageNote discloses this when non-hook tools are active.
 function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
+  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const n = analytics.files_touched_total;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
@@ -135,8 +166,8 @@ function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
     <>
       <StatWidget
         value={display}
-        onOpenDetail={openUsage('files-touched')}
-        detailAriaLabel={`Open usage detail · ${display} files touched`}
+        onOpenDetail={drillable ? openUsage('files-touched') : undefined}
+        detailAriaLabel={drillable ? `Open usage detail · ${display} files touched` : undefined}
       />
       <CoverageNote text={note} />
     </>
@@ -146,15 +177,21 @@ function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
 function CostWidget({ analytics }: WidgetBodyProps) {
   const t = analytics.token_usage;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
-  const note = capabilityCoverageNote(tools, 'tokenUsage');
-  const hasData = t.sessions_with_token_data > 0;
-  const value = hasData ? `$${t.total_estimated_cost_usd.toFixed(2)}` : '--';
+  const drillable = useIsDrillable();
+  // Widen beyond the old `sessions > 0` gate: stale pricing and
+  // all-models-unpriced are both "can't honestly compute" states where
+  // pricing-enrich zeros the total. Rendering $0.00 in those states would
+  // lie. hasCostData folds all three degraded paths into one predicate.
+  const reliable = hasCostData(t);
+  const value = reliable ? formatCost(t.total_estimated_cost_usd, 2) : '--';
+  const note = reliable ? capabilityCoverageNote(tools, 'tokenUsage') : costEmptyReason(t, tools);
+  const canDrill = reliable && drillable;
   return (
     <>
       <StatWidget
         value={value}
-        onOpenDetail={hasData ? openUsage('cost') : undefined}
-        detailAriaLabel={hasData ? `Open usage detail · ${value} cost` : undefined}
+        onOpenDetail={canDrill ? openUsage('cost') : undefined}
+        detailAriaLabel={canDrill ? `Open usage detail · ${value} cost` : undefined}
       />
       <CoverageNote text={note} />
     </>
@@ -162,17 +199,22 @@ function CostWidget({ analytics }: WidgetBodyProps) {
 }
 
 function CostPerEditWidget({ analytics }: WidgetBodyProps) {
-  const cpe = analytics.token_usage.cost_per_edit;
+  const t = analytics.token_usage;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
-  const note = capabilityCoverageNote(tools, 'tokenUsage');
-  const hasData = cpe != null;
-  const value = hasData ? `$${cpe.toFixed(3)}` : '--';
+  const drillable = useIsDrillable();
+  // Lock-step with CostWidget: cost-per-edit is the numerator's ratio, so
+  // whenever cost itself isn't showable, the ratio isn't either. Prevents
+  // the "total says -- but the ratio shows a number" divergence.
+  const reliable = hasCostData(t) && t.cost_per_edit != null;
+  const value = reliable ? formatCost(t.cost_per_edit, 3) : '--';
+  const note = reliable ? capabilityCoverageNote(tools, 'tokenUsage') : costEmptyReason(t, tools);
+  const canDrill = reliable && drillable;
   return (
     <>
       <StatWidget
         value={value}
-        onOpenDetail={hasData ? openUsage('cost-per-edit') : undefined}
-        detailAriaLabel={hasData ? `Open usage detail · ${value} per edit` : undefined}
+        onOpenDetail={canDrill ? openUsage('cost-per-edit') : undefined}
+        detailAriaLabel={canDrill ? `Open usage detail · ${value} per edit` : undefined}
       />
       <CoverageNote text={note} />
     </>

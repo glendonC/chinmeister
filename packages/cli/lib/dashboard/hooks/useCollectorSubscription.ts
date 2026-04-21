@@ -13,7 +13,12 @@
  * not load-bearing for the agent lifecycle.
  */
 import { useEffect } from 'react';
-import { readCompletedSession, deleteCompletedSession } from '@chinwag/shared/session-registry.js';
+import {
+  readCompletedSession,
+  deleteCompletedSession,
+  listCompletedSessions,
+  type CompletedSession,
+} from '@chinwag/shared/session-registry.js';
 import { createLogger } from '@chinwag/shared';
 import { onProcessExit } from '../../process/registry.js';
 import {
@@ -113,5 +118,71 @@ export function useCollectorSubscription({ config, teamId }: UseCollectorSubscri
     });
 
     return unsubscribe;
+  }, [config, teamId]);
+}
+
+/**
+ * Synthesize a minimal ManagedProcess from an on-disk completion record so
+ * the existing collector dispatch (which consumes ManagedProcess) can run
+ * against externally-launched agents the dashboard never observed exit for.
+ * All fields the collectors actually read are supplied from the record;
+ * display-only fields (title, pid, status) get placeholder values because
+ * the sweep path doesn't render rows for orphaned sessions.
+ */
+function synthesizeProcessFromRecord(record: CompletedSession): ManagedProcess {
+  return {
+    id: record.agentId,
+    agentId: record.agentId,
+    sessionId: record.sessionId,
+    teamId: record.teamId,
+    toolId: record.toolId,
+    // Collectors resolve log paths off cwd (Claude Code's project-hash, etc.),
+    // so this is load-bearing. It's the one piece of state the sweep truly
+    // depends on — without it the spec engine can't find the right JSONL.
+    cwd: record.cwd,
+    startedAt: record.startedAt,
+    // Display-only below; collectors don't touch these.
+    title: '',
+    pid: 0,
+    status: 'exited',
+  } as unknown as ManagedProcess;
+}
+
+/**
+ * One-shot sweep of orphaned completion records on dashboard mount. Closes
+ * the external-agent cost-coverage gap: a user running `claude-code` outside
+ * chinwag's managed flow still produces `<agentId>.completed.json` via MCP
+ * cleanup, but the dashboard never observes the exit and the collectors
+ * never run. Sweeping on mount means any later dashboard session — even
+ * days after the external run — picks up the stranded record and uploads.
+ *
+ * Scope guard: only records whose teamId matches the currently-authenticated
+ * team are processed. Records from other teams stay on disk so a future
+ * session that auths to that team can handle them.
+ */
+export function useOrphanCollectorSweep({ config, teamId }: UseCollectorSubscriptionParams): void {
+  useEffect(() => {
+    if (!config || !teamId) return;
+    let cancelled = false;
+    void (async () => {
+      let records: ReturnType<typeof listCompletedSessions>;
+      try {
+        records = listCompletedSessions();
+      } catch (err) {
+        log.warn(`orphan sweep: failed to list completion records: ${err}`);
+        return;
+      }
+      for (const { record } of records) {
+        if (cancelled) return;
+        if (record.teamId !== teamId) continue;
+        const proc = synthesizeProcessFromRecord(record);
+        await runCollectorsForProcess(proc, config).catch((err) => {
+          log.warn(`orphan sweep: collector run failed for ${record.agentId}: ${err}`);
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [config, teamId]);
 }

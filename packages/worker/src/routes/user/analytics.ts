@@ -13,7 +13,7 @@ import { createLogger } from '../../lib/logger.js';
 import { enrichTokenUsageWithPricing } from '../../lib/pricing-enrich.js';
 import { authedRoute } from '../../lib/middleware.js';
 import { MAX_DASHBOARD_TEAMS } from '../../lib/constants.js';
-import { getToolsWithCapability } from '@chinwag/shared/tool-registry.js';
+import { buildDataCoverage } from '../../lib/data-coverage.js';
 import { userAnalyticsSchema } from '@chinwag/shared/contracts/analytics.js';
 import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 
@@ -308,30 +308,3 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
     { schema: userAnalyticsSchema },
   );
 });
-
-/**
- * Compute the data_coverage slice from the set of active tools. Uses the
- * shared tool-registry to figure out which capabilities the active tools
- * actually provide vs the ones no active tool supports.
- */
-function buildDataCoverage(activeToolsSet: Set<string>) {
-  const allTools = [...activeToolsSet];
-  const capConversation = new Set(getToolsWithCapability('conversationLogs'));
-  const capTokens = new Set(getToolsWithCapability('tokenUsage'));
-  const reporting = allTools.filter((t) => capConversation.has(t) || capTokens.has(t));
-  const withoutData = allTools.filter((t) => !capConversation.has(t) && !capTokens.has(t));
-  const capsAvailable: string[] = [];
-  const capsMissing: string[] = [];
-  if (allTools.some((t) => capConversation.has(t))) capsAvailable.push('conversationLogs');
-  else if (allTools.length > 0) capsMissing.push('conversationLogs');
-  if (allTools.some((t) => capTokens.has(t))) capsAvailable.push('tokenUsage');
-  else if (allTools.length > 0) capsMissing.push('tokenUsage');
-  return {
-    tools_reporting: reporting,
-    tools_without_data: withoutData,
-    coverage_rate:
-      allTools.length > 0 ? Math.round((reporting.length / allTools.length) * 100) / 100 : 0,
-    capabilities_available: capsAvailable,
-    capabilities_missing: capsMissing,
-  };
-}

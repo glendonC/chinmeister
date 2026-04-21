@@ -1,6 +1,14 @@
 import { getToolsWithCapability, type DataCapabilities } from '@chinwag/shared/tool-registry.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
+import { formatCostDelta } from '../utils.js';
 import styles from '../widget-shared.module.css';
+
+/** How to format the inline delta magnitude shown next to a stat value.
+ *  'count' is the default (1-decimal rounded form used by session/edit
+ *  counts). 'usd-fine' is for per-edit USD deltas that need sub-cent
+ *  precision via formatCostDelta. Additional variants can land here as
+ *  cost-adjacent stats join the strip. */
+export type StatDeltaFormat = 'count' | 'usd-fine';
 
 export const SENTIMENT_COLORS: Record<string, string> = {
   positive: 'var(--success)',
@@ -15,31 +23,81 @@ export function StatWidget({
   value,
   delta,
   deltaInvert,
+  deltaFormat = 'count',
+  active,
+  onSelect,
+  selectAriaLabel,
   onOpenDetail,
   detailAriaLabel,
 }: {
   value: string;
-  delta?: { current: number; previous: number } | null;
+  delta?: { current: number | null; previous: number | null } | null;
   deltaInvert?: boolean;
-  /** When provided, the stat value is rendered as a button that opens a
-   * category detail surface. Used by sessions to drill into Usage Detail;
-   * other stats opt in as their detail tabs land. */
+  /** How to render the inline delta magnitude. Defaults to 'count' —
+   *  1-decimal rounding suitable for integer-ish stats. Use 'usd-fine'
+   *  for per-edit dollar deltas that need sub-cent precision. */
+  deltaFormat?: StatDeltaFormat;
+  /** Tab-selector state. When a boolean (true or false), the stat renders
+   * as a selectable tab — active stays in full ink, inactive dims to
+   * `--soft`. Undefined means the stat is not part of a selector group and
+   * falls back to the plain (drill-or-static) render path. */
+  active?: boolean;
+  /** Fired when the stat value is clicked as a tab-select action. Required
+   * whenever `active` is defined — the cell is only tab-clickable when the
+   * caller wires a handler. */
+  onSelect?: () => void;
+  selectAriaLabel?: string;
+  /** When provided (and `active` is undefined), the stat value is wrapped
+   * in a drill-in button with a trailing ↗ affordance. Tab-selector stats
+   * drop this in favor of `onSelect` — the adjacent trend widget IS the
+   * drill, so a secondary arrow would be redundant. */
   onOpenDetail?: () => void;
   detailAriaLabel?: string;
 }) {
   let deltaEl = null;
-  if (delta && delta.previous > 0) {
+  // Only render a delta when both sides are measured and previous > 0.
+  // Null on either side means "no comparison available" (e.g., stale
+  // pricing, all-unpriced models, or first-ever period); zero previous
+  // is divide-by-infinity territory where the arrow is misleading.
+  if (delta && delta.current != null && delta.previous != null && delta.previous > 0) {
     const d = delta.current - delta.previous;
     const isGood = deltaInvert ? d < 0 : d > 0;
     const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
     const color = d === 0 ? 'var(--muted)' : isGood ? 'var(--success)' : 'var(--danger)';
+    const magnitude =
+      deltaFormat === 'usd-fine' ? formatCostDelta(d) : String(Math.abs(Math.round(d * 10) / 10));
     deltaEl = (
       <span className={styles.statInlineDelta} style={{ color }}>
         {arrow}
-        {Math.abs(Math.round(d * 10) / 10)}
+        {magnitude}
       </span>
     );
   }
+
+  // Tab-selector render path: the stat is one of N mutually-exclusive
+  // selectors driving an adjacent trend/chart. Active = full ink, inactive
+  // dims to --soft. onSelect is the single click action; drill-in is not
+  // rendered here because the adjacent chart is the detail.
+  if (active !== undefined) {
+    const valueClass = active
+      ? styles.heroStatValue
+      : `${styles.heroStatValue} ${styles.heroStatInactive}`;
+    return (
+      <button
+        type="button"
+        className={styles.statSelectButton}
+        onClick={onSelect}
+        aria-label={selectAriaLabel}
+        aria-pressed={active}
+      >
+        <span className={valueClass}>
+          {value}
+          {deltaEl}
+        </span>
+      </button>
+    );
+  }
+
   const inner = (
     <span className={styles.heroStatValue}>
       {value}
@@ -150,6 +208,58 @@ const CAPABILITY_LABEL: Partial<Record<keyof DataCapabilities, string>> = {
  * That is the A3 honesty fix: gating must be visible when the widget is
  * rendering em-dashes, not only when it has data.
  */
+/**
+ * Shape of the token_usage slice the cost-reliability helpers consume. Scoped
+ * to the fields that determine whether we can show a dollar number at all —
+ * not a full TokenUsageStats. Kept structural so test fixtures don't have to
+ * fill unrelated fields.
+ */
+interface CostReliabilityInput {
+  sessions_with_token_data: number;
+  pricing_is_stale: boolean;
+  models_without_pricing: string[];
+  models_without_pricing_total: number;
+  by_model: Array<{ agent_model: string }>;
+}
+
+/**
+ * True when the widget can honestly render a dollar value. Three reasons to
+ * say no: no sessions reported token data, the pricing snapshot is stale
+ * (pricing-enrich.ts zeroes costs rather than serve wrong numbers), or every
+ * observed model is unpriced on a fresh snapshot (the totalCost sum is zero
+ * not because there was no spend but because chinwag can't price the models
+ * that did spend). Any of the three → render em-dash.
+ */
+export function hasCostData(tu: CostReliabilityInput): boolean {
+  if (tu.sessions_with_token_data === 0) return false;
+  if (tu.pricing_is_stale) return false;
+  if (tu.by_model.length > 0 && tu.models_without_pricing_total >= tu.by_model.length) {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Explain the em-dash. Called when `hasCostData` returns false; picks the most
+ * specific reason so the CoverageNote under the stat tells the user *why* the
+ * widget isn't showing a number. Falls through to the standard capability
+ * attribution for the zero-sessions case (first-day solo etc.) — returning
+ * null there is fine, the widget just shows a bare em-dash.
+ */
+export function costEmptyReason(tu: CostReliabilityInput, toolsReporting: string[]): string | null {
+  if (tu.pricing_is_stale) {
+    return 'Pricing refresh pending — cost estimates paused';
+  }
+  if (tu.by_model.length > 0 && tu.models_without_pricing_total >= tu.by_model.length) {
+    const first = tu.models_without_pricing[0];
+    const extra = tu.models_without_pricing_total - 1;
+    if (first && extra > 0) return `Awaiting pricing for ${first} (and ${extra} more)`;
+    if (first) return `Awaiting pricing for ${first}`;
+    return 'Awaiting pricing for observed models';
+  }
+  return capabilityCoverageNote(toolsReporting, 'tokenUsage');
+}
+
 export function capabilityCoverageNote(
   toolsReporting: string[],
   capability: keyof DataCapabilities,

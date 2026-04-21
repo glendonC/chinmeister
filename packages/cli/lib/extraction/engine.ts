@@ -452,6 +452,17 @@ function extractConversationFromEntry(
   entry: unknown,
   spec: ConversationExtractionSpec,
   sequence: number,
+  /**
+   * Normalization applied to per-message token fields before they land on
+   * the ExtractedConversation. Without this, OpenAI-shaped specs (Codex,
+   * Aider) would store raw per-message tokens with cached still nested in
+   * input — a different quantity than the session-level aggregate, which
+   * is already normalized by the tokens-extraction path. Keeping them in
+   * the same domain is what lets downstream per-message aggregation SQL
+   * sum values across the conversation_events table without rewriting
+   * OpenAI math at query time.
+   */
+  tokenNormalization: 'anthropic' | 'openai' = 'anthropic',
 ): ExtractedConversation | null {
   let role: 'user' | 'assistant' | null = null;
   const fields = [spec.roleDetection.field, ...(spec.roleDetection.fieldFallbacks ?? [])];
@@ -499,19 +510,44 @@ function extractConversationFromEntry(
     created_at: timestamp || undefined,
   };
 
-  // Per-message token/model/stop_reason (assistant entries only in practice)
+  // Per-message token/model/stop_reason (assistant entries only in practice).
+  // Values flow through normalizeTokens so the conversation_events table
+  // stays in the same domain as sessions.*_tokens — OpenAI rows subtract
+  // cached from input, Anthropic rows pass through additive.
   if (spec.tokenPaths) {
-    const it = resolvePath(entry, spec.tokenPaths.input_tokens) as number | undefined;
-    const ot = resolvePath(entry, spec.tokenPaths.output_tokens) as number | undefined;
-    if (it != null) result.input_tokens = it;
-    if (ot != null) result.output_tokens = ot;
-    if (spec.tokenPaths.cache_read_tokens) {
-      const cr = resolvePath(entry, spec.tokenPaths.cache_read_tokens) as number | undefined;
-      if (cr != null) result.cache_read_tokens = cr;
-    }
-    if (spec.tokenPaths.cache_creation_tokens) {
-      const cc = resolvePath(entry, spec.tokenPaths.cache_creation_tokens) as number | undefined;
-      if (cc != null) result.cache_creation_tokens = cc;
+    const rawInput = (resolvePath(entry, spec.tokenPaths.input_tokens) as number | undefined) ?? 0;
+    const rawOutput =
+      (resolvePath(entry, spec.tokenPaths.output_tokens) as number | undefined) ?? 0;
+    const rawCacheRead = spec.tokenPaths.cache_read_tokens
+      ? ((resolvePath(entry, spec.tokenPaths.cache_read_tokens) as number | undefined) ?? 0)
+      : 0;
+    const rawCacheCreation = spec.tokenPaths.cache_creation_tokens
+      ? ((resolvePath(entry, spec.tokenPaths.cache_creation_tokens) as number | undefined) ?? 0)
+      : 0;
+    // Only attach when the source provided at least one token signal — a
+    // bare assistant turn with no usage shouldn't pollute the record with
+    // zeroes that look like a measured zero.
+    const anyToken =
+      resolvePath(entry, spec.tokenPaths.input_tokens) != null ||
+      resolvePath(entry, spec.tokenPaths.output_tokens) != null;
+    if (anyToken) {
+      const normalized = normalizeTokens(
+        {
+          input: rawInput,
+          output: rawOutput,
+          cacheRead: rawCacheRead,
+          cacheCreation: rawCacheCreation,
+        },
+        tokenNormalization,
+      );
+      result.input_tokens = normalized.input_tokens;
+      result.output_tokens = normalized.output_tokens;
+      if (spec.tokenPaths.cache_read_tokens) {
+        result.cache_read_tokens = normalized.cache_read_tokens;
+      }
+      if (spec.tokenPaths.cache_creation_tokens) {
+        result.cache_creation_tokens = normalized.cache_creation_tokens;
+      }
     }
   }
   if (spec.modelPath) {
@@ -737,13 +773,16 @@ export async function extract(
     entries = applyModelStateCarry(entries, spec.prepass.modelState, convSpecForPrepass);
   }
 
-  // Conversations
+  // Conversations. The tokens-extraction spec (when present) carries the
+  // normalization semantics for this tool; passing it here keeps per-message
+  // tokens on conversation_events in the same domain as sessions.*_tokens.
   const conversations: ExtractedConversation[] = [];
   if (spec.extractions.conversation && !isMarkdownSpec(spec.extractions.conversation)) {
     const convSpec = spec.extractions.conversation;
+    const tokenNormalization = spec.extractions.tokens?.normalization ?? 'anthropic';
     let seq = 0;
     for (const entry of entries) {
-      const ev = extractConversationFromEntry(entry, convSpec, seq);
+      const ev = extractConversationFromEntry(entry, convSpec, seq, tokenNormalization);
       if (ev) {
         conversations.push(ev);
         seq++;

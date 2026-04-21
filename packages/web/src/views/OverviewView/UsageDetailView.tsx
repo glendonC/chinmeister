@@ -10,6 +10,8 @@ import { getToolMeta } from '../../lib/toolMeta.js';
 import { navigate } from '../../lib/router.js';
 import { Sparkline } from '../../widgets/charts.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
+import { formatCost } from '../../widgets/utils.js';
+import { hasCostData } from '../../widgets/bodies/shared.js';
 import { RANGES, formatScope, type RangeDays } from './overview-utils.js';
 import styles from './UsageDetailView.module.css';
 
@@ -28,15 +30,11 @@ interface Props {
   onRangeChange: (next: RangeDays) => void;
 }
 
-// Formatting helpers kept inline so the detail view is self-contained.
+// Formatting helpers kept inline for the non-currency paths. USD goes
+// through `formatCost` (widgets/utils) so the detail view gets the same
+// thousands-separator behavior as the KPI strip and null→em-dash fallback.
 function fmtCount(n: number): string {
   return n.toLocaleString();
-}
-function fmtUsd(n: number): string {
-  return `$${n.toFixed(2)}`;
-}
-function fmtUsdFine(n: number): string {
-  return `$${n.toFixed(3)}`;
 }
 function fmtPct(n: number, digits = 0): string {
   return `${(n * 100).toFixed(digits)}%`;
@@ -83,12 +81,13 @@ export default function UsageDetailView({
     {
       id: 'cost',
       label: 'Cost',
-      value: analytics.token_usage.sessions_with_token_data === 0 ? '--' : fmtUsd(totals.cost),
+      value: hasCostData(analytics.token_usage) ? formatCost(totals.cost, 2) : '--',
     },
     {
       id: 'cost-per-edit',
       label: 'Cost / edit',
-      value: totals.cpe == null ? '--' : fmtUsdFine(totals.cpe),
+      value:
+        hasCostData(analytics.token_usage) && totals.cpe != null ? formatCost(totals.cpe, 3) : '--',
     },
     { id: 'files-touched', label: 'Files', value: fmtCount(totals.filesTouched) },
   ];
@@ -913,10 +912,17 @@ function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
 
 function CostPanel({ analytics }: { analytics: UserAnalytics }) {
   const t = analytics.token_usage;
-  if (t.sessions_with_token_data === 0) {
-    return (
-      <span className={styles.empty}>No tools in this window captured token or cost data yet.</span>
-    );
+  // Matches the KPI widget's gate — if the total is an em-dash at overview,
+  // the detail shouldn't render $0.00. Three reasons fold in: zero token
+  // sessions, stale pricing (pricing-enrich zeros total), or every observed
+  // model unpriced (totalCost sums to zero for a non-zero reason).
+  if (!hasCostData(t)) {
+    const reason = t.pricing_is_stale
+      ? 'Pricing snapshot is stale — cost estimates paused until it refreshes.'
+      : t.by_model.length > 0 && t.models_without_pricing_total >= t.by_model.length
+        ? 'None of the models used in this window have pricing yet — cost estimates paused.'
+        : 'No tools in this window captured token or cost data yet.';
+    return <span className={styles.empty}>{reason}</span>;
   }
   const byModel = [...t.by_model].sort(
     (a, b) => (b.estimated_cost_usd ?? 0) - (a.estimated_cost_usd ?? 0),
@@ -945,7 +951,7 @@ function CostPanel({ analytics }: { analytics: UserAnalytics }) {
                   />
                 </div>
                 <span className={styles.breakdownValue}>
-                  {m.estimated_cost_usd == null ? '--' : fmtUsd(m.estimated_cost_usd)}
+                  {formatCost(m.estimated_cost_usd, 2)}
                   <span className={styles.breakdownMeta}> · {fmtCount(m.sessions)} sessions</span>
                 </span>
               </div>
@@ -1012,16 +1018,22 @@ function CostPanel({ analytics }: { analytics: UserAnalytics }) {
 // ── Cost-per-edit tab ────────────────────────────
 
 function CostPerEditPanel({ analytics }: { analytics: UserAnalytics }) {
-  const cpe = analytics.token_usage.cost_per_edit;
-  const byTool = analytics.token_usage.by_tool;
-  const toolCompare = new Map(analytics.tool_comparison.map((t) => [t.host_tool, t.total_edits]));
+  const t = analytics.token_usage;
+  const cpe = t.cost_per_edit;
+  const byTool = t.by_tool;
+  const toolCompare = new Map(analytics.tool_comparison.map((x) => [x.host_tool, x.total_edits]));
 
-  if (cpe == null) {
-    return (
-      <span className={styles.empty}>
-        Cost per edit needs sessions with both token and edit data — none recorded yet.
-      </span>
-    );
+  // Lock-step with the KPI: cost-per-edit inherits the cost total's
+  // reliability gate (stale pricing, all-unpriced) plus its own null case.
+  // Pricing-specific reasons pre-empt the default empty copy so the user
+  // knows why the em-dash is there, not just that it is.
+  if (!hasCostData(t) || cpe == null) {
+    const reason = t.pricing_is_stale
+      ? 'Pricing snapshot is stale — cost estimates paused until it refreshes.'
+      : t.by_model.length > 0 && t.models_without_pricing_total >= t.by_model.length
+        ? 'None of the models used in this window have pricing yet — cost estimates paused.'
+        : 'Cost per edit needs sessions with both token and edit data — none recorded yet.';
+    return <span className={styles.empty}>{reason}</span>;
   }
 
   const perTool = byTool
@@ -1032,12 +1044,8 @@ function CostPerEditPanel({ analytics }: { analytics: UserAnalytics }) {
       // coarse and honest.
       const inputShare =
         (m.input_tokens + m.cache_read_tokens * 0.1) /
-        Math.max(
-          1,
-          analytics.token_usage.total_input_tokens +
-            analytics.token_usage.total_cache_read_tokens * 0.1,
-        );
-      const estCost = analytics.token_usage.total_estimated_cost_usd * inputShare;
+        Math.max(1, t.total_input_tokens + t.total_cache_read_tokens * 0.1);
+      const estCost = t.total_estimated_cost_usd * inputShare;
       const rate = edits > 0 ? estCost / edits : null;
       return { host_tool: m.host_tool, edits, estCost, rate };
     })
@@ -1074,7 +1082,7 @@ function CostPerEditPanel({ analytics }: { analytics: UserAnalytics }) {
                     />
                   </div>
                   <span className={styles.breakdownValue}>
-                    {fmtUsdFine(x.rate ?? 0)}
+                    {formatCost(x.rate, 3)}
                     <span className={styles.breakdownMeta}> / {fmtCount(x.edits)} edits</span>
                   </span>
                 </div>

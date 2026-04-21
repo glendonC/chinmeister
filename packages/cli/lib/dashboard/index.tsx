@@ -6,7 +6,10 @@ import { useMemoryManager } from './memory.js';
 import { useAgentLifecycle } from './agents.js';
 import { useComposer as useComposerHook } from './composer.js';
 import { useIntegrationDoctor } from './integrations.js';
-import { useCollectorSubscription } from './hooks/useCollectorSubscription.js';
+import {
+  useCollectorSubscription,
+  useOrphanCollectorSweep,
+} from './hooks/useCollectorSubscription.js';
 import { MainPane } from './main-pane.jsx';
 import { MemoryView } from './memory-view.jsx';
 import { SessionsView } from './sessions-view.jsx';
@@ -156,6 +159,11 @@ function DashboardProviders({
     flash,
   });
   useCollectorSubscription({ config, teamId });
+  // Drains `<agentId>.completed.json` records left behind by externally
+  // launched agents (user ran claude-code directly, not through chinwag).
+  // Runs once per dashboard mount — subsequent external sessions fill the
+  // queue again and get swept next time.
+  useOrphanCollectorSweep({ config, teamId });
   const integrations = useIntegrationDoctor({ projectRoot, flash });
   const composer = useComposerHook({
     config,
