@@ -65,21 +65,66 @@ export function queryTokenUsage(sql: SqlStorage, days: number): TokenUsageStats 
       return { ...empty, sessions_without_token_data: withoutData };
     }
 
-    // By model
+    // By model — hybrid rollup with per-message preference.
+    //
+    // Migration 019 captures per-assistant-message `model` + tokens in the
+    // conversation_events table. Summing there gives an accurate multi-model
+    // breakdown: a Claude Code session that ran Opus for planning and Haiku
+    // for sub-agents shows both models in proportion, instead of everything
+    // attributed to the session's single `agent_model` column.
+    //
+    // Sessions without per-message data (pre-019 rows, or tools whose spec
+    // doesn't populate tokenPaths) fall back to the session-level rollup.
+    // The NOT EXISTS guard prevents double-counting — any session with ANY
+    // per-message token row is excluded from the fallback CTE.
+    //
+    // Per-message rows land normalized via the extraction engine's
+    // `normalizeTokens`, so the two sources can be summed without further
+    // OpenAI/Anthropic math at query time.
     const modelRows = sql
       .exec(
-        `SELECT agent_model,
-                COALESCE(SUM(input_tokens), 0) AS input_tokens,
-                COALESCE(SUM(output_tokens), 0) AS output_tokens,
-                COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
-                COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens,
-                COUNT(*) AS sessions
-         FROM sessions
-         WHERE started_at > datetime('now', '-' || ? || ' days')
-           AND input_tokens IS NOT NULL
-           AND agent_model IS NOT NULL AND agent_model != ''
-         GROUP BY agent_model
-         ORDER BY input_tokens DESC`,
+        `WITH per_msg AS (
+           SELECT ce.model AS agent_model,
+                  COALESCE(SUM(ce.input_tokens), 0) AS input_tokens,
+                  COALESCE(SUM(ce.output_tokens), 0) AS output_tokens,
+                  COALESCE(SUM(ce.cache_read_tokens), 0) AS cache_read_tokens,
+                  COALESCE(SUM(ce.cache_creation_tokens), 0) AS cache_creation_tokens,
+                  COUNT(DISTINCT ce.session_id) AS sessions
+             FROM conversation_events ce
+             JOIN sessions s ON s.id = ce.session_id
+            WHERE s.started_at > datetime('now', '-' || ? || ' days')
+              AND ce.input_tokens IS NOT NULL
+              AND ce.model IS NOT NULL AND ce.model != ''
+            GROUP BY ce.model
+         ),
+         fallback AS (
+           SELECT s.agent_model AS agent_model,
+                  COALESCE(SUM(s.input_tokens), 0) AS input_tokens,
+                  COALESCE(SUM(s.output_tokens), 0) AS output_tokens,
+                  COALESCE(SUM(s.cache_read_tokens), 0) AS cache_read_tokens,
+                  COALESCE(SUM(s.cache_creation_tokens), 0) AS cache_creation_tokens,
+                  COUNT(*) AS sessions
+             FROM sessions s
+            WHERE s.started_at > datetime('now', '-' || ? || ' days')
+              AND s.input_tokens IS NOT NULL
+              AND s.agent_model IS NOT NULL AND s.agent_model != ''
+              AND NOT EXISTS (
+                SELECT 1 FROM conversation_events ce2
+                 WHERE ce2.session_id = s.id
+                   AND ce2.input_tokens IS NOT NULL
+              )
+            GROUP BY s.agent_model
+         )
+         SELECT agent_model,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(cache_read_tokens) AS cache_read_tokens,
+                SUM(cache_creation_tokens) AS cache_creation_tokens,
+                SUM(sessions) AS sessions
+           FROM (SELECT * FROM per_msg UNION ALL SELECT * FROM fallback)
+          GROUP BY agent_model
+          ORDER BY input_tokens DESC`,
+        days,
         days,
       )
       .toArray();
@@ -155,5 +200,61 @@ export function queryTokenUsage(sql: SqlStorage, days: number): TokenUsageStats 
   } catch (err) {
     log.warn(`tokenUsage query failed: ${err}`);
     return empty;
+  }
+}
+
+/** Per-day per-model token sum, the minimum shape needed to price daily cost.
+ * Feeds `enrichDailyTrendsWithPricing` which resolves each model via the
+ * LiteLLM pricing cache and sums cost per day. Days with no token-bearing
+ * sessions simply don't appear — the enrichment layer leaves those days'
+ * cost fields null, matching the period-total "no token data → --" rule. */
+export interface DailyTokenUsageRow {
+  day: string;
+  agent_model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_tokens: number;
+  cache_creation_tokens: number;
+}
+
+export function queryDailyTokenUsage(
+  sql: SqlStorage,
+  days: number,
+  tzOffsetMinutes: number = 0,
+): DailyTokenUsageRow[] {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT date(datetime(started_at, ? || ' minutes')) AS day,
+                agent_model,
+                COALESCE(SUM(input_tokens), 0) AS input_tokens,
+                COALESCE(SUM(output_tokens), 0) AS output_tokens,
+                COALESCE(SUM(cache_read_tokens), 0) AS cache_read_tokens,
+                COALESCE(SUM(cache_creation_tokens), 0) AS cache_creation_tokens
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days', '-1 day')
+           AND input_tokens IS NOT NULL
+           AND agent_model IS NOT NULL AND agent_model != ''
+         GROUP BY day, agent_model
+         ORDER BY day ASC`,
+        tzOffsetMinutes,
+        days,
+      )
+      .toArray();
+
+    return rows.map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        day: row.day as string,
+        agent_model: row.agent_model as string,
+        input_tokens: (row.input_tokens as number) || 0,
+        output_tokens: (row.output_tokens as number) || 0,
+        cache_read_tokens: (row.cache_read_tokens as number) || 0,
+        cache_creation_tokens: (row.cache_creation_tokens as number) || 0,
+      };
+    });
+  } catch (err) {
+    log.warn(`dailyTokenUsage query failed: ${err}`);
+    return [];
   }
 }

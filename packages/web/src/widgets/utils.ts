@@ -170,3 +170,37 @@ export function formatDuration(ms: number): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
   return `${(ms / 60_000).toFixed(1)}m`;
 }
+
+/**
+ * USD cost formatter. Returns the em-dash sentinel (`--`) for null/undefined
+ * so callers can gate on their own "cost is unavailable" predicate and hand
+ * the formatter a pass-through without a ternary at every site.
+ *
+ * Thousands separators are load-bearing at the 3.6rem hero-stat altitude —
+ * `$12345.67` overflows the 4×2 KPI slot where `$12,345.67` does not.
+ */
+export function formatCost(value: number | null | undefined, decimals = 2): string {
+  if (value == null) return '--';
+  return value.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  });
+}
+
+/**
+ * Delta magnitude formatter for per-edit USD movements. Picks 4 decimals
+ * below half a cent (|delta| < $0.005) so sub-cent swings aren't rounded
+ * to $0.000; falls back to 3 decimals above that range for readability.
+ * Returns the unsigned magnitude — the caller decorates with the
+ * arrow/direction glyph.
+ *
+ * Lives next to formatCost rather than in lib/ because it's a
+ * stat-widget-shaped concern: only the inline delta pill consumes it.
+ */
+export function formatCostDelta(value: number): string {
+  const abs = Math.abs(value);
+  if (abs < 0.005) return `$${abs.toFixed(4)}`;
+  return `$${abs.toFixed(3)}`;
+}
