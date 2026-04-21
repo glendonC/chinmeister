@@ -130,8 +130,9 @@ import { normalizeRuntimeMetadata } from './runtime.js';
 import {
   enrichAnalyticsWithPricing,
   enrichDailyTrendsWithPricing,
+  enrichPeriodComparisonCost,
 } from '../../lib/pricing-enrich.js';
-import { queryDailyTokenUsage } from './analytics/tokens.js';
+import { queryDailyTokenUsage, queryTokenAggregateForWindow } from './analytics/tokens.js';
 import {
   CONTEXT_CACHE_TTL_MS,
   CLEANUP_INTERVAL_MS,
@@ -665,6 +666,14 @@ export class TeamDO extends DurableObject<Env> {
     // placeholder. Reliability gates mirror the period total.
     const dailyTokens = queryDailyTokenUsage(this.sql, days, tzOffsetMinutes);
     await enrichDailyTrendsWithPricing(enriched.daily_trends, dailyTokens, this.env);
+    // Period-comparison cost: price both windows against the CURRENT pricing
+    // snapshot so the cost-per-edit delta shown by CostPerEditWidget reflects
+    // behavior change, not price drift. Previous-window aggregate falls to
+    // empty when outside retention (30d default), which computeWindowCost
+    // maps to a null cost — StatWidget's delta gate then skips rendering.
+    const currentAgg = queryTokenAggregateForWindow(this.sql, days, 0);
+    const previousAgg = queryTokenAggregateForWindow(this.sql, days * 2, days);
+    await enrichPeriodComparisonCost(enriched, currentAgg, previousAgg, this.env);
     return enriched;
   }
 
@@ -1199,6 +1208,13 @@ export class TeamDO extends DurableObject<Env> {
     const enriched = await enrichAnalyticsWithPricing(gate, this.env);
     const dailyTokens = queryDailyTokenUsage(this.sql, days, tzOffsetMinutes);
     await enrichDailyTrendsWithPricing(enriched.daily_trends, dailyTokens, this.env);
+    // Same period-comparison cost enrichment as getAnalytics. Each team
+    // ships its own cost/edits in period_comparison; the cross-team route
+    // then sums them null-stickily and re-derives cost_per_edit on the
+    // merged totals (daily-trends pattern) instead of averaging ratios.
+    const currentAgg = queryTokenAggregateForWindow(this.sql, days, 0);
+    const previousAgg = queryTokenAggregateForWindow(this.sql, days * 2, days);
+    await enrichPeriodComparisonCost(enriched, currentAgg, previousAgg, this.env);
     return enriched;
   }
 

@@ -16,6 +16,12 @@ interface PeriodAcc {
   velocity_sum: number;
   total_sessions_sum: number;
   count: number;
+  // Cost/edits summed null-stickily across teams (daily-trends pattern).
+  // cost_sum stays null when no team reported a priced cost — matches the
+  // per-team "no token data / stale pricing / all-unpriced → --" rule, so
+  // a partial-coverage team can't contaminate the aggregate with zero.
+  cost_sum: number | null;
+  edits_sum: number;
 }
 
 export interface PeriodComparisonAcc {
@@ -32,6 +38,8 @@ function emptyPeriodAcc(): PeriodAcc {
     velocity_sum: 0,
     total_sessions_sum: 0,
     count: 0,
+    cost_sum: null,
+    edits_sum: 0,
   };
 }
 
@@ -52,6 +60,10 @@ export function merge(acc: PeriodComparisonAcc, team: TeamResult): void {
     acc.current.velocity_sum += cur.edit_velocity * ts;
     acc.current.total_sessions_sum += ts;
     acc.current.count++;
+    if (cur.total_estimated_cost_usd != null) {
+      acc.current.cost_sum = (acc.current.cost_sum ?? 0) + cur.total_estimated_cost_usd;
+    }
+    acc.current.edits_sum += cur.total_edits_in_token_sessions ?? 0;
   }
   const prev = pc.previous;
   if (prev) {
@@ -63,12 +75,28 @@ export function merge(acc: PeriodComparisonAcc, team: TeamResult): void {
     acc.previous.velocity_sum += prev.edit_velocity * ts;
     acc.previous.total_sessions_sum += ts;
     acc.previous.count++;
+    if (prev.total_estimated_cost_usd != null) {
+      acc.previous.cost_sum = (acc.previous.cost_sum ?? 0) + prev.total_estimated_cost_usd;
+    }
+    acc.previous.edits_sum += prev.total_edits_in_token_sessions ?? 0;
   }
 }
 
 export function project(acc: PeriodComparisonAcc): PeriodComparison {
   const cs = acc.current.total_sessions_sum;
   const ps = acc.previous.total_sessions_sum;
+  const curCost =
+    acc.current.cost_sum != null ? Math.round(acc.current.cost_sum * 100) / 100 : null;
+  const curCostPerEdit =
+    curCost != null && acc.current.edits_sum > 0
+      ? Math.round((curCost / acc.current.edits_sum) * 10000) / 10000
+      : null;
+  const prevCost =
+    acc.previous.cost_sum != null ? Math.round(acc.previous.cost_sum * 100) / 100 : null;
+  const prevCostPerEdit =
+    prevCost != null && acc.previous.edits_sum > 0
+      ? Math.round((prevCost / acc.previous.edits_sum) * 10000) / 10000
+      : null;
   return {
     current: {
       completion_rate: cs > 0 ? round1(acc.current.completion_sum / cs) : 0,
@@ -77,16 +105,12 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
       memory_hit_rate: cs > 0 ? round1(acc.current.memory_hit_sum / cs) : 0,
       edit_velocity: cs > 0 ? round1(acc.current.velocity_sum / cs) : 0,
       total_sessions: cs,
-      // Cost fields pass through as null — the cross-team route does not
-      // invoke enrichPeriodComparisonCost today (the function exists + is
-      // unit-tested but has no production caller and no widget consumer).
-      // If a period-over-period cost delta ships, add a cross-team window
-      // token aggregate and call enrichPeriodComparisonCost before
-      // returning. Leaving the fields as null keeps the shape honest
-      // ("unknown") rather than implying a measured $0.
-      total_estimated_cost_usd: null,
-      total_edits_in_token_sessions: 0,
-      cost_per_edit: null,
+      // Cost/edits summed null-stickily in `merge`; cost_per_edit re-derived
+      // here from the merged totals. A simple average of per-team ratios
+      // would mis-weight small teams — same reasoning as daily-trends.
+      total_estimated_cost_usd: curCost,
+      total_edits_in_token_sessions: acc.current.edits_sum,
+      cost_per_edit: curCostPerEdit,
     },
     previous:
       acc.previous.count > 0
@@ -97,10 +121,9 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
             memory_hit_rate: ps > 0 ? round1(acc.previous.memory_hit_sum / ps) : 0,
             edit_velocity: ps > 0 ? round1(acc.previous.velocity_sum / ps) : 0,
             total_sessions: ps,
-            // Same "null = unknown, not measured" discipline as current.
-            total_estimated_cost_usd: null,
-            total_edits_in_token_sessions: 0,
-            cost_per_edit: null,
+            total_estimated_cost_usd: prevCost,
+            total_edits_in_token_sessions: acc.previous.edits_sum,
+            cost_per_edit: prevCostPerEdit,
           }
         : null,
   };

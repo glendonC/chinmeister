@@ -2,6 +2,7 @@
 
 import { createLogger } from '../../../lib/logger.js';
 import type { TokenUsageStats } from '@chinwag/shared/contracts/analytics.js';
+import type { WindowTokenAggregate } from '../../../lib/pricing-enrich.js';
 
 const log = createLogger('TeamDO.analytics');
 
@@ -215,6 +216,110 @@ export interface DailyTokenUsageRow {
   output_tokens: number;
   cache_read_tokens: number;
   cache_creation_tokens: number;
+}
+
+/**
+ * Minimal by_model + total_edits aggregate for a specific period offset
+ * range, e.g. current = [days, 0], previous = [days*2, days]. Feeds
+ * `enrichPeriodComparisonCost` so the delta on `cost-per-edit` prices both
+ * windows against today's pricing snapshot — the delta reflects behavior
+ * change, not price drift.
+ *
+ * Mirrors `queryTokenUsage`'s hybrid rollup (per-message from
+ * conversation_events, session-level fallback with NOT EXISTS guard) but
+ * scoped to one window at a time. Returns zero-edit/empty-model aggregates
+ * when the window has no token-bearing sessions, which `computeWindowCost`
+ * then maps to the four null-cause outputs documented on the schema.
+ */
+export function queryTokenAggregateForWindow(
+  sql: SqlStorage,
+  offsetStart: number,
+  offsetEnd: number,
+): WindowTokenAggregate {
+  const empty: WindowTokenAggregate = {
+    by_model: [],
+    total_edits_in_token_sessions: 0,
+  };
+
+  try {
+    const editsRows = sql
+      .exec(
+        `SELECT COALESCE(SUM(CASE WHEN input_tokens IS NOT NULL THEN edit_count ELSE 0 END), 0) AS edits
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+           AND started_at <= datetime('now', '-' || ? || ' days')`,
+        offsetStart,
+        offsetEnd,
+      )
+      .toArray();
+    const editsRow = (editsRows[0] || {}) as Record<string, unknown>;
+    const totalEdits = (editsRow.edits as number) || 0;
+
+    const modelRows = sql
+      .exec(
+        `WITH per_msg AS (
+           SELECT ce.model AS agent_model,
+                  COALESCE(SUM(ce.input_tokens), 0) AS input_tokens,
+                  COALESCE(SUM(ce.output_tokens), 0) AS output_tokens,
+                  COALESCE(SUM(ce.cache_read_tokens), 0) AS cache_read_tokens,
+                  COALESCE(SUM(ce.cache_creation_tokens), 0) AS cache_creation_tokens
+             FROM conversation_events ce
+             JOIN sessions s ON s.id = ce.session_id
+            WHERE s.started_at > datetime('now', '-' || ? || ' days')
+              AND s.started_at <= datetime('now', '-' || ? || ' days')
+              AND ce.input_tokens IS NOT NULL
+              AND ce.model IS NOT NULL AND ce.model != ''
+            GROUP BY ce.model
+         ),
+         fallback AS (
+           SELECT s.agent_model AS agent_model,
+                  COALESCE(SUM(s.input_tokens), 0) AS input_tokens,
+                  COALESCE(SUM(s.output_tokens), 0) AS output_tokens,
+                  COALESCE(SUM(s.cache_read_tokens), 0) AS cache_read_tokens,
+                  COALESCE(SUM(s.cache_creation_tokens), 0) AS cache_creation_tokens
+             FROM sessions s
+            WHERE s.started_at > datetime('now', '-' || ? || ' days')
+              AND s.started_at <= datetime('now', '-' || ? || ' days')
+              AND s.input_tokens IS NOT NULL
+              AND s.agent_model IS NOT NULL AND s.agent_model != ''
+              AND NOT EXISTS (
+                SELECT 1 FROM conversation_events ce2
+                 WHERE ce2.session_id = s.id
+                   AND ce2.input_tokens IS NOT NULL
+              )
+            GROUP BY s.agent_model
+         )
+         SELECT agent_model,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(cache_read_tokens) AS cache_read_tokens,
+                SUM(cache_creation_tokens) AS cache_creation_tokens
+           FROM (SELECT * FROM per_msg UNION ALL SELECT * FROM fallback)
+          GROUP BY agent_model`,
+        offsetStart,
+        offsetEnd,
+        offsetStart,
+        offsetEnd,
+      )
+      .toArray();
+
+    return {
+      by_model: modelRows.map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          agent_model: row.agent_model as string,
+          input_tokens: (row.input_tokens as number) || 0,
+          output_tokens: (row.output_tokens as number) || 0,
+          cache_read_tokens: (row.cache_read_tokens as number) || 0,
+          cache_creation_tokens: (row.cache_creation_tokens as number) || 0,
+        };
+      }),
+      total_edits_in_token_sessions: totalEdits,
+    };
+  } catch (err) {
+    log.warn(`tokenAggregateForWindow query failed: ${err}`);
+    return empty;
+  }
 }
 
 export function queryDailyTokenUsage(

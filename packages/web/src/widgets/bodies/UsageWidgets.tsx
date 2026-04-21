@@ -209,10 +209,28 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
   const value = reliable ? formatCost(t.cost_per_edit, 3) : '--';
   const note = reliable ? capabilityCoverageNote(tools, 'tokenUsage') : costEmptyReason(t, tools);
   const canDrill = reliable && drillable;
+  // Period-over-period delta. Both windows are priced against the current
+  // snapshot (via enrichPeriodComparisonCost) so the arrow reflects
+  // behavior change, not price drift. `deltaInvert` renders a downward
+  // move green — cheaper is the improvement direction here. Structurally
+  // null at 30-day windows (previous is outside retention) and at any
+  // window where either side has no priced token data; StatWidget's delta
+  // gate then suppresses the pill without the widget needing to know why.
+  const pc = analytics.period_comparison;
+  const delta =
+    reliable && pc
+      ? {
+          current: pc.current.cost_per_edit,
+          previous: pc.previous?.cost_per_edit ?? null,
+        }
+      : null;
   return (
     <>
       <StatWidget
         value={value}
+        delta={delta}
+        deltaInvert
+        deltaFormat="usd-fine"
         onOpenDetail={canDrill ? openUsage('cost-per-edit') : undefined}
         detailAriaLabel={canDrill ? `Open usage detail · ${value} per edit` : undefined}
       />
