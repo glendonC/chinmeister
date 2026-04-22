@@ -37,6 +37,12 @@ import {
 
 export { arcPath, CX, CY, R, SW };
 
+// Top-N branded arcs; the tail aggregates into a single muted Other slice.
+// Keeps every rendered slice above the cap-overlap floor regardless of how
+// many tools are configured.
+export const RING_TOP_N = 5;
+export const OTHER_KEY = '__other';
+
 const VERDICT_ORDER: Record<string, number> = {
   integrated: 0,
   compatible: 0,
@@ -199,24 +205,36 @@ export function useToolsViewData(): ToolsViewData {
     return known.map((t) => ({ ...t, share: total > 0 ? t.value / total : 0 }) as JoinShareEntry);
   }, [toolShare]);
 
-  // All tools get arc segments; labels shown unless they'd overlap on the same side.
-  // Highest-value tools win label priority when space is contested.
+  // Top-N branded arcs + one aggregated Other arc for the tail. Keeps every
+  // rendered slice comfortably above the cap-overlap floor regardless of how
+  // many tools are configured. Labels show on branded arcs unless they'd
+  // overlap on the same side; Other never gets a leader line.
   const arcs = useMemo((): ArcEntry[] => {
     if (!knownToolShare.length) return [];
-    const totalGap = GAP * knownToolShare.length;
+    const sorted = [...knownToolShare].sort((a, b) => b.value - a.value);
+    const topN = sorted.slice(0, RING_TOP_N);
+    const tail = sorted.slice(RING_TOP_N);
+    const tailValue = tail.reduce((s, e) => s + e.value, 0);
+    type SliceInput = { tool: string; value: number; isOther: boolean };
+    const slices: SliceInput[] = [
+      ...topN.map((e) => ({ tool: e.tool as string, value: e.value, isOther: false })),
+      ...(tailValue > 0 ? [{ tool: OTHER_KEY, value: tailValue, isOther: true }] : []),
+    ].filter((s) => s.value > 0);
+    if (!slices.length) return [];
+
+    const totalGap = GAP * slices.length;
     const available = 360 - totalGap;
-    const total = knownToolShare.reduce((s, e) => s + e.value, 0);
+    const total = slices.reduce((s, e) => s + e.value, 0);
     const anchorR = R + SW / 2 + LEADER_GAP;
     const elbowR = R + SW / 2 + LEADER_GAP + LEADER_STUB;
 
-    // Precompute sweep widths and cumulative offsets (no mutation inside map)
-    const sweeps = knownToolShare.map((e) =>
-      Math.max((total > 0 ? e.value / total : 0) * available, 4),
-    );
+    // No min-floor needed: top-N guarantees every rendered slice is meaningful,
+    // and the Other aggregate is always substantial enough to render cleanly.
+    const sweeps = slices.map((s) => (total > 0 ? s.value / total : 0) * available);
     const offsets = sweeps.map((_, i, arr) => arr.slice(0, i).reduce((s, sw) => s + sw + GAP, 0));
 
-    const entries: ArcEntry[] = knownToolShare.map((entry, i) => {
-      const share = total > 0 ? entry.value / total : 0;
+    const entries: ArcEntry[] = slices.map((slice, i) => {
+      const share = total > 0 ? slice.value / total : 0;
       const sweep = sweeps[i];
       const offset = offsets[i];
       const midDeg = (offset + sweep / 2 - 90) * DEG;
@@ -226,8 +244,8 @@ export function useToolsViewData(): ToolsViewData {
       const elbowX = CX + elbowR * Math.cos(midDeg);
       const elbowY = CY + elbowR * Math.sin(midDeg);
       return {
-        tool: entry.tool as string,
-        joins: entry.value,
+        tool: slice.tool,
+        joins: slice.value,
         share,
         startDeg: offset,
         sweepDeg: sweep,
@@ -242,11 +260,12 @@ export function useToolsViewData(): ToolsViewData {
       };
     });
 
-    // Pass 2: per-side collision detection — highest-value arcs get label priority
+    // Per-side label collision: highest-value branded arcs win. Other is
+    // excluded — the muted slice never claims a leader line.
     for (const side of ['left', 'right'] as const) {
       const candidates = entries
         .map((e, i) => ({ i, value: e.joins, y: e.labelY }))
-        .filter(({ i }) => entries[i].side === side)
+        .filter(({ i }) => entries[i].side === side && entries[i].tool !== OTHER_KEY)
         .sort((a, b) => b.value - a.value);
 
       const placed: number[] = [];

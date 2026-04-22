@@ -20,7 +20,7 @@ import PairDetail from './PairDetail.js';
 import SharedFileDetail from './SharedFileDetail.js';
 import CompareTools from './CompareTools.js';
 import { useScoredStackData, type ScoredToolRow } from './useScoredStackData.js';
-import { useToolsViewData, arcPath, CX, CY, R, SW } from './useToolsViewData.js';
+import { useToolsViewData, arcPath, CX, CY, R, SW, OTHER_KEY } from './useToolsViewData.js';
 import styles from './ToolsView.module.css';
 
 type StackSortKey = 'name' | 'sessions' | 'completion' | 'firstEdit';
@@ -184,11 +184,13 @@ export default function ToolsView() {
               <div className={styles.ringWrap}>
                 <svg viewBox="0 0 260 260" className={styles.ringSvg}>
                   {arcs.map((arc) => {
-                    const meta = getToolMeta(arc.tool);
-                    const arcKey = normalizeToolId(arc.tool);
+                    const isOther = arc.tool === OTHER_KEY;
+                    const meta = isOther ? null : getToolMeta(arc.tool);
+                    const strokeColor = isOther ? 'var(--soft)' : meta!.color;
+                    const arcKey = isOther ? null : normalizeToolId(arc.tool);
                     const hoveredKey = hoveredTool ? normalizeToolId(hoveredTool) : null;
-                    const dimmed = hoveredKey && hoveredKey !== arcKey;
-                    const highlighted = hoveredKey === arcKey;
+                    const dimmed = !isOther && hoveredKey && hoveredKey !== arcKey;
+                    const highlighted = !isOther && hoveredKey === arcKey;
                     return (
                       <g
                         key={arc.tool}
@@ -196,26 +198,28 @@ export default function ToolsView() {
                           opacity: dimmed ? 0.15 : 1,
                           transition: 'opacity 0.2s ease',
                         }}
-                        onMouseEnter={() => setHoveredTool(arc.tool)}
-                        onMouseLeave={() => setHoveredTool(null)}
+                        onMouseEnter={isOther ? undefined : () => setHoveredTool(arc.tool)}
+                        onMouseLeave={isOther ? undefined : () => setHoveredTool(null)}
                       >
+                        {!isOther && (
+                          <path
+                            d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)}
+                            fill="none"
+                            stroke="transparent"
+                            strokeWidth={SW + 16}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        )}
                         <path
                           d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)}
                           fill="none"
-                          stroke="transparent"
-                          strokeWidth={SW + 16}
-                          style={{ cursor: 'pointer' }}
-                        />
-                        <path
-                          d={arcPath(CX, CY, R, arc.startDeg, arc.sweepDeg)}
-                          fill="none"
-                          stroke={meta.color}
+                          stroke={strokeColor}
                           strokeWidth={SW}
                           strokeLinecap="round"
                           opacity={highlighted ? 1 : 0.8}
                           style={{ transition: 'opacity 0.2s ease' }}
                         />
-                        {arc.labeled && (
+                        {arc.labeled && meta && (
                           <g pointerEvents="none">
                             <path
                               d={`M ${arc.anchorX} ${arc.anchorY} L ${arc.elbowX} ${arc.elbowY} L ${arc.labelX} ${arc.labelY}`}
