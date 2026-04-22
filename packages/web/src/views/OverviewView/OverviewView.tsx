@@ -443,6 +443,20 @@ export default function OverviewView() {
   // memoize their outputs. OVERVIEW_LOCKS is shared at module scope for
   // the same reason — `[]` literal would re-bust memo every render.
   const truncated = dashboardData?.truncated ?? false;
+  // Widgets receive `selectTeam` as the "open this project" callback. The
+  // raw team-store action only flips activeTeamId; without the navigate
+  // call the URL stays at /overview and the project view never mounts —
+  // visible bug on the projects widget's View pill before this wrap. Mirror
+  // the existing onOpenProject pattern from the live drill-in (~line 626):
+  // store action first for snappy state, navigate second so App's URL→store
+  // sync effect lands on the same team.
+  const openProject = useCallback(
+    (teamId: string) => {
+      selectTeam(teamId);
+      navigate('project', teamId);
+    },
+    [selectTeam],
+  );
   const renderWidget = useCallback(
     (id: string) => (
       <WidgetRenderer
@@ -453,10 +467,10 @@ export default function OverviewView() {
         liveAgents={liveAgents}
         locks={demoLocks}
         truncated={truncated}
-        selectTeam={selectTeam}
+        selectTeam={openProject}
       />
     ),
-    [analytics, conversationData, sortedSummaries, liveAgents, demoLocks, truncated, selectTeam],
+    [analytics, conversationData, sortedSummaries, liveAgents, demoLocks, truncated, openProject],
   );
 
   // Cmd/Ctrl-Z to undo layout changes (drag, resize, add, remove, reset).
