@@ -123,6 +123,8 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
   const heatmapAcc = codebase.createHeatmapAcc();
   const filesTouchedTotalAcc = codebase.createFilesTouchedTotalAcc();
+  const filesByWorkTypeAcc = codebase.createFilesByWorkTypeAcc();
+  const filesNewVsRevisitedAcc = codebase.createFilesNewVsRevisitedAcc();
   const fileChurnAcc = codebase.createFileChurnAcc();
   const fileReworkAcc = codebase.createFileReworkAcc();
   const dirHeatmapAcc = codebase.createDirHeatmapAcc();
@@ -205,6 +207,8 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
     codebase.mergeHeatmap(heatmapAcc, team);
     codebase.mergeFilesTouchedTotal(filesTouchedTotalAcc, team);
+    codebase.mergeFilesByWorkType(filesByWorkTypeAcc, team);
+    codebase.mergeFilesNewVsRevisited(filesNewVsRevisitedAcc, team);
     codebase.mergeFileChurn(fileChurnAcc, team);
     codebase.mergeFileRework(fileReworkAcc, team);
     codebase.mergeDirHeatmap(dirHeatmapAcc, team);
@@ -301,6 +305,8 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       conversation_edit_correlation: conversations.projectConvEdit(convEditAcc),
       file_rework: codebase.projectFileRework(fileReworkAcc),
       directory_heatmap: codebase.projectDirHeatmap(dirHeatmapAcc),
+      files_by_work_type: codebase.projectFilesByWorkType(filesByWorkTypeAcc),
+      files_new_vs_revisited: codebase.projectFilesNewVsRevisited(filesNewVsRevisitedAcc),
       stuckness: sessions.projectStuckness(stucknessAcc),
       conflict_stats: sessions.projectConflictStats(conflictStatsAcc),
       file_overlap: codebase.projectFileOverlap(fileOverlapAcc),

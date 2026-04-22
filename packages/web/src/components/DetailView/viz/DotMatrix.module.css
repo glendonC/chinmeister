@@ -1,8 +1,7 @@
-/* Dot matrix — one dot per item, filled = hits the condition. 9px dots
- * with 5px gutter, caller-controlled column count (default 15), so the
- * grid occupies real visual weight next to a display-sized number next
- * to it. Outlined "not-hit" dots use a 1px soft border so they read as
- * hollow rings rather than absent slots. */
+/* Dot matrix — fixed 10×10 percentage grid, 9px dots with 5px gutter.
+ * Each dot = 1%; filled dots hit the condition, hollow rings (1px soft
+ * border) do not. Matrix weight sits next to a display-sized number so
+ * the proportion reads at a glance. */
 
 .matrix {
   display: grid;

@@ -13,6 +13,8 @@ import type {
   FileHeatmapEntry,
   FileOverlapStats,
   FileReworkEntry,
+  FilesByWorkTypeEntry,
+  FilesNewVsRevisited,
   ScopeComplexityBucket,
 } from '@chinwag/shared/contracts/analytics.js';
 import type { TeamResult } from './types.js';
@@ -328,4 +330,52 @@ export function projectAuditStaleness(acc: AuditStalenessAcc): AuditStalenessEnt
       days_since: v.days_since,
       prior_edit_count: v.prior_edit_count,
     }));
+}
+
+// ── files_by_work_type ───────────────────────────
+//
+// Per-team distinct-file counts per work_type, summed across teams. Same
+// cross-team semantics as `files_touched_total`: a user with matching paths
+// in two projects counts each separately (one file per repo), which is
+// correct because they are different files in different trees.
+
+export type FilesByWorkTypeAcc = Map<string, number>;
+
+export function createFilesByWorkTypeAcc(): FilesByWorkTypeAcc {
+  return new Map();
+}
+
+export function mergeFilesByWorkType(acc: FilesByWorkTypeAcc, team: TeamResult): void {
+  for (const entry of team.files_by_work_type ?? []) {
+    acc.set(entry.work_type, (acc.get(entry.work_type) ?? 0) + entry.file_count);
+  }
+}
+
+export function projectFilesByWorkType(acc: FilesByWorkTypeAcc): FilesByWorkTypeEntry[] {
+  return [...acc.entries()]
+    .map(([work_type, file_count]) => ({ work_type, file_count }))
+    .sort((a, b) => b.file_count - a.file_count);
+}
+
+// ── files_new_vs_revisited ───────────────────────
+//
+// Each team independently classifies its own files as new or revisited
+// relative to the window. Summing across teams preserves the per-project
+// judgement — a file that is "new" in project A and "revisited" in project B
+// is one of each at user scope because the two file paths live in different
+// repos and thus have independent first-seen timestamps.
+
+export function createFilesNewVsRevisitedAcc(): FilesNewVsRevisited {
+  return { new_files: 0, revisited_files: 0 };
+}
+
+export function mergeFilesNewVsRevisited(acc: FilesNewVsRevisited, team: TeamResult): void {
+  const t = team.files_new_vs_revisited;
+  if (!t) return;
+  acc.new_files += t.new_files;
+  acc.revisited_files += t.revisited_files;
+}
+
+export function projectFilesNewVsRevisited(acc: FilesNewVsRevisited): FilesNewVsRevisited {
+  return { new_files: acc.new_files, revisited_files: acc.revisited_files };
 }

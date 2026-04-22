@@ -1,0 +1,53 @@
+/* File constellation — 2D scatter fusing touch count × completion rate.
+ * Relies on the global `rowReveal` keyframe (app.css). */
+
+.svg {
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  display: block;
+}
+
+.axisLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  fill: var(--soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.axisTitle {
+  font-family: var(--mono);
+  font-size: var(--text-3xs);
+  fill: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.dotGroup {
+  animation: rowReveal 0.32s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 22ms);
+  transition: opacity var(--motion-fast) ease;
+}
+
+.dotLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+}
+
+/* Dimmed label matches the dimmed dot opacity so labels don't become the
+ * loudest element on an otherwise muted dot. */
+.dotLabelDim {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+  opacity: 0.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotGroup {
+    animation: none;
+  }
+}

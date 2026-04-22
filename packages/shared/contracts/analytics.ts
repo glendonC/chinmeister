@@ -374,6 +374,24 @@ export const directoryHeatmapEntrySchema = z.object({
 });
 export type DirectoryHeatmapEntry = z.infer<typeof directoryHeatmapEntrySchema>;
 
+// Files-touched breadth breakdowns. Both read from the `edits` table with
+// `work_type` normalized on write (migration 018). Feed the Files-Touched
+// drill hero: strip viz + new-vs-revisited split. Distinct file counts, not
+// edit counts — breadth, not depth.
+export const filesByWorkTypeEntrySchema = z.object({
+  work_type: z.string(),
+  file_count: z.number(),
+});
+export type FilesByWorkTypeEntry = z.infer<typeof filesByWorkTypeEntrySchema>;
+
+export const filesNewVsRevisitedSchema = z.object({
+  // File's earliest edit ever is inside the current window.
+  new_files: z.number(),
+  // File was first touched before the window opened but also touched within it.
+  revisited_files: z.number(),
+});
+export type FilesNewVsRevisited = z.infer<typeof filesNewVsRevisitedSchema>;
+
 export const stucknessStatsSchema = z.object({
   total_sessions: z.number(),
   stuck_sessions: z.number(),
@@ -727,6 +745,10 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   conversation_edit_correlation: z.array(conversationEditCorrelationSchema),
   file_rework: z.array(fileReworkEntrySchema),
   directory_heatmap: z.array(directoryHeatmapEntrySchema),
+  // Files-touched breadth anatomy. Both default to sensible empties so
+  // older producers parse cleanly; the UI gates on length / sum.
+  files_by_work_type: z.array(filesByWorkTypeEntrySchema).default([]),
+  files_new_vs_revisited: filesNewVsRevisitedSchema.default({ new_files: 0, revisited_files: 0 }),
   stuckness: stucknessStatsSchema,
   file_overlap: fileOverlapStatsSchema,
   audit_staleness: z.array(auditStalenessEntrySchema),

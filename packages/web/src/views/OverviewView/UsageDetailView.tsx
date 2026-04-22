@@ -1,24 +1,28 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import clsx from 'clsx';
 import {
   BreakdownList,
   BreakdownMeta,
   DetailSection,
   DetailView,
+  DirectoryConstellation,
   DivergingColumns,
   DivergingRows,
   DotMatrix,
+  FileChurnScatter,
+  FileConstellation,
   FileList,
   HeroStatRow,
+  InteractiveDailyChurn,
   LegendDot,
   LegendHatch,
   RateStrip,
-  SmallMultiples,
   VelocityScatter,
   type DetailTabDef,
   type DivergingRowEntry,
   type DivergingSeries,
   type HeroStatDef,
+  type InteractiveDailyChurnEntry,
   type RateEntry,
   type VelocityPoint,
 } from '../../components/DetailView/index.js';
@@ -301,7 +305,13 @@ const RING_CX = 80;
 const RING_CY = 80;
 const RING_R = 56;
 const RING_SW = 10;
-const RING_GAP_DEG = 4;
+// Gap must exceed 2×(SW/2)/R in degrees so round linecaps don't overlap
+// into neighboring slices. At SW=10, R=56 that floor is ~10.24°.
+const RING_GAP_DEG = 12;
+// Top-N branded slices; the rest aggregate into a muted Other slice. Keeps
+// every rendered arc above the cap-overlap floor regardless of tool count.
+const RING_TOP_N = 5;
+const OTHER_KEY = '__other';
 
 function ToolRing({
   entries,
@@ -318,35 +328,39 @@ function ToolRing({
       sweepDeg: number;
       sessions: number;
     }> = [];
-    let cursor = 0;
     const safeTotal = Math.max(1, total);
-    // Fold tiny slices under 3% into the tail so we don't render specks.
-    // They still appear in the table.
-    const visible = entries.filter((e) => e.sessions / safeTotal >= 0.03);
-    const gaps = visible.length > 1 ? visible.length * RING_GAP_DEG : 0;
+    const sorted = [...entries].sort((a, b) => b.sessions - a.sessions);
+    const top = sorted.slice(0, RING_TOP_N);
+    const tail = sorted.slice(RING_TOP_N);
+    const tailSessions = tail.reduce((s, e) => s + e.sessions, 0);
+    const slices = [
+      ...top.map((e) => ({
+        tool: e.host_tool,
+        color: getToolMeta(e.host_tool).color,
+        sessions: e.sessions,
+      })),
+      ...(tailSessions > 0
+        ? [{ tool: OTHER_KEY, color: 'var(--soft)', sessions: tailSessions }]
+        : []),
+    ].filter((s) => s.sessions > 0);
+    const gaps = slices.length * RING_GAP_DEG;
     const available = Math.max(0, 360 - gaps);
-    for (const e of visible) {
-      const sweep = (e.sessions / safeTotal) * available;
+    let cursor = 0;
+    for (const s of slices) {
+      const sweep = (s.sessions / safeTotal) * available;
       if (sweep > 0.2) {
         out.push({
-          tool: e.host_tool,
-          color: getToolMeta(e.host_tool).color,
+          tool: s.tool,
+          color: s.color,
           startDeg: cursor,
           sweepDeg: sweep,
-          sessions: e.sessions,
+          sessions: s.sessions,
         });
       }
       cursor += sweep + RING_GAP_DEG;
     }
     return out;
   }, [entries, total]);
-
-  // Single-tool case: SVG arc with start === end renders nothing, so we
-  // paint the full ring as a plain <circle> instead of a zero-length arc.
-  // For multi-tool case, each arc sprouts a short radial leader stub — the
-  // Tools-tab arc-connector vocabulary, scaled down for this compact ring.
-  const singleArc = arcs.length === 1 ? arcs[0] : null;
-  const LEADER_OUT = 9;
 
   return (
     <div className={styles.ringBlock}>
@@ -360,47 +374,17 @@ function ToolRing({
             stroke="var(--hover-bg)"
             strokeWidth={RING_SW}
           />
-          {singleArc ? (
-            <circle
-              cx={RING_CX}
-              cy={RING_CY}
-              r={RING_R}
+          {arcs.map((arc) => (
+            <path
+              key={arc.tool}
+              d={arcPath(RING_CX, RING_CY, RING_R, arc.startDeg, arc.sweepDeg)}
               fill="none"
-              stroke={singleArc.color}
+              stroke={arc.color}
               strokeWidth={RING_SW}
+              strokeLinecap="round"
               opacity={0.9}
             />
-          ) : (
-            arcs.map((arc) => {
-              const midDeg = arc.startDeg + arc.sweepDeg / 2;
-              const midRad = ((midDeg - 90) * Math.PI) / 180;
-              const ax = RING_CX + (RING_R + RING_SW / 2) * Math.cos(midRad);
-              const ay = RING_CY + (RING_R + RING_SW / 2) * Math.sin(midRad);
-              const bx = RING_CX + (RING_R + RING_SW / 2 + LEADER_OUT) * Math.cos(midRad);
-              const by = RING_CY + (RING_R + RING_SW / 2 + LEADER_OUT) * Math.sin(midRad);
-              return (
-                <g key={arc.tool}>
-                  <path
-                    d={arcPath(RING_CX, RING_CY, RING_R, arc.startDeg, arc.sweepDeg)}
-                    fill="none"
-                    stroke={arc.color}
-                    strokeWidth={RING_SW}
-                    strokeLinecap="round"
-                    opacity={0.9}
-                  />
-                  <line
-                    x1={ax}
-                    y1={ay}
-                    x2={bx}
-                    y2={by}
-                    stroke={arc.color}
-                    strokeWidth={1.25}
-                    opacity={0.7}
-                  />
-                </g>
-              );
-            })
-          )}
+          ))}
           <text
             x={RING_CX}
             y={RING_CY - 4}
@@ -829,16 +813,19 @@ function LinesPanel({ analytics }: { analytics: UserAnalytics }) {
   // Top files by churn (added + removed). file_heatmap rows for MCP-only
   // tools leave total_lines_added / total_lines_removed undefined, so they
   // naturally filter out below.
+  // Keep 50 (heatmap cap) rather than the old top-10 slice — the scatter
+  // reads fine at that density and a wider dataset reveals the tail that
+  // a ranked list would have hidden.
   const topChurnFiles = analytics.file_heatmap
     .map((f) => ({
       file: f.file,
       added: f.total_lines_added ?? 0,
       removed: f.total_lines_removed ?? 0,
       touches: f.touch_count,
+      work_type: f.work_type,
     }))
     .filter((f) => f.added + f.removed > 0)
-    .sort((a, b) => b.added + b.removed - (a.added + a.removed))
-    .slice(0, 10);
+    .sort((a, b) => b.added + b.removed - (a.added + a.removed));
 
   // Per-member small multiples. Group member_daily_lines by handle, sort
   // by total churn desc, keep only members with any line activity.
@@ -941,44 +928,133 @@ function LinesPanel({ analytics }: { analytics: UserAnalytics }) {
       )}
 
       {topChurnFiles.length > 0 && (
-        <DetailSection label="Highest churn files">
-          <FileList
-            items={topChurnFiles.map((f) => ({
-              key: f.file,
-              name: f.file,
-              title: f.file,
-              meta: `+${fmtCount(f.added)} / −${fmtCount(f.removed)} · ${fmtCount(f.touches)} touches`,
+        <DetailSection label="Files by churn">
+          <FileChurnScatter
+            entries={topChurnFiles.map((f) => ({
+              file: f.file,
+              lines_added: f.added,
+              lines_removed: f.removed,
+              work_type: f.work_type,
+              touch_count: f.touches,
             }))}
+            ariaLabel={`${topChurnFiles.length} files plotted by lines added vs lines removed`}
           />
         </DetailSection>
       )}
 
-      {perMember.length >= 2 && (
-        <DetailSection label="Teammate churn · daily timeline">
-          <SmallMultiples
-            items={perMember.map((m) => ({
-              key: m.handle,
-              label: m.handle,
-              meta: `+${fmtCount(m.totalAdded)} / −${fmtCount(m.totalRemoved)}`,
-              body: <DivergingColumns data={m.series} height={54} showAxis={false} />,
-            }))}
-          />
-        </DetailSection>
-      )}
-
-      {perProject.length >= 2 && (
-        <DetailSection label="Project churn · daily timeline">
-          <SmallMultiples
-            items={perProject.map((p) => ({
-              key: p.team_id,
-              label: p.team_name ?? p.team_id,
-              meta: `+${fmtCount(p.totalAdded)} / −${fmtCount(p.totalRemoved)}`,
-              body: <DivergingColumns data={p.series} height={54} showAxis={false} />,
-            }))}
-          />
-        </DetailSection>
-      )}
+      {/* Daily churn — stacked area per entity with a pivot selector.
+          Unifies the two separate "by teammate" / "by project" sections
+          behind one chart; selector at the top of the section switches
+          the dataset and the chart re-seeds its active set so toggles
+          from the prior pivot don't leak. */}
+      <DailyChurnSection memberEntries={perMember} projectEntries={perProject} />
     </>
+  );
+}
+
+interface MemberChurnEntry {
+  handle: string;
+  series: DivergingSeries[];
+  totalAdded: number;
+  totalRemoved: number;
+}
+
+interface ProjectChurnEntry {
+  team_id: string;
+  team_name: string | null;
+  series: DivergingSeries[];
+  totalAdded: number;
+  totalRemoved: number;
+}
+
+type ChurnPivot = 'teammate' | 'project';
+
+// Inline pivot selector + stacked area chart. Lives inside the Lines panel
+// since it's the only caller; if another tab grows an equivalent pair of
+// entity lists it's straightforward to lift into DetailView/viz/.
+function DailyChurnSection({
+  memberEntries,
+  projectEntries,
+}: {
+  memberEntries: MemberChurnEntry[];
+  projectEntries: ProjectChurnEntry[];
+}) {
+  const memberAvailable = memberEntries.length >= 2;
+  const projectAvailable = projectEntries.length >= 2;
+
+  // Default pivot prefers teammate; falls through to project when that's
+  // the only populated substrate. If neither substrate is populated, the
+  // section renders nothing at all.
+  const [pivot, setPivot] = useState<ChurnPivot>(memberAvailable ? 'teammate' : 'project');
+
+  // If the preferred pivot disappears (e.g. teammate list drops below 2
+  // when filters change upstream), switch to whichever is still populated
+  // so the chart stays meaningful. React's "adjust state during render"
+  // pattern — setState during render re-queues immediately, with no
+  // cascading-effect warning and no intermediate stale paint.
+  if (pivot === 'teammate' && !memberAvailable && projectAvailable) {
+    setPivot('project');
+  } else if (pivot === 'project' && !projectAvailable && memberAvailable) {
+    setPivot('teammate');
+  }
+
+  const entries = useMemo<InteractiveDailyChurnEntry[]>(() => {
+    if (pivot === 'teammate') {
+      return memberEntries.map((m) => ({
+        key: m.handle,
+        label: m.handle,
+        series: m.series.map((s) => ({
+          day: s.day,
+          added: s.added,
+          removed: s.removed,
+        })),
+      }));
+    }
+    return projectEntries.map((p) => ({
+      key: p.team_id,
+      label: p.team_name ?? p.team_id,
+      series: p.series.map((s) => ({
+        day: s.day,
+        added: s.added,
+        removed: s.removed,
+      })),
+    }));
+  }, [pivot, memberEntries, projectEntries]);
+
+  if (!memberAvailable && !projectAvailable) return null;
+  const showSelector = memberAvailable && projectAvailable;
+
+  return (
+    <DetailSection label="daily churn">
+      {showSelector && (
+        <div className={styles.pivotBar} role="tablist" aria-label="Breakdown pivot">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={pivot === 'teammate'}
+            className={clsx(styles.pivotButton, pivot === 'teammate' && styles.pivotButtonActive)}
+            onClick={() => setPivot('teammate')}
+          >
+            by teammate
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={pivot === 'project'}
+            className={clsx(styles.pivotButton, pivot === 'project' && styles.pivotButtonActive)}
+            onClick={() => setPivot('project')}
+          >
+            by project
+          </button>
+        </div>
+      )}
+
+      <InteractiveDailyChurn
+        entries={entries}
+        unitLabel="lines"
+        ariaLabel={`Daily churn per ${pivot} with toggleable legend`}
+      />
+    </DetailSection>
   );
 }
 
@@ -1183,30 +1259,34 @@ function NewVsRevisitedBar({ newFiles, revisited }: { newFiles: number; revisite
 
 function FilesTouchedPanel({ analytics }: { analytics: UserAnalytics }) {
   const files = analytics.file_heatmap;
-  const dirs = [...analytics.directory_heatmap].sort((a, b) => b.touch_count - a.touch_count);
-  const topFiles = [...files].sort((a, b) => b.touch_count - a.touch_count).slice(0, 15);
-  const rework = [...analytics.file_rework]
-    .filter((r) => r.rework_ratio > 0)
-    .sort((a, b) => b.rework_ratio - a.rework_ratio)
-    .slice(0, 8);
-
-  const maxDir = Math.max(1, ...dirs.map((d) => d.touch_count));
+  const dirs = analytics.directory_heatmap;
   const filesTotal = analytics.files_touched_total;
   const workTypeBreakdown = analytics.files_by_work_type;
   const nvr = analytics.files_new_vs_revisited;
   const nvrTotal = nvr.new_files + nvr.revisited_files;
 
+  // Hero work-type strip doubles as a filter for the File Constellation —
+  // clicking a segment dims every dot whose work_type doesn't match. Clicking
+  // the active segment clears. Scoped to the panel so navigation to other
+  // tabs resets the filter without extra state plumbing.
+  const [activeWorkType, setActiveWorkType] = useState<string | null>(null);
+
   if (filesTotal === 0 && files.length === 0) {
     return <span className={styles.empty}>No files touched in this window.</span>;
   }
 
+  // Filter label in the constellation section header tells the reader what
+  // they're looking at when the filter is engaged — "backend files" is the
+  // literal framing, with a clear-X affordance sitting next to it.
+  const constellationLabel = activeWorkType ? `Files — ${activeWorkType}` : 'Files';
+  const dirLabel = 'Directories';
+
   return (
     <>
       {/* Hero: scalar breadth + work-type composition | new-vs-revisited
-          split. Answers "how wide and of what kind" alongside "expansion
-          or familiar ground" in one row. The scalar is the headline;
-          the strip is the work-type decompression; the right column
-          reframes breadth as a first-time-vs-return split. */}
+          split. The strip's segments are tab-selectors threaded through
+          the File Constellation below — clicking `backend` filters the
+          scatter to backend dots without re-rendering the dataset. */}
       <div className={styles.topGrid}>
         <DetailSection label="Distinct files touched" className={styles.sectionHero}>
           <div className={styles.filesHero}>
@@ -1216,6 +1296,8 @@ function FilesTouchedPanel({ analytics }: { analytics: UserAnalytics }) {
                 entries={workTypeBreakdown}
                 variant="hero"
                 ariaLabel={`${filesTotal} distinct files by work type`}
+                activeWorkType={activeWorkType}
+                onSelect={setActiveWorkType}
               />
             )}
           </div>
@@ -1228,46 +1310,30 @@ function FilesTouchedPanel({ analytics }: { analytics: UserAnalytics }) {
         )}
       </div>
 
+      {/* File Constellation — 2D scatter fusing activity (touch count) and
+          effectiveness (completion rate). Upper-right = solid hot files,
+          upper-left = one-shot wins, lower-right = problem files (this
+          quadrant subsumes the old "rework" list). Dots colored by
+          work-type; the hero strip filters visibility. */}
+      {files.length > 0 && (
+        <DetailSection label={constellationLabel}>
+          <FileConstellation
+            entries={files}
+            activeWorkType={activeWorkType}
+            ariaLabel={`${files.length} files plotted by touches × completion rate`}
+          />
+        </DetailSection>
+      )}
+
+      {/* Directory Constellation — breadth × depth per directory. Upper-right
+          = hot zones, upper-left = focused rework on few files, lower-right
+          = wide-and-shallow. Dot tint encodes completion rate. Replaces the
+          flat by-directory bar list; hierarchical context emerges by shape. */}
       {dirs.length > 0 && (
-        <DetailSection label="By directory">
-          <BreakdownList
-            items={dirs.map((d) => ({
-              key: d.directory,
-              label: d.directory,
-              fillPct: (d.touch_count / maxDir) * 100,
-              value: (
-                <>
-                  {fmtCount(d.touch_count)}
-                  <BreakdownMeta> · {d.file_count} files</BreakdownMeta>
-                </>
-              ),
-            }))}
-          />
-        </DetailSection>
-      )}
-
-      {topFiles.length > 0 && (
-        <DetailSection label="Most-touched files">
-          <FileList
-            items={topFiles.map((f) => ({
-              key: f.file,
-              name: f.file,
-              title: f.file,
-              meta: `${fmtCount(f.touch_count)} touches`,
-            }))}
-          />
-        </DetailSection>
-      )}
-
-      {rework.length > 0 && (
-        <DetailSection label="Highest rework ratio">
-          <FileList
-            items={rework.map((r) => ({
-              key: r.file,
-              name: r.file,
-              title: r.file,
-              meta: `${fmtPct(r.rework_ratio, 1)} rework · ${fmtCount(r.total_edits)} edits`,
-            }))}
+        <DetailSection label={dirLabel}>
+          <DirectoryConstellation
+            entries={dirs}
+            ariaLabel={`${dirs.length} directories plotted by breadth × depth`}
           />
         </DetailSection>
       )}

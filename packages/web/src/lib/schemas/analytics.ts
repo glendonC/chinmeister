@@ -32,6 +32,8 @@ import {
   conversationEditCorrelationSchema as baseConversationEditCorrelationSchema,
   fileReworkEntrySchema as baseFileReworkEntrySchema,
   directoryHeatmapEntrySchema as baseDirectoryHeatmapEntrySchema,
+  filesByWorkTypeEntrySchema as baseFilesByWorkTypeEntrySchema,
+  filesNewVsRevisitedSchema as baseFilesNewVsRevisitedSchema,
   stucknessStatsSchema as baseStucknessStatsSchema,
   fileOverlapStatsSchema as baseFileOverlapStatsSchema,
   auditStalenessEntrySchema as baseAuditStalenessEntrySchema,
@@ -274,6 +276,18 @@ const directoryHeatmapEntrySchema = baseDirectoryHeatmapEntrySchema.extend({
   completion_rate: z.number().default(0),
 });
 
+// Files-touched breadth primitives. Defaults on the count fields so older
+// payloads parse without surprise, matching the rest of the module's
+// resilience pattern.
+const filesByWorkTypeEntrySchema = baseFilesByWorkTypeEntrySchema.extend({
+  file_count: z.number().default(0),
+});
+
+const filesNewVsRevisitedSchema = baseFilesNewVsRevisitedSchema.extend({
+  new_files: z.number().default(0),
+  revisited_files: z.number().default(0),
+});
+
 const stucknessStatsSchema = baseStucknessStatsSchema.extend({
   total_sessions: z.number().default(0),
   stuck_sessions: z.number().default(0),
@@ -495,6 +509,11 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   conversation_edit_correlation: z.array(conversationEditCorrelationSchema).default([]),
   file_rework: z.array(fileReworkEntrySchema).default([]),
   directory_heatmap: z.array(directoryHeatmapEntrySchema).default([]),
+  files_by_work_type: z.array(filesByWorkTypeEntrySchema).default([]),
+  files_new_vs_revisited: filesNewVsRevisitedSchema.default({
+    new_files: 0,
+    revisited_files: 0,
+  }),
   stuckness: stucknessStatsSchema.default({
     total_sessions: 0,
     stuck_sessions: 0,
@@ -593,6 +612,8 @@ export type WorkTypeOutcome = z.infer<typeof workTypeOutcomeSchema>;
 export type ConversationEditCorrelation = z.infer<typeof conversationEditCorrelationSchema>;
 export type FileReworkEntry = z.infer<typeof fileReworkEntrySchema>;
 export type DirectoryHeatmapEntry = z.infer<typeof directoryHeatmapEntrySchema>;
+export type FilesByWorkTypeEntry = z.infer<typeof filesByWorkTypeEntrySchema>;
+export type FilesNewVsRevisited = z.infer<typeof filesNewVsRevisitedSchema>;
 export type StucknessStats = z.infer<typeof stucknessStatsSchema>;
 export type FileOverlapStats = z.infer<typeof fileOverlapStatsSchema>;
 export type AuditStalenessEntry = z.infer<typeof auditStalenessEntrySchema>;
@@ -664,6 +685,8 @@ export function createEmptyUserAnalytics(): UserAnalytics {
     conversation_edit_correlation: [],
     file_rework: [],
     directory_heatmap: [],
+    files_by_work_type: [],
+    files_new_vs_revisited: { new_files: 0, revisited_files: 0 },
     stuckness: {
       total_sessions: 0,
       stuck_sessions: 0,

@@ -18,4 +18,19 @@ export type { DivergingRowEntry } from './DivergingRows.js';
 export { default as SmallMultiples } from './SmallMultiples.js';
 export type { SmallMultipleItem } from './SmallMultiples.js';
 
+export { default as FileConstellation } from './FileConstellation.js';
+export type { FileConstellationEntry } from './FileConstellation.js';
+
+export { default as DirectoryConstellation } from './DirectoryConstellation.js';
+export type { DirectoryConstellationEntry } from './DirectoryConstellation.js';
+
+export { default as FileChurnScatter } from './FileChurnScatter.js';
+export type { FileChurnScatterEntry } from './FileChurnScatter.js';
+
+export { default as InteractiveDailyChurn } from './InteractiveDailyChurn.js';
+export type {
+  InteractiveDailyChurnEntry,
+  InteractiveDailyChurnPoint,
+} from './InteractiveDailyChurn.js';
+
 export { LegendDot, LegendHatch } from './Legend.js';

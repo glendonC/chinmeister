@@ -1352,13 +1352,47 @@ export function createBaselineAnalytics(): UserAnalytics {
   void wobble;
   void MODEL_PROFILES;
 
+  // files_by_work_type: canonical work-type buckets (frontend/backend/test/…),
+  // not the demo's feature/fix/refactor labels. Classifier-normalized names are
+  // what the real backend emits, and the hero strip's palette resolves by those
+  // keys. Shares here are a plausible-looking breadth mix for a full-stack app.
+  const filesTouchedTotal = FILES.length + 31;
+  const filesByWorkTypeShares: Array<[string, number]> = [
+    ['frontend', 0.3],
+    ['backend', 0.26],
+    ['test', 0.18],
+    ['styling', 0.1],
+    ['config', 0.08],
+    ['docs', 0.05],
+    ['other', 0.03],
+  ];
+  const filesByWorkTypeCounts = allocateIntegerShares(
+    filesTouchedTotal,
+    filesByWorkTypeShares.map(([, s]) => s),
+  );
+  const files_by_work_type = filesByWorkTypeShares.map(([work_type], i) => ({
+    work_type,
+    file_count: filesByWorkTypeCounts[i] ?? 0,
+  }));
+
+  // Plausible new-vs-revisited split for a mid-week snapshot: slight
+  // majority of files are returning ground (~60/40), which matches the
+  // rhythm of an active codebase where pure-new surface is rarer.
+  const newFiles = Math.round(filesTouchedTotal * 0.42);
+  const files_new_vs_revisited = {
+    new_files: newFiles,
+    revisited_files: filesTouchedTotal - newFiles,
+  };
+
   return {
     ok: true,
     period_days: periodDays,
     teams_included: DEMO_TEAMS.length,
     degraded: false,
     file_heatmap,
-    files_touched_total: FILES.length + 31,
+    files_touched_total: filesTouchedTotal,
+    files_by_work_type,
+    files_new_vs_revisited,
     daily_trends,
     tool_distribution,
     outcome_distribution,

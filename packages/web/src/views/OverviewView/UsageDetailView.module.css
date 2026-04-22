@@ -546,3 +546,55 @@
     transform: none;
   }
 }
+
+/* ── Daily churn pivot selector ──
+ *
+ * Segmented tab row at the top of the Daily Churn section. Swaps the
+ * stacked-area chart's dataset between teammate and project pivots in
+ * place (no section duplication). Active = full ink with a 1.5px bottom
+ * border, inactive = --soft with hover-to-ink.
+ */
+.pivotBar {
+  display: inline-flex;
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+.pivotButton {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 6px 10px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  color: var(--soft);
+  cursor: pointer;
+  border-bottom: 1.5px solid transparent;
+  transition:
+    color var(--motion-fast) ease,
+    border-color var(--motion-fast) ease;
+}
+
+.pivotButton:hover {
+  color: var(--ink);
+}
+
+.pivotButton:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-2xs);
+}
+
+.pivotButtonActive {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+  font-weight: 500;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pivotButton {
+    transition: none;
+  }
+}

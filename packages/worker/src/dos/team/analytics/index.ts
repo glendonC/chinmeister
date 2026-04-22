@@ -53,6 +53,8 @@ import {
   queryFileRework,
   queryDirectoryHeatmap,
   queryAuditStaleness,
+  queryFilesByWorkType,
+  queryFilesNewVsRevisited,
 } from './codebase.js';
 import {
   queryRetryPatterns,
@@ -116,6 +118,8 @@ export function getExtendedAnalytics(
     file_rework: queryFileRework(sql, days),
     directory_heatmap: queryDirectoryHeatmap(sql, days),
     audit_staleness: queryAuditStaleness(sql),
+    files_by_work_type: queryFilesByWorkType(sql, days),
+    files_new_vs_revisited: queryFilesNewVsRevisited(sql, days),
 
     // ── Sessions ───────────────────────────────────────────────────────
     retry_patterns: queryRetryPatterns(sql, days),

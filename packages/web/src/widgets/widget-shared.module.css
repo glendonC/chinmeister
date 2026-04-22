@@ -423,6 +423,23 @@ button.dataRow {
   margin-top: 0;
 }
 
+/* Work-type strip card variant — pin above the coverage-note band so the
+ * breadth composition reads at the bottom of the card without displacing
+ * the centered stat value. Global selector (data-wts) because the class
+ * name inside the strip's own CSS module is hashed; the attribute is the
+ * stable contract between the strip primitive and this frame's layout. */
+[data-widget-viz='stat'] [data-wts='card'],
+[data-widget-viz='stat-row'] [data-wts='card'] {
+  position: absolute;
+  left: 20px;
+  right: 20px;
+  bottom: 40px;
+}
+[data-widget-viz='stat']:not(:has(.coverageNote)) [data-wts='card'],
+[data-widget-viz='stat-row']:not(:has(.coverageNote)) [data-wts='card'] {
+  bottom: 20px;
+}
+
 /* ── Shared animations ───────────────────────────── */
 
 @keyframes ghostPulse {

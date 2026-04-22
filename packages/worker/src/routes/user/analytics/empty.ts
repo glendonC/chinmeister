@@ -127,6 +127,8 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
     conversation_edit_correlation: [],
     file_rework: [],
     directory_heatmap: [],
+    files_by_work_type: [],
+    files_new_vs_revisited: { new_files: 0, revisited_files: 0 },
     stuckness: {
       total_sessions: 0,
       stuck_sessions: 0,

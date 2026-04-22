@@ -10,6 +10,8 @@ import type {
   FileReworkEntry,
   DirectoryHeatmapEntry,
   AuditStalenessEntry,
+  FilesByWorkTypeEntry,
+  FilesNewVsRevisited,
 } from '@chinwag/shared/contracts/analytics.js';
 
 const log = createLogger('TeamDO.analytics');
@@ -371,5 +373,75 @@ export function queryAuditStaleness(sql: SqlStorage): AuditStalenessEntry[] {
   } catch (err) {
     log.warn(`auditStaleness query failed: ${err}`);
     return [];
+  }
+}
+
+// Distinct file count per work_type within the window. Reads `edits.work_type`
+// (normalized on write via migration 018) so the grouping is O(1) lookups
+// rather than re-classifying paths at query time. Unlike `file_heatmap`, this
+// is uncapped — every work_type bucket gets its real file count, which is what
+// the Files-Touched breadth strip visualises.
+export function queryFilesByWorkType(sql: SqlStorage, days: number): FilesByWorkTypeEntry[] {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT work_type, COUNT(DISTINCT file_path) AS file_count
+         FROM edits
+         WHERE created_at > datetime('now', '-' || ? || ' days')
+         GROUP BY work_type
+         ORDER BY file_count DESC`,
+        days,
+      )
+      .toArray();
+
+    return rows.map((r) => {
+      const row = r as Record<string, unknown>;
+      return {
+        work_type: (row.work_type as string) || 'other',
+        file_count: (row.file_count as number) || 0,
+      };
+    });
+  } catch (err) {
+    log.warn(`filesByWorkType query failed: ${err}`);
+    return [];
+  }
+}
+
+// Files touched in the window split by first-seen-ever: "new" if the file's
+// earliest edit anywhere in history falls inside the window, "revisited" if it
+// was first touched before the window opened. Answers "was this week's breadth
+// expansion or familiar ground?" without inventing a new column — the
+// (file_path, created_at) index powers the per-file MIN/MAX.
+//
+// HAVING gates the outer sum to files active in the period, so MIN across the
+// whole edits history is only paid for files that matter to this question.
+// Three `days` bindings: one for the new/revisited cutoff (twice, new vs. old)
+// and one for the HAVING clause.
+export function queryFilesNewVsRevisited(sql: SqlStorage, days: number): FilesNewVsRevisited {
+  try {
+    const rows = sql
+      .exec(
+        `SELECT
+           COALESCE(SUM(CASE WHEN min_created > datetime('now', '-' || ? || ' days') THEN 1 ELSE 0 END), 0) AS new_files,
+           COALESCE(SUM(CASE WHEN min_created <= datetime('now', '-' || ? || ' days') THEN 1 ELSE 0 END), 0) AS revisited_files
+         FROM (
+           SELECT MIN(created_at) AS min_created
+           FROM edits
+           GROUP BY file_path
+           HAVING MAX(created_at) > datetime('now', '-' || ? || ' days')
+         )`,
+        days,
+        days,
+        days,
+      )
+      .toArray();
+    const row = rows[0] as Record<string, unknown> | undefined;
+    return {
+      new_files: (row?.new_files as number) ?? 0,
+      revisited_files: (row?.revisited_files as number) ?? 0,
+    };
+  } catch (err) {
+    log.warn(`filesNewVsRevisited query failed: ${err}`);
+    return { new_files: 0, revisited_files: 0 };
   }
 }

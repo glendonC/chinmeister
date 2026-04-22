@@ -1,0 +1,43 @@
+/* Directory constellation — 2D scatter of (file count, avg touches per
+ * file). Tint encodes completion rate; dot size encodes total lines churn.
+ * Relies on the global `rowReveal` keyframe (app.css). */
+
+.svg {
+  width: 100%;
+  height: auto;
+  max-height: 320px;
+  display: block;
+}
+
+.axisLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  fill: var(--soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.axisTitle {
+  font-family: var(--mono);
+  font-size: var(--text-3xs);
+  fill: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.dotGroup {
+  animation: rowReveal 0.32s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 30ms);
+}
+
+.dotLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotGroup {
+    animation: none;
+  }
+}

@@ -1,0 +1,43 @@
+/* File churn scatter — 2D scatter of (lines added, lines removed).
+ * Shares visual language with FileConstellation: fixed-radius dots,
+ * work-type palette, rowReveal stagger. */
+
+.svg {
+  width: 100%;
+  height: auto;
+  max-height: 360px;
+  display: block;
+}
+
+.axisLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  fill: var(--soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.axisTitle {
+  font-family: var(--mono);
+  font-size: var(--text-3xs);
+  fill: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.dotGroup {
+  animation: rowReveal 0.32s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 22ms);
+}
+
+.dotLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  fill: var(--ink);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dotGroup {
+    animation: none;
+  }
+}
