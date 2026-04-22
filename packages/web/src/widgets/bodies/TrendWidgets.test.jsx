@@ -91,15 +91,20 @@ describe('SessionTrendWidget ghost fallback', () => {
 });
 
 describe('OutcomeTrendWidget resilience', () => {
-  it('ignores zero-session days and ghosts when no active days remain', async () => {
+  it('ignores zero-session days and renders a named empty state when no active days remain', async () => {
+    // 2026-04-22 outcomes rubric: a flat GhostSparkline under the
+    // "completion rate trend" title read as "completion is 0 and flat."
+    // The widget now falls through to a SectionEmpty with an explicit
+    // condition — assert that copy, not a ghost line.
     const { OutcomeTrendWidget, createEmptyUserAnalytics } = await loadModule();
     const analytics = createEmptyUserAnalytics();
     analytics.daily_trends = Array.from({ length: 11 }, (_, i) =>
       zeroTrendRow(`2026-04-${String(10 + i).padStart(2, '0')}`),
     );
     const r = render(OutcomeTrendWidget, makeProps(analytics));
-    expect(r.container.querySelector('line')).not.toBeNull();
+    expect(r.container.querySelector('line')).toBeNull();
     expect(r.container.querySelector('path')).toBeNull();
+    expect(r.container.textContent).toMatch(/2\+ different days/);
     r.unmount();
   });
 
