@@ -297,9 +297,55 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
   const conflictCount = [...fileCounts.values()].filter((c) => c > 1).length;
 
   const memoriesCount = sql.exec('SELECT COUNT(*) as c FROM memories').toArray();
+  // Memory count as of 7 days ago — pairs with current count for the projects
+  // widget growth delta (current − previous). created_at default is UTC.
+  const memoryCountPrev = sql
+    .exec("SELECT COUNT(*) as c FROM memories WHERE created_at <= datetime('now', '-7 days')")
+    .toArray();
   const live = sql.exec('SELECT COUNT(*) as c FROM sessions WHERE ended_at IS NULL').toArray();
   const recent = sql
     .exec("SELECT COUNT(*) as c FROM sessions WHERE started_at > datetime('now', '-24 hours')")
+    .toArray();
+
+  // Daily session counts for last 7 days. Worker runtime + SQLite both UTC,
+  // so YYYY-MM-DD keys align across the two domains. Buckets are filled
+  // oldest → newest so the sparkline renders left-to-right with time.
+  const dailyRows = sql
+    .exec(
+      `SELECT date(started_at) AS d, COUNT(*) AS c
+       FROM sessions
+       WHERE date(started_at) >= date('now', '-6 days')
+       GROUP BY date(started_at)`,
+    )
+    .toArray();
+  const dailyMap = new Map<string, number>();
+  for (const row of dailyRows) {
+    const r = row as Record<string, unknown>;
+    dailyMap.set(r.d as string, (r.c as number) || 0);
+  }
+  const daily_sessions_7d: number[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - i);
+    daily_sessions_7d.push(dailyMap.get(d.toISOString().slice(0, 10)) || 0);
+  }
+
+  // Conflicts hit over the last 7 days, plus the immediately-prior 7-day
+  // window. Sourced from sessions.conflicts_hit (per-session counter), not
+  // the live activity-overlap snapshot in `conflictCount` above — those are
+  // different concepts (live contention vs. cumulative friction).
+  const conflicts7d = sql
+    .exec(
+      `SELECT COALESCE(SUM(conflicts_hit), 0) AS c FROM sessions
+       WHERE started_at > datetime('now', '-7 days')`,
+    )
+    .toArray();
+  const conflicts7dPrev = sql
+    .exec(
+      `SELECT COALESCE(SUM(conflicts_hit), 0) AS c FROM sessions
+       WHERE started_at > datetime('now', '-14 days')
+         AND started_at <= datetime('now', '-7 days')`,
+    )
     .toArray();
 
   // Active member details for the overview agents panel.
@@ -377,8 +423,12 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
     total_members: ((total[0] as Record<string, unknown>)?.c as number) || 0,
     conflict_count: conflictCount,
     memory_count: ((memoriesCount[0] as Record<string, unknown>)?.c as number) || 0,
+    memory_count_previous: ((memoryCountPrev[0] as Record<string, unknown>)?.c as number) || 0,
     live_sessions: ((live[0] as Record<string, unknown>)?.c as number) || 0,
     recent_sessions_24h: ((recent[0] as Record<string, unknown>)?.c as number) || 0,
+    daily_sessions_7d,
+    conflicts_7d: ((conflicts7d[0] as Record<string, unknown>)?.c as number) || 0,
+    conflicts_7d_previous: ((conflicts7dPrev[0] as Record<string, unknown>)?.c as number) || 0,
     active_members,
     ...getTelemetryBreakdown(sql),
   };

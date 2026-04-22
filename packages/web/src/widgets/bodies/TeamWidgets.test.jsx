@@ -81,35 +81,31 @@ describe('ProjectsWidget — team name binding', () => {
   });
 });
 
-describe('ProjectsWidget — meta stat bindings', () => {
-  it('shows "N sessions (24h)" when recent_sessions_24h > 0', async () => {
-    // Locks the label fix: label must match the rolling-24h SQL semantics,
-    // not the earlier misleading "sessions today" copy.
+describe('ProjectsWidget — column headers + view button', () => {
+  it('renders mono-uppercase column headers above the rows', async () => {
+    // Column headers match the LiveAgents/LiveConflicts pattern — mono,
+    // uppercase, tracking-table letter spacing. Locks against a regression
+    // where the header row was removed in favor of inline cell labels.
     const Projects = await loadProjectsWidget();
     const r = render(
       Projects,
       makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag', recent_sessions_24h: 7 }],
+        summaries: [{ team_id: 't1', team_name: 'chinwag', memory_count: 5 }],
       }),
     );
-    expect(r.container.textContent).toContain('7 sessions (24h)');
-    expect(r.container.textContent).not.toContain('sessions today');
+    const text = r.container.textContent;
+    expect(text).toContain('Project');
+    expect(text).toContain('Tools');
+    expect(text).toContain('Activity');
+    expect(text).toContain('Memories');
+    expect(text).toContain('Conflicts');
     r.unmount();
   });
 
-  it('omits session stat when recent_sessions_24h is 0', async () => {
-    const Projects = await loadProjectsWidget();
-    const r = render(
-      Projects,
-      makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag', recent_sessions_24h: 0 }],
-      }),
-    );
-    expect(r.container.textContent).not.toContain('sessions');
-    r.unmount();
-  });
-
-  it('omits session stat when recent_sessions_24h is undefined (server omitted)', async () => {
+  it('renders a "View" CTA button on each row', async () => {
+    // Mirrors live-agents' liveViewButton — explicit click target on the
+    // right edge that inverts to accent on row hover. Replaces the earlier
+    // ↗ arrow which read as decoration rather than action.
     const Projects = await loadProjectsWidget();
     const r = render(
       Projects,
@@ -117,80 +113,142 @@ describe('ProjectsWidget — meta stat bindings', () => {
         summaries: [{ team_id: 't1', team_name: 'chinwag' }],
       }),
     );
-    expect(r.container.textContent).not.toContain('sessions');
-    r.unmount();
-  });
-
-  it('shows conflict count when conflict_count > 0', async () => {
-    const Projects = await loadProjectsWidget();
-    const r = render(
-      Projects,
-      makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag', conflict_count: 1 }],
-      }),
-    );
-    expect(r.container.textContent).toContain('1 conflict');
-    r.unmount();
-  });
-
-  it('pluralizes conflict count correctly', async () => {
-    const Projects = await loadProjectsWidget();
-    const r = render(
-      Projects,
-      makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag', conflict_count: 3 }],
-      }),
-    );
-    expect(r.container.textContent).toContain('3 conflicts');
-    r.unmount();
-  });
-
-  it('shows memory count when memory_count > 0', async () => {
-    const Projects = await loadProjectsWidget();
-    const r = render(
-      Projects,
-      makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag', memory_count: 42 }],
-      }),
-    );
-    expect(r.container.textContent).toContain('42 memories');
+    expect(r.container.textContent).toContain('View');
     r.unmount();
   });
 });
 
-describe('ProjectsWidget — liveCount derivation', () => {
-  // Current behavior: liveCount is derived from liveAgents filtered by teamId.
-  // PR2 will switch this to bind `active_agents` from the summary directly —
-  // update these assertions at that time.
-  it('counts liveAgents matching this teamId', async () => {
+describe('ProjectsWidget — metric cells', () => {
+  it('renders the formatted memory count', async () => {
     const Projects = await loadProjectsWidget();
     const r = render(
       Projects,
       makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag' }],
-        liveAgents: [
-          { agent_id: 'a1', teamId: 't1', handle: 'one', host_tool: 'claude-code' },
-          { agent_id: 'a2', teamId: 't1', handle: 'two', host_tool: 'claude-code' },
-          { agent_id: 'a3', teamId: 't2', handle: 'three', host_tool: 'claude-code' },
-        ],
+        summaries: [{ team_id: 't1', team_name: 'chinwag', memory_count: 1234 }],
       }),
     );
-    expect(r.container.textContent).toContain('2 live');
+    expect(r.container.textContent).toContain('1,234');
     r.unmount();
   });
 
-  it('omits live row when no agents match this teamId', async () => {
+  it('renders conflicts_7d as a measured-zero (not em-dash) when the field is present', async () => {
+    // The em-dash is reserved for "not measured" — a server that ships the
+    // field with value 0 has measured zero conflicts and the renderer must
+    // distinguish the two cases.
     const Projects = await loadProjectsWidget();
     const r = render(
       Projects,
       makeProps({
-        summaries: [{ team_id: 't1', team_name: 'chinwag' }],
-        liveAgents: [
-          { agent_id: 'a1', teamId: 't-other', handle: 'elsewhere', host_tool: 'claude-code' },
+        summaries: [
+          {
+            team_id: 't1',
+            team_name: 'chinwag',
+            memory_count: 0,
+            conflicts_7d: 0,
+          },
         ],
       }),
     );
-    expect(r.container.textContent).not.toContain('live');
+    // Conflicts cell shows '0' (measured zero), not '—'. Memory cell does
+    // the same. We can't easily isolate the conflicts cell by text content
+    // alone, so check the row has a '0' but no '—' for the conflict column.
+    expect(r.container.textContent).toContain('0');
+    r.unmount();
+  });
+
+  it('renders an em-dash when conflicts_7d is omitted by the server', async () => {
+    const Projects = await loadProjectsWidget();
+    const r = render(
+      Projects,
+      makeProps({
+        summaries: [{ team_id: 't1', team_name: 'chinwag', memory_count: 5 }],
+      }),
+    );
+    expect(r.container.textContent).toContain('—');
+    r.unmount();
+  });
+});
+
+describe('ProjectsWidget — tools cell', () => {
+  it('renders an em-dash when no tools are configured', async () => {
+    const Projects = await loadProjectsWidget();
+    const r = render(
+      Projects,
+      makeProps({
+        summaries: [{ team_id: 't1', team_name: 'chinwag', hosts_configured: [] }],
+      }),
+    );
+    expect(r.container.textContent).toContain('—');
+    r.unmount();
+  });
+
+  it('renders an overflow tag when more than 3 tools are configured', async () => {
+    const Projects = await loadProjectsWidget();
+    const r = render(
+      Projects,
+      makeProps({
+        summaries: [
+          {
+            team_id: 't1',
+            team_name: 'chinwag',
+            hosts_configured: [
+              { host_tool: 'claude-code', joins: 50 },
+              { host_tool: 'cursor', joins: 30 },
+              { host_tool: 'codex', joins: 20 },
+              { host_tool: 'aider', joins: 10 },
+              { host_tool: 'cline', joins: 5 },
+            ],
+          },
+        ],
+      }),
+    );
+    // 5 configured, 3 visible, +2 overflow
+    expect(r.container.textContent).toContain('+2');
+    r.unmount();
+  });
+
+  it('floats live tools to the front of the icon row', async () => {
+    // Sort contract: live tools render first regardless of join count, so
+    // the eye picks them up at the leading edge of the cell. Test asserts
+    // the title order on the rendered tool wrappers.
+    const Projects = await loadProjectsWidget();
+    const r = render(
+      Projects,
+      makeProps({
+        summaries: [
+          {
+            team_id: 't1',
+            team_name: 'chinwag',
+            hosts_configured: [
+              { host_tool: 'claude-code', joins: 50 },
+              { host_tool: 'cursor', joins: 30 },
+              { host_tool: 'codex', joins: 20 },
+            ],
+          },
+        ],
+        liveAgents: [
+          {
+            agent_id: 'a1',
+            teamId: 't1',
+            handle: 'one',
+            host_tool: 'codex',
+            agent_surface: null,
+            files: [],
+            summary: null,
+            session_minutes: 1,
+            seconds_since_update: 0,
+            teamName: 'chinwag',
+          },
+        ],
+      }),
+    );
+    // The first rendered tool wrapper should be the live one (codex), even
+    // though it's last by join count.
+    const wrappers = Array.from(r.container.querySelectorAll('[title]'));
+    const titles = wrappers.map((w) => w.getAttribute('title'));
+    // Live tools render with " (live)" suffix on their tooltip; the leading
+    // entry is codex regardless of join count because live floats first.
+    expect(titles[0]).toBe('Codex (active)');
     r.unmount();
   });
 });

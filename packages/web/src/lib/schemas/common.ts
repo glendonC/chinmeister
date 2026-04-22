@@ -227,10 +227,22 @@ const teamSummarySchema = z
     team_name: z.string().optional(),
     active_agents: z.number().default(0),
     memory_count: z.number().default(0),
+    // Pairs with `memory_count` for the projects widget growth delta. Stays
+    // optional (not .default(0)) so renderers can suppress the delta when
+    // older worker builds or fixtures omit the field, instead of treating
+    // unknown previous as 0 and rendering a misleading +N spike.
+    memory_count_previous: z.number().optional(),
     conflict_count: z.number().optional(),
+    // Cumulative session conflicts_hit over windows. Distinct from
+    // `conflict_count` (live activity-overlap snapshot from queryTeamSummary).
+    conflicts_7d: z.number().optional(),
+    conflicts_7d_previous: z.number().optional(),
     total_members: z.number().optional(),
     live_sessions: z.number().optional(),
     recent_sessions_24h: z.number().optional(),
+    // Sparkline source for the projects widget activity column. 7 entries
+    // oldest → newest. Optional for the same reason as the deltas above.
+    daily_sessions_7d: z.array(z.number()).optional(),
     hosts_configured: z.array(hostMetricSchema).default([]),
     surfaces_seen: z.array(surfaceMetricSchema).default([]),
     models_seen: z.array(modelMetricSchema).default([]),

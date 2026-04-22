@@ -101,6 +101,17 @@ function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'live-agents' && s.colSpan === 12 ? { ...s, colSpan: 6 } : s));
 }
 
+// 2026-04-22: catalog `w` for projects was 12 until the comparator-table
+// redesign narrowed it to 8. Same situation as live-agents above — users
+// with persisted colSpan: 12 see the new table sprawl across the full row
+// because the grid has way more leftover space than the cells need. Heal
+// back to the new default so the redesign actually lands. Power users who
+// genuinely want it at 12 can drag-resize back; the cost of one-time reset
+// is lower than leaving the widget visibly broken for existing users.
+function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => (s.id === 'projects' && s.colSpan === 12 ? { ...s, colSpan: 8 } : s));
+}
+
 function migrateFromLegacyKeys(): DashboardLayout | null {
   try {
     const idsRaw = localStorage.getItem(LEGACY_IDS_KEY);
@@ -142,7 +153,7 @@ function loadDashboard(): DashboardLayout {
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
         const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
-        const healed = healLiveAgentsWidth(expanded);
+        const healed = healProjectsWidth(healLiveAgentsWidth(expanded));
         const stored = parsed.widgets as WidgetSlot[];
         const changed =
           healed.length !== stored.length ||

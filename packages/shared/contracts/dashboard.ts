@@ -58,10 +58,24 @@ export const dashboardTeamSummarySchema = z.object({
   team_name: z.string().optional(),
   active_agents: z.number(),
   memory_count: z.number(),
+  /** Memory count as of 7 days ago. Pairs with `memory_count` to render the
+   *  growth delta on the projects widget. Optional: older worker builds and
+   *  legacy fixtures may omit it; renderer should suppress the delta when
+   *  this is absent rather than treating the previous count as zero. */
+  memory_count_previous: z.number().optional(),
   conflict_count: z.number().optional(),
+  /** Sum of session conflicts_hit over the last 7 days. Distinct from
+   *  `conflict_count` (live activity-overlap snapshot). */
+  conflicts_7d: z.number().optional(),
+  /** Sum of session conflicts_hit over the 14d-to-7d window. Pairs with
+   *  `conflicts_7d` for a period delta. */
+  conflicts_7d_previous: z.number().optional(),
   total_members: z.number().optional(),
   live_sessions: z.number().optional(),
   recent_sessions_24h: z.number().optional(),
+  /** Daily session counts for the last 7 days, oldest → newest, always 7
+   *  entries. Sparkline source for the projects widget activity column. */
+  daily_sessions_7d: z.array(z.number()).optional(),
   tools_configured: z.array(toolJoinMetricSchema).optional(),
   hosts_configured: z.array(hostJoinMetricSchema).optional(),
   surfaces_seen: z.array(surfaceJoinMetricSchema).optional(),

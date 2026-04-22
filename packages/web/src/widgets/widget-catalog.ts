@@ -553,14 +553,25 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'projects',
     name: 'projects',
-    description: 'Recent activity and tool mix across your projects',
+    description:
+      'Cross-project comparator: tool mix, 7-day activity, shared memory growth, conflict trend',
     category: 'usage',
     scope: 'overview',
     viz: 'project-list',
-    w: 12,
+    // 8-col default (down from 12 on the 2026-04-22 redesign): the table now
+    // has 6 fixed-track columns + a View pill, so a half-to-two-thirds tile
+    // matches the live-agents/live-conflicts density precedent. Users can
+    // still resize down to 6 or up to 12 from the customize panel.
+    w: 8,
     h: 3,
     minW: 6,
     minH: 2,
+    // Same opt-in as live-agents et al: WidgetGrid's useFitRowSpan measures
+    // the table's scrollHeight and shrinks the cell's grid-row span to the
+    // minimum needed (clamped at h:3 as ceiling). A single-project user
+    // sees a 1-row tall cell instead of 3 rows of empty space; a
+    // many-project user gets the full 3 rows + scroll inside the body.
+    fitContent: true,
     dataKeys: ['dashboard'],
   },
 
@@ -1125,17 +1136,19 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   // default placement alongside the tools/models row.
   { id: 'tool-handoffs', colSpan: 12, rowSpan: 3 },
 
-  // Memory correlation + stuckness — 8 + 4. memory-outcomes is the
-  // strongest D1 memory widget: completion rate bucketed by whether the
-  // session hit shared memory. Promoted from catalog-only in the
-  // 2026-04-21 memory audit; memory-activity and memory-health were
-  // demoted (raw search counts + abstract avg-age don't earn a cockpit
-  // slot without a stale-list companion).
-  { id: 'memory-outcomes', colSpan: 8, rowSpan: 3 },
-  { id: 'stuckness', colSpan: 4, rowSpan: 2 },
+  // Memory correlation — 12. Promoted from 8 to full-width on 2026-04-22
+  // when stuckness moved down to pair with the resized projects widget.
+  // memory-outcomes is the strongest D1 memory widget (completion rate
+  // bucketed by shared-memory hit) and uses the extra horizontal room for
+  // its bucket bar chart.
+  { id: 'memory-outcomes', colSpan: 12, rowSpan: 3 },
 
-  // Projects — 12
-  { id: 'projects', colSpan: 12, rowSpan: 3 },
+  // Projects + stuckness — 8 + 4. Projects shrank from 12→8 on 2026-04-22
+  // (the comparator-table redesign doesn't earn full width), opening room
+  // for stuckness as its row partner. Bottom-row pairing keeps the layout
+  // total at 12 per row and avoids leaving empty grid space.
+  { id: 'projects', colSpan: 8, rowSpan: 3 },
+  { id: 'stuckness', colSpan: 4, rowSpan: 2 },
 ];
 
 export const DEFAULT_WIDGET_IDS = DEFAULT_LAYOUT.map((s) => s.id);

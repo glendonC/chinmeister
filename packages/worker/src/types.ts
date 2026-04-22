@@ -345,8 +345,20 @@ export interface TeamSummary {
   total_members: number;
   conflict_count: number;
   memory_count: number;
+  /** Memory count as of 7 days ago. Pairs with `memory_count` for the projects
+   *  widget growth delta (current − previous). */
+  memory_count_previous: number;
   live_sessions: number;
   recent_sessions_24h: number;
+  /** Daily session counts for the last 7 days, ordered oldest → newest.
+   *  Always 7 entries; empty days are zero. Sparkline data for the projects
+   *  widget activity column. */
+  daily_sessions_7d: number[];
+  /** Sum of `sessions.conflicts_hit` over the last 7 days. */
+  conflicts_7d: number;
+  /** Sum of `sessions.conflicts_hit` over the 14d-to-7d window. Pairs with
+   *  `conflicts_7d` for a period delta on the projects widget. */
+  conflicts_7d_previous: number;
   active_members: ActiveMemberSummary[];
 }
 

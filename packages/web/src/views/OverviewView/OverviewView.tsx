@@ -600,16 +600,13 @@ export default function OverviewView() {
     );
   }
 
-  // Active widgets with valid definitions. `projects` is gated to N ≥ 2
-  // projects: at N = 1 the entire Overview already aggregates that single
-  // team, so a one-row project list would duplicate on-screen data. First
-  // use of data-driven default-layout filtering; extract to a shared helper
-  // if this pattern picks up more widgets.
-  const activeSlots = slots.filter((s) => {
-    if (!getWidget(s.id)) return false;
-    if (s.id === 'projects' && summaries.length < 2) return false;
-    return true;
-  });
+  // Active widgets with valid definitions. The earlier N≥2 gate on
+  // `projects` (added in 369a4f4 to avoid one-row duplication of Overview's
+  // aggregated stats) was lifted with the comparator redesign: tools mix,
+  // 7-day activity sparkline, memory growth delta, and conflicts trend
+  // aren't surfaced anywhere else on Overview, so the widget earns its
+  // slot at N=1 as a single-project scorecard rather than a comparator.
+  const activeSlots = slots.filter((s) => Boolean(getWidget(s.id)));
 
   return (
     <DndContext
