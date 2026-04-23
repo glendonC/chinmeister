@@ -1,0 +1,214 @@
+/* Vertical stacked columns per directory. Each column's height = share of
+ * max directory total; internal stacks are work-type colored. Horizontal
+ * flow reads as a chart, not a vertical scroll list. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+
+.cols {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 10px;
+  align-items: end;
+  height: var(--col-height, 200px);
+  padding-bottom: 28px; /* reserve space for the label row beneath */
+  position: relative;
+}
+
+.col,
+.colClickable {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+  animation: colReveal 0.35s var(--motion) both;
+  animation-delay: calc(var(--col-index, 0) * 55ms);
+  cursor: default;
+  transition:
+    transform var(--motion-fast) ease,
+    opacity var(--motion-fast) ease;
+}
+
+.colClickable {
+  cursor: pointer;
+  outline: none;
+}
+
+.col[data-active='true'],
+.colClickable[data-active='true'] {
+  transform: translateY(-2px);
+}
+
+/* Dim non-selected columns so the canvas (file treemap) reads as
+ * filtered-by-this-directory. Opacity, not color, so the semantic
+ * work-type stack colors still read. */
+.colClickable[data-dimmed='true'] {
+  opacity: 0.35;
+}
+
+.colClickable[data-dimmed='true']:hover {
+  opacity: 0.55;
+}
+
+.colClickable[data-selected='true'] .label {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.colClickable[data-selected='true']::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  width: 18px;
+  height: 2px;
+  border-radius: 999px;
+  background: var(--ink);
+  opacity: 0.7;
+}
+
+.colClickable:focus-visible .stack {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.value {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+  letter-spacing: var(--tracking-stat);
+  opacity: 0;
+  transition: opacity var(--motion-fast) ease;
+}
+
+.col[data-active='true'] .value,
+.colClickable[data-active='true'] .value,
+.col:hover .value,
+.colClickable:hover .value {
+  opacity: 1;
+  color: var(--ink);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column-reverse; /* heaviest work type at the base */
+  width: 100%;
+  max-width: 56px;
+  min-height: 2px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--hover-bg);
+  transition: filter var(--motion-fast) ease;
+}
+
+.col[data-active='true'] .stack,
+.colClickable[data-active='true'] .stack {
+  filter: brightness(1.04);
+}
+
+.seg {
+  width: 100%;
+  min-height: 1px;
+  opacity: var(--opacity-primary, 0.92);
+}
+
+.seg + .seg {
+  border-top: 1px solid var(--surface-glass, #fff);
+}
+
+.label {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: 100%;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-top: 6px;
+  text-align: center;
+}
+
+.col[data-active='true'] .label,
+.colClickable[data-active='true'] .label {
+  color: var(--ink);
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 22px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.legendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.swatch {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.overflow {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+@keyframes colReveal {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scaleY(0.4);
+    transform-origin: bottom;
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .col {
+    animation: none;
+  }
+  .col[data-active='true'] {
+    transform: none;
+  }
+}

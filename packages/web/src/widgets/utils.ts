@@ -5,22 +5,15 @@ import type {
   UserAnalytics,
 } from '../lib/apiSchemas.js';
 import { getDataCapabilities } from '@chinwag/shared/tool-registry.js';
+import { WORK_TYPES, type WorkType } from '@chinwag/shared/analytics/work-type.js';
 
 // ── Work types ────────────────────────────────────
 
-// Canonical work-type categories. Matches the SQL WORK_TYPE_CASE and
-// classifyWorkType() classifier in packages/worker/src/dos/team/analytics/outcomes.ts —
-// any change here requires a migration on the worker side.
-export const WORK_TYPES = [
-  'frontend',
-  'backend',
-  'styling',
-  'test',
-  'docs',
-  'config',
-  'other',
-] as const;
-export type WorkType = (typeof WORK_TYPES)[number];
+// Canonical list + classifier live in @chinwag/shared/analytics/work-type.
+// Re-export here so the rest of the web package can keep importing from
+// widgets/utils without chasing the upstream path.
+export { WORK_TYPES };
+export type { WorkType };
 
 // Work-type palette. Values are CSS custom-property references declared
 // in styles/tokens.css — they alias the app's semantic tokens so dark
@@ -35,12 +28,30 @@ export const WORK_TYPE_COLORS: Record<WorkType, string> = {
   other: 'var(--work-other)',
 };
 
-/** Lookup a work-type color with a safe fallback to --work-other. */
+// Deterministic HSL fallback for unknown work-type strings. The real
+// backend classifier emits a fixed set (WORK_TYPES), but demo fixtures,
+// stale payloads, and future-added categories can slip through — grouping
+// all of them into var(--work-other) turns every chart into a gray wash.
+// Hash routes unknown keys to a distinct but muted HSL so the viz still
+// reads, with neutral saturation so it never competes with the semantic
+// palette on a shared surface.
+function hashWorkTypeColor(key: string): string {
+  let h = 5381;
+  for (let i = 0; i < key.length; i++) h = ((h << 5) + h + key.charCodeAt(i)) | 0;
+  const hue = ((h % 360) + 360) % 360;
+  return `hsl(${hue}, 42%, 52%)`;
+}
+
+/** Lookup a work-type color. Known categories get their semantic token;
+ *  unknown strings get a deterministic HSL so unexpected data still
+ *  renders in distinguishable colors instead of collapsing to gray.
+ *  Null/undefined/empty → the canonical --work-other. */
 export function workTypeColor(key: string | null | undefined): string {
-  if (key && (WORK_TYPES as readonly string[]).includes(key)) {
+  if (!key) return WORK_TYPE_COLORS.other;
+  if ((WORK_TYPES as readonly string[]).includes(key)) {
     return WORK_TYPE_COLORS[key as WorkType];
   }
-  return WORK_TYPE_COLORS.other;
+  return hashWorkTypeColor(key);
 }
 
 export const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

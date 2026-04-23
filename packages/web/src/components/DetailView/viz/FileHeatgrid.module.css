@@ -1,0 +1,49 @@
+/* File heatgrid: ranked horizontal bars, length = touch_count, fill =
+ * work-type. Replaces the vertical FileList in the edits view. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.caption {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.dir {
+  color: var(--soft);
+  margin-right: 2px;
+}
+
+.name {
+  color: var(--ink);
+}
+
+.expand {
+  align-self: flex-start;
+  background: transparent;
+  border: 0;
+  padding: 6px 0;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-action);
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--motion-fast) ease;
+}
+
+.expand:hover,
+.expand:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+
+.expand::after {
+  content: ' →';
+}

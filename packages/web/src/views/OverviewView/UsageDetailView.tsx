@@ -6,25 +6,29 @@ import {
   DetailSection,
   DetailView,
   DirectoryConstellation,
+  DirectoryColumns,
   DivergingColumns,
   DivergingRows,
   DotMatrix,
   FileChurnScatter,
   FileConstellation,
-  FileList,
+  FileTreemap,
+  SmallMultiples,
   HeroStatRow,
+  DeltaChip,
   InteractiveDailyChurn,
   LegendDot,
   LegendHatch,
-  RateStrip,
-  VelocityScatter,
+  StackedArea,
+  TrueShareBars,
   type DetailTabDef,
   type DivergingRowEntry,
   type DivergingSeries,
   type HeroStatDef,
   type InteractiveDailyChurnEntry,
-  type RateEntry,
-  type VelocityPoint,
+  type SmallMultipleItem,
+  type StackedAreaEntry,
+  type TrueShareEntry,
 } from '../../components/DetailView/index.js';
 import RangePills from '../../components/RangePills/RangePills.jsx';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
@@ -72,19 +76,71 @@ function fmtPct(n: number, digits = 0): string {
   return `${(n * 100).toFixed(digits)}%`;
 }
 
-function deltaMark(
-  current: number,
-  previous: number | null | undefined,
+// Em-dash placeholder for tabs without a comparable previous-period
+// value (e.g. files-touched has no per-day breakdown). Keeps the delta
+// caption visible on every tab so the strip stays visually uniform —
+// no conditional renders that hide treatment during testing.
+const MISSING_DELTA = { text: '—', color: 'var(--soft)' } as const;
+
+/**
+ * In-window delta: split a daily series in half by position and compare
+ * sums. Matches the widget convention (see `splitPeriodDelta` in
+ * `widgets/bodies/UsageWidgets.tsx`) — preferred over `period_comparison`
+ * because the worker's 30-day session retention empties the previous
+ * window for production users, which would null every cross-window
+ * delta. Splitting the current window sidesteps retention and keeps the
+ * arrow honest at any range.
+ */
+function splitDelta<T>(
+  days: ReadonlyArray<T>,
+  select: (row: T) => number,
+): { current: number; previous: number } | null {
+  if (days.length < 2) return null;
+  const mid = Math.floor(days.length / 2);
+  const currentStart = days.length % 2 === 0 ? mid : mid + 1;
+  const previous = days.slice(0, mid).reduce((s, d) => s + select(d), 0);
+  const current = days.slice(currentStart).reduce((s, d) => s + select(d), 0);
+  return { current, previous };
+}
+
+/**
+ * Format a numeric delta into an arrow + magnitude pill matching the
+ * StatWidget convention (`↑26`, `↓4`, `→0`). Returns the placeholder
+ * em-dash when the comparison can't be established (no previous data,
+ * or `previous <= 0` which is divide-by-infinity territory).
+ */
+function formatCountDelta(
+  delta: { current: number; previous: number } | null,
   invert = false,
-): { arrow: string; color: string; magnitude: string } | null {
-  if (previous == null || previous === 0) return null;
+): { text: string; color: string } {
+  if (!delta || delta.previous <= 0) return MISSING_DELTA;
+  const d = delta.current - delta.previous;
+  if (d === 0) return { text: '→0', color: 'var(--muted)' };
+  const arrow = d > 0 ? '↑' : '↓';
+  const magnitude = String(Math.abs(Math.round(d * 10) / 10));
+  const isGood = invert ? d < 0 : d > 0;
+  return { text: `${arrow}${magnitude}`, color: isGood ? 'var(--success)' : 'var(--danger)' };
+}
+
+/**
+ * USD-flavored delta formatter. Matches StatWidget's `usd-fine` path
+ * (sub-cent precision) for cost-per-edit, and falls back to plain
+ * cost formatting for whole-dollar deltas.
+ */
+function formatUsdDelta(
+  current: number | null | undefined,
+  previous: number | null | undefined,
+  digits: number,
+  invert = false,
+): { text: string; color: string } {
+  if (current == null || previous == null || previous <= 0) return MISSING_DELTA;
   const d = current - previous;
-  if (d === 0) return { arrow: '→', color: 'var(--muted)', magnitude: '0' };
+  if (d === 0) return { text: '→0', color: 'var(--muted)' };
+  const arrow = d > 0 ? '↑' : '↓';
   const isGood = invert ? d < 0 : d > 0;
   return {
-    arrow: d > 0 ? '↑' : '↓',
+    text: `${arrow}${formatCost(Math.abs(d), digits)}`,
     color: isGood ? 'var(--success)' : 'var(--danger)',
-    magnitude: String(Math.abs(Math.round(d * 10) / 10)),
   };
 }
 
@@ -121,22 +177,60 @@ export default function UsageDetailView({
       ? '--'
       : `${totals.linesNet >= 0 ? '+' : '−'}${fmtCount(Math.abs(totals.linesNet))}`;
 
+  // Tab deltas mirror the overview KPI widgets one-for-one so the same
+  // metric can't show two different numbers between views. Sources match
+  // each widget's choice in `widgets/bodies/UsageWidgets.tsx`:
+  //   - Sessions / Edits / Lines: in-window split (avoids 30-day retention
+  //     emptying period_comparison.previous in production)
+  //   - Cost: in-window split on daily_trends.cost (the per-day cost is
+  //     already pricing-enriched server-side)
+  //   - Cost / edit: period_comparison.cost_per_edit + invert (matches the
+  //     CostPerEditWidget exactly; null at 30-day windows by design)
+  //   - Files: no per-day breakdown exists yet; placeholder em-dash
+  const trends = analytics.daily_trends;
+  const pc = analytics.period_comparison;
+
   const tabs: Array<DetailTabDef<UsageTab>> = [
-    { id: 'sessions', label: 'Sessions', value: fmtCount(totals.sessions) },
-    { id: 'edits', label: 'Edits', value: fmtCount(totals.edits) },
-    { id: 'lines', label: 'Lines', value: linesTabValue },
+    {
+      id: 'sessions',
+      label: 'Sessions',
+      value: fmtCount(totals.sessions),
+      delta: formatCountDelta(splitDelta(trends, (d) => d.sessions)),
+    },
+    {
+      id: 'edits',
+      label: 'Edits',
+      value: fmtCount(totals.edits),
+      delta: formatCountDelta(splitDelta(trends, (d) => d.edits)),
+    },
+    {
+      id: 'lines',
+      label: 'Lines',
+      value: linesTabValue,
+      delta: formatCountDelta(splitDelta(trends, (d) => d.lines_added - d.lines_removed)),
+    },
     {
       id: 'cost',
       label: 'Cost',
       value: hasCostData(analytics.token_usage) ? formatCost(totals.cost, 2) : '--',
+      delta: (() => {
+        const s = splitDelta(trends, (d) => d.cost ?? 0);
+        return formatUsdDelta(s?.current ?? null, s?.previous ?? null, 2);
+      })(),
     },
     {
       id: 'cost-per-edit',
       label: 'Cost / edit',
       value:
         hasCostData(analytics.token_usage) && totals.cpe != null ? formatCost(totals.cpe, 3) : '--',
+      delta: formatUsdDelta(pc.current.cost_per_edit, pc.previous?.cost_per_edit ?? null, 3, true),
     },
-    { id: 'files-touched', label: 'Files', value: fmtCount(totals.filesTouched) },
+    {
+      id: 'files-touched',
+      label: 'Files',
+      value: fmtCount(totals.filesTouched),
+      delta: MISSING_DELTA,
+    },
   ];
 
   const scopeSubtitle = useMemo(() => {
@@ -176,8 +270,6 @@ export default function UsageDetailView({
 function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
   const cs = analytics.completion_summary;
   const totalSessions = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
-  const pc = analytics.period_comparison;
-  const d = deltaMark(pc.current.total_sessions, pc.previous?.total_sessions ?? null);
   const stuck = analytics.stuckness;
   const firstEdit = analytics.first_edit_stats;
 
@@ -198,13 +290,12 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
     return <span className={styles.empty}>No sessions captured in this window.</span>;
   }
 
-  // Hero row — promoted from a mono byline to first-class stat blocks.
-  // `completion_rate` and `stuckness_rate` arrive pre-multiplied from the
-  // backend (percent form, e.g. 73.3 not 0.733). Each block is gated so
-  // we never render "0%" when the system has no data. The `sublabel` line
-  // carries a concrete ratio, and ratio-based stats get a dot-matrix viz
-  // (one dot per session, filled = hits the condition) so the number has
-  // literal visual reference beside it.
+  // Session-health hero: two ratio-based quality stats (completed,
+  // stalled), each paired with a DotMatrix so the number has literal
+  // visual reference. First-edit is timing/onboarding (lives next to
+  // duration); period delta lives on the SESSIONS tab itself — both
+  // intentionally excluded here so the row stays cohesive and visually
+  // balanced against the BY TOOL column across the gap.
   const heroStats: HeroStatDef[] = [];
   if (cs.total_sessions > 0 && cs.completion_rate > 0) {
     heroStats.push({
@@ -230,28 +321,15 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
       viz: <DotMatrix total={stuck.total_sessions} filled={stuck.stuck_sessions} color={color} />,
     });
   }
-  if (firstEdit.median_minutes_to_first_edit > 0) {
-    const m = firstEdit.median_minutes_to_first_edit;
-    const v = m >= 10 ? String(Math.round(m)) : m.toFixed(1);
-    heroStats.push({
-      key: 'first-edit',
-      value: v,
-      unit: 'min',
-      label: 'median to first edit',
-      sublabel: totalSessions > 0 ? `across ${fmtCount(totalSessions)} sessions` : undefined,
-      color: 'var(--ink)',
-    });
-  }
-  if (d) {
-    heroStats.push({
-      key: 'delta',
-      value: `${d.arrow}${d.magnitude}`,
-      label: 'vs prior period',
-      color: d.color,
-    });
-  }
 
   const hasHero = heroStats.length > 0;
+  const firstEditMin = firstEdit.median_minutes_to_first_edit;
+  const firstEditDisplay =
+    firstEditMin > 0
+      ? firstEditMin >= 10
+        ? String(Math.round(firstEditMin))
+        : firstEditMin.toFixed(1)
+      : null;
 
   return (
     <>
@@ -260,10 +338,10 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
           where (by tool). Session duration lives below as its own full
           width band since it answers a different question (how long). */}
       {(hasHero || byTool.length > 0) && (
-        <div className={styles.topGrid}>
+        <div className={clsx(styles.topGrid, styles.topGridSessions)}>
           {hasHero && (
             <DetailSection label="Session health" className={styles.sectionHero}>
-              <HeroStatRow stats={heroStats} />
+              <HeroStatRow stats={heroStats} direction="column" />
             </DetailSection>
           )}
           {byTool.length > 0 && (
@@ -287,9 +365,23 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
         </DetailSection>
       )}
 
-      {/* Session duration — full-width band */}
+      {/* Session duration — full-width band. First-edit median rides
+          along as a small lead-in caption since both metrics answer
+          "how long did things take" (warmup vs total session length). */}
       {durationDist.length > 0 && (
         <DetailSection label="Session duration">
+          {firstEditDisplay && (
+            <p className={styles.durationLeadIn}>
+              <span className={styles.durationLeadValue}>{firstEditDisplay}</span>
+              <span className={styles.durationLeadUnit}>min</span>
+              <span className={styles.durationLeadLabel}>median to first edit</span>
+              {totalSessions > 0 && (
+                <span className={styles.durationLeadContext}>
+                  · across {fmtCount(totalSessions)} sessions
+                </span>
+              )}
+            </p>
+          )}
           <DurationStrip buckets={durationDist} />
         </DetailSection>
       )}
@@ -464,6 +556,196 @@ function ToolRing({
   );
 }
 
+// Edits-flavored share ring — same visual DNA as ToolRing above, but
+// sized by edits (not sessions). Center reads "EDITS", table columns are
+// Tool / Edits / Share / Rate so the pair reads as the edit story.
+function EditsToolRing({
+  entries,
+  total,
+}: {
+  entries: UserAnalytics['tool_comparison'];
+  total: number;
+}) {
+  const arcs = useMemo(() => {
+    const out: Array<{
+      tool: string;
+      color: string;
+      startDeg: number;
+      sweepDeg: number;
+      edits: number;
+    }> = [];
+    const safeTotal = Math.max(1, total);
+    const sorted = [...entries].sort((a, b) => b.total_edits - a.total_edits);
+    const top = sorted.slice(0, RING_TOP_N);
+    const tail = sorted.slice(RING_TOP_N);
+    const tailEdits = tail.reduce((s, e) => s + e.total_edits, 0);
+    const slices = [
+      ...top.map((e) => ({
+        tool: e.host_tool,
+        color: getToolMeta(e.host_tool).color,
+        edits: e.total_edits,
+      })),
+      ...(tailEdits > 0 ? [{ tool: OTHER_KEY, color: 'var(--soft)', edits: tailEdits }] : []),
+    ].filter((s) => s.edits > 0);
+    const gaps = slices.length * RING_GAP_DEG;
+    const available = Math.max(0, 360 - gaps);
+    let cursor = 0;
+    for (const s of slices) {
+      const sweep = (s.edits / safeTotal) * available;
+      if (sweep > 0.2) {
+        out.push({
+          tool: s.tool,
+          color: s.color,
+          startDeg: cursor,
+          sweepDeg: sweep,
+          edits: s.edits,
+        });
+      }
+      cursor += sweep + RING_GAP_DEG;
+    }
+    return out;
+  }, [entries, total]);
+
+  const rows = useMemo(
+    () =>
+      [...entries].filter((e) => e.total_edits > 0).sort((a, b) => b.total_edits - a.total_edits),
+    [entries],
+  );
+
+  // Single-tool empty state: a full ring is decorative, not informative.
+  if (rows.length <= 1) {
+    const only = rows[0];
+    if (!only) return null;
+    const meta = getToolMeta(only.host_tool);
+    const rate = only.total_session_hours > 0 ? only.total_edits / only.total_session_hours : 0;
+    return (
+      <div className={styles.ringBlock}>
+        <div className={styles.singleTool}>
+          <div className={styles.singleToolHead} style={{ color: meta.color }}>
+            <ToolIcon tool={only.host_tool} size={18} />
+            <span>{meta.label}</span>
+          </div>
+          <div className={styles.singleToolValue}>
+            {fmtCount(only.total_edits)}
+            <span className={styles.singleToolUnit}>edits</span>
+          </div>
+          {rate > 0 && (
+            <div className={styles.singleToolMeta}>
+              {rate.toFixed(1)}/hr · {only.total_session_hours.toFixed(1)}h
+            </div>
+          )}
+          <button type="button" className={styles.toolsCta} onClick={() => navigate('tools')}>
+            <span>Open Tools tab</span>
+            <span className={styles.toolsCtaArrow} aria-hidden="true">
+              ↗
+            </span>
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={styles.ringBlock}>
+      <div className={styles.ringMedia}>
+        <svg viewBox="0 0 160 160" className={styles.ringSvg} role="img" aria-label="Tool mix">
+          <circle
+            cx={RING_CX}
+            cy={RING_CY}
+            r={RING_R}
+            fill="none"
+            stroke="var(--hover-bg)"
+            strokeWidth={RING_SW}
+          />
+          {arcs.map((arc) => (
+            <path
+              key={arc.tool}
+              d={arcPath(RING_CX, RING_CY, RING_R, arc.startDeg, arc.sweepDeg)}
+              fill="none"
+              stroke={arc.color}
+              strokeWidth={RING_SW}
+              strokeLinecap="round"
+              opacity={0.9}
+            />
+          ))}
+          <text
+            x={RING_CX}
+            y={RING_CY - 4}
+            textAnchor="middle"
+            dominantBaseline="central"
+            fill="var(--ink)"
+            fontSize="26"
+            fontWeight="200"
+            fontFamily="var(--display)"
+            letterSpacing="-0.04em"
+          >
+            {fmtCount(total)}
+          </text>
+          <text
+            x={RING_CX}
+            y={RING_CY + 16}
+            textAnchor="middle"
+            fill="var(--soft)"
+            fontSize="8"
+            fontFamily="var(--mono)"
+            letterSpacing="0.14em"
+          >
+            EDITS
+          </text>
+        </svg>
+      </div>
+      <div className={styles.ringPanel}>
+        <table className={styles.toolTable}>
+          <thead>
+            <tr>
+              <th scope="col" className={styles.toolTh}>
+                Tool
+              </th>
+              <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
+                Edits
+              </th>
+              <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
+                Share
+              </th>
+              <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
+                Rate
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((t, i) => {
+              const meta = getToolMeta(t.host_tool);
+              const share = total > 0 ? Math.round((t.total_edits / total) * 100) : 0;
+              const rate = t.total_session_hours > 0 ? t.total_edits / t.total_session_hours : 0;
+              return (
+                <tr
+                  key={t.host_tool}
+                  className={styles.toolRow}
+                  style={{ '--row-index': i } as CSSProperties}
+                >
+                  <td className={styles.toolCellName}>
+                    <ToolIcon tool={t.host_tool} size={14} />
+                    <span>{meta.label}</span>
+                  </td>
+                  <td className={styles.toolCellNum}>{fmtCount(t.total_edits)}</td>
+                  <td className={styles.toolCellNum}>{share}%</td>
+                  <td className={styles.toolCellNum}>{rate > 0 ? `${rate.toFixed(1)}/hr` : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        <button type="button" className={styles.toolsCta} onClick={() => navigate('tools')}>
+          <span>Open Tools tab</span>
+          <span className={styles.toolsCtaArrow} aria-hidden="true">
+            ↗
+          </span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Horizontal stacked strip — labels on top, continuous bar in the middle,
 // counts beneath each segment. Segments share a baseline so label/bar/count
 // stay in columns that flex to the bucket's share. Palette-wide ink-alpha
@@ -613,9 +895,22 @@ function median(values: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
+/** Humanize a duration expressed in minutes: seconds under one minute,
+ *  minutes up to an hour, hours past that. Returns the pair the hero
+ *  stat expects so callers spread it into HeroStatDef. */
+function formatWarmup(minutes: number): { value: string; unit?: string } {
+  if (minutes < 1) return { value: `${Math.max(1, Math.round(minutes * 60))}`, unit: 's' };
+  if (minutes < 60) return { value: minutes.toFixed(1), unit: 'min' };
+  return { value: (minutes / 60).toFixed(1), unit: 'h' };
+}
+
 function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
+  // Row 4 cross-filter: clicking a directory column scopes the file
+  // treemap to that directory. Keeps Row 4 as one connected lens on the
+  // repo instead of two parallel viz.
+  const [selectedDir, setSelectedDir] = useState<string | null>(null);
+
   const total = analytics.daily_trends.reduce((s, d) => s + d.edits, 0);
-  const dailyEdits = analytics.daily_trends.map((d) => d.edits);
 
   const peak = analytics.daily_trends.reduce<{ day: string; edits: number }>(
     (best, d) => (d.edits > best.edits ? { day: d.day, edits: d.edits } : best),
@@ -628,46 +923,34 @@ function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
   const medianRate = median(ratesWithHours);
   const activeDays = ratesWithHours.length;
 
-  const byTool = useMemo<VelocityPoint[]>(
-    () =>
-      [...analytics.tool_comparison]
-        .filter((t) => t.sessions > 0 && t.total_session_hours > 0 && t.total_edits > 0)
-        .map((t) => ({
-          key: t.host_tool,
-          label: getToolMeta(t.host_tool).label,
-          color: getToolMeta(t.host_tool).color,
-          hours: t.total_session_hours,
-          rate: t.total_edits / t.total_session_hours,
-          edits: t.total_edits,
-        }))
-        .sort((a, b) => b.edits - a.edits),
-    [analytics.tool_comparison],
-  );
-
-  const byMember = useMemo<RateEntry[]>(
+  const byMember = useMemo<TrueShareEntry[]>(
     () =>
       [...analytics.member_analytics]
-        .filter((m) => m.total_session_hours > 0 && m.total_edits > 0)
-        .map((m) => ({
-          key: m.handle,
-          label: (
-            <>
-              {m.primary_tool && <ToolIcon tool={m.primary_tool} size={12} />}
-              {m.handle}
-            </>
-          ),
-          rate: m.total_edits / m.total_session_hours,
-          weight: m.total_session_hours,
-        }))
-        .sort((a, b) => b.rate - a.rate),
+        .filter((m) => m.total_edits > 0)
+        .sort((a, b) => b.total_edits - a.total_edits)
+        .map((m) => {
+          const rate = m.total_session_hours > 0 ? m.total_edits / m.total_session_hours : 0;
+          return {
+            key: m.handle,
+            label: (
+              <>
+                {m.primary_tool && <ToolIcon tool={m.primary_tool} size={12} />}
+                {m.handle}
+              </>
+            ),
+            value: m.total_edits,
+            color: m.primary_tool ? getToolMeta(m.primary_tool).color : undefined,
+            meta: rate > 0 ? `${rate.toFixed(1)}/hr · ${m.total_session_hours.toFixed(1)}h` : null,
+          };
+        }),
     [analytics.member_analytics],
   );
 
-  const byProject = useMemo<RateEntry[]>(
+  const byProject = useMemo<TrueShareEntry[]>(
     () =>
       [...analytics.per_project_velocity]
-        .filter((p) => p.total_session_hours > 0 && p.total_edits > 0)
-        .sort((a, b) => b.edits_per_hour - a.edits_per_hour)
+        .filter((p) => p.total_edits > 0)
+        .sort((a, b) => b.total_edits - a.total_edits)
         .map((p) => ({
           key: p.team_id,
           label: (
@@ -676,35 +959,130 @@ function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
               {p.team_name ?? p.team_id}
             </>
           ),
-          rate: p.edits_per_hour,
-          weight: p.total_session_hours,
+          value: p.total_edits,
+          color: p.primary_tool ? getToolMeta(p.primary_tool).color : undefined,
+          meta:
+            p.edits_per_hour > 0
+              ? `${p.edits_per_hour.toFixed(1)}/hr · ${p.total_session_hours.toFixed(1)}h`
+              : null,
         })),
     [analytics.per_project_velocity],
   );
 
-  const topFiles = [...analytics.file_heatmap]
-    .sort((a, b) => b.touch_count - a.touch_count)
-    .slice(0, 10);
+  const rankedFiles = useMemo(
+    () =>
+      [...analytics.file_heatmap]
+        .filter((f) => f.touch_count > 0)
+        .sort((a, b) => b.touch_count - a.touch_count),
+    [analytics.file_heatmap],
+  );
+
+  const projectPulse = useMemo<SmallMultipleItem[]>(() => {
+    const rows = analytics.per_project_lines ?? [];
+    if (rows.length === 0) return [];
+    const byId = new Map<
+      string,
+      {
+        team_id: string;
+        team_name: string | null;
+        series: { day: string; edits: number }[];
+        total: number;
+      }
+    >();
+    for (const r of rows) {
+      const entry = byId.get(r.team_id) ?? {
+        team_id: r.team_id,
+        team_name: r.team_name ?? null,
+        series: [],
+        total: 0,
+      };
+      entry.series.push({ day: r.day, edits: r.edits });
+      entry.total += r.edits;
+      byId.set(r.team_id, entry);
+    }
+    const toolByProject = new Map<string, string | null>();
+    for (const p of analytics.per_project_velocity) {
+      toolByProject.set(p.team_id, p.primary_tool ?? null);
+    }
+    const items = [...byId.values()].filter((e) => e.total > 0);
+    items.sort((a, b) => b.total - a.total);
+    return items.map((p) => {
+      p.series.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+      const primaryTool = toolByProject.get(p.team_id) ?? null;
+      const color = primaryTool ? getToolMeta(primaryTool).color : 'var(--muted)';
+      return {
+        key: p.team_id,
+        label: (
+          <>
+            {primaryTool && <ToolIcon tool={primaryTool} size={12} />}
+            {p.team_name ?? p.team_id}
+          </>
+        ),
+        meta: `${fmtCount(p.total)} edits`,
+        body: <Sparkline data={p.series.map((s) => s.edits)} height={48} color={color} />,
+      };
+    });
+  }, [analytics.per_project_lines, analytics.per_project_velocity]);
+
+  const teamMode = byMember.length >= 2;
+  const contributionEntries = teamMode ? byMember : byProject;
+  const contributionLabel = teamMode ? 'Contribution' : 'Project mix';
+
+  const toolDailyStacked = useMemo<StackedAreaEntry[]>(() => {
+    const rows = analytics.tool_daily ?? [];
+    if (rows.length === 0) return [];
+    const byTool = new Map<string, { day: string; value: number }[]>();
+    for (const r of rows) {
+      const key = r.host_tool ?? 'unknown';
+      const bucket = byTool.get(key) ?? [];
+      bucket.push({ day: r.day, value: r.edits });
+      byTool.set(key, bucket);
+    }
+    const out: StackedAreaEntry[] = [];
+    for (const [tool, series] of byTool) {
+      const total = series.reduce((s, p) => s + p.value, 0);
+      if (total <= 0) continue;
+      series.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0));
+      const meta = getToolMeta(tool);
+      out.push({ key: tool, label: meta.label, series, color: meta.color });
+    }
+    return out;
+  }, [analytics.tool_daily]);
+
+  const toolRingRows = useMemo(
+    () => analytics.tool_comparison.filter((t) => t.total_edits > 0),
+    [analytics.tool_comparison],
+  );
+  const hasRing = toolRingRows.length > 0;
 
   if (total === 0) {
     return <span className={styles.empty}>No edits captured in this window.</span>;
   }
 
-  const heroStats: HeroStatDef[] = [
-    {
-      key: 'total',
-      value: fmtCount(total),
-      label: 'edits total',
-      sublabel: activeDays > 0 ? `across ${activeDays} active days` : undefined,
-    },
-  ];
-  if (medianRate > 0) {
+  const currentRate = analytics.period_comparison.current.edit_velocity;
+  const previousRate = analytics.period_comparison.previous?.edit_velocity ?? null;
+  const warmup = analytics.first_edit_stats.median_minutes_to_first_edit;
+
+  const heroStats: HeroStatDef[] = [];
+  if (currentRate > 0) {
     heroStats.push({
-      key: 'median-rate',
+      key: 'rate',
+      value: currentRate.toFixed(1),
+      unit: '/hr',
+      label: 'edits per hour',
+      sublabel:
+        previousRate != null && previousRate > 0 ? (
+          <DeltaChip current={currentRate} previous={previousRate} sense="up" suffix="vs prev" />
+        ) : undefined,
+    });
+  } else if (medianRate > 0) {
+    // Fallback for legacy payloads where period_comparison isn't populated yet.
+    heroStats.push({
+      key: 'rate',
       value: medianRate.toFixed(1),
       unit: '/hr',
-      label: 'median edit rate',
-      sublabel: `daily median across ${activeDays} days`,
+      label: 'edits per hour',
+      sublabel: `median across ${activeDays} active days`,
     });
   }
   if (peak.edits > 0) {
@@ -715,50 +1093,106 @@ function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
       sublabel: formatStripDate(peak.day),
     });
   }
+  if (warmup > 0) {
+    heroStats.push({
+      key: 'warmup',
+      ...formatWarmup(warmup),
+      label: 'time to first edit',
+      sublabel: 'median across sessions',
+    });
+  }
 
   return (
     <>
-      <DetailSection label="Edit activity">
-        <HeroStatRow stats={heroStats} />
-      </DetailSection>
-
-      {byTool.length >= 2 && (
-        <DetailSection label="Tool velocity · hours × edits per hour">
-          <VelocityScatter entries={byTool} />
-        </DetailSection>
+      {(heroStats.length > 0 || hasRing) && (
+        <div className={clsx(styles.topGrid, styles.topGridSessions)}>
+          {heroStats.length > 0 && (
+            <DetailSection label="Edit cadence" className={styles.sectionHero}>
+              <HeroStatRow stats={heroStats} direction="column" />
+            </DetailSection>
+          )}
+          {hasRing && (
+            <DetailSection label="Tool mix">
+              <EditsToolRing entries={toolRingRows} total={total} />
+            </DetailSection>
+          )}
+        </div>
       )}
 
-      {byMember.length >= 2 && (
-        <DetailSection label="Teammate rate">
-          <RateStrip entries={byMember} />
-        </DetailSection>
+      {(contributionEntries.length >= 2 || projectPulse.length > 0) && (
+        <div className={styles.topGrid}>
+          {contributionEntries.length >= 2 && (
+            <DetailSection label={contributionLabel}>
+              <TrueShareBars
+                entries={contributionEntries}
+                formatValue={(n) => `${fmtCount(n)} edits`}
+              />
+            </DetailSection>
+          )}
+          {projectPulse.length > 0 && (
+            <DetailSection label="Project rhythm">
+              <SmallMultiples items={projectPulse} />
+            </DetailSection>
+          )}
+        </div>
       )}
 
-      {byProject.length >= 2 && (
-        <DetailSection label="Project rate">
-          <RateStrip entries={byProject} />
-        </DetailSection>
-      )}
-
-      {dailyEdits.length >= 2 && (
-        <DetailSection label="Daily trend">
-          <div className={styles.trendFrame}>
-            <Sparkline data={dailyEdits} height={96} />
-          </div>
-        </DetailSection>
-      )}
-
-      {topFiles.length > 0 && (
-        <DetailSection label="Most-touched files">
-          <FileList
-            items={topFiles.map((f) => ({
-              key: f.file,
-              name: f.file,
-              title: f.file,
-              meta: `${fmtCount(f.touch_count)} touches`,
-            }))}
+      {toolDailyStacked.length >= 1 && (
+        <DetailSection label="Daily rhythm">
+          <StackedArea
+            entries={toolDailyStacked}
+            unitLabel="edits per day"
+            ariaLabel="Edits per day, stacked by tool"
           />
         </DetailSection>
+      )}
+
+      {rankedFiles.length > 0 && (
+        <section className={styles.landscapeBlock}>
+          <header className={styles.landscapeHead}>
+            <span className={styles.landscapeLabel}>Where work lands</span>
+            <span className={styles.landscapeHint}>
+              {selectedDir ? (
+                <>
+                  Scoped to <span className={styles.landscapeHintValue}>{selectedDir}</span>
+                  <button
+                    type="button"
+                    className={styles.landscapeClear}
+                    onClick={() => setSelectedDir(null)}
+                    aria-label="Clear directory filter"
+                  >
+                    × clear
+                  </button>
+                </>
+              ) : (
+                <>Click a directory on the right to scope the map</>
+              )}
+            </span>
+          </header>
+          <div className={styles.landscapeGrid}>
+            <div className={styles.landscapePane}>
+              <span className={styles.landscapeSublabel}>File landscape</span>
+              <FileTreemap
+                entries={rankedFiles}
+                totalFiles={analytics.files_touched_total}
+                filterPrefix={selectedDir}
+              />
+            </div>
+            <div className={styles.landscapePane}>
+              <span className={styles.landscapeSublabel}>
+                Filter by directory
+                <span className={styles.landscapeArrow} aria-hidden="true">
+                  ←
+                </span>
+              </span>
+              <DirectoryColumns
+                files={rankedFiles}
+                selectedKey={selectedDir}
+                onSelect={setSelectedDir}
+              />
+            </div>
+          </div>
+        </section>
       )}
     </>
   );

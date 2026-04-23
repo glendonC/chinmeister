@@ -1,0 +1,113 @@
+/* True-share contribution bars. Bar WIDTH = share of total (not rate).
+ * Replaces RateStrip's dot-on-empty-track pattern where the visual was
+ * inert. Uses the global rowReveal keyframe (app.css). */
+
+.strip {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.row,
+.rowClickable {
+  display: grid;
+  grid-template-columns: minmax(0, 140px) minmax(0, 1fr) minmax(0, auto);
+  align-items: center;
+  gap: 20px;
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 40ms);
+}
+
+.rowClickable {
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  padding: 2px 0;
+  transition: background var(--motion-fast) ease;
+}
+
+.rowClickable:hover,
+.rowClickable:focus-visible {
+  background: var(--hover-bg);
+  outline: none;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  position: relative;
+  height: 8px;
+  min-width: 0;
+  background: var(--hover-bg);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  min-width: 2px;
+  opacity: var(--opacity-primary, 0.92);
+  border-radius: 999px;
+  transform-origin: left center;
+  animation: fillReveal 0.5s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 40ms + 80ms);
+}
+
+.value {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.share {
+  color: var(--ink);
+}
+
+.absolute {
+  color: var(--muted);
+}
+
+.meta {
+  color: var(--soft);
+}
+
+@keyframes fillReveal {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row,
+  .rowClickable,
+  .fill {
+    animation: none;
+  }
+  .rowClickable {
+    transition: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .row,
+  .rowClickable {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+}

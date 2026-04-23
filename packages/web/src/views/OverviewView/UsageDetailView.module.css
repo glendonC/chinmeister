@@ -709,3 +709,110 @@
     transition: none;
   }
 }
+
+/* ── Row 4 landscape block — unified "where work lands" composite ──
+ *
+ * Rather than two sibling DetailSections with their own headings (which
+ * read as two independent charts to new users), the landscape row is a
+ * single composite with one parent label + a persistent instruction
+ * hint. The sub-labels inside each half coordinate ("File landscape" |
+ * "Filter by directory ←") so the left-is-canvas, right-is-selector
+ * relationship is visible before any interaction. */
+
+.landscapeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.landscapeHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 10px 16px;
+}
+
+.landscapeLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--soft);
+  letter-spacing: var(--tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.landscapeHint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--sans);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.landscapeHintValue {
+  color: var(--ink);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.landscapeClear {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 2px 6px;
+  cursor: pointer;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  transition: color var(--motion-fast) ease;
+}
+
+.landscapeClear:hover,
+.landscapeClear:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+
+.landscapeGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 28px;
+}
+
+@media (min-width: 900px) {
+  .landscapeGrid {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    gap: 36px;
+  }
+}
+
+.landscapePane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.landscapeSublabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+/* Directional arrow on the directory pane's label — points across the
+ * gutter toward the treemap so the filter-flow direction is legible
+ * without any interaction. */
+.landscapeArrow {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  letter-spacing: 0;
+}

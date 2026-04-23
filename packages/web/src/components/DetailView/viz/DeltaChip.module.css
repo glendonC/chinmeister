@@ -1,0 +1,35 @@
+/* Inline delta pill. Green/red colorway follows semantic good/bad, not
+ * raw sign — a 12% drop in warmup time reads green. */
+
+.chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-stat);
+  color: var(--muted);
+}
+
+.chip[data-tone='good'] {
+  color: var(--success);
+}
+
+.chip[data-tone='bad'] {
+  color: var(--danger);
+}
+
+.chip[data-tone='neutral'] {
+  color: var(--soft);
+}
+
+.glyph {
+  font-size: var(--text-sm);
+  line-height: 1;
+  transform: translateY(1px);
+}
+
+.suffix {
+  color: var(--soft);
+}

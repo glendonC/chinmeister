@@ -10,10 +10,18 @@ import type {
   ToolWorkTypeBreakdown,
   WorkTypeOutcome,
 } from '@chinwag/shared/contracts/analytics.js';
+// The JS classifier and the canonical WORK_TYPES list live in shared so
+// the web package, demo fixtures, and the worker all agree on the same
+// enum. The SQL CASE below must stay in lockstep with that JS classifier
+// — any rule change goes in both places, and work-type.test.js pins
+// behavior for a canonical set of paths.
+export { classifyWorkType, WORK_TYPES } from '@chinwag/shared/analytics/work-type.js';
+export type { WorkType } from '@chinwag/shared/analytics/work-type.js';
 
 const log = createLogger('TeamDO.analytics');
 
-// SQL CASE expression for classifying file paths into work types.
+// SQL CASE expression for classifying file paths into work types. Must
+// stay semantically equivalent to classifyWorkType() in @chinwag/shared.
 // Test patterns go first (most specific), then docs/styling/frontend/backend/config, else other.
 export const WORK_TYPE_CASE = `
   CASE
@@ -35,41 +43,6 @@ export const WORK_TYPE_CASE = `
 // Same classification for files from the sessions.files_touched JSON array
 // where the column alias is 'value' (from json_each).
 export const WORK_TYPE_CASE_VALUE = WORK_TYPE_CASE.replace(/file_path/g, 'value');
-
-/** Classify a file path into a work type. JS-side mirror of the SQL CASE. */
-export function classifyWorkType(filePath: string): string {
-  const p = filePath.toLowerCase();
-  if (p.includes('.test.') || p.includes('.spec.') || p.includes('__tests__')) return 'test';
-  if (p.endsWith('.md') || p.includes('/docs/')) return 'docs';
-  if (p.endsWith('.css') || p.endsWith('.scss') || p.includes('.module.css')) return 'styling';
-  if (
-    p.endsWith('.tsx') ||
-    p.endsWith('.jsx') ||
-    p.includes('/components/') ||
-    p.includes('/views/') ||
-    p.includes('/hooks/') ||
-    p.includes('/pages/')
-  )
-    return 'frontend';
-  if (
-    p.includes('/routes/') ||
-    p.includes('/dos/') ||
-    p.includes('/api/') ||
-    p.includes('/server/') ||
-    p.includes('/workers/')
-  )
-    return 'backend';
-  if (
-    p.includes('package.json') ||
-    p.includes('tsconfig') ||
-    p.includes('wrangler') ||
-    p.includes('.config.') ||
-    p.includes('.eslint') ||
-    p.includes('.prettier')
-  )
-    return 'config';
-  return 'other';
-}
 
 export function queryModelPerformance(sql: SqlStorage, days: number): ModelOutcome[] {
   try {

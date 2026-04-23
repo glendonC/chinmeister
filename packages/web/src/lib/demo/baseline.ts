@@ -5,6 +5,7 @@
 // model_outcomes aggregation, and so on. Scenarios layer overrides on top
 // of this baseline.
 
+import { classifyWorkType } from '@chinwag/shared/analytics/work-type.js';
 import type { UserAnalytics } from '../apiSchemas.js';
 import {
   TOOL_PROFILES,
@@ -74,12 +75,19 @@ const DIRECTORIES = [
   { directory: 'docs', share: 0.04, files: 8 },
 ];
 
-const WORK_TYPES = [
-  { work_type: 'feature', share: 0.45 },
-  { work_type: 'fix', share: 0.3 },
-  { work_type: 'refactor', share: 0.15 },
-  { work_type: 'docs', share: 0.06 },
-  { work_type: 'test', share: 0.04 },
+// Demo volume mix per canonical work type. Keys come from the shared
+// WORK_TYPES enum — the shares are the only tunable piece here, since
+// the category list itself is defined in @chinwag/shared/analytics/work-type.
+// Keep the shares summed to ~1.0 so allocateIntegerShares divides the
+// period totals cleanly.
+const WORK_TYPE_MIX: Array<{ work_type: string; share: number }> = [
+  { work_type: 'frontend', share: 0.4 },
+  { work_type: 'backend', share: 0.25 },
+  { work_type: 'other', share: 0.12 },
+  { work_type: 'docs', share: 0.1 },
+  { work_type: 'test', share: 0.07 },
+  { work_type: 'styling', share: 0.04 },
+  { work_type: 'config', share: 0.02 },
 ];
 
 // ── Derivation helpers ───────────────────────────────────────────────
@@ -400,21 +408,21 @@ export function createBaselineAnalytics(): UserAnalytics {
   // 12. work_type_distribution
   const workTypeSessions = allocateIntegerShares(
     totalSessions,
-    WORK_TYPES.map((w) => w.share),
+    WORK_TYPE_MIX.map((w) => w.share),
   );
   const workTypeEdits = allocateIntegerShares(
     totalEdits,
-    WORK_TYPES.map((w) => w.share),
+    WORK_TYPE_MIX.map((w) => w.share),
   );
   const workTypeLinesAdded = allocateIntegerShares(
     totalLinesAdded,
-    WORK_TYPES.map((w) => w.share),
+    WORK_TYPE_MIX.map((w) => w.share),
   );
   const workTypeLinesRemoved = allocateIntegerShares(
     totalLinesRemoved,
-    WORK_TYPES.map((w) => w.share),
+    WORK_TYPE_MIX.map((w) => w.share),
   );
-  const work_type_distribution = WORK_TYPES.map((w, i) => ({
+  const work_type_distribution = WORK_TYPE_MIX.map((w, i) => ({
     work_type: w.work_type,
     sessions: workTypeSessions[i],
     edits: workTypeEdits[i],
@@ -426,11 +434,11 @@ export function createBaselineAnalytics(): UserAnalytics {
       1,
       Math.round(
         workTypeSessions[i] *
-          (w.work_type === 'feature'
+          (w.work_type === 'frontend'
             ? 0.8
-            : w.work_type === 'fix'
+            : w.work_type === 'backend'
               ? 0.6
-              : w.work_type === 'refactor'
+              : w.work_type === 'other'
                 ? 0.5
                 : 0.3),
       ),
@@ -441,13 +449,13 @@ export function createBaselineAnalytics(): UserAnalytics {
   const tool_work_type = ledger.flatMap((l) => {
     const ws = allocateIntegerShares(
       l.sessions,
-      WORK_TYPES.map((w) => w.share),
+      WORK_TYPE_MIX.map((w) => w.share),
     );
     const we = allocateIntegerShares(
       l.totalEdits,
-      WORK_TYPES.map((w) => w.share),
+      WORK_TYPE_MIX.map((w) => w.share),
     );
-    return WORK_TYPES.map((w, i) => ({
+    return WORK_TYPE_MIX.map((w, i) => ({
       host_tool: l.tool.id,
       work_type: w.work_type,
       sessions: ws[i],
@@ -456,14 +464,14 @@ export function createBaselineAnalytics(): UserAnalytics {
   });
 
   // 14. work_type_outcomes
-  const work_type_outcomes = WORK_TYPES.map((w, i) => {
+  const work_type_outcomes = WORK_TYPE_MIX.map((w, i) => {
     const sessions = workTypeSessions[i];
     const baseRate =
-      w.work_type === 'feature'
+      w.work_type === 'frontend'
         ? 0.72
-        : w.work_type === 'fix'
+        : w.work_type === 'backend'
           ? 0.78
-          : w.work_type === 'refactor'
+          : w.work_type === 'other'
             ? 0.66
             : w.work_type === 'docs'
               ? 0.88
@@ -533,10 +541,13 @@ export function createBaselineAnalytics(): UserAnalytics {
   const fileTouches = allocateIntegerShares(totalFileTouches, fileWeights);
   const fileLinesAdded = allocateIntegerShares(totalLinesAdded, fileWeights);
   const fileLinesRemoved = allocateIntegerShares(totalLinesRemoved, fileWeights);
+  // Work type derived from each file path via the shared classifier —
+  // the same function the worker runs against production edits. Keeps
+  // the demo aligned with production without a hand-maintained map.
   const file_heatmap = FILES.map((f, i) => ({
     file: f.path,
     touch_count: fileTouches[i],
-    work_type: i < 4 ? 'feature' : i < 9 ? 'fix' : i < 14 ? 'refactor' : 'docs',
+    work_type: classifyWorkType(f.path),
     outcome_rate: Math.max(42, Math.min(92, 76 - i * 2 + Math.round(hash(i + 50) * 10))),
     total_lines_added: fileLinesAdded[i],
     total_lines_removed: fileLinesRemoved[i],

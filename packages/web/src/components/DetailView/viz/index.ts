@@ -3,11 +3,28 @@ export type { HeroStatDef } from './HeroStatRow.js';
 
 export { default as DotMatrix } from './DotMatrix.js';
 
+export { default as DeltaChip } from './DeltaChip.js';
+
 export { default as VelocityScatter } from './VelocityScatter.js';
 export type { VelocityPoint } from './VelocityScatter.js';
 
 export { default as RateStrip } from './RateStrip.js';
 export type { RateEntry } from './RateStrip.js';
+
+export { default as TrueShareBars } from './TrueShareBars.js';
+export type { TrueShareEntry } from './TrueShareBars.js';
+
+export { default as FileHeatgrid } from './FileHeatgrid.js';
+export type { FileHeatgridEntry } from './FileHeatgrid.js';
+
+export { default as FileTreemap } from './FileTreemap.js';
+export type { FileTreemapEntry } from './FileTreemap.js';
+
+export { default as DirectoryShare } from './DirectoryShare.js';
+export type { DirectoryShareFile } from './DirectoryShare.js';
+
+export { default as DirectoryColumns } from './DirectoryColumns.js';
+export type { DirectoryColumnsFile } from './DirectoryColumns.js';
 
 export { default as DivergingColumns } from './DivergingColumns.js';
 export type { DivergingSeries } from './DivergingColumns.js';
@@ -32,5 +49,8 @@ export type {
   InteractiveDailyChurnEntry,
   InteractiveDailyChurnPoint,
 } from './InteractiveDailyChurn.js';
+
+export { default as StackedArea } from './StackedArea.js';
+export type { StackedAreaEntry, StackedAreaPoint } from './StackedArea.js';
 
 export { LegendDot, LegendHatch } from './Legend.js';

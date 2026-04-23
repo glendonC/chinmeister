@@ -94,6 +94,10 @@
       "types": "./dist/tool-call-categories.d.ts",
       "import": "./dist/tool-call-categories.js"
     },
+    "./analytics/work-type.js": {
+      "types": "./dist/analytics/work-type.d.ts",
+      "import": "./dist/analytics/work-type.js"
+    },
     "./logger.js": {
       "types": "./dist/logger.d.ts",
       "import": "./dist/logger.js"

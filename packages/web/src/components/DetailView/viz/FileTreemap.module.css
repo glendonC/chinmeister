@@ -1,0 +1,111 @@
+/* Squarified treemap for the file landscape. Rectangle area = touch_count,
+ * fill = work-type color. Replaces the ranked-bar list that still read as
+ * a vertical scroll at 50+ items. */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.caption {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.plot {
+  position: relative;
+  width: 100%;
+}
+
+.svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cell {
+  cursor: default;
+  transition: transform var(--motion-fast) ease;
+}
+
+.cell:hover {
+  transform-origin: center;
+}
+
+.cell rect {
+  transition: fill-opacity var(--motion-fast) ease;
+}
+
+.label {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  fill: var(--ink);
+  pointer-events: none;
+}
+
+.sublabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  fill: var(--muted);
+  letter-spacing: 0.01em;
+  pointer-events: none;
+}
+
+.meta {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  fill: var(--muted);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-stat);
+  pointer-events: none;
+}
+
+.tooltip {
+  position: absolute;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 10px 12px;
+  background: var(--surface-glass, rgba(255, 255, 255, 0.96));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+  pointer-events: none;
+  z-index: 2;
+}
+
+.tooltipPath {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--ink);
+  word-break: break-all;
+  margin-bottom: 6px;
+}
+
+.tooltipMeta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 0;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+.sep {
+  margin: 0 6px;
+  color: var(--soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cell,
+  .cell rect {
+    transition: none;
+  }
+}
