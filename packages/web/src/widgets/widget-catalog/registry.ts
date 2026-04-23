@@ -1,240 +1,17 @@
 import type { WidgetDef, WidgetSlot } from './types.js';
 import { VIZ_MAX_CONSTRAINTS } from './viz-constraints.js';
 import { widgetColSpan, widgetRowSpan } from './span.js';
+import { LIVE_WIDGETS } from './categories/live.js';
+import { USAGE_WIDGETS } from './categories/usage.js';
+import { OUTCOMES_WIDGETS } from './categories/outcomes.js';
 
 /**
- * Flat list of every widget the dashboard knows about. Ordering is
- * historical (grouped roughly by category, extended widgets at the bottom)
- * and is not semantic — consumers filter/map; no code depends on array
- * position. Subsequent refactors will split this by category into
- * sibling files under ./categories/.
+ * Flat list of every widget the dashboard knows about. Assembled from
+ * per-category modules under ./categories/ so a new widget or category
+ * change touches one file. Order reflects the category enumeration;
+ * consumers filter/map, no code depends on array position.
  */
-export const WIDGET_CATALOG: WidgetDef[] = [
-  // ── Live (presence / coordination) ────
-  {
-    id: 'live-agents',
-    name: 'live agents',
-    description: 'Agents working right now',
-    category: 'live',
-    scope: 'both',
-    viz: 'live-list',
-    w: 6,
-    h: 4,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['dashboard'],
-    timeScope: 'live',
-    fitContent: true,
-  },
-  {
-    id: 'live-conflicts',
-    name: 'live conflicts',
-    description: 'Files being edited by more than one agent right now',
-    category: 'live',
-    scope: 'both',
-    viz: 'data-list',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['dashboard'],
-    timeScope: 'live',
-    fitContent: true,
-  },
-  {
-    id: 'files-in-play',
-    name: 'files being edited',
-    description: 'Files currently being edited',
-    category: 'live',
-    scope: 'both',
-    viz: 'data-list',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['dashboard'],
-    timeScope: 'live',
-    fitContent: true,
-  },
-  {
-    id: 'claimed-files',
-    name: 'claimed files',
-    description: 'Files reserved by agents via chinmeister_claim_files',
-    category: 'live',
-    scope: 'project',
-    viz: 'data-list',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['dashboard'],
-    timeScope: 'live',
-    fitContent: true,
-  },
-
-  // ── Usage (KPI stats) ─────────────────
-  {
-    id: 'sessions',
-    name: 'sessions',
-    description:
-      'Scalar session count with period delta. Canonical anchor for the session dimension.',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-  },
-  {
-    id: 'edits',
-    name: 'edits',
-    description: 'Total edits made by agents',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-  },
-  {
-    id: 'lines-added',
-    name: 'lines added',
-    description: 'Total lines of code added',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-  },
-  {
-    id: 'lines-removed',
-    name: 'lines removed',
-    description: 'Total lines of code removed',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-  },
-  {
-    id: 'files-touched',
-    name: 'files touched',
-    description: 'Unique files edited by agents',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['file_heatmap'],
-  },
-  {
-    id: 'cost',
-    name: 'cost',
-    description: 'Estimated cost from token usage',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['token_usage'],
-  },
-  {
-    id: 'cost-per-edit',
-    name: 'cost per edit',
-    description: 'Average cost per file edit across sessions with token data',
-    category: 'usage',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['token_usage'],
-  },
-  {
-    id: 'cache-efficiency',
-    name: 'cache hit rate',
-    description: 'How much of each prompt is reused from cache instead of re-sent to the model',
-    category: 'tools',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['token_usage'],
-  },
-
-  // ── Outcomes ──────────────────────────
-  {
-    id: 'outcomes',
-    name: 'outcomes',
-    description: 'Finished, abandoned, and failed sessions',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'outcome-bar',
-    w: 4,
-    h: 3,
-    minW: 3,
-    minH: 2,
-    dataKeys: ['completion_summary'],
-    fitContent: true,
-  },
-  {
-    id: 'outcome-trend',
-    name: 'completion rate trend',
-    description: 'Daily completion rate over time',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'sparkline',
-    w: 8,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-    fitContent: true,
-  },
-  {
-    id: 'one-shot-rate',
-    name: 'one-shot rate',
-    description: 'Percentage of sessions where edits worked without retry',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'stat',
-    w: 3,
-    h: 2,
-    minW: 2,
-    minH: 2,
-    dataKeys: ['tool_call_stats'],
-  },
-  {
-    id: 'stuckness',
-    name: 'stuck sessions',
-    description: 'Sessions where the agent stalled for 15+ minutes',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'stat-row',
-    w: 4,
-    h: 2,
-    minW: 3,
-    minH: 2,
-    dataKeys: ['stuckness'],
-  },
-
+const REMAINING_WIDGETS: WidgetDef[] = [
   // ── Activity ──────────────────────────
   {
     id: 'heatmap',
@@ -306,6 +83,19 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Tools & Models ────────────────────
+  {
+    id: 'cache-efficiency',
+    name: 'cache hit rate',
+    description: 'How much of each prompt is reused from cache instead of re-sent to the model',
+    category: 'tools',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['token_usage'],
+  },
   {
     id: 'tools',
     name: 'tool comparison',
@@ -392,73 +182,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 6,
     minH: 2,
     dataKeys: ['member_analytics'],
-  },
-
-  // ── Projects ──────────────────────────
-  {
-    id: 'projects',
-    name: 'projects',
-    description:
-      'Cross-project comparator: tool mix, 7-day activity, shared memory growth, conflict trend',
-    category: 'usage',
-    scope: 'overview',
-    viz: 'project-list',
-    // 8-col default (down from 12 on the 2026-04-22 redesign): the table now
-    // has 6 fixed-track columns + a View pill, so a half-to-two-thirds tile
-    // matches the live-agents/live-conflicts density precedent. Users can
-    // still resize down to 6 or up to 12 from the customize panel.
-    w: 8,
-    h: 3,
-    minW: 6,
-    minH: 2,
-    // Same opt-in as live-agents et al: WidgetGrid's useFitRowSpan measures
-    // the table's scrollHeight and shrinks the cell's grid-row span to the
-    // minimum needed (clamped at h:3 as ceiling). A single-project user
-    // sees a 1-row tall cell instead of 3 rows of empty space; a
-    // many-project user gets the full 3 rows + scroll inside the body.
-    fitContent: true,
-    dataKeys: ['dashboard'],
-  },
-
-  // ── Outcomes (extended) ─────────────
-  {
-    id: 'first-edit',
-    name: 'time to first edit',
-    description: 'How long before agents start producing edits',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'stat-row',
-    w: 6,
-    h: 2,
-    minW: 3,
-    minH: 2,
-    dataKeys: ['first_edit_stats'],
-  },
-  {
-    id: 'duration-dist',
-    name: 'session durations',
-    description: 'Distribution of session lengths',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'bar-chart',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['duration_distribution'],
-  },
-  {
-    id: 'scope-complexity',
-    name: 'scope complexity',
-    description: 'Files touched per session vs completion rate',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'bucket-chart',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['scope_complexity'],
   },
 
   // ── Activity (extended) ─────────────
@@ -712,6 +435,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 2,
     dataKeys: ['conversation_edit_correlation'],
   },
+
   // ── Memory (extended) ───────────────
   {
     id: 'memory-outcomes',
@@ -807,6 +531,13 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 2,
     dataKeys: ['file_overlap'],
   },
+];
+
+export const WIDGET_CATALOG: WidgetDef[] = [
+  ...LIVE_WIDGETS,
+  ...USAGE_WIDGETS,
+  ...OUTCOMES_WIDGETS,
+  ...REMAINING_WIDGETS,
 ];
 
 export const WIDGET_MAP = new Map(

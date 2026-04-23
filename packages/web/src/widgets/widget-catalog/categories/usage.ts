@@ -1,0 +1,120 @@
+import type { WidgetDef } from '../types.js';
+
+export const USAGE_WIDGETS: WidgetDef[] = [
+  {
+    id: 'sessions',
+    name: 'sessions',
+    description:
+      'Scalar session count with period delta. Canonical anchor for the session dimension.',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['daily_trends'],
+  },
+  {
+    id: 'edits',
+    name: 'edits',
+    description: 'Total edits made by agents',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['daily_trends'],
+  },
+  {
+    id: 'lines-added',
+    name: 'lines added',
+    description: 'Total lines of code added',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['daily_trends'],
+  },
+  {
+    id: 'lines-removed',
+    name: 'lines removed',
+    description: 'Total lines of code removed',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['daily_trends'],
+  },
+  {
+    id: 'files-touched',
+    name: 'files touched',
+    description: 'Unique files edited by agents',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['file_heatmap'],
+  },
+  {
+    id: 'cost',
+    name: 'cost',
+    description: 'Estimated cost from token usage',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['token_usage'],
+  },
+  {
+    id: 'cost-per-edit',
+    name: 'cost per edit',
+    description: 'Average cost per file edit across sessions with token data',
+    category: 'usage',
+    scope: 'both',
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
+    minH: 2,
+    dataKeys: ['token_usage'],
+  },
+  {
+    id: 'projects',
+    name: 'projects',
+    description:
+      'Cross-project comparator: tool mix, 7-day activity, shared memory growth, conflict trend',
+    category: 'usage',
+    scope: 'overview',
+    viz: 'project-list',
+    // 8-col default (down from 12 on the 2026-04-22 redesign): the table now
+    // has 6 fixed-track columns + a View pill, so a half-to-two-thirds tile
+    // matches the live-agents/live-conflicts density precedent. Users can
+    // still resize down to 6 or up to 12 from the customize panel.
+    w: 8,
+    h: 3,
+    minW: 6,
+    minH: 2,
+    // Same opt-in as live-agents et al: WidgetGrid's useFitRowSpan measures
+    // the table's scrollHeight and shrinks the cell's grid-row span to the
+    // minimum needed (clamped at h:3 as ceiling). A single-project user
+    // sees a 1-row tall cell instead of 3 rows of empty space; a
+    // many-project user gets the full 3 rows + scroll inside the body.
+    fitContent: true,
+    dataKeys: ['dashboard'],
+  },
+];
