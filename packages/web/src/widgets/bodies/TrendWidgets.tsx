@@ -4,13 +4,14 @@ import { Sparkline } from '../charts.js';
 import { completionColor } from '../utils.js';
 import styles from '../widget-shared.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { CoverageNote, GhostSparkline, capabilityCoverageNote } from './shared.js';
+import { CoverageNote, capabilityCoverageNote } from './shared.js';
 
-function SessionTrendWidget({ analytics }: WidgetBodyProps) {
-  const data = analytics.daily_trends.map((d) => d.sessions);
-  if (data.length < 2) return <GhostSparkline />;
-  return <Sparkline data={data} height={80} />;
-}
+// `session-trend` and `edit-velocity` were cut from the catalog
+// 2026-04-23 — the sessions/edits KPI stat cards answer the same
+// question and drill into UsageDetailView for the full chart, so a
+// sparkline-only card was a B2 (unique question) rubric failure. This
+// module now only carries trend widgets that aren't duplicated by a KPI
+// stat: completion rate, prompt efficiency, hourly effectiveness.
 
 function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
   // Completion rate per day, in percent. Days with no sessions are skipped
@@ -29,12 +30,6 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
     return <SectionEmpty>Appears once sessions run on 2+ different days</SectionEmpty>;
   }
   return <Sparkline data={points} height={80} />;
-}
-
-function EditVelocityWidget({ analytics }: WidgetBodyProps) {
-  const data = analytics.edit_velocity.map((d) => d.edits_per_hour);
-  if (data.length < 2) return <GhostSparkline />;
-  return <Sparkline data={data} height={80} />;
 }
 
 function PromptEfficiencyWidget({ analytics }: WidgetBodyProps) {
@@ -116,8 +111,6 @@ function HourlyEffectivenessWidget({ analytics }: WidgetBodyProps) {
 }
 
 export const trendWidgets: WidgetRegistry = {
-  'session-trend': SessionTrendWidget,
-  'edit-velocity': EditVelocityWidget,
   'outcome-trend': OutcomeTrendWidget,
   'prompt-efficiency': PromptEfficiencyWidget,
   'hourly-effectiveness': HourlyEffectivenessWidget,

@@ -2,16 +2,9 @@ import {
   getToolsWithCapability,
   type DataCapabilities,
 } from '@chinmeister/shared/tool-registry.js';
+import DeltaChip from '../../components/DetailView/viz/DeltaChip.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
-import { formatCostDelta } from '../utils.js';
 import styles from '../widget-shared.module.css';
-
-/** How to format the inline delta magnitude shown next to a stat value.
- *  'count' is the default (1-decimal rounded form used by session/edit
- *  counts). 'usd-fine' is for per-edit USD deltas that need sub-cent
- *  precision via formatCostDelta. Additional variants can land here as
- *  cost-adjacent stats join the strip. */
-export type StatDeltaFormat = 'count' | 'usd-fine';
 
 export const SENTIMENT_COLORS: Record<string, string> = {
   positive: 'var(--success)',
@@ -41,7 +34,6 @@ export function StatWidget({
   value,
   delta,
   deltaInvert,
-  deltaFormat = 'count',
   active,
   onSelect,
   selectAriaLabel,
@@ -51,10 +43,6 @@ export function StatWidget({
   value: string;
   delta?: { current: number | null; previous: number | null } | null;
   deltaInvert?: boolean;
-  /** How to render the inline delta magnitude. Defaults to 'count' —
-   *  1-decimal rounding suitable for integer-ish stats. Use 'usd-fine'
-   *  for per-edit dollar deltas that need sub-cent precision. */
-  deltaFormat?: StatDeltaFormat;
   /** Tab-selector state. When a boolean (true or false), the stat renders
    * as a selectable tab — active stays in full ink, inactive dims to
    * `--soft`. Undefined means the stat is not part of a selector group and
@@ -72,30 +60,24 @@ export function StatWidget({
   onOpenDetail?: () => void;
   detailAriaLabel?: string;
 }) {
-  let deltaEl = null;
-  // Only render a delta when both sides are measured and previous > 0.
-  // Null on either side means "no comparison available" (e.g., stale
-  // pricing, all-unpriced models, or first-ever period); zero previous
-  // is divide-by-infinity territory where the arrow is misleading.
-  if (delta && delta.current != null && delta.previous != null && delta.previous > 0) {
-    const d = delta.current - delta.previous;
-    const isGood = deltaInvert ? d < 0 : d > 0;
-    const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
-    const color = d === 0 ? 'var(--muted)' : isGood ? 'var(--success)' : 'var(--danger)';
-    const magnitude =
-      deltaFormat === 'usd-fine' ? formatCostDelta(d) : String(Math.abs(Math.round(d * 10) / 10));
-    deltaEl = (
-      <span className={styles.statInlineDelta} style={{ color }}>
-        {arrow}
-        {magnitude}
-      </span>
-    );
-  }
+  // Delta presentation is unified on DeltaChip — the same pill the detail
+  // views use. Previous null/zero-or-negative suppresses the chip (same
+  // gate as before; divide-by-infinity is misleading). One design
+  // language across the overview stat strip and the detail view folds.
+  const deltaEl =
+    delta && delta.current != null && delta.previous != null && delta.previous > 0 ? (
+      <DeltaChip
+        current={delta.current}
+        previous={delta.previous}
+        sense={deltaInvert ? 'down' : 'up'}
+      />
+    ) : null;
 
   // Tab-selector render path: the stat is one of N mutually-exclusive
   // selectors driving an adjacent trend/chart. Active = full ink, inactive
-  // dims to --soft. onSelect is the single click action; drill-in is not
-  // rendered here because the adjacent chart is the detail.
+  // dims to --soft. onSelect is the single click action; no drill and no
+  // delta chip — the adjacent chart IS the detail, and a second indicator
+  // would compete with the active/inactive tab signal.
   if (active !== undefined) {
     const valueClass = active
       ? styles.heroStatValue
@@ -108,17 +90,20 @@ export function StatWidget({
         aria-label={selectAriaLabel}
         aria-pressed={active}
       >
-        <span className={valueClass}>
-          {value}
-          {deltaEl}
-        </span>
+        <span className={valueClass}>{value}</span>
       </button>
     );
   }
 
+  // Hero + DeltaChip inline on one baseline. Reads as a single compound
+  // stat ("2,483 ↑12%"); the widget title already lives in the head
+  // above the body, so stacking the chip below would leave it dangling
+  // with no anchor. Right-alignment also keeps the slot beneath the hero
+  // clear for any future secondary viz that belongs on the overview —
+  // though the default for KPI cards is nothing there at all.
   const inner = (
-    <span className={styles.heroStatValue}>
-      {value}
+    <span className={styles.heroRow}>
+      <span className={styles.heroStatValue}>{value}</span>
       {deltaEl}
     </span>
   );

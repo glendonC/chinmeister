@@ -305,34 +305,12 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Trends (sparklines) ───────────────
-  {
-    id: 'session-trend',
-    name: 'session trend',
-    description: 'Daily session volume over time',
-    category: 'usage',
-    scope: 'both',
-    viz: 'sparkline',
-    w: 8,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-    fitContent: true,
-  },
-  {
-    id: 'edit-velocity',
-    name: 'edits per hour',
-    description: 'Edits per hour trend over time',
-    category: 'usage',
-    scope: 'both',
-    viz: 'sparkline',
-    w: 8,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['edit_velocity'],
-    fitContent: true,
-  },
+  // `session-trend` and `edit-velocity` lived here historically but were
+  // cut 2026-04-23: they duplicated the `sessions` / `edits` KPI stat
+  // cards, which already answer the same question (with DeltaChip for
+  // direction) and drill into UsageDetailView for the full chart. Two
+  // widgets, one question = B2 (unique question) failure on the rubric.
+  // Any trend-over-time lives in the drill, not on the cockpit.
 
   // ── Outcomes ──────────────────────────
   {
@@ -1105,9 +1083,13 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'cost-per-edit', colSpan: 3, rowSpan: 2 },
   { id: 'one-shot-rate', colSpan: 3, rowSpan: 2 },
 
-  // Trend chart + outcomes — 8 + 4
-  { id: 'session-trend', colSpan: 8, rowSpan: 3 },
-  { id: 'outcomes', colSpan: 4, rowSpan: 3 },
+  // Outcomes full-width. session-trend / edit-velocity lived here
+  // historically, but the session + edit KPI stats now carry their own
+  // inline sparklines (see `KpiTrend` in UsageWidgets.tsx), so a second
+  // card for "the same metric, but bigger, as a line" duplicates the
+  // stat it sits next to. The outcomes bar takes the row instead —
+  // finished / abandoned / failed reads clean at 12 cols.
+  { id: 'outcomes', colSpan: 12, rowSpan: 3 },
 
   // Heatmap + work types — 8 + 4
   { id: 'heatmap', colSpan: 8, rowSpan: 4 },

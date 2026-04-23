@@ -14,7 +14,6 @@ async function loadModule() {
     import('../../lib/schemas/analytics.js'),
   ]);
   return {
-    SessionTrendWidget: trendsMod.trendWidgets['session-trend'],
     OutcomeTrendWidget: trendsMod.trendWidgets['outcome-trend'],
     createEmptyUserAnalytics: schemasMod.createEmptyUserAnalytics,
   };
@@ -64,30 +63,6 @@ function zeroTrendRow(day) {
 afterEach(() => {
   vi.restoreAllMocks();
   document.body.innerHTML = '';
-});
-
-describe('SessionTrendWidget ghost fallback', () => {
-  it('renders GhostSparkline when there is no data', async () => {
-    const { SessionTrendWidget, createEmptyUserAnalytics } = await loadModule();
-    const r = render(SessionTrendWidget, makeProps(createEmptyUserAnalytics()));
-    // GhostSparkline draws a single <line>; the populated Sparkline draws paths.
-    expect(r.container.querySelector('line')).not.toBeNull();
-    expect(r.container.querySelector('path')).toBeNull();
-    r.unmount();
-  });
-
-  it('renders a sparkline when any day has sessions', async () => {
-    const { SessionTrendWidget, createEmptyUserAnalytics } = await loadModule();
-    const analytics = createEmptyUserAnalytics();
-    analytics.daily_trends = [
-      zeroTrendRow('2026-04-14'),
-      zeroTrendRow('2026-04-15'),
-      { ...zeroTrendRow('2026-04-16'), sessions: 3 },
-    ];
-    const r = render(SessionTrendWidget, makeProps(analytics));
-    expect(r.container.querySelector('path')).not.toBeNull();
-    r.unmount();
-  });
 });
 
 describe('OutcomeTrendWidget resilience', () => {

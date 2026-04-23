@@ -1,15 +1,8 @@
 import { setQueryParam, useRoute } from '../../lib/router.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import {
-  StatWidget,
-  CoverageNote,
-  capabilityCoverageNote,
-  hasCostData,
-  costEmptyReason,
-} from './shared.js';
+import { StatWidget, CoverageNote, costEmptyReason, hasCostData } from './shared.js';
 import { formatCost } from '../utils.js';
-import { WorkTypeStrip } from '../../components/WorkTypeStrip/index.js';
 
 function openUsage(tab: string) {
   return () => setQueryParam('usage', tab);
@@ -153,38 +146,22 @@ function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
 
 // files_touched_total comes from COUNT(DISTINCT file_path) on the edits
 // table — uncapped. Distinct from file_heatmap.length, which is the
-// ranked top-50 list and would silently cap this stat at 50. Capture
-// gate is hook-enabled tools (Claude Code, Cursor, Windsurf); the
-// CoverageNote discloses this when non-hook tools are active.
+// ranked top-50 list and would silently cap this stat at 50.
 //
-// The card face pairs the scalar with a 3px work-type strip — files_touched
-// is breadth, and breadth has a native second dimension (what kind of
-// surface). The strip decompresses the number without labels; one glance
-// reveals "mostly backend + test" before the drill opens.
+// Overview treatment is just the scalar. Work-type composition (the
+// old card-face strip) lives in the drill now — the overview is the
+// cockpit, not the breakdown.
 function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
   const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const n = analytics.files_touched_total;
-  const tools = analytics.data_coverage?.tools_reporting ?? [];
-  const note = capabilityCoverageNote(tools, 'hooks');
   const display = n.toLocaleString();
-  const breakdown = analytics.files_by_work_type;
   return (
-    <>
-      <StatWidget
-        value={display}
-        onOpenDetail={drillable ? openUsage('files-touched') : undefined}
-        detailAriaLabel={drillable ? `Open usage detail · ${display} files touched` : undefined}
-      />
-      {breakdown.length > 0 && (
-        <WorkTypeStrip
-          entries={breakdown}
-          variant="card"
-          ariaLabel={`${display} files touched by work type`}
-        />
-      )}
-      <CoverageNote text={note} />
-    </>
+    <StatWidget
+      value={display}
+      onOpenDetail={drillable ? openUsage('files-touched') : undefined}
+      detailAriaLabel={drillable ? `Open usage detail · ${display} files touched` : undefined}
+    />
   );
 }
 
@@ -198,8 +175,11 @@ function CostWidget({ analytics }: WidgetBodyProps) {
   // lie. hasCostData folds all three degraded paths into one predicate.
   const reliable = hasCostData(t);
   const value = reliable ? formatCost(t.total_estimated_cost_usd, 2) : '--';
-  const note = reliable ? capabilityCoverageNote(tools, 'tokenUsage') : costEmptyReason(t, tools);
   const canDrill = reliable && drillable;
+  // Populated stats don't need a face-level coverage line (attribution
+  // belongs in the drill view). Empty stats still do — "--" without a
+  // reason is the exact A3 regression the rubric forbids.
+  const emptyReason = reliable ? null : costEmptyReason(t, tools);
   return (
     <>
       <StatWidget
@@ -207,21 +187,19 @@ function CostWidget({ analytics }: WidgetBodyProps) {
         onOpenDetail={canDrill ? openUsage('cost') : undefined}
         detailAriaLabel={canDrill ? `Open usage detail · ${value} cost` : undefined}
       />
-      <CoverageNote text={note} />
+      <CoverageNote text={emptyReason} />
     </>
   );
 }
 
 function CostPerEditWidget({ analytics }: WidgetBodyProps) {
   const t = analytics.token_usage;
-  const tools = analytics.data_coverage?.tools_reporting ?? [];
   const drillable = useIsDrillable();
   // Lock-step with CostWidget: cost-per-edit is the numerator's ratio, so
   // whenever cost itself isn't showable, the ratio isn't either. Prevents
   // the "total says -- but the ratio shows a number" divergence.
   const reliable = hasCostData(t) && t.cost_per_edit != null;
   const value = reliable ? formatCost(t.cost_per_edit, 3) : '--';
-  const note = reliable ? capabilityCoverageNote(tools, 'tokenUsage') : costEmptyReason(t, tools);
   const canDrill = reliable && drillable;
   // Period-over-period delta. Both windows are priced against the current
   // snapshot (via enrichPeriodComparisonCost) so the arrow reflects
@@ -229,7 +207,7 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
   // move green — cheaper is the improvement direction here. Structurally
   // null at 30-day windows (previous is outside retention) and at any
   // window where either side has no priced token data; StatWidget's delta
-  // gate then suppresses the pill without the widget needing to know why.
+  // gate then suppresses the chip without the widget needing to know why.
   const pc = analytics.period_comparison;
   const delta =
     reliable && pc
@@ -238,17 +216,18 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
           previous: pc.previous?.cost_per_edit ?? null,
         }
       : null;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const emptyReason = reliable ? null : costEmptyReason(t, tools);
   return (
     <>
       <StatWidget
         value={value}
         delta={delta}
         deltaInvert
-        deltaFormat="usd-fine"
         onOpenDetail={canDrill ? openUsage('cost-per-edit') : undefined}
         detailAriaLabel={canDrill ? `Open usage detail · ${value} per edit` : undefined}
       />
-      <CoverageNote text={note} />
+      <CoverageNote text={emptyReason} />
     </>
   );
 }

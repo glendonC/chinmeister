@@ -21,7 +21,11 @@ export const ACTIVITY_DEFAULT_LAYOUT: WidgetSlot[] = [
 
 // Trends tab — historical reflection. Bigger charts, full coverage.
 export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
-  { id: 'session-trend', colSpan: 8, rowSpan: 3 },
+  // Lead with completion-rate over time + the outcome bar. Replaces
+  // `session-trend` after that widget was cut from the catalog — session
+  // counts live on the KPI strip below, and this tab is for questions
+  // the KPI strip can't answer (shape + composition of outcomes).
+  { id: 'outcome-trend', colSpan: 8, rowSpan: 3 },
   { id: 'outcomes', colSpan: 4, rowSpan: 3 },
   { id: 'heatmap', colSpan: 8, rowSpan: 4 },
   { id: 'work-types', colSpan: 4, rowSpan: 3 },

@@ -421,6 +421,55 @@ const RING_GAP_DEG = 12;
 const RING_TOP_N = 5;
 const OTHER_KEY = '__other';
 
+// Row shape for the tool table. Real tool rows carry their `host_tool`
+// identifier for the ToolIcon; the aggregated tail rolls into a single
+// `Other` row (`host_tool: null`) matching the ring's aggregation so the
+// table and the ring never disagree about how many categories exist.
+interface SessionsToolRow {
+  key: string;
+  host_tool: string | null;
+  label: string;
+  sessions: number;
+  completionRate: number | null;
+}
+
+/**
+ * Aggregate tool-comparison rows to match the ring's top-N + Other
+ * aggregation. Keeps the table and the ring visually consistent — the
+ * ring already truncates to RING_TOP_N slices, so the table rendering
+ * every raw entry is the root cause of the visual weight asymmetry in
+ * the paired hero row. Other's completion rate is a session-weighted
+ * average of the tail (not a simple mean), which is the only honest
+ * aggregate across tools with different sample sizes.
+ */
+function aggregateSessionsRows(entries: UserAnalytics['tool_comparison']): SessionsToolRow[] {
+  const sorted = [...entries].filter((e) => e.sessions > 0).sort((a, b) => b.sessions - a.sessions);
+  const top = sorted.slice(0, RING_TOP_N);
+  const tail = sorted.slice(RING_TOP_N);
+  const rows: SessionsToolRow[] = top.map((t) => ({
+    key: t.host_tool,
+    host_tool: t.host_tool,
+    label: getToolMeta(t.host_tool).label,
+    sessions: t.sessions,
+    completionRate: t.completion_rate > 0 ? t.completion_rate : null,
+  }));
+  const tailSessions = tail.reduce((s, e) => s + e.sessions, 0);
+  if (tailSessions > 0) {
+    // Session-weighted completion rate; ignore rows with no completion data.
+    const rated = tail.filter((t) => t.completion_rate > 0);
+    const weight = rated.reduce((s, e) => s + e.sessions, 0);
+    const weighted = rated.reduce((s, e) => s + e.completion_rate * e.sessions, 0);
+    rows.push({
+      key: OTHER_KEY,
+      host_tool: null,
+      label: `Other · ${tail.length} tools`,
+      sessions: tailSessions,
+      completionRate: weight > 0 ? weighted / weight : null,
+    });
+  }
+  return rows;
+}
+
 function ToolRing({
   entries,
   total,
@@ -428,47 +477,29 @@ function ToolRing({
   entries: UserAnalytics['tool_comparison'];
   total: number;
 }) {
+  const rows = useMemo(() => aggregateSessionsRows(entries), [entries]);
+
   const arcs = useMemo(() => {
     const out: Array<{
-      tool: string;
+      key: string;
       color: string;
       startDeg: number;
       sweepDeg: number;
-      sessions: number;
     }> = [];
     const safeTotal = Math.max(1, total);
-    const sorted = [...entries].sort((a, b) => b.sessions - a.sessions);
-    const top = sorted.slice(0, RING_TOP_N);
-    const tail = sorted.slice(RING_TOP_N);
-    const tailSessions = tail.reduce((s, e) => s + e.sessions, 0);
-    const slices = [
-      ...top.map((e) => ({
-        tool: e.host_tool,
-        color: getToolMeta(e.host_tool).color,
-        sessions: e.sessions,
-      })),
-      ...(tailSessions > 0
-        ? [{ tool: OTHER_KEY, color: 'var(--soft)', sessions: tailSessions }]
-        : []),
-    ].filter((s) => s.sessions > 0);
-    const gaps = slices.length * RING_GAP_DEG;
+    const gaps = rows.length * RING_GAP_DEG;
     const available = Math.max(0, 360 - gaps);
     let cursor = 0;
-    for (const s of slices) {
-      const sweep = (s.sessions / safeTotal) * available;
+    for (const r of rows) {
+      const color = r.host_tool ? getToolMeta(r.host_tool).color : 'var(--soft)';
+      const sweep = (r.sessions / safeTotal) * available;
       if (sweep > 0.2) {
-        out.push({
-          tool: s.tool,
-          color: s.color,
-          startDeg: cursor,
-          sweepDeg: sweep,
-          sessions: s.sessions,
-        });
+        out.push({ key: r.key, color, startDeg: cursor, sweepDeg: sweep });
       }
       cursor += sweep + RING_GAP_DEG;
     }
     return out;
-  }, [entries, total]);
+  }, [rows, total]);
 
   return (
     <div className={styles.ringBlock}>
@@ -484,7 +515,7 @@ function ToolRing({
           />
           {arcs.map((arc) => (
             <path
-              key={arc.tool}
+              key={arc.key}
               d={arcPath(RING_CX, RING_CY, RING_R, arc.startDeg, arc.sweepDeg)}
               fill="none"
               stroke={arc.color}
@@ -530,35 +561,31 @@ function ToolRing({
                 Sessions
               </th>
               <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
-                Share
-              </th>
-              <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
                 Done
               </th>
             </tr>
           </thead>
           <tbody>
-            {entries.map((t, i) => {
-              const meta = getToolMeta(t.host_tool);
-              const share = total > 0 ? Math.round((t.sessions / total) * 100) : 0;
-              return (
-                <tr
-                  key={t.host_tool}
-                  className={styles.toolRow}
-                  style={{ '--row-index': i } as CSSProperties}
-                >
-                  <td className={styles.toolCellName}>
-                    <ToolIcon tool={t.host_tool} size={14} />
-                    <span>{meta.label}</span>
-                  </td>
-                  <td className={styles.toolCellNum}>{fmtCount(t.sessions)}</td>
-                  <td className={styles.toolCellNum}>{share}%</td>
-                  <td className={styles.toolCellNum}>
-                    {t.completion_rate > 0 ? `${Math.round(t.completion_rate)}%` : '—'}
-                  </td>
-                </tr>
-              );
-            })}
+            {rows.map((row, i) => (
+              <tr
+                key={row.key}
+                className={styles.toolRow}
+                style={{ '--row-index': i } as CSSProperties}
+              >
+                <td className={styles.toolCellName}>
+                  {row.host_tool ? (
+                    <ToolIcon tool={row.host_tool} size={14} />
+                  ) : (
+                    <span className={styles.toolCellOtherDot} aria-hidden="true" />
+                  )}
+                  <span>{row.label}</span>
+                </td>
+                <td className={styles.toolCellNum}>{fmtCount(row.sessions)}</td>
+                <td className={styles.toolCellNum}>
+                  {row.completionRate != null ? `${Math.round(row.completionRate)}%` : '—'}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
         <button type="button" className={styles.toolsCta} onClick={() => navigate('tools')}>
@@ -572,9 +599,50 @@ function ToolRing({
   );
 }
 
+interface EditsToolRow {
+  key: string;
+  host_tool: string | null;
+  label: string;
+  edits: number;
+  rate: number | null;
+}
+
+/**
+ * Edits-tab variant of aggregateSessionsRows. The Other row's rate is a
+ * true aggregate — total tail edits divided by total tail hours — which
+ * is the correct aggregation (not an average of averages). Rows without
+ * session hours carry `rate: null` rather than pretending to be zero.
+ */
+function aggregateEditsRows(entries: UserAnalytics['tool_comparison']): EditsToolRow[] {
+  const sorted = [...entries]
+    .filter((e) => e.total_edits > 0)
+    .sort((a, b) => b.total_edits - a.total_edits);
+  const top = sorted.slice(0, RING_TOP_N);
+  const tail = sorted.slice(RING_TOP_N);
+  const rows: EditsToolRow[] = top.map((t) => ({
+    key: t.host_tool,
+    host_tool: t.host_tool,
+    label: getToolMeta(t.host_tool).label,
+    edits: t.total_edits,
+    rate: t.total_session_hours > 0 ? t.total_edits / t.total_session_hours : null,
+  }));
+  const tailEdits = tail.reduce((s, e) => s + e.total_edits, 0);
+  if (tailEdits > 0) {
+    const tailHours = tail.reduce((s, e) => s + e.total_session_hours, 0);
+    rows.push({
+      key: OTHER_KEY,
+      host_tool: null,
+      label: `Other · ${tail.length} tools`,
+      edits: tailEdits,
+      rate: tailHours > 0 ? tailEdits / tailHours : null,
+    });
+  }
+  return rows;
+}
+
 // Edits-flavored share ring — same visual DNA as ToolRing above, but
 // sized by edits (not sessions). Center reads "EDITS", table columns are
-// Tool / Edits / Share / Rate so the pair reads as the edit story.
+// Tool / Edits / Rate so the pair reads as the edit story.
 function EditsToolRing({
   entries,
   total,
@@ -582,58 +650,38 @@ function EditsToolRing({
   entries: UserAnalytics['tool_comparison'];
   total: number;
 }) {
+  const rows = useMemo(() => aggregateEditsRows(entries), [entries]);
+
   const arcs = useMemo(() => {
     const out: Array<{
-      tool: string;
+      key: string;
       color: string;
       startDeg: number;
       sweepDeg: number;
-      edits: number;
     }> = [];
     const safeTotal = Math.max(1, total);
-    const sorted = [...entries].sort((a, b) => b.total_edits - a.total_edits);
-    const top = sorted.slice(0, RING_TOP_N);
-    const tail = sorted.slice(RING_TOP_N);
-    const tailEdits = tail.reduce((s, e) => s + e.total_edits, 0);
-    const slices = [
-      ...top.map((e) => ({
-        tool: e.host_tool,
-        color: getToolMeta(e.host_tool).color,
-        edits: e.total_edits,
-      })),
-      ...(tailEdits > 0 ? [{ tool: OTHER_KEY, color: 'var(--soft)', edits: tailEdits }] : []),
-    ].filter((s) => s.edits > 0);
-    const gaps = slices.length * RING_GAP_DEG;
+    const gaps = rows.length * RING_GAP_DEG;
     const available = Math.max(0, 360 - gaps);
     let cursor = 0;
-    for (const s of slices) {
-      const sweep = (s.edits / safeTotal) * available;
+    for (const r of rows) {
+      const color = r.host_tool ? getToolMeta(r.host_tool).color : 'var(--soft)';
+      const sweep = (r.edits / safeTotal) * available;
       if (sweep > 0.2) {
-        out.push({
-          tool: s.tool,
-          color: s.color,
-          startDeg: cursor,
-          sweepDeg: sweep,
-          edits: s.edits,
-        });
+        out.push({ key: r.key, color, startDeg: cursor, sweepDeg: sweep });
       }
       cursor += sweep + RING_GAP_DEG;
     }
     return out;
-  }, [entries, total]);
-
-  const rows = useMemo(
-    () =>
-      [...entries].filter((e) => e.total_edits > 0).sort((a, b) => b.total_edits - a.total_edits),
-    [entries],
-  );
+  }, [rows, total]);
 
   // Single-tool empty state: a full ring is decorative, not informative.
+  // After aggregation there's at most one "Other" row appended to the top
+  // list, so a single underlying tool still yields rows.length === 1.
   if (rows.length <= 1) {
     const only = rows[0];
-    if (!only) return null;
+    if (!only || !only.host_tool) return null;
     const meta = getToolMeta(only.host_tool);
-    const rate = only.total_session_hours > 0 ? only.total_edits / only.total_session_hours : 0;
+    const hours = entries.find((e) => e.host_tool === only.host_tool)?.total_session_hours ?? 0;
     return (
       <div className={styles.ringBlock}>
         <div className={styles.singleTool}>
@@ -642,12 +690,12 @@ function EditsToolRing({
             <span>{meta.label}</span>
           </div>
           <div className={styles.singleToolValue}>
-            {fmtCount(only.total_edits)}
+            {fmtCount(only.edits)}
             <span className={styles.singleToolUnit}>edits</span>
           </div>
-          {rate > 0 && (
+          {only.rate != null && only.rate > 0 && (
             <div className={styles.singleToolMeta}>
-              {rate.toFixed(1)}/hr · {only.total_session_hours.toFixed(1)}h
+              {only.rate.toFixed(1)}/hr · {hours.toFixed(1)}h
             </div>
           )}
           <button type="button" className={styles.toolsCta} onClick={() => navigate('tools')}>
@@ -675,7 +723,7 @@ function EditsToolRing({
           />
           {arcs.map((arc) => (
             <path
-              key={arc.tool}
+              key={arc.key}
               d={arcPath(RING_CX, RING_CY, RING_R, arc.startDeg, arc.sweepDeg)}
               fill="none"
               stroke={arc.color}
@@ -721,34 +769,31 @@ function EditsToolRing({
                 Edits
               </th>
               <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
-                Share
-              </th>
-              <th scope="col" className={clsx(styles.toolTh, styles.toolThNum)}>
                 Rate
               </th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((t, i) => {
-              const meta = getToolMeta(t.host_tool);
-              const share = total > 0 ? Math.round((t.total_edits / total) * 100) : 0;
-              const rate = t.total_session_hours > 0 ? t.total_edits / t.total_session_hours : 0;
-              return (
-                <tr
-                  key={t.host_tool}
-                  className={styles.toolRow}
-                  style={{ '--row-index': i } as CSSProperties}
-                >
-                  <td className={styles.toolCellName}>
-                    <ToolIcon tool={t.host_tool} size={14} />
-                    <span>{meta.label}</span>
-                  </td>
-                  <td className={styles.toolCellNum}>{fmtCount(t.total_edits)}</td>
-                  <td className={styles.toolCellNum}>{share}%</td>
-                  <td className={styles.toolCellNum}>{rate > 0 ? `${rate.toFixed(1)}/hr` : '—'}</td>
-                </tr>
-              );
-            })}
+            {rows.map((row, i) => (
+              <tr
+                key={row.key}
+                className={styles.toolRow}
+                style={{ '--row-index': i } as CSSProperties}
+              >
+                <td className={styles.toolCellName}>
+                  {row.host_tool ? (
+                    <ToolIcon tool={row.host_tool} size={14} />
+                  ) : (
+                    <span className={styles.toolCellOtherDot} aria-hidden="true" />
+                  )}
+                  <span>{row.label}</span>
+                </td>
+                <td className={styles.toolCellNum}>{fmtCount(row.edits)}</td>
+                <td className={styles.toolCellNum}>
+                  {row.rate != null && row.rate > 0 ? `${row.rate.toFixed(1)}/hr` : '—'}
+                </td>
+              </tr>
+            ))}
           </tbody>
         </table>
         <button type="button" className={styles.toolsCta} onClick={() => navigate('tools')}>

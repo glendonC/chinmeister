@@ -230,14 +230,35 @@ export class DatabaseDO extends DurableObject<Env> {
   }
 
   // -- Rate limiting --
+  //
+  // All three rate-limit methods short-circuit when ENVIRONMENT === 'local'.
+  // Rate limits exist to protect multi-tenant production from abuse; the
+  // local dev loop is a single developer on their own machine, where the
+  // 5/24h team-creation ceiling (and the token-refresh / ws-ticket limits
+  // alongside it) turn into deadlocks every time the developer resets
+  // state, loses a team, or iterates on the bootstrap script. See
+  // scripts/dev-local.mjs — a single run walks through auth init + team
+  // create + refresh; with the real limiter in play, a handful of
+  // restarts pushes over the ceiling and blocks the next 24 hours.
+  //
+  // Prod ('production'), staging, and the test harness ('test' in
+  // wrangler.test.toml) all fall through to the real SQL path. The bypass
+  // is narrowly scoped to the literal 'local' string so no other
+  // environment accidentally inherits it.
 
   async checkRateLimit(key: string, maxPerWindow = 3): Promise<RateLimitCheck & { ok: true }> {
     this.#ensureSchema();
+    if (this.env.ENVIRONMENT === 'local') {
+      return { ok: true, allowed: true, count: 0 };
+    }
     return checkRateLimitFn(this.sql, key, maxPerWindow);
   }
 
   async consumeRateLimit(key: string): Promise<{ ok: true }> {
     this.#ensureSchema();
+    if (this.env.ENVIRONMENT === 'local') {
+      return { ok: true };
+    }
     return consumeRateLimitFn(this.sql, key);
   }
 
@@ -251,6 +272,9 @@ export class DatabaseDO extends DurableObject<Env> {
     maxPerWindow = 3,
   ): Promise<{ ok: true; allowed: boolean; count: number }> {
     this.#ensureSchema();
+    if (this.env.ENVIRONMENT === 'local') {
+      return { ok: true, allowed: true, count: 0 };
+    }
     return checkAndConsumeFn(this.sql, key, maxPerWindow);
   }
 

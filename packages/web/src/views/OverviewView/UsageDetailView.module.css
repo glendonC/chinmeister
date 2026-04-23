@@ -58,16 +58,18 @@
   }
 }
 
-/* Sessions-flavored top grid: the left hero (SESSION HEALTH) is two
- * stacked ratio stats — intrinsically narrow — while the right side
- * (BY TOOL) carries a ring + a 6-row tool table. Equal halves leave a
- * large horizontal gap mid-row because the left content can't fill its
- * column. `auto 1fr` sizes left to its natural content and lets the
- * right column take the remainder, removing the dead space without
- * forcing artificial typography or hiding tool rows. */
+/* Sessions/Edits-flavored top grid: the left hero is a narrow column of
+ * ratio stats; the right side is a ring + tool table that's now capped to
+ * RING_TOP_N + Other rows (matching the ring's aggregation). With the
+ * table capped and the redundant Share column dropped, the right side
+ * no longer sprawls, so equal 1fr columns inherit from .topGrid — the
+ * hero stats float left of their column with comfortable breathing room
+ * to the ring rather than pressing against it. Kept as its own class
+ * (empty for now) so the pairing is still explicit at the call site and
+ * future hero/breakdown balance tweaks land here, not on .topGrid. */
 @media (min-width: 900px) {
   .topGridSessions {
-    grid-template-columns: auto minmax(0, 1fr);
+    /* inherits 1fr 1fr from .topGrid */
   }
 }
 
@@ -279,6 +281,21 @@
   color: var(--ink);
   text-align: right;
   white-space: nowrap;
+}
+
+/* Icon-slot stand-in for the aggregated "Other" row. Matches ToolIcon's
+ * 14px footprint so the tool-name column stays aligned whether the cell
+ * carries a real tool icon or the aggregate pip. Color echoes the ring's
+ * Other slice (`var(--soft)`) so the visual tie between ring slice and
+ * table row reads without a legend. */
+.toolCellOtherDot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--soft);
+  opacity: 0.55;
+  display: inline-block;
+  flex-shrink: 0;
 }
 
 /* ── CTA — clean text link below the table ── */
