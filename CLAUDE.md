@@ -18,7 +18,7 @@ Monorepo with five packages:
 - **`packages/shared/`:** Shared primitives reused across packages. Tool registry, agent identity, API client factory, session registry. Dependency-light, no grab bags.
 - **`packages/web/`:** Web presence at chinmeister.com. React 19 + Vite SPA on Cloudflare Pages. Landing page (`index.html`) plus authenticated dashboard (`dashboard.html`) with Zustand state management and CSS Modules. Cross-project workflow visibility, tool discovery, and team management.
 
-**Live API:** `https://chinmeister-api.glendonchin.workers.dev`
+**Live API:** `https://api.chinmeister.com`
 
 ## Development Principles
 

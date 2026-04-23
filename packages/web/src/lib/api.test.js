@@ -54,9 +54,9 @@ describe('web API client', () => {
 
     await api('GET', '/me/teams', null, 'web-token');
 
-    expect(getApiUrl()).toBe('https://chinmeister-api.glendonchin.workers.dev');
+    expect(getApiUrl()).toBe('https://api.chinmeister.com');
     expect(fetch).toHaveBeenCalledWith(
-      'https://chinmeister-api.glendonchin.workers.dev/me/teams',
+      'https://api.chinmeister.com/me/teams',
       expect.objectContaining({
         method: 'GET',
       }),
@@ -72,7 +72,7 @@ describe('web API client', () => {
   it('uses DEFAULT_API_URL regardless of hostname when no local profile is set', () => {
     stubHostname('127.0.0.1');
 
-    expect(getApiUrl()).toBe('https://chinmeister-api.glendonchin.workers.dev');
+    expect(getApiUrl()).toBe('https://api.chinmeister.com');
   });
 
   it('uses web-specific parse errors for non-JSON responses', async () => {

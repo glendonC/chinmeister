@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-const API_HOST = 'https://chinmeister-api.glendonchin.workers.dev';
+const API_HOST = 'https://api.chinmeister.com';
 
 function createDashboardState() {
   return {

@@ -1,6 +1,6 @@
 # API Reference
 
-Base URL: `https://chinmeister-api.glendonchin.workers.dev`
+Base URL: `https://api.chinmeister.com`
 
 ## Authentication
 
@@ -1424,7 +1424,7 @@ Get session history for the team.
 
 Global chat room WebSocket. Requires authentication via Bearer token or ticket query parameter.
 
-**Connection:** `wss://chinmeister-api.glendonchin.workers.dev/ws/chat?ticket=<ticket>`
+**Connection:** `wss://api.chinmeister.com/ws/chat?ticket=<ticket>`
 
 **Query parameters:**
 
@@ -1516,7 +1516,7 @@ Global chat room WebSocket. Requires authentication via Bearer token or ticket q
 
 Team coordination WebSocket. Provides real-time updates for team activity, member status, locks, and more. Requires authentication via Bearer token or ticket.
 
-**Connection:** `wss://chinmeister-api.glendonchin.workers.dev/teams/t_a7b3c9d2e1f04856/ws?ticket=<ticket>&role=agent`
+**Connection:** `wss://api.chinmeister.com/teams/t_a7b3c9d2e1f04856/ws?ticket=<ticket>&role=agent`
 
 **Query parameters:**
 

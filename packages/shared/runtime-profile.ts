@@ -20,7 +20,7 @@ export interface RuntimeTargets {
 export const PROD_RUNTIME_PROFILE: ChinmeisterRuntimeProfile = 'prod';
 export const LOCAL_RUNTIME_PROFILE: ChinmeisterRuntimeProfile = 'local';
 
-export const DEFAULT_API_URL = 'https://chinmeister-api.glendonchin.workers.dev';
+export const DEFAULT_API_URL = 'https://api.chinmeister.com';
 export const DEFAULT_DASHBOARD_URL = 'https://chinmeister.com/dashboard';
 export const LOCAL_API_URL = 'http://localhost:8787';
 export const LOCAL_DASHBOARD_URL = 'http://localhost:56790/dashboard.html';

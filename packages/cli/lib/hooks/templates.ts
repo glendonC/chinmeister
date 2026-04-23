@@ -106,7 +106,7 @@ if (MODE === 'off') process.exit(0);
 
 const API_BASE =
   process.env.CHINMEISTER_API_BASE ||
-  'https://chinmeister-api.glendonchin.workers.dev';
+  'https://api.chinmeister.com';
 
 function failOpen(reason) {
   // Used for expected "can't run the check" paths (no config, no team,

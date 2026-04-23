@@ -148,7 +148,7 @@ describe('isLoopbackUrl', () => {
 
   describe('remote hosts', () => {
     it('returns false for public URLs', () => {
-      expect(isLoopbackUrl('https://chinmeister-api.glendonchin.workers.dev')).toBe(false);
+      expect(isLoopbackUrl('https://api.chinmeister.com')).toBe(false);
       expect(isLoopbackUrl('https://example.com')).toBe(false);
       expect(isLoopbackUrl('https://google.com')).toBe(false);
     });
@@ -301,9 +301,7 @@ describe('resolveRuntimeProfile', () => {
     });
 
     it('returns prod for remote URLs with no explicit profile', () => {
-      expect(
-        resolveRuntimeProfile({ apiUrl: 'https://chinmeister-api.glendonchin.workers.dev' }),
-      ).toBe('prod');
+      expect(resolveRuntimeProfile({ apiUrl: 'https://api.chinmeister.com' })).toBe('prod');
     });
 
     it('returns prod when all URLs are remote', () => {
@@ -324,9 +322,7 @@ describe('resolveRuntimeProfile', () => {
 
 describe('toWebSocketOrigin', () => {
   it('converts https to wss', () => {
-    expect(toWebSocketOrigin('https://chinmeister-api.glendonchin.workers.dev')).toBe(
-      'wss://chinmeister-api.glendonchin.workers.dev',
-    );
+    expect(toWebSocketOrigin('https://api.chinmeister.com')).toBe('wss://api.chinmeister.com');
   });
 
   it('converts http to ws', () => {
@@ -373,8 +369,8 @@ describe('resolveRuntimeTargets', () => {
       profile: 'prod',
       apiUrl: DEFAULT_API_URL,
       dashboardUrl: DEFAULT_DASHBOARD_URL,
-      teamWsOrigin: 'wss://chinmeister-api.glendonchin.workers.dev',
-      chatWsUrl: 'wss://chinmeister-api.glendonchin.workers.dev/ws/chat',
+      teamWsOrigin: 'wss://api.chinmeister.com',
+      chatWsUrl: 'wss://api.chinmeister.com/ws/chat',
     });
   });
 
@@ -461,7 +457,7 @@ describe('exported constants', () => {
   });
 
   it('DEFAULT_API_URL is the production API endpoint', () => {
-    expect(DEFAULT_API_URL).toBe('https://chinmeister-api.glendonchin.workers.dev');
+    expect(DEFAULT_API_URL).toBe('https://api.chinmeister.com');
   });
 
   it('DEFAULT_DASHBOARD_URL is the production dashboard', () => {

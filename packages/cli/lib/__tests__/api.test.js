@@ -74,7 +74,7 @@ describe('CLI API client', () => {
     await initAccount();
 
     expect(fetch).toHaveBeenCalledWith(
-      'https://chinmeister-api.glendonchin.workers.dev/auth/init',
+      'https://api.chinmeister.com/auth/init',
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({}),
