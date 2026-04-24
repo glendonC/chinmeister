@@ -2,81 +2,52 @@
 // Manages team membership, activity tracking, file conflict detection,
 // shared project memory, and session history (observability).
 //
-// Business logic is split into submodules (one concept per file):
-//   schema.ts         -- DDL, migrations, index creation
-//   context.ts        -- composite read queries (getContext, getSummary)
-//   identity.ts       -- agent ID resolution and ownership verification
-//   cleanup.ts        -- stale member eviction and data pruning
-//   membership.ts     -- join / leave / heartbeat
-//   activity.ts       -- update-activity / check-conflicts / report-file
-//   sessions.ts       -- session lifecycle + edits, outcomes, tokens, tool-calls, commits
-//   conversations.ts  -- conversation event ingestion + per-session stats
-//   memory.ts         -- shared memory save/search/update/delete
-//   categories.ts     -- memory category CRUD and promotion
-//   locks.ts          -- file claim/release/query
-//   messages.ts       -- inter-agent messaging
-//   commands.ts       -- command queue for managed agents
-//   analytics/        -- 14 domain modules + orchestrator (index.ts)
-//   runtime.ts        -- agent ID / host tool inference
-//   presence.ts       -- WebSocket presence helpers
-//   broadcast.ts      -- delta broadcast helpers
-//   telemetry.ts      -- per-team metric counters
-//   context-cache.ts  -- TTL cache for the composite team context read
-//   websocket.ts      -- hibernation-API lifecycle handlers
+// This file is a facade. The DO class declares the public RPC surface
+// (each `async methodName(...)` IS the contract callers stub against),
+// owns instance state that cannot move out of the class boundary
+// (schema readiness, context cache, heartbeat debounce timestamps,
+// cleanup clock), and routes every request to a per-domain handler.
 //
-// This file owns: the DurableObject class shell, WebSocket method entry
-// points, instance-scoped caches (context, heartbeat debounce, cleanup
-// clock), the identity/member/op/owner wrappers that every RPC flows
-// through, and the public RPC surface itself.
+// Three layers sit behind the class:
+//   - domain modules with pure SQL logic (schema, context, identity,
+//     cleanup, membership, activity, sessions, conversations, memory,
+//     consolidation, formation, categories, locks, messages, commands,
+//     analytics/*)
+//   - presence / broadcast / telemetry / context-cache / runtime
+//     helpers for cross-cutting infrastructure
+//   - rpc-context.ts + rpc-*.ts handler modules that translate
+//     "RPC call from the worker" into "domain-module call + side
+//     effects (broadcast, metric)". Every class method delegates here
 //
-// Deferred: per ANALYTICS_SPEC.md, a further split pulls the ~40 RPC
-// method bodies out into per-domain *-rpc modules, leaving this file as
-// a thin facade (~200 LoC). That refactor is mechanical but touches
-// every call site and the hibernation-sensitive class boundary, so it's
-// intentionally held for a dedicated session rather than bundled with
-// unrelated work. See the research plan for the 6-step extraction order
-// (wrappers → membership-handler → context-handler → commands-handler →
-// per-domain RPC modules → final cleanup).
+// Three methods stay inline because they close over instance state the
+// handler modules cannot sensibly carry:
+//   heartbeat    -- owns #lastHeartbeatBroadcast debounce Map
+//   getContext   -- reads #contextCache, hot path; cache layering is
+//                   clearer as inline code than as ctx-threaded calls
+//   recordTelemetry -- three lines, auth-lax (route already authed)
+//
+// Cloudflare's Hibernation API dispatches fetch / webSocketMessage /
+// webSocketClose / webSocketError by reflection against the class, so
+// those method names are load-bearing; their bodies delegate to
+// websocket.ts.
 
 import { DurableObject } from 'cloudflare:workers';
 import type { Env, DOResult, DOError, TeamContext } from '../../types.js';
 import { isDOError } from '../../lib/errors.js';
 
 import { ensureSchema } from './schema.js';
-import { queryTeamContext, queryTeamSummary } from './context.js';
+import { queryTeamContext } from './context.js';
 import { resolveOwnedAgentId } from './identity.js';
 import { runCleanup, collectHandleBackfills, type OrphanSummary } from './cleanup.js';
 import { heartbeat as heartbeatFn } from './membership.js';
 import type { SearchFilters, BatchDeleteFilter } from './memory.js';
 import type { FormationRecommendation } from './formation.js';
-import {
-  claimFiles as claimFilesFn,
-  checkFileConflicts as checkFileConflictsFn,
-  releaseFiles as releaseFilesFn,
-  getLockedFiles as getLockedFilesFn,
-} from './locks.js';
-import {
-  type ToolCallInput,
-  type CommitInput,
-  type SessionRecord,
-  getSessionsInRange as getSessionsInRangeFn,
-} from './sessions.js';
-import {
-  getAnalytics as getAnalyticsFn,
-  getExtendedAnalytics as getExtendedAnalyticsFn,
-} from './analytics/index.js';
-import { getBillingBlocksForOwner as getBillingBlocksForOwnerFn } from './analytics/billing-blocks.js';
+import type { ToolCallInput, CommitInput } from './sessions.js';
 import type { ConversationEventInput } from './conversations.js';
 import type {
   ConversationAnalytics,
   SessionConversationStats,
 } from '@chinmeister/shared/contracts/conversation.js';
-import {
-  enrichAnalyticsWithPricing,
-  enrichDailyTrendsWithPricing,
-  enrichPeriodComparisonCost,
-} from '../../lib/pricing-enrich.js';
-import { queryDailyTokenUsage, queryTokenAggregateForWindow } from './analytics/tokens.js';
 import {
   CONTEXT_CACHE_TTL_MS,
   CLEANUP_INTERVAL_MS,
@@ -92,12 +63,7 @@ import { broadcastToWatchers, broadcastToExecutors } from './broadcast.js';
 import { recordMetric as recordMetricFn } from './telemetry.js';
 import { ContextCache } from './context-cache.js';
 import { handleFetch, handleMessage, handleClose, handleError, type WsCtx } from './websocket.js';
-import {
-  type RpcCtx,
-  withMember as withMemberFn,
-  withOwner as withOwnerFn,
-  op as opFn,
-} from './rpc-context.js';
+import { type RpcCtx, withMember as withMemberFn } from './rpc-context.js';
 import { joinRpc, leaveRpc } from './rpc-membership.js';
 import { updateActivityRpc, checkConflictsRpc, reportFileRpc } from './rpc-activity.js';
 import { sendMessageRpc, getMessagesRpc } from './rpc-messages.js';
@@ -143,6 +109,19 @@ import {
   deleteCategoryRpc,
   getPromotableTagsRpc,
 } from './rpc-categories.js';
+import {
+  claimFilesRpc,
+  checkFileConflictsRpc,
+  releaseFilesRpc,
+  getLockedFilesRpc,
+} from './rpc-locks.js';
+import {
+  getAnalyticsRpc,
+  getSessionsInRangeRpc,
+  getAnalyticsForOwnerRpc,
+  getSummaryRpc,
+  getBillingBlocksRpc,
+} from './rpc-analytics.js';
 import { getDB } from '../../lib/env.js';
 import { createLogger } from '../../lib/logger.js';
 
@@ -228,6 +207,7 @@ export class TeamDO extends DurableObject<Env> {
       getConnectedAgentIds: () => this.#getConnectedAgentIds(),
       hasExecutorConnected: () => this.#hasExecutorConnected(),
       lastHeartbeatBroadcast: this.#lastHeartbeatBroadcast,
+      maybeCleanup: () => this.#maybeCleanup(),
     };
   }
 
@@ -347,39 +327,6 @@ export class TeamDO extends DurableObject<Env> {
     return resolveOwnedAgentId(this.sql, agentId, ownerId);
   }
 
-  // -- RPC wrappers --
-  //
-  // Thin delegators over the free functions in rpc-context.ts. Kept as
-  // private methods so the existing ~40 RPC method bodies keep their
-  // `this.#withMember(...)` / `this.#withOwner(...)` / `this.#op(...)`
-  // calls unchanged until per-domain extraction moves them out of the
-  // class entirely.
-
-  #withMember<T>(
-    agentId: string,
-    ownerId: string | null,
-    fn: (resolved: string) => T,
-  ): T | DOError {
-    return withMemberFn(this.#rpcCtx(), agentId, ownerId, fn);
-  }
-
-  #op<R>(
-    agentId: string,
-    ownerId: string | null,
-    run: (resolved: string) => R,
-    side: {
-      broadcast?: (result: Exclude<R, DOError>, resolved: string) => Record<string, unknown> | null;
-      broadcastOpts?: { invalidateCache?: boolean };
-      metric?: (result: Exclude<R, DOError>) => string | null;
-    } = {},
-  ): R | DOError {
-    return opFn(this.#rpcCtx(), agentId, ownerId, run, side);
-  }
-
-  #withOwner<T>(ownerId: string, fn: () => T): T | DOError {
-    return withOwnerFn(this.#rpcCtx(), ownerId, fn);
-  }
-
   // -- Membership --
 
   async join(
@@ -399,7 +346,7 @@ export class TeamDO extends DurableObject<Env> {
     agentId: string,
     ownerId: string | null = null,
   ): Promise<DOResult<{ ok: true }> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
+    return withMemberFn(this.#rpcCtx(), agentId, ownerId, (resolved) => {
       const result = heartbeatFn(this.sql, resolved);
       if (!isDOError(result)) {
         const now = Date.now();
@@ -450,7 +397,7 @@ export class TeamDO extends DurableObject<Env> {
     agentId: string,
     ownerId: string | null = null,
   ): Promise<Record<string, unknown> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => {
+    return withMemberFn(this.#rpcCtx(), agentId, ownerId, (resolved) => {
       // Always bump calling agent's heartbeat
       this.sql.exec(
         "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
@@ -560,33 +507,8 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
     extended = false,
     tzOffsetMinutes: number = 0,
-  ): Promise<
-    ReturnType<typeof getAnalyticsFn> | ReturnType<typeof getExtendedAnalyticsFn> | DOError
-  > {
-    const raw = this.#withMember(agentId, ownerId, () =>
-      extended
-        ? getExtendedAnalyticsFn(this.sql, days, tzOffsetMinutes)
-        : getAnalyticsFn(this.sql, days, tzOffsetMinutes),
-    );
-    if (isDOError(raw)) return raw;
-    // Enrich token_usage with cost from the isolate pricing cache. This hits
-    // DatabaseDO at most once per TTL window (5 min) rather than per request.
-    const enriched = await enrichAnalyticsWithPricing(raw, this.env);
-    // Per-day cost on daily_trends: same pricing snapshot, one extra SQL
-    // aggregate. Fills the Trend widget's cost and cost-per-edit lines with
-    // honest per-day numbers instead of the "daily cost not captured"
-    // placeholder. Reliability gates mirror the period total.
-    const dailyTokens = queryDailyTokenUsage(this.sql, days, tzOffsetMinutes);
-    await enrichDailyTrendsWithPricing(enriched.daily_trends, dailyTokens, this.env);
-    // Period-comparison cost: price both windows against the CURRENT pricing
-    // snapshot so the cost-per-edit delta shown by CostPerEditWidget reflects
-    // behavior change, not price drift. Previous-window aggregate falls to
-    // empty when outside retention (30d default), which computeWindowCost
-    // maps to a null cost — StatWidget's delta gate then skips rendering.
-    const currentAgg = queryTokenAggregateForWindow(this.sql, days, 0);
-    const previousAgg = queryTokenAggregateForWindow(this.sql, days * 2, days);
-    await enrichPeriodComparisonCost(enriched, currentAgg, previousAgg, this.env);
-    return enriched;
+  ): Promise<ReturnType<typeof getAnalyticsRpc>> {
+    return getAnalyticsRpc(this.#rpcCtx(), agentId, days, ownerId, extended, tzOffsetMinutes);
   }
 
   async enrichModel(
@@ -904,38 +826,16 @@ export class TeamDO extends DurableObject<Env> {
     runtimeOrTool: string | Record<string, unknown> | null | undefined,
     ownerId: string | null = null,
     options: { ttlSeconds?: number } = {},
-  ): Promise<ReturnType<typeof claimFilesFn> | DOError> {
-    return this.#op(
-      agentId,
-      ownerId,
-      (resolved) =>
-        claimFilesFn(this.sql, resolved, files, handle, runtimeOrTool, ownerId!, options),
-      {
-        broadcast: (_r, resolved) => ({
-          type: 'lock_change',
-          action: 'claim',
-          agent_id: resolved,
-          files,
-        }),
-      },
-    );
+  ): Promise<ReturnType<typeof claimFilesRpc> | DOError> {
+    return claimFilesRpc(this.#rpcCtx(), agentId, files, handle, runtimeOrTool, ownerId, options);
   }
 
-  /**
-   * Read-only conflict check for a batch of concrete paths. Used by the
-   * pre-commit hook and any would-be-editor that wants to know whether
-   * proceeding would collide with a peer's lock (exact-path or glob
-   * umbrella) without actually claiming. Globs in the input are skipped.
-   */
   async checkFileConflicts(
     agentId: string,
     files: string[],
     ownerId: string | null = null,
-  ): Promise<{ ok: true; blocked: ReturnType<typeof checkFileConflictsFn> } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) => ({
-      ok: true,
-      blocked: checkFileConflictsFn(this.sql, resolved, files),
-    }));
+  ): Promise<ReturnType<typeof checkFileConflictsRpc> | DOError> {
+    return checkFileConflictsRpc(this.#rpcCtx(), agentId, files, ownerId);
   }
 
   async releaseFiles(
@@ -943,28 +843,14 @@ export class TeamDO extends DurableObject<Env> {
     files: string[] | null | undefined,
     ownerId: string | null = null,
   ): Promise<{ ok: true } | DOError> {
-    return this.#op(
-      agentId,
-      ownerId,
-      (resolved) => releaseFilesFn(this.sql, resolved, files, ownerId),
-      {
-        broadcast: (_r, resolved) => ({
-          type: 'lock_change',
-          action: 'release',
-          agent_id: resolved,
-          files,
-        }),
-      },
-    );
+    return releaseFilesRpc(this.#rpcCtx(), agentId, files, ownerId);
   }
 
   async getLockedFiles(
     agentId: string,
     ownerId: string | null = null,
-  ): Promise<ReturnType<typeof getLockedFilesFn> | DOError> {
-    return this.#withMember(agentId, ownerId, () =>
-      getLockedFilesFn(this.sql, this.#getConnectedAgentIds()),
-    );
+  ): Promise<ReturnType<typeof getLockedFilesRpc> | DOError> {
+    return getLockedFilesRpc(this.#rpcCtx(), agentId, ownerId);
   }
 
   // -- Messages --
@@ -1022,13 +908,8 @@ export class TeamDO extends DurableObject<Env> {
     fromDate: string,
     toDate: string,
     filters?: { hostTool?: string; handle?: string },
-  ): Promise<
-    { ok: true; sessions: SessionRecord[]; truncated: boolean; total_sessions: number } | DOError
-  > {
-    return this.#withOwner(ownerId, () => {
-      const result = getSessionsInRangeFn(this.sql, fromDate, toDate, filters);
-      return { ok: true as const, ...result };
-    });
+  ): Promise<ReturnType<typeof getSessionsInRangeRpc>> {
+    return getSessionsInRangeRpc(this.#rpcCtx(), ownerId, fromDate, toDate, filters);
   }
 
   // -- Extended analytics (cross-project dashboard) --
@@ -1037,51 +918,20 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string,
     days: number,
     tzOffsetMinutes: number = 0,
-  ): Promise<ReturnType<typeof getExtendedAnalyticsFn> | DOError> {
-    const gate = this.#withOwner(ownerId, () =>
-      getExtendedAnalyticsFn(this.sql, days, tzOffsetMinutes),
-    );
-    if (isDOError(gate)) return gate;
-    const enriched = await enrichAnalyticsWithPricing(gate, this.env);
-    const dailyTokens = queryDailyTokenUsage(this.sql, days, tzOffsetMinutes);
-    await enrichDailyTrendsWithPricing(enriched.daily_trends, dailyTokens, this.env);
-    // Same period-comparison cost enrichment as getAnalytics. Each team
-    // ships its own cost/edits in period_comparison; the cross-team route
-    // then sums them null-stickily and re-derives cost_per_edit on the
-    // merged totals (daily-trends pattern) instead of averaging ratios.
-    const currentAgg = queryTokenAggregateForWindow(this.sql, days, 0);
-    const previousAgg = queryTokenAggregateForWindow(this.sql, days * 2, days);
-    await enrichPeriodComparisonCost(enriched, currentAgg, previousAgg, this.env);
-    return enriched;
+  ): Promise<ReturnType<typeof getAnalyticsForOwnerRpc>> {
+    return getAnalyticsForOwnerRpc(this.#rpcCtx(), ownerId, days, tzOffsetMinutes);
   }
 
   // -- Summary (lightweight, for cross-project dashboard) --
 
-  async getSummary(ownerId: string): Promise<ReturnType<typeof queryTeamSummary> | DOError> {
-    return this.#withOwner(ownerId, () => {
-      this.#maybeCleanup();
-      return queryTeamSummary(this.sql);
-    });
+  async getSummary(ownerId: string): Promise<ReturnType<typeof getSummaryRpc>> {
+    return getSummaryRpc(this.#rpcCtx(), ownerId);
   }
 
   // -- Billing blocks (5h Anthropic rate-limit windows) --
 
-  /**
-   * Return the caller's billing-block history for this team's sessions.
-   * Scoped by `ownerId` (the caller's user id) so a single user gets
-   * their own window state regardless of which agent they were using —
-   * the Anthropic limit is billed to the account, not the session.
-   *
-   * When chinmeister eventually grows a cross-team aggregator for Pro
-   * windows, this DO method is the per-team primitive it should call.
-   * Today, multi-team users get per-team views; the algorithm itself
-   * works on any pre-collected event stream so merging across teams is
-   * a route-level concern, not a DO change.
-   */
-  async getBillingBlocks(
-    ownerId: string,
-  ): Promise<ReturnType<typeof getBillingBlocksForOwnerFn> | DOError> {
-    return this.#withOwner(ownerId, () => getBillingBlocksForOwnerFn(this.sql, ownerId));
+  async getBillingBlocks(ownerId: string): Promise<ReturnType<typeof getBillingBlocksRpc>> {
+    return getBillingBlocksRpc(this.#rpcCtx(), ownerId);
   }
 }
 

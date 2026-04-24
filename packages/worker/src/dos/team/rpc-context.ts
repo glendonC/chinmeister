@@ -37,6 +37,11 @@ export interface RpcCtx {
    *  leave / close. Passed by reference so mutations land in the class's
    *  live Map. */
   lastHeartbeatBroadcast: Map<string, number>;
+  /** Trigger the debounced cleanup sweep (stale-member eviction, old-
+   *  session pruning, user-metrics backfill). Called by getSummary
+   *  before reading the summary view so cross-project dashboards pick
+   *  up expired sessions without waiting for the next heartbeat. */
+  maybeCleanup: () => void;
 }
 
 /**
