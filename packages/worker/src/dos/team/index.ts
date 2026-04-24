@@ -84,34 +84,18 @@ import {
   getLockedFiles as getLockedFilesFn,
 } from './locks.js';
 import {
-  startSession as startSessionFn,
-  endSession as endSessionFn,
-  recordEdit as recordEditFn,
-  reportOutcome as reportOutcomeFn,
-  recordTokenUsage as recordTokenUsageFn,
-  recordToolCalls as recordToolCallsFn,
-  recordCommits as recordCommitsFn,
   type ToolCallInput,
   type CommitInput,
-  getSessionHistory,
+  type SessionRecord,
   getSessionsInRange as getSessionsInRangeFn,
-  getEditHistory as getEditHistoryFn,
-  enrichSessionModel as enrichSessionModelFn,
   bumpActiveTime,
 } from './sessions.js';
-import type { EditEntry, SessionRecord } from './sessions.js';
 import {
   getAnalytics as getAnalyticsFn,
   getExtendedAnalytics as getExtendedAnalyticsFn,
 } from './analytics/index.js';
 import { getBillingBlocksForOwner as getBillingBlocksForOwnerFn } from './analytics/billing-blocks.js';
-import {
-  batchRecordConversationEvents as batchRecordConversationEventsFn,
-  getConversationForSession as getConversationForSessionFn,
-  getConversationAnalytics as getConversationAnalyticsFn,
-  getSessionConversationStats as getSessionConversationStatsFn,
-  type ConversationEventInput,
-} from './conversations.js';
+import type { ConversationEventInput } from './conversations.js';
 import type {
   ConversationAnalytics,
   SessionConversationStats,
@@ -148,6 +132,24 @@ import { joinRpc, leaveRpc } from './rpc-membership.js';
 import { updateActivityRpc, checkConflictsRpc, reportFileRpc } from './rpc-activity.js';
 import { sendMessageRpc, getMessagesRpc } from './rpc-messages.js';
 import { submitCommandRpc, getCommandsRpc } from './rpc-commands.js';
+import {
+  startSessionRpc,
+  endSessionRpc,
+  recordEditRpc,
+  reportOutcomeRpc,
+  getHistoryRpc,
+  getEditHistoryRpc,
+  enrichModelRpc,
+  recordTokenUsageRpc,
+  recordToolCallsRpc,
+  recordCommitsRpc,
+} from './rpc-sessions.js';
+import {
+  recordConversationEventsRpc,
+  getConversationRpc,
+  getConversationAnalyticsRpc,
+  getSessionConversationStatsRpc,
+} from './rpc-conversations.js';
 import { getDB } from '../../lib/env.js';
 import { createLogger } from '../../lib/logger.js';
 
@@ -508,14 +510,7 @@ export class TeamDO extends DurableObject<Env> {
     runtime: Record<string, unknown> | null = null,
     ownerId: string | null = null,
   ): Promise<DOResult<{ ok: true; session_id: string }> | DOError> {
-    return this.#op(
-      agentId,
-      ownerId,
-      (resolved) => startSessionFn(this.sql, resolved, handle, framework, runtime, this.#transact),
-      {
-        metric: () => 'sessions_started',
-      },
-    );
+    return startSessionRpc(this.#rpcCtx(), agentId, handle, framework, runtime, ownerId);
   }
 
   async endSession(
@@ -526,9 +521,7 @@ export class TeamDO extends DurableObject<Env> {
     | DOResult<{ ok: true; outcome?: string | null; summary?: Record<string, unknown> | null }>
     | DOError
   > {
-    return this.#op(agentId, ownerId, (resolved) => endSessionFn(this.sql, resolved, sessionId), {
-      metric: (r) => (r.outcome ? `outcome:${r.outcome}` : null),
-    });
+    return endSessionRpc(this.#rpcCtx(), agentId, sessionId, ownerId);
   }
 
   async recordEdit(
@@ -538,9 +531,7 @@ export class TeamDO extends DurableObject<Env> {
     linesRemoved = 0,
     ownerId: string | null = null,
   ): Promise<{ ok: true; skipped?: boolean } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      recordEditFn(this.sql, resolved, filePath, linesAdded, linesRemoved),
-    );
+    return recordEditRpc(this.#rpcCtx(), agentId, filePath, linesAdded, linesRemoved, ownerId);
   }
 
   async reportOutcome(
@@ -550,17 +541,15 @@ export class TeamDO extends DurableObject<Env> {
     ownerId: string | null = null,
     outcomeTags?: string[] | null,
   ): Promise<DOResult<{ ok: true }> | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      reportOutcomeFn(this.sql, resolved, outcome, summary, outcomeTags),
-    );
+    return reportOutcomeRpc(this.#rpcCtx(), agentId, outcome, summary, ownerId, outcomeTags);
   }
 
   async getHistory(
     agentId: string,
     days: number,
     ownerId: string | null = null,
-  ): Promise<ReturnType<typeof getSessionHistory> | DOError> {
-    return this.#withMember(agentId, ownerId, () => getSessionHistory(this.sql, days));
+  ): Promise<ReturnType<typeof getHistoryRpc> | DOError> {
+    return getHistoryRpc(this.#rpcCtx(), agentId, days, ownerId);
   }
 
   async getEditHistory(
@@ -570,10 +559,8 @@ export class TeamDO extends DurableObject<Env> {
     handle: string | null = null,
     limit = 200,
     ownerId: string | null = null,
-  ): Promise<{ ok: true; edits: EditEntry[] } | DOError> {
-    return this.#withMember(agentId, ownerId, () =>
-      getEditHistoryFn(this.sql, days, filePath, handle, limit),
-    );
+  ): Promise<ReturnType<typeof getEditHistoryRpc> | DOError> {
+    return getEditHistoryRpc(this.#rpcCtx(), agentId, days, filePath, handle, limit, ownerId);
   }
 
   async getAnalytics(
@@ -616,9 +603,7 @@ export class TeamDO extends DurableObject<Env> {
     model: string,
     ownerId: string | null = null,
   ): Promise<{ ok: true } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      enrichSessionModelFn(this.sql, resolved, model, this.#boundRecordMetric, this.#transact),
-    );
+    return enrichModelRpc(this.#rpcCtx(), agentId, model, ownerId);
   }
 
   async recordTokenUsage(
@@ -630,16 +615,15 @@ export class TeamDO extends DurableObject<Env> {
     cacheCreationTokens: number,
     ownerId: string | null = null,
   ): Promise<{ ok: true } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      recordTokenUsageFn(
-        this.sql,
-        resolved,
-        sessionId,
-        inputTokens,
-        outputTokens,
-        cacheReadTokens,
-        cacheCreationTokens,
-      ),
+    return recordTokenUsageRpc(
+      this.#rpcCtx(),
+      agentId,
+      sessionId,
+      inputTokens,
+      outputTokens,
+      cacheReadTokens,
+      cacheCreationTokens,
+      ownerId,
     );
   }
 
@@ -651,9 +635,7 @@ export class TeamDO extends DurableObject<Env> {
     calls: ToolCallInput[],
     ownerId: string | null = null,
   ): Promise<{ ok: true; recorded: number } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      recordToolCallsFn(this.sql, resolved, sessionId, handle, hostTool, calls),
-    );
+    return recordToolCallsRpc(this.#rpcCtx(), agentId, sessionId, handle, hostTool, calls, ownerId);
   }
 
   async recordCommits(
@@ -664,9 +646,7 @@ export class TeamDO extends DurableObject<Env> {
     commits: CommitInput[],
     ownerId: string | null = null,
   ): Promise<{ ok: true; recorded: number } | DOError> {
-    return this.#withMember(agentId, ownerId, (resolved) =>
-      recordCommitsFn(this.sql, resolved, sessionId, handle, hostTool, commits),
-    );
+    return recordCommitsRpc(this.#rpcCtx(), agentId, sessionId, handle, hostTool, commits, ownerId);
   }
 
   // -- Conversation intelligence --
@@ -679,22 +659,14 @@ export class TeamDO extends DurableObject<Env> {
     events: ConversationEventInput[],
     ownerId: string | null = null,
   ): Promise<{ ok: true; count: number } | DOError> {
-    return this.#op(
+    return recordConversationEventsRpc(
+      this.#rpcCtx(),
       agentId,
+      sessionId,
+      handle,
+      hostTool,
+      events,
       ownerId,
-      () =>
-        batchRecordConversationEventsFn(
-          this.sql,
-          sessionId,
-          agentId,
-          handle,
-          hostTool,
-          events,
-          this.#transact,
-        ),
-      {
-        metric: () => 'conversation_events_recorded',
-      },
     );
   }
 
@@ -702,10 +674,8 @@ export class TeamDO extends DurableObject<Env> {
     agentId: string,
     sessionId: string,
     ownerId: string | null = null,
-  ): Promise<ReturnType<typeof getConversationForSessionFn> | DOError> {
-    return this.#withMember(agentId, ownerId, () =>
-      getConversationForSessionFn(this.sql, sessionId),
-    );
+  ): Promise<ReturnType<typeof getConversationRpc> | DOError> {
+    return getConversationRpc(this.#rpcCtx(), agentId, sessionId, ownerId);
   }
 
   async getConversationAnalytics(
@@ -713,7 +683,7 @@ export class TeamDO extends DurableObject<Env> {
     days: number,
     ownerId: string | null = null,
   ): Promise<ConversationAnalytics | DOError> {
-    return this.#withMember(agentId, ownerId, () => getConversationAnalyticsFn(this.sql, days));
+    return getConversationAnalyticsRpc(this.#rpcCtx(), agentId, days, ownerId);
   }
 
   async getSessionConversationStats(
@@ -721,10 +691,7 @@ export class TeamDO extends DurableObject<Env> {
     sessionIds: string[],
     ownerId: string | null = null,
   ): Promise<{ ok: true; stats: SessionConversationStats[] } | DOError> {
-    return this.#withMember(agentId, ownerId, () => ({
-      ok: true as const,
-      stats: getSessionConversationStatsFn(this.sql, sessionIds),
-    }));
+    return getSessionConversationStatsRpc(this.#rpcCtx(), agentId, sessionIds, ownerId);
   }
 
   // -- Memory --
