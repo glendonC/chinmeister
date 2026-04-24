@@ -56,6 +56,12 @@ export function formatCountDelta(
   return { text: `${arrow}${magnitude}`, color: isGood ? 'var(--success)' : 'var(--danger)' };
 }
 
+/** YYYY-MM-DD → MM-DD for the mono-friendly daily-strip axis label. */
+export function formatStripDate(iso: string): string {
+  if (iso.length >= 10) return iso.slice(5);
+  return iso;
+}
+
 /**
  * USD-flavored delta formatter. Matches StatWidget's `usd-fine` path
  * (sub-cent precision) for cost-per-edit, and falls back to plain
