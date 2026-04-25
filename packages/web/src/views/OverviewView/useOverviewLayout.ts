@@ -112,6 +112,16 @@ function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'projects' && s.colSpan === 12 ? { ...s, colSpan: 8 } : s));
 }
 
+// 2026-04-24: outcomes widget went from ring-only at 4×3 to ring + 4-column
+// table at 8×3. The table (OUTCOME | COUNT | SHARE | TREND) can't render
+// in the old 4-col slot — labels clip, headers collide. Snap any saved
+// outcomes slot that's narrower than its new minimum (6 cols) up to the
+// new default (8). session-trend was cut the same day so its paired
+// healer is gone — saved layouts drop the slot via WIDGET_ALIASES.
+function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => (s.id === 'outcomes' && s.colSpan < 6 ? { ...s, colSpan: 8 } : s));
+}
+
 function migrateFromLegacyKeys(): DashboardLayout | null {
   try {
     const idsRaw = localStorage.getItem(LEGACY_IDS_KEY);
@@ -153,7 +163,7 @@ function loadDashboard(): DashboardLayout {
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
         const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
-        const healed = healProjectsWidth(healLiveAgentsWidth(expanded));
+        const healed = healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(expanded)));
         const stored = parsed.widgets as WidgetSlot[];
         const changed =
           healed.length !== stored.length ||

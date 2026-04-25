@@ -21,8 +21,10 @@ export const ACTIVITY_DEFAULT_LAYOUT: WidgetSlot[] = [
 
 // Trends tab — historical reflection. Bigger charts, full coverage.
 export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
-  { id: 'session-trend', colSpan: 8, rowSpan: 3 },
-  { id: 'outcomes', colSpan: 4, rowSpan: 3 },
+  // session-trend was cut 2026-04-24 (see widget-catalog.ts Trends
+  // block). Outcomes snaps to its natural 8 cols — was 4 only because
+  // session-trend filled the other 8. No forced backfill on the row.
+  { id: 'outcomes', colSpan: 8, rowSpan: 3 },
   { id: 'heatmap', colSpan: 8, rowSpan: 4 },
   { id: 'work-types', colSpan: 4, rowSpan: 3 },
   { id: 'directories', colSpan: 6, rowSpan: 4 },

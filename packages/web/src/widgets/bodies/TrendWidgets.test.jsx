@@ -14,7 +14,6 @@ async function loadModule() {
     import('../../lib/schemas/analytics.js'),
   ]);
   return {
-    SessionTrendWidget: trendsMod.trendWidgets['session-trend'],
     OutcomeTrendWidget: trendsMod.trendWidgets['outcome-trend'],
     createEmptyUserAnalytics: schemasMod.createEmptyUserAnalytics,
   };
@@ -66,59 +65,40 @@ afterEach(() => {
   document.body.innerHTML = '';
 });
 
-describe('SessionTrendWidget ghost fallback', () => {
-  it('renders GhostSparkline when there is no data', async () => {
-    const { SessionTrendWidget, createEmptyUserAnalytics } = await loadModule();
-    const r = render(SessionTrendWidget, makeProps(createEmptyUserAnalytics()));
-    // GhostSparkline draws a single <line>; the populated Sparkline draws paths.
-    expect(r.container.querySelector('line')).not.toBeNull();
-    expect(r.container.querySelector('path')).toBeNull();
-    r.unmount();
-  });
-
-  it('renders a sparkline when any day has sessions', async () => {
-    const { SessionTrendWidget, createEmptyUserAnalytics } = await loadModule();
-    const analytics = createEmptyUserAnalytics();
-    analytics.daily_trends = [
-      zeroTrendRow('2026-04-14'),
-      zeroTrendRow('2026-04-15'),
-      { ...zeroTrendRow('2026-04-16'), sessions: 3 },
-    ];
-    const r = render(SessionTrendWidget, makeProps(analytics));
-    expect(r.container.querySelector('path')).not.toBeNull();
-    r.unmount();
-  });
-});
-
 describe('OutcomeTrendWidget resilience', () => {
-  it('ignores zero-session days and renders a named empty state when no active days remain', async () => {
-    // 2026-04-22 outcomes rubric: a flat GhostSparkline under the
-    // "completion rate trend" title read as "completion is 0 and flat."
-    // The widget now falls through to a SectionEmpty with an explicit
-    // condition — assert that copy, not a ghost line.
+  it('ignores zero-outcome days and renders a named empty state when no active days remain', async () => {
+    // 2026-04-24: OutcomeTrendWidget switched from continuous stacked
+    // area (SVG paths) to discrete stacked columns per day. Empty state
+    // path is unchanged — SectionEmpty when <2 observed days.
     const { OutcomeTrendWidget, createEmptyUserAnalytics } = await loadModule();
     const analytics = createEmptyUserAnalytics();
     analytics.daily_trends = Array.from({ length: 11 }, (_, i) =>
       zeroTrendRow(`2026-04-${String(10 + i).padStart(2, '0')}`),
     );
     const r = render(OutcomeTrendWidget, makeProps(analytics));
-    expect(r.container.querySelector('line')).toBeNull();
-    expect(r.container.querySelector('path')).toBeNull();
     expect(r.container.textContent).toMatch(/2\+ different days/);
     r.unmount();
   });
 
-  it('plots completion rate across active days when zero-padded rows are mixed in', async () => {
+  it('renders per-day groups and a legend when outcomes are recorded', async () => {
+    // 2026-04-24: outcome-trend switched from HTML grid columns back
+    // to SVG bars (flex/grid %-height kept collapsing). Each day
+    // renders a <g> group with rects for the present outcomes plus
+    // a hit rect for tooltip + hover tint.
     const { OutcomeTrendWidget, createEmptyUserAnalytics } = await loadModule();
     const analytics = createEmptyUserAnalytics();
     analytics.daily_trends = [
       zeroTrendRow('2026-04-14'),
-      { ...zeroTrendRow('2026-04-15'), sessions: 4, completed: 3 },
+      { ...zeroTrendRow('2026-04-15'), sessions: 4, completed: 3, abandoned: 1 },
       zeroTrendRow('2026-04-16'),
-      { ...zeroTrendRow('2026-04-17'), sessions: 5, completed: 2 },
+      { ...zeroTrendRow('2026-04-17'), sessions: 5, completed: 2, failed: 1 },
     ];
     const r = render(OutcomeTrendWidget, makeProps(analytics));
-    expect(r.container.querySelector('path')).not.toBeNull();
+    const dayGroups = r.container.querySelectorAll('svg g');
+    expect(dayGroups.length).toBe(analytics.daily_trends.length);
+    expect(r.container.textContent).toMatch(/completed/);
+    expect(r.container.textContent).toMatch(/abandoned/);
+    expect(r.container.textContent).toMatch(/failed/);
     r.unmount();
   });
 });

@@ -3,38 +3,185 @@ import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { Sparkline } from '../charts.js';
 import { completionColor } from '../utils.js';
 import styles from '../widget-shared.module.css';
+import trend from './TrendWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { CoverageNote, GhostSparkline, capabilityCoverageNote } from './shared.js';
-
-function SessionTrendWidget({ analytics }: WidgetBodyProps) {
-  const data = analytics.daily_trends.map((d) => d.sessions);
-  if (data.length < 2) return <GhostSparkline />;
-  return <Sparkline data={data} height={80} />;
-}
+import { CoverageNote, capabilityCoverageNote } from './shared.js';
 
 function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
-  // Completion rate per day, in percent. Days with no sessions are skipped
-  // so a zero-session day doesn't drag the line to 0 and swamp the signal.
-  const points = analytics.daily_trends
-    .filter((d) => d.sessions > 0)
-    .map((d) => {
-      const completed = d.completed ?? 0;
-      return Math.round((completed / d.sessions) * 1000) / 10;
-    });
-  // A flat GhostSparkline under the title "completion rate trend" reads as
-  // "completion rate is zero and flat." PromptEfficiency swapped the ghost
-  // for a named empty state for the same reason — match that pattern here
-  // rather than let the ghost line tell a false story.
-  if (points.length < 2) {
+  // Discrete stacked bars, one per day — each bar IS the hover
+  // affordance. Using pure SVG with computed geometry instead of
+  // flex/grid percentages because nested flex + %-height kept
+  // collapsing to near-zero heights depending on the widget slot's
+  // computed size.
+  //
+  // Stack order bottom-up: completed (success) → abandoned (warn) →
+  // failed (danger). Success reads as the foundation. Unknown-
+  // outcome sessions are excluded — they'd inflate the stack with
+  // signal-free bulk.
+  const days = analytics.daily_trends;
+  const stackTotal = (d: { completed?: number; abandoned?: number; failed?: number }) =>
+    (d.completed ?? 0) + (d.abandoned ?? 0) + (d.failed ?? 0);
+  const observed = days.filter((d) => stackTotal(d) > 0);
+  if (observed.length < 2) {
     return <SectionEmpty>Appears once sessions run on 2+ different days</SectionEmpty>;
   }
-  return <Sparkline data={points} height={80} />;
+
+  const maxTotal = Math.max(...days.map(stackTotal), 1);
+  const firstDay = observed[0].day;
+  const lastDay = observed[observed.length - 1].day;
+  const dateRange = formatDateRange(firstDay, lastDay);
+
+  // Fixed coordinate space — the SVG scales via preserveAspectRatio
+  // none to fit the container. Bar widths are proportional to the
+  // number of days; bar HEIGHTS are computed in these units so the
+  // tallest stack fills ~90% of the plot area and the axis baseline
+  // stays clear at the bottom.
+  const PLOT_W = 1000;
+  const PLOT_H = 100;
+  const DAY_STRIDE = PLOT_W / days.length;
+  const BAR_W = Math.max(2, DAY_STRIDE * 0.65);
+  const BAR_GAP_X = (DAY_STRIDE - BAR_W) / 2;
+
+  return (
+    <div className={trend.stackFrame}>
+      <div className={trend.stackHeader}>
+        <div className={trend.stackLegend}>
+          <span className={trend.stackLegendItem}>
+            <span className={trend.stackLegendDot} style={{ background: 'var(--success)' }} />
+            completed
+          </span>
+          <span className={trend.stackLegendItem}>
+            <span className={trend.stackLegendDot} style={{ background: 'var(--warn)' }} />
+            abandoned
+          </span>
+          <span className={trend.stackLegendItem}>
+            <span className={trend.stackLegendDot} style={{ background: 'var(--danger)' }} />
+            failed
+          </span>
+        </div>
+        {dateRange && <span className={trend.stackRange}>{dateRange}</span>}
+      </div>
+      <div className={trend.stackPlot}>
+        <svg
+          viewBox={`0 0 ${PLOT_W} ${PLOT_H}`}
+          preserveAspectRatio="none"
+          className={trend.stackSvg}
+          role="img"
+          aria-label={`Daily outcome stack · ${dateRange ?? 'period'}`}
+        >
+          {days.map((d, i) => {
+            const c = d.completed ?? 0;
+            const a = d.abandoned ?? 0;
+            const f = d.failed ?? 0;
+            const total = c + a + f;
+            const label = formatDay(d.day);
+            const tooltip =
+              total === 0
+                ? `${label} · no outcomes recorded`
+                : `${label} · ${c} completed · ${a} abandoned · ${f} failed`;
+            const x = i * DAY_STRIDE + BAR_GAP_X;
+
+            if (total === 0) {
+              // Faint empty placeholder at the baseline so the axis
+              // stays readable even on zero-outcome days.
+              return (
+                <g key={d.day} className={trend.stackGroup}>
+                  <rect x={x} y={PLOT_H - 1} width={BAR_W} height={1} fill="var(--ghost)" />
+                  <rect
+                    x={i * DAY_STRIDE}
+                    y={0}
+                    width={DAY_STRIDE}
+                    height={PLOT_H}
+                    className={trend.stackHitstrip}
+                  >
+                    <title>{tooltip}</title>
+                  </rect>
+                </g>
+              );
+            }
+
+            // Reserve 90% of plot height for the tallest stack —
+            // leaves a 10% headroom strip so the tallest bar
+            // doesn't kiss the top edge.
+            const scale = (PLOT_H * 0.9) / maxTotal;
+            const cH = c * scale;
+            const aH = a * scale;
+            const fH = f * scale;
+            const cY = PLOT_H - cH;
+            const aY = cY - aH;
+            const fY = aY - fH;
+
+            return (
+              <g key={d.day} className={trend.stackGroup}>
+                {c > 0 && (
+                  <rect
+                    x={x}
+                    y={cY}
+                    width={BAR_W}
+                    height={cH}
+                    fill="var(--success)"
+                    opacity={0.8}
+                    rx={1}
+                  />
+                )}
+                {a > 0 && (
+                  <rect
+                    x={x}
+                    y={aY}
+                    width={BAR_W}
+                    height={aH}
+                    fill="var(--warn)"
+                    opacity={0.8}
+                    rx={1}
+                  />
+                )}
+                {f > 0 && (
+                  <rect
+                    x={x}
+                    y={fY}
+                    width={BAR_W}
+                    height={fH}
+                    fill="var(--danger)"
+                    opacity={0.8}
+                    rx={1}
+                  />
+                )}
+                {/* Full-height hit rect per day for the tooltip + hover tint.
+                 *  Sits on top of the bars so the target is the whole column,
+                 *  not just the painted area. */}
+                <rect
+                  x={i * DAY_STRIDE}
+                  y={0}
+                  width={DAY_STRIDE}
+                  height={PLOT_H}
+                  className={trend.stackHitstrip}
+                >
+                  <title>{tooltip}</title>
+                </rect>
+              </g>
+            );
+          })}
+        </svg>
+      </div>
+    </div>
+  );
 }
 
-function EditVelocityWidget({ analytics }: WidgetBodyProps) {
-  const data = analytics.edit_velocity.map((d) => d.edits_per_hour);
-  if (data.length < 2) return <GhostSparkline />;
-  return <Sparkline data={data} height={80} />;
+/** Render a day ISO string as `Apr 24` for the tooltip. */
+function formatDay(day: string): string {
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
+/** Render the first-to-last-day range as a caption. Same locale as
+ *  the per-day tooltip so the vocabulary matches. */
+function formatDateRange(first: string, last: string): string | null {
+  const f = formatDay(first);
+  const l = formatDay(last);
+  if (!f || !l) return null;
+  if (f === l) return f;
+  return `${f} – ${l}`;
 }
 
 function PromptEfficiencyWidget({ analytics }: WidgetBodyProps) {
@@ -116,8 +263,6 @@ function HourlyEffectivenessWidget({ analytics }: WidgetBodyProps) {
 }
 
 export const trendWidgets: WidgetRegistry = {
-  'session-trend': SessionTrendWidget,
-  'edit-velocity': EditVelocityWidget,
   'outcome-trend': OutcomeTrendWidget,
   'prompt-efficiency': PromptEfficiencyWidget,
   'hourly-effectiveness': HourlyEffectivenessWidget,
