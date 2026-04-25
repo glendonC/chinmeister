@@ -1,0 +1,91 @@
+/* TrendWidgets-only viz: outcome-trend stack chrome (legend + date
+ * caption + per-day hover overlay). Simple sparkline widgets still
+ * rely on widget-shared.module.css. */
+
+.stackFrame {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+
+.stackHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+.stackLegend {
+  display: flex;
+  gap: var(--space-md);
+}
+
+.stackLegendItem {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.stackLegendDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.stackRange {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+}
+
+/* SVG plot for the daily outcome bars. The plot fills the remaining
+ * body height via flex:1; the SVG inside stretches with
+ * preserveAspectRatio=none to fit. `vector-effect: non-scaling-stroke`
+ * would apply to strokes if we had any — bars are fills so not needed.
+ *
+ * Hit-strip rects sit above the paint and carry the per-day tooltip +
+ * hover tint, which is the visible affordance that tells the user the
+ * columns ARE interactive. */
+.stackPlot {
+  flex: 1;
+  min-height: 80px;
+  width: 100%;
+  display: block;
+}
+
+.stackSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.stackGroup {
+  cursor: default;
+}
+
+.stackHitstrip {
+  fill: var(--ink);
+  fill-opacity: 0;
+  transition: fill-opacity 0.12s ease;
+}
+
+.stackGroup:hover .stackHitstrip {
+  fill-opacity: 0.08;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stackHitstrip {
+    transition: none !important;
+  }
+}

@@ -16,9 +16,12 @@ const LOCAL_CONFIG_FILE = join(LOCAL_CONFIG_DIR, 'config.json');
 /** @typedef {{ token?: string, refresh_token?: string, handle?: string, color?: string }} LocalConfig */
 /** @typedef {{ teamId: string, teamName: string }} TeamFile */
 
-let workerProcess = null;
-let webProcess = null;
+/** @type {Record<string, { child: ReturnType<typeof spawn> | null, exits: number[], stopped: boolean }>} */
+const supervisors = Object.create(null);
 let shuttingDown = false;
+
+const CRASH_WINDOW_MS = 30_000;
+const CRASH_MAX = 3;
 
 function logLine(message = '') {
   process.stderr.write(`${message}\n`);
@@ -83,21 +86,46 @@ function formatChildExit(name, code, signal) {
   return `${name} exited with code ${code ?? 0}`;
 }
 
-function registerChild(name, child) {
-  child.on('exit', (code, signal) => {
-    if (shuttingDown) return;
-    logLine(`[dev:local] ${formatChildExit(name, code, signal)}`);
-    void shutdown(typeof code === 'number' ? code : 1);
-  });
-  return child;
+function superviseChild(name, spawnFn) {
+  const state = { child: null, exits: [], stopped: false };
+  supervisors[name] = state;
+
+  const start = () => {
+    const child = spawnFn();
+    state.child = child;
+    child.on('exit', (code, signal) => {
+      if (shuttingDown || state.stopped) return;
+      logLine(`[dev:local] ${formatChildExit(name, code, signal)}`);
+      const now = Date.now();
+      state.exits = state.exits.filter((t) => now - t < CRASH_WINDOW_MS);
+      state.exits.push(now);
+      if (state.exits.length >= CRASH_MAX) {
+        state.stopped = true;
+        logLine(
+          `[dev:local] ${name} crashed ${CRASH_MAX} times in ${CRASH_WINDOW_MS / 1000}s — shutting down`,
+        );
+        void shutdown(1);
+        return;
+      }
+      logLine(`[dev:local] restarting ${name}...`);
+      start();
+    });
+  };
+
+  start();
+  return state;
 }
 
 async function shutdown(exitCode = 0) {
   if (shuttingDown) return;
   shuttingDown = true;
 
-  for (const child of [webProcess, workerProcess]) {
-    if (!child || child.killed) continue;
+  const children = Object.values(supervisors)
+    .map((state) => state?.child)
+    .filter(Boolean);
+
+  for (const child of children) {
+    if (child.killed) continue;
     try {
       child.kill('SIGTERM');
     } catch {
@@ -107,8 +135,8 @@ async function shutdown(exitCode = 0) {
 
   await sleep(150);
 
-  for (const child of [webProcess, workerProcess]) {
-    if (!child || child.killed) continue;
+  for (const child of children) {
+    if (child.killed) continue;
     try {
       child.kill('SIGKILL');
     } catch {
@@ -269,6 +297,15 @@ async function ensureLocalTeam(token) {
     return { teamId: existingTeam.team_id, source: 'account-team' };
   }
 
+  // No name match, but any existing team is still a valid local view for this
+  // repo. Reuse it instead of creating another — repo renames, differently
+  // named checkouts, and half-successful prior bootstraps all leave orphans
+  // that would otherwise burn the per-day team-creation rate limit every run.
+  if (teams.length > 0) {
+    const fallback = teams[0];
+    return { teamId: fallback.team_id, source: 'account-team-fallback' };
+  }
+
   const created = await requestJson('POST', '/teams', {
     token,
     body: { name: repoName },
@@ -289,8 +326,7 @@ async function main() {
   await assertPortAvailable(56790, 'Dashboard');
 
   logLine('[dev:local] starting local worker...');
-  workerProcess = registerChild(
-    'worker',
+  superviseChild('worker', () =>
     spawn('npm', ['run', 'dev:local', '--workspace=packages/worker'], {
       cwd: rootDir,
       stdio: 'inherit',
@@ -312,8 +348,7 @@ async function main() {
   const team = await ensureLocalTeam(config.token);
 
   logLine('[dev:local] starting local web dashboard...');
-  webProcess = registerChild(
-    'web',
+  superviseChild('web', () =>
     spawn('npm', ['run', 'dev', '--workspace=packages/web'], {
       cwd: rootDir,
       stdio: 'inherit',

@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties, type KeyboardEvent } from 'react';
+import { useMemo, type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { setQueryParam, useRoute } from '../../lib/router.js';
 import { arcPath } from '../../lib/svgArcs.js';
@@ -41,11 +41,12 @@ function useIsDrillable(): boolean {
  * the widget body chromeless — the widget title names the metric;
  * repeating it below the value is filler. ──────────────────────── */
 
-// ── Hero ring ───────────────────────────────────────
+// ── Outcomes ring + clickable row table ─────────────
 //
-// 4×3 cell = ~317w × 240h body. Side-by-side layout fits a 140px ring
-// + 3-4 legend rows without clipping. Arc stroke-width 8 at R=58 keeps
-// the round-cap overlap floor at ~10° — RING_GAP_DEG 14° has headroom.
+// 8×3 cell = ~671×240 body. Ring on the left (matches the UsageDetailView
+// ToolRing — 160px, SW=8), table on the right with clickable row
+// buttons. The ring is the visual identity; the table is the
+// breakdown + drill affordance.
 
 const RING_VIEW = 160;
 const RING_CX = 80;
@@ -94,41 +95,131 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
     { key: 'unknown', label: 'no outcome', count: cs.unknown, color: 'var(--ghost)', muted: true },
   ];
   const slices = allSlices.filter((s) => s.count > 0);
+  const reported = cs.total_sessions - cs.unknown;
+
+  // Per-outcome daily series for the TREND mini-sparkline column.
+  const trends: Record<OutcomeKey, number[]> = {
+    completed: analytics.daily_trends.map((d) => d.completed ?? 0),
+    abandoned: analytics.daily_trends.map((d) => d.abandoned ?? 0),
+    failed: analytics.daily_trends.map((d) => d.failed ?? 0),
+    unknown: analytics.daily_trends.map((d) => {
+      const total = d.sessions ?? 0;
+      const known = (d.completed ?? 0) + (d.abandoned ?? 0) + (d.failed ?? 0);
+      return Math.max(0, total - known);
+    }),
+  };
 
   return (
-    <OutcomeRing slices={slices} cs={cs} completionDelta={completionDelta} drillable={drillable} />
+    <div className={styles.outcomeFrame}>
+      <OutcomeRing
+        slices={slices.filter((s) => !s.muted)}
+        cs={cs}
+        completionDelta={completionDelta}
+        reported={reported}
+      />
+      <div className={styles.outcomeTable} role="table">
+        <div className={styles.outcomeHeadRow} role="row">
+          <span role="columnheader">outcome</span>
+          <span role="columnheader" className={styles.outcomeHeadNum}>
+            count
+          </span>
+          <span role="columnheader">share</span>
+          <span role="columnheader">trend</span>
+          <span aria-hidden="true" />
+        </div>
+        {slices.map((s, i) => {
+          const share = cs.total_sessions > 0 ? s.count / cs.total_sessions : 0;
+          const sharePct = Math.round(share * 100);
+          const series = trends[s.key];
+          const content = (
+            <>
+              <span className={styles.outcomeCellOutcome}>
+                <span
+                  className={styles.outcomeDot}
+                  style={{ background: s.color, opacity: s.muted ? 0.45 : 1 }}
+                />
+                <span className={styles.outcomeLabel}>{s.label}</span>
+              </span>
+              <span className={styles.outcomeCount}>{s.count.toLocaleString()}</span>
+              <span className={styles.outcomeShareCell}>
+                <span className={styles.outcomeShareTrack}>
+                  <span
+                    className={styles.outcomeShareFill}
+                    style={{
+                      width: `${Math.max(2, sharePct)}%`,
+                      background: s.color,
+                      opacity: s.muted ? 0.35 : 'var(--opacity-bar-fill)',
+                    }}
+                  />
+                </span>
+                <span className={styles.outcomeShareValue}>{sharePct}%</span>
+              </span>
+              <span className={styles.outcomeTrendCell}>
+                <MiniSparkline values={series} color={s.color} muted={s.muted} />
+              </span>
+              {drillable && (
+                <span className={styles.outcomeRowArrow} aria-hidden="true">
+                  ↗
+                </span>
+              )}
+            </>
+          );
+          if (drillable) {
+            return (
+              <button
+                key={s.key}
+                type="button"
+                role="row"
+                className={styles.outcomeDataRow}
+                style={{ '--row-index': i } as CSSProperties}
+                onClick={openOutcomes('sessions')}
+                aria-label={`Open outcomes detail · ${s.label} ${s.count}`}
+              >
+                {content}
+              </button>
+            );
+          }
+          return (
+            <div
+              key={s.key}
+              role="row"
+              className={styles.outcomeDataRow}
+              style={{ '--row-index': i } as CSSProperties}
+            >
+              {content}
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
+/** Ring component — mirrors UsageDetailView's ToolRing: 160×160
+ *  SVG, R=58, SW=8, center value + caption as SVG text. `unknown`
+ *  outcome is excluded from arcs (caller pre-filters) because the
+ *  arc has no audience signal; it surfaces instead as the small
+ *  reported-count caption underneath the ring when its share is
+ *  high enough to matter. */
 function OutcomeRing({
   slices,
   cs,
   completionDelta,
-  drillable,
+  reported,
 }: {
   slices: OutcomeSlice[];
   cs: UserAnalytics['completion_summary'];
   completionDelta: number | null;
-  drillable: boolean;
+  reported: number;
 }) {
-  // Match UsageDetailView's ToolRing exactly — 160px ring, R=58, SW=8,
-  // center number rendered as SVG text at fontSize 30 (ToolRing uses
-  // 26; we bump slightly for the % sign to still read). HTML overlay
-  // was overkill and clipped the top arc. Ring renders reported
-  // outcomes only; `unknown` stays out of arcs and legend.
-  const reportedSlices = useMemo(() => slices.filter((s) => !s.muted), [slices]);
-
-  // Functional reduce — `let cursor` with in-map mutation trips React
-  // Compiler's immutability rule. Accumulate arcs + running cursor in
-  // a single reduce pass, then read arcs off the end.
   const arcs = useMemo(() => {
-    const total = reportedSlices.reduce((s, x) => s + x.count, 0);
+    const total = slices.reduce((s, x) => s + x.count, 0);
     const safeTotal = Math.max(1, total);
-    const gaps = reportedSlices.length > 1 ? reportedSlices.length * RING_GAP_DEG : 0;
+    const gaps = slices.length > 1 ? slices.length * RING_GAP_DEG : 0;
     const available = Math.max(0, 360 - gaps);
-    const gap = reportedSlices.length > 1 ? RING_GAP_DEG : 0;
-    return reportedSlices.reduce<{
-      arcs: Array<(typeof reportedSlices)[number] & { startDeg: number; sweepDeg: number }>;
+    const gap = slices.length > 1 ? RING_GAP_DEG : 0;
+    return slices.reduce<{
+      arcs: Array<OutcomeSlice & { startDeg: number; sweepDeg: number }>;
       cursor: number;
     }>(
       (acc, slice) => {
@@ -140,103 +231,115 @@ function OutcomeRing({
       },
       { arcs: [], cursor: 0 },
     ).arcs;
-  }, [reportedSlices]);
+  }, [slices]);
 
   const rate = Math.round(cs.completion_rate);
-  const onClick = drillable ? openOutcomes('sessions') : undefined;
-  const highUnknown = cs.unknown > 0 && cs.unknown / cs.total_sessions > 0.3;
+  const highUnknown = cs.unknown > 0 && reported / cs.total_sessions < 0.7;
 
   return (
-    <div
-      className={styles.ringFrame}
-      {...(onClick
-        ? {
-            role: 'button',
-            tabIndex: 0,
-            onClick,
-            onKeyDown: (e: KeyboardEvent) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onClick();
-              }
-            },
-            style: { cursor: 'pointer' },
-            'aria-label': `Open outcomes detail · ${rate}% completion rate`,
-          }
-        : {})}
-    >
-      <div className={styles.ringMedia}>
-        <svg
-          viewBox={`0 0 ${RING_VIEW} ${RING_VIEW}`}
-          className={styles.ringSvg}
-          role="img"
-          aria-label={`Completion rate ${rate}%, ${cs.completed} of ${cs.total_sessions} sessions completed`}
+    <div className={styles.ringBlock}>
+      <svg
+        viewBox={`0 0 ${RING_VIEW} ${RING_VIEW}`}
+        className={styles.ringSvg}
+        role="img"
+        aria-label={`Completion rate ${rate}%, ${cs.completed} of ${cs.total_sessions} sessions completed`}
+      >
+        <circle cx={RING_CX} cy={RING_CY} r={RING_R} className={styles.ringTrack} />
+        {arcs
+          .filter((a) => a.sweepDeg > 0.2)
+          .map((a) => (
+            <path
+              key={a.key}
+              d={arcPath(RING_CX, RING_CY, RING_R, a.startDeg, a.sweepDeg)}
+              className={styles.ringArc}
+              style={{ stroke: a.color, opacity: 0.9 }}
+            >
+              <title>
+                {a.label}: {a.count}
+              </title>
+            </path>
+          ))}
+        <text
+          x={RING_CX}
+          y={RING_CY - 2}
+          textAnchor="middle"
+          dominantBaseline="central"
+          fill="var(--ink)"
+          fontSize="30"
+          fontWeight="200"
+          fontFamily="var(--display)"
+          letterSpacing="-0.04em"
         >
-          <circle cx={RING_CX} cy={RING_CY} r={RING_R} className={styles.ringTrack} />
-          {arcs
-            .filter((a) => a.sweepDeg > 0.2)
-            .map((a) => (
-              <path
-                key={a.key}
-                d={arcPath(RING_CX, RING_CY, RING_R, a.startDeg, a.sweepDeg)}
-                className={styles.ringArc}
-                style={{ stroke: a.color, opacity: 0.9 }}
-              >
-                <title>
-                  {a.label}: {a.count}
-                </title>
-              </path>
-            ))}
-          <text
-            x={RING_CX}
-            y={RING_CY - 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="var(--ink)"
-            fontSize="30"
-            fontWeight="200"
-            fontFamily="var(--display)"
-            letterSpacing="-0.04em"
-          >
-            {rate}%
-          </text>
-          <text
-            x={RING_CX}
-            y={RING_CY + 20}
-            textAnchor="middle"
-            fill="var(--soft)"
-            fontSize="8"
-            fontFamily="var(--mono)"
-            letterSpacing="0.14em"
-          >
-            COMPLETED
-          </text>
-        </svg>
-      </div>
-      <div className={styles.ringLegend}>
-        {reportedSlices.map((s, i) => (
-          <div
-            key={s.key}
-            className={styles.ringLegendRow}
-            style={{ '--row-index': i } as CSSProperties}
-          >
-            <span className={styles.ringLegendDot} style={{ background: s.color }} />
-            <span className={styles.ringLegendLabel}>{s.label}</span>
-            <span className={styles.ringLegendValue}>
-              {s.count}
-              {s.key === 'completed' && completionDelta != null && (
-                <InlineDelta value={completionDelta} />
-              )}
-            </span>
-          </div>
-        ))}
-        {highUnknown && (
-          <span className={styles.ringLegendFoot}>
-            {cs.total_sessions - cs.unknown} of {cs.total_sessions} reported
-          </span>
-        )}
-      </div>
+          {rate}%
+        </text>
+        <text
+          x={RING_CX}
+          y={RING_CY + 20}
+          textAnchor="middle"
+          fill="var(--soft)"
+          fontSize="8"
+          fontFamily="var(--mono)"
+          letterSpacing="0.14em"
+        >
+          COMPLETED
+        </text>
+      </svg>
+      {completionDelta != null && (
+        <span className={styles.ringCaption}>
+          <InlineDelta value={completionDelta} /> vs prior period
+        </span>
+      )}
+      {highUnknown && (
+        <span className={styles.ringCaption}>
+          {reported} of {cs.total_sessions} reported
+        </span>
+      )}
     </div>
+  );
+}
+
+/** Tiny inline sparkline for the trend column — area fill + line,
+ *  no axes. Length normalizes to the widget's column width via SVG. */
+function MiniSparkline({
+  values,
+  color,
+  muted,
+}: {
+  values: number[];
+  color: string;
+  muted: boolean;
+}) {
+  if (values.length < 2) {
+    return <span className={styles.outcomeTrendBlank}>—</span>;
+  }
+  const max = Math.max(...values, 1);
+  const W = 100;
+  const H = 22;
+  const points = values.map((v, i) => ({
+    x: (i / (values.length - 1)) * W,
+    y: H - (v / max) * (H - 2) - 1,
+  }));
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ');
+  const area = `${line} L${W},${H} L0,${H} Z`;
+  return (
+    <svg
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      className={styles.outcomeSparkline}
+      aria-hidden="true"
+    >
+      <path d={area} fill={color} opacity={muted ? 0.1 : 0.15} />
+      <path
+        d={line}
+        fill="none"
+        stroke={color}
+        strokeWidth={1.25}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        opacity={muted ? 0.4 : 0.85}
+        vectorEffect="non-scaling-stroke"
+      />
+    </svg>
   );
 }
 
@@ -328,35 +431,14 @@ function ScopeComplexityWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
-  const onClick = drillable ? openOutcomes('retries') : undefined;
-  const interactiveProps: Record<string, unknown> = onClick
-    ? {
-        role: 'button',
-        tabIndex: 0,
-        onClick,
-        onKeyDown: (e: KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onClick();
-          }
-        },
-        style: { cursor: 'pointer' },
-        'aria-label': 'Open outcomes detail · completion by scope',
-      }
-    : {};
-
   return (
-    <div className={styles.scopeList} {...interactiveProps}>
+    <div className={styles.scopeList}>
       {sc.map((b, i) => {
         const color = completionColor(b.completion_rate);
         const minutes = Math.round(b.avg_duration_min);
-        return (
-          <div
-            key={b.bucket}
-            className={styles.scopeRow}
-            style={{ '--row-index': i } as CSSProperties}
-            title={`${b.bucket}: ${b.completion_rate}% across ${b.sessions} sessions, ${minutes}m avg`}
-          >
+        const ariaLabel = `Open outcomes detail · ${b.bucket} ${b.completion_rate}% across ${b.sessions} sessions`;
+        const content = (
+          <>
             <span className={styles.scopeLabel}>{b.bucket}</span>
             <div className={styles.scopeTrack}>
               <div
@@ -373,6 +455,34 @@ function ScopeComplexityWidget({ analytics }: WidgetBodyProps) {
             <span className={styles.scopeMeta}>
               {b.sessions.toLocaleString()} sessions · {minutes}m avg
             </span>
+            {drillable && (
+              <span className={styles.scopeArrow} aria-hidden="true">
+                ↗
+              </span>
+            )}
+          </>
+        );
+        if (drillable) {
+          return (
+            <button
+              key={b.bucket}
+              type="button"
+              className={styles.scopeRow}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={openOutcomes('retries')}
+              aria-label={ariaLabel}
+            >
+              {content}
+            </button>
+          );
+        }
+        return (
+          <div
+            key={b.bucket}
+            className={styles.scopeRow}
+            style={{ '--row-index': i } as CSSProperties}
+          >
+            {content}
           </div>
         );
       })}

@@ -1,0 +1,472 @@
+/* OutcomesDetailView — styles for the outcomes detail surface.
+ *
+ * Structure mirrors UsageDetailView: DetailView shell + DetailSection
+ * blocks. This module owns only viz-specific chrome (the detail ring,
+ * the scope curve at detail size, empty states). Spacing and typography
+ * come from shared tokens.
+ */
+
+.empty {
+  display: block;
+  padding: var(--space-lg) 0;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+}
+
+/* ── Hero ring (detail size) ──────────────────────── */
+/* Larger than the widget's 140px clamp so the detail surface earns its
+ * scale. 220px keeps the stroke-cap overlap floor comfortable at GAP=14.
+ * Ring + legend use a 2-col grid so the legend sits beside the ring on
+ * wide screens and stacks below on narrow. */
+
+.ringBlock {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: var(--space-xl);
+}
+
+.ringMedia {
+  position: relative;
+  width: 220px;
+  height: 220px;
+  flex-shrink: 0;
+}
+
+.ringSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.ringOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.ringValue {
+  font-family: var(--display);
+  font-weight: 200;
+  font-size: var(--display-page);
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
+  color: var(--ink);
+  display: inline-flex;
+  align-items: baseline;
+}
+
+.ringValueUnit {
+  font-size: var(--text-xl);
+  color: var(--soft);
+  margin-left: 4px;
+  font-weight: 200;
+}
+
+.ringCaveat {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  margin-top: 6px;
+}
+
+.ringLegend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.legendRow {
+  display: grid;
+  grid-template-columns: 10px 1fr auto auto;
+  align-items: baseline;
+  column-gap: var(--space-md);
+  padding: 6px 8px;
+  margin: 0 -8px;
+  border-radius: var(--radius-2xs);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 55ms);
+}
+
+.legendDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.legendLabel {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legendCount {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.legendShare {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+  min-width: 44px;
+  text-align: right;
+}
+
+/* ── Stuckness detail block ──────────────────────── */
+
+.stuckRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-xl);
+  align-items: baseline;
+}
+
+.stuckHero {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.stuckValue {
+  font-family: var(--display);
+  font-weight: 200;
+  font-size: var(--display-hero);
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
+  color: var(--ink);
+}
+
+.stuckUnit {
+  font-size: var(--text-lg);
+  color: var(--soft);
+  font-weight: 200;
+}
+
+.stuckFacts {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 6px;
+}
+
+.stuckFact {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+}
+
+.stuckFactValue {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+/* ── First edit detail block ──────────────────────── */
+
+.firstEditBlock {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-xl);
+  align-items: baseline;
+}
+
+.feHero {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.feValue {
+  font-family: var(--display);
+  font-weight: 200;
+  font-size: var(--display-hero);
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
+  color: var(--ink);
+}
+
+.feUnit {
+  font-size: var(--text-lg);
+  color: var(--soft);
+  font-weight: 200;
+}
+
+.feChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 18px;
+  padding-top: 6px;
+}
+
+.feChip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+}
+
+.feChipDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  align-self: center;
+  flex-shrink: 0;
+}
+
+.feChipLabel {
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+}
+
+.feChipValue {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Duration strip (detail size) ─────────────────── */
+/* Horizontal proportional bar — same pattern as UsageDetailView's
+ * DurationStrip, rebuilt here so the outcomes view doesn't depend on
+ * private exports from usage. Segments colored from success → ink →
+ * warn on a position ramp. */
+
+.durationFrame {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.durationBar {
+  display: flex;
+  height: 14px;
+  gap: 2px;
+  border-radius: var(--radius-2xs);
+  overflow: hidden;
+}
+
+.durationSegment {
+  height: 100%;
+  border-radius: var(--radius-2xs);
+  transition: flex-grow 0.4s var(--motion);
+}
+
+.durationLegend {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-sm);
+}
+
+.durationCell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-items: flex-start;
+}
+
+.durationBucket {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.durationCount {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.durationShare {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+
+/* ── Scope curve (detail size) ────────────────────── */
+
+.curveBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.curveMedia {
+  width: 100%;
+  aspect-ratio: 3 / 1;
+  max-height: 240px;
+}
+
+.curveSvg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.curveArea {
+  fill: var(--ink);
+  opacity: 0.06;
+}
+
+.curveLine {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 3 4;
+  opacity: 0.5;
+}
+
+.curveDot {
+  fill: var(--page-bg);
+  stroke-width: 2.25;
+  transition:
+    r 0.15s ease,
+    stroke-width 0.15s ease;
+}
+
+.curveDot:hover {
+  stroke-width: 3;
+}
+
+.curveGrid {
+  stroke: var(--ghost);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  opacity: 0.4;
+}
+
+.curveAxis {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  fill: var(--soft);
+  letter-spacing: var(--tracking-stat);
+}
+
+.curveLabels {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: var(--space-sm);
+}
+
+.curveLabelCell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.curveBucketLabel {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.curveSessionCount {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Work-type bars (detail size) ─────────────────── */
+
+.wtList {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.wtRow {
+  display: grid;
+  grid-template-columns: 120px 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 40ms);
+}
+
+.wtLabel {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wtBarTrack {
+  height: 16px;
+  background: var(--ghost);
+  border-radius: var(--radius-2xs);
+  overflow: hidden;
+}
+
+.wtBarFill {
+  height: 100%;
+  opacity: var(--opacity-bar-fill);
+  transition: width 0.4s var(--motion);
+}
+
+.wtValue {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.wtValueSoft {
+  color: var(--soft);
+  margin-left: 6px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .legendRow,
+  .wtRow {
+    animation: none !important;
+  }
+  .durationSegment,
+  .wtBarFill,
+  .curveDot {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .ringBlock,
+  .stuckRow,
+  .firstEditBlock {
+    grid-template-columns: 1fr;
+    gap: var(--space-md);
+  }
+}

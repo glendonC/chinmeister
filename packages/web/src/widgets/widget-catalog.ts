@@ -305,34 +305,21 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Trends (sparklines) ───────────────
-  {
-    id: 'session-trend',
-    name: 'session trend',
-    description: 'Daily session volume over time',
-    category: 'usage',
-    scope: 'both',
-    viz: 'sparkline',
-    w: 8,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['daily_trends'],
-    fitContent: true,
-  },
-  {
-    id: 'edit-velocity',
-    name: 'edits per hour',
-    description: 'Edits per hour trend over time',
-    category: 'usage',
-    scope: 'both',
-    viz: 'sparkline',
-    w: 8,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['edit_velocity'],
-    fitContent: true,
-  },
+  // `session-trend` and `edit-velocity` were both cut 2026-04-25 after
+  // the widget-rubric agent-team pass on the Usage Trends category.
+  // session-trend failed A3 (zero-fill renders fake shape), B2 (subset
+  // of the outcomes widget on the same row), and D1 (session count is
+  // the most generic agent-tool metric going). edit-velocity was the
+  // closer call — Challenger argued keep-catalog under Option B — but
+  // followed when the question "are we actually building a detail
+  // surface for it" came up: the only substrate-honest detail Q
+  // (velocity → completion) is a Simpson's-paradox trap (fast=small
+  // fixes, slow=deep refactors) flagged by ANALYTICS_SPEC §10, and
+  // STRATEGY.md explicitly names raw-volume metrics as getting LESS
+  // valuable as agents become more autonomous. Both alias to [] for
+  // saved-layout migration. The underlying `edit_velocity` and
+  // `daily_trends` fields stay in the schema — UsageDetail's `cadence`
+  // and `peak` questions still consume them as scalars.
 
   // ── Outcomes ──────────────────────────
   {
@@ -342,12 +329,18 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     category: 'outcomes',
     scope: 'both',
     viz: 'outcome-bar',
-    w: 4,
+    // Widened from 4×3 to 8×3 on 2026-04-24 after the viz became a
+    // hero-stat + 5-column table (OUTCOME / COUNT / SHARE bar /
+    // DELTA / TREND sparkline). The old 4-col slot clipped labels
+    // and forced the table into a narrow column. The table needs
+    // the 8-col width to breathe — share bars become legible, per-
+    // outcome trend sparklines fit, drill arrows have room.
+    w: 8,
     h: 3,
-    minW: 3,
+    minW: 6,
     minH: 2,
+    maxW: 12,
     dataKeys: ['completion_summary'],
-    fitContent: true,
   },
   {
     id: 'outcome-trend',
@@ -382,7 +375,14 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     description: 'Sessions where the agent stalled for 15+ minutes',
     category: 'outcomes',
     scope: 'both',
-    viz: 'stat-row',
+    // viz: 'stat' so the hero value uses --display-hero like one-shot-rate,
+    // edits, cost, cost-per-edit — every KPI-shape widget in the system
+    // renders at the same typography tier. The ratio + recovered% live in
+    // the CoverageNote caption slot so they're visible without stealing
+    // the hero tier. Changed from 'stat-row' on 2026-04-24 when the
+    // 3-block layout read as "random smaller typography" next to the
+    // hero-sized peers above it in the layout.
+    viz: 'stat',
     w: 4,
     h: 2,
     minW: 3,
@@ -576,36 +576,19 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Outcomes (extended) ─────────────
-  {
-    id: 'first-edit',
-    name: 'time to first edit',
-    description: 'How long before agents start producing edits',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'stat-row',
-    w: 6,
-    h: 2,
-    minW: 3,
-    minH: 2,
-    dataKeys: ['first_edit_stats'],
-  },
-  {
-    id: 'duration-dist',
-    name: 'session durations',
-    description: 'Distribution of session lengths',
-    category: 'outcomes',
-    scope: 'both',
-    viz: 'bar-chart',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['duration_distribution'],
-  },
+  // Note: `first-edit` and `duration-dist` were cut 2026-04-24 per the
+  // Widget-Detail Precedent (WIDGET_RUBRIC.md § Widget ↔ Detail-View
+  // Disposition). Both duplicated data that already lives in Usage
+  // detail's Sessions panel — first-edit as the "first edit lands at
+  // X min" lead-in, duration-dist as the DurationStrip. Detail-only is
+  // the honest home when a metric only earns its seat in context.
+  // duration-dist carried an additional concern: the histogram shape
+  // invited the "optimal session length" read named as a never-build
+  // anti-pattern in ANALYTICS_SPEC § 10.
   {
     id: 'scope-complexity',
-    name: 'scope complexity',
-    description: 'Files touched per session vs completion rate',
+    name: 'completion by scope',
+    description: 'Completion rate bucketed by files touched per session',
     category: 'outcomes',
     scope: 'both',
     viz: 'bucket-chart',
@@ -1056,6 +1039,27 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
   // The merge/evolve/discard breakdown belongs in the review drill, not
   // the cockpit.
   'formation-summary': [],
+  // 2026-04-24: first-edit + duration-dist cut per the Widget-Detail
+  // Precedent. Both already render in the Usage detail Sessions panel
+  // (first-edit as a lead-in fact, duration-dist as the DurationStrip).
+  // Detail-only is the honest home when a metric only earns its seat
+  // in context. duration-dist additionally invited the "optimal session
+  // length" read flagged as a never-build anti-pattern in
+  // ANALYTICS_SPEC § 10. Empty array = drop the slot from any saved
+  // layout on next load.
+  'first-edit': [],
+  'duration-dist': [],
+  // 2026-04-24: session-trend cut. Detail view's DailyOutcomeStrip +
+  // the same-row outcomes widget already own the signal with more
+  // context, and the zero-fill spine rendered fake shape for low-
+  // activity users. Saved layouts drop the slot on next load.
+  'session-trend': [],
+  // 2026-04-25: edit-velocity cut. No detail-view future earns the
+  // build cost — only substrate-honest question (velocity → completion)
+  // is a Simpson's-paradox trap, and edits/hr is a generic metric any
+  // tool's own dashboard produces. Schema field `edit_velocity` stays
+  // for UsageDetail's `cadence` scalar consumers.
+  'edit-velocity': [],
 };
 
 /**
@@ -1105,9 +1109,11 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'cost-per-edit', colSpan: 3, rowSpan: 2 },
   { id: 'one-shot-rate', colSpan: 3, rowSpan: 2 },
 
-  // Trend chart + outcomes — 8 + 4
-  { id: 'session-trend', colSpan: 8, rowSpan: 3 },
-  { id: 'outcomes', colSpan: 4, rowSpan: 3 },
+  // Outcomes — 8×3. Stands alone on its row after `session-trend` was
+  // cut 2026-04-24 (see catalog Trends block). No forced backfill — the
+  // grid is modular, users add other widgets via the picker if they want
+  // the leftover 4 cols filled.
+  { id: 'outcomes', colSpan: 8, rowSpan: 3 },
 
   // Heatmap + work types — 8 + 4
   { id: 'heatmap', colSpan: 8, rowSpan: 4 },
