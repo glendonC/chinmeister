@@ -72,7 +72,7 @@ describe('Authentication', () => {
   it('returns 401 for missing Authorization header', async () => {
     const res = await SELF.fetch('http://localhost/me');
     expect(res.status).toBe(401);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Unauthorized');
   });
 
@@ -104,7 +104,7 @@ describe('GET /me', () => {
     const { headers, user } = await createAuthUser();
     const res = await SELF.fetch('http://localhost/me', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.handle).toBe(user.handle);
     expect(body.color).toBe(user.color);
     expect(body.id).toBeUndefined();
@@ -113,7 +113,7 @@ describe('GET /me', () => {
   it('includes created_at field', async () => {
     const { headers } = await createAuthUser();
     const res = await SELF.fetch('http://localhost/me', { headers });
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.created_at).toBeDefined();
   });
 });
@@ -127,7 +127,7 @@ describe('POST /auth/init', () => {
       headers: { 'CF-Connecting-IP': `test-init-${Date.now()}` },
     });
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.handle).toBeDefined();
     expect(body.color).toBeDefined();
     expect(body.token).toBeDefined();
@@ -150,7 +150,7 @@ describe('POST /auth/init', () => {
       headers: { 'CF-Connecting-IP': ip },
     });
     expect(res.status).toBe(429);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('Too many accounts');
   });
 });
@@ -163,7 +163,7 @@ describe('GET /stats', () => {
       headers: { 'CF-Connecting-IP': `stats-ok-${Date.now()}-${Math.random()}` },
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(typeof body.totalUsers).toBe('number');
   });
 
@@ -184,7 +184,7 @@ describe('GET /stats', () => {
       headers: { 'CF-Connecting-IP': ip },
     });
     expect(res.status).toBe(429);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('Rate limit exceeded');
   });
 });
@@ -197,7 +197,7 @@ describe('GET /tools/catalog', () => {
       headers: { 'CF-Connecting-IP': `catalog-ok-${Date.now()}-${Math.random()}` },
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.tools).toBeDefined();
     expect(body.categories).toBeDefined();
   });
@@ -233,7 +233,7 @@ describe('PUT /me/handle', () => {
     });
     expect([200, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.handle).toBe(newHandle);
   });
@@ -246,7 +246,7 @@ describe('PUT /me/handle', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Handle is required');
   });
 
@@ -272,7 +272,7 @@ describe('PUT /me/color', () => {
       body: JSON.stringify({ color: 'cyan' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.color).toBe('cyan');
   });
@@ -295,7 +295,7 @@ describe('PUT /me/color', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Color is required');
   });
 });
@@ -312,7 +312,7 @@ describe('PUT /status', () => {
     });
     expect([200, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -324,7 +324,7 @@ describe('PUT /status', () => {
       body: JSON.stringify({ status: 'x'.repeat(281) }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('280');
   });
 
@@ -353,7 +353,7 @@ describe('DELETE /status', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 });
@@ -372,7 +372,7 @@ describe('parseBody via endpoints', () => {
       body: '{"handle": "test"}',
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content-Type must be application/json');
   });
 
@@ -387,7 +387,7 @@ describe('parseBody via endpoints', () => {
       body: 'not valid json{{{',
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Invalid JSON body');
   });
 
@@ -402,7 +402,7 @@ describe('parseBody via endpoints', () => {
       body: JSON.stringify({ handle: 'x'.repeat(60000) }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Request body too large');
   });
 });
@@ -419,7 +419,7 @@ describe('POST /teams (create team)', () => {
     });
     expect([201, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.team_id).toBeDefined();
     expect(body.team_id).toMatch(/^t_[a-f0-9]{16}$/);
   });
@@ -544,8 +544,8 @@ describe('Team activity content moderation', () => {
 // --- Team activity input validation ---
 
 describe('Team activity input validation', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -586,7 +586,7 @@ describe('Team activity input validation', () => {
       body: JSON.stringify({ files, summary: 'Working' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('too many files');
   });
 
@@ -621,8 +621,8 @@ describe('Team activity input validation', () => {
 // --- Team memory endpoints ---
 
 describe('Team memory endpoints', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -647,7 +647,7 @@ describe('Team memory endpoints', () => {
     });
     expect([201, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.id).toBeDefined();
   });
@@ -668,7 +668,7 @@ describe('Team memory endpoints', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.memories).toBeDefined();
     expect(body.memories.length).toBeGreaterThan(0);
   });
@@ -683,7 +683,7 @@ describe('Team memory endpoints', () => {
       }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -697,7 +697,7 @@ describe('Team memory endpoints', () => {
       }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('2000');
   });
 
@@ -717,8 +717,8 @@ describe('Team memory endpoints', () => {
 // --- Team messages ---
 
 describe('Team message endpoints', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -740,7 +740,7 @@ describe('Team message endpoints', () => {
     });
     expect([201, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.id).toBeDefined();
   });
@@ -758,7 +758,7 @@ describe('Team message endpoints', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.messages).toBeDefined();
     expect(body.messages.length).toBeGreaterThan(0);
   });
@@ -794,8 +794,8 @@ describe('Team message endpoints', () => {
 // --- Team sessions ---
 
 describe('Team session endpoints', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -816,7 +816,7 @@ describe('Team session endpoints', () => {
       body: JSON.stringify({ framework: 'react' }),
     });
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.session_id).toBeDefined();
   });
@@ -828,7 +828,7 @@ describe('Team session endpoints', () => {
       body: JSON.stringify({ file: 'src/app.js' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -837,7 +837,7 @@ describe('Team session endpoints', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.sessions).toBeDefined();
     expect(body.sessions.length).toBeGreaterThan(0);
   });
@@ -855,8 +855,8 @@ describe('Team session endpoints', () => {
 // --- Team locks ---
 
 describe('Team lock endpoints', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -877,7 +877,7 @@ describe('Team lock endpoints', () => {
       body: JSON.stringify({ files: ['src/main.js'] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.claimed).toContain('src/main.js');
     expect(body.blocked).toHaveLength(0);
   });
@@ -887,7 +887,7 @@ describe('Team lock endpoints', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.locks).toBeDefined();
   });
 
@@ -908,7 +908,7 @@ describe('Team lock endpoints', () => {
       body: JSON.stringify({ files }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('too many files');
   });
 });
@@ -921,7 +921,7 @@ describe('GET /tools/catalog', () => {
       headers: { 'CF-Connecting-IP': `catalog-basic-${Date.now()}-${Math.random()}` },
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.tools).toBeDefined();
     expect(Array.isArray(body.tools)).toBe(true);
     expect(body.categories).toBeDefined();
@@ -943,7 +943,7 @@ describe('404 handling', () => {
     const { headers } = await createAuthUser();
     const res = await SELF.fetch('http://localhost/nonexistent', { headers });
     expect(res.status).toBe(404);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Not found');
   });
 
@@ -967,7 +967,7 @@ describe('GET /me/teams', () => {
     const { headers } = await createAuthUser();
     const res = await SELF.fetch('http://localhost/me/teams', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.teams).toEqual([]);
   });
 
@@ -981,7 +981,7 @@ describe('GET /me/teams', () => {
 
     const res = await SELF.fetch('http://localhost/me/teams', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.teams.length).toBeGreaterThanOrEqual(1);
   });
 });
@@ -993,7 +993,7 @@ describe('GET /me/dashboard', () => {
     const { headers } = await createAuthUser();
     const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.teams).toEqual([]);
     expect(body.degraded).toBe(false);
     expect(body.failed_teams).toEqual([]);
@@ -1014,7 +1014,7 @@ describe('GET /me/dashboard', () => {
 
     const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.degraded).toBe(true);
     expect(body.failed_teams).toHaveLength(1);
     expect(body.failed_teams[0].team_name).toBe('Broken Project');
@@ -1029,7 +1029,7 @@ describe('GET /me/dashboard', () => {
 
     const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
     expect(res.status).toBe(503);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('temporarily unavailable');
     expect(body.degraded).toBe(true);
     expect(body.failed_teams).toHaveLength(1);
@@ -1076,13 +1076,13 @@ describe('GET /me/dashboard', () => {
     // must not remove the user from user_teams.
     const dashRes = await SELF.fetch('http://localhost/me/dashboard', { headers });
     expect(dashRes.status).toBe(200);
-    const dashBody = await dashRes.json();
+    const dashBody = (await dashRes.json()) as any;
     expect(dashBody.failed_teams).toEqual([]);
-    expect(dashBody.teams.map((t) => t.team_id)).toContain(team_id);
+    expect(dashBody.teams.map((t: any) => t.team_id)).toContain(team_id);
 
     // Roster row in DatabaseDO is intact.
     const userTeams = await db.getUserTeams(user.id);
-    expect(userTeams.teams.map((t) => t.team_id)).toContain(team_id);
+    expect(userTeams.teams.map((t: any) => t.team_id)).toContain(team_id);
   });
 
   // --- Cross-DO chaos coverage ---
@@ -1110,12 +1110,14 @@ describe('GET /me/dashboard', () => {
 
     // Capture roster before the call
     const before = await db.getUserTeams(user.id);
-    expect(before.teams.map((t) => t.team_id).sort()).toEqual([realTeamId, brokenTeamId].sort());
+    expect(before.teams.map((t: any) => t.team_id).sort()).toEqual(
+      [realTeamId, brokenTeamId].sort(),
+    );
 
     // Dashboard call should degrade gracefully
     const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.degraded).toBe(true);
     expect(body.failed_teams).toHaveLength(1);
     expect(body.failed_teams[0].team_id).toBe(brokenTeamId);
@@ -1126,7 +1128,9 @@ describe('GET /me/dashboard', () => {
     // removeUserTeam call from the dashboard handler. The broken team
     // stays on the roster so a future retry can succeed.
     const after = await db.getUserTeams(user.id);
-    expect(after.teams.map((t) => t.team_id).sort()).toEqual([realTeamId, brokenTeamId].sort());
+    expect(after.teams.map((t: any) => t.team_id).sort()).toEqual(
+      [realTeamId, brokenTeamId].sort(),
+    );
   });
 
   it('chaos: /me/analytics with a broken team returns partial data', async () => {
@@ -1143,7 +1147,7 @@ describe('GET /me/dashboard', () => {
 
     const res = await SELF.fetch('http://localhost/me/analytics?days=7', { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     // Cross-team analytics merges over the surviving teams; the response
     // includes a degraded marker so the dashboard can flag partial data.
     expect(body.degraded).toBe(true);
@@ -1161,7 +1165,7 @@ describe('POST /presence/heartbeat', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 });
@@ -1169,8 +1173,8 @@ describe('POST /presence/heartbeat', () => {
 // --- Team file reporting endpoint ---
 
 describe('Team file reporting', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -1191,7 +1195,7 @@ describe('Team file reporting', () => {
       body: JSON.stringify({ file: 'src/index.js' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -1231,7 +1235,7 @@ describe('PUT /agent/profile', () => {
       }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 });
@@ -1239,8 +1243,8 @@ describe('PUT /agent/profile', () => {
 // --- Team conflicts endpoint ---
 
 describe('Team conflicts endpoint', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -1261,7 +1265,7 @@ describe('Team conflicts endpoint', () => {
       body: JSON.stringify({ files: ['src/app.js'] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.conflicts).toBeDefined();
     expect(body.locked).toBeDefined();
   });
@@ -1294,7 +1298,7 @@ describe('Team heartbeat endpoint', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 });
@@ -1308,7 +1312,7 @@ describe('Token lifecycle', () => {
       headers: { 'CF-Connecting-IP': `token-lifecycle-${Date.now()}` },
     });
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.token).toBeDefined();
     expect(body.refresh_token).toBeDefined();
     expect(body.refresh_token).toMatch(/^rt_/);
@@ -1373,7 +1377,7 @@ describe('Token lifecycle', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('refresh_token is required');
   });
 
@@ -1384,7 +1388,7 @@ describe('Token lifecycle', () => {
       body: JSON.stringify({ refresh_token: 'not-a-refresh-token' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Invalid refresh token format');
   });
 
@@ -1395,7 +1399,7 @@ describe('Token lifecycle', () => {
       body: JSON.stringify({ refresh_token: 'rt_0000000000000000000000000000000' }),
     });
     expect(res.status).toBe(401);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Invalid or expired refresh token');
   });
 
@@ -1446,7 +1450,7 @@ describe('WebSocket origin validation', () => {
       },
     });
     expect(res.status).toBe(403);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Origin not allowed');
   });
 
@@ -1469,7 +1473,7 @@ describe('WebSocket origin validation', () => {
       },
     });
     expect(res.status).toBe(403);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Origin not allowed');
   });
 });
@@ -1486,7 +1490,7 @@ describe('Content moderation: handle updates', () => {
       body: JSON.stringify({ handle: 'retard' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -1500,7 +1504,7 @@ describe('Content moderation: handle updates', () => {
     });
     expect([200, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 });
@@ -1514,7 +1518,7 @@ describe('Content moderation: team name on create', () => {
       body: JSON.stringify({ name: 'kill yourself project' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -1527,7 +1531,7 @@ describe('Content moderation: team name on create', () => {
     });
     expect([201, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.team_id).toBeDefined();
   });
 });
@@ -1550,15 +1554,15 @@ describe('Content moderation: team name on join', () => {
       body: JSON.stringify({ name: 'kill yourself team' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 });
 
 describe('Content moderation: memory update', () => {
-  let headers;
-  let teamId;
-  let memoryId;
+  let headers: Record<string, string>;
+  let teamId: string;
+  let memoryId: string | undefined;
 
   it('setup: create user, team, and memory', async () => {
     const auth = await createAuthUser();
@@ -1588,7 +1592,7 @@ describe('Content moderation: memory update', () => {
       body: JSON.stringify({ id: memoryId, text: 'kill yourself' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -1601,14 +1605,14 @@ describe('Content moderation: memory update', () => {
     });
     expect([200, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 });
 
 describe('Content moderation: memory tags', () => {
-  let headers;
-  let teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const auth = await createAuthUser();
@@ -1635,7 +1639,7 @@ describe('Content moderation: memory tags', () => {
     // which may return 503 before the tag check runs
     expect([400, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -1650,7 +1654,7 @@ describe('Content moderation: memory tags', () => {
     });
     expect([201, 503]).toContain(res.status);
     if (res.status === 503) return; // AI moderation unavailable, can't complete test
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -1673,7 +1677,7 @@ describe('Content moderation: memory tags', () => {
       body: JSON.stringify({ id: memoryId, tags: ['retard'] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 });

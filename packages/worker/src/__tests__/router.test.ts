@@ -1,9 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { buildRoutes, matchRoute } from '../lib/router.js';
+import type { RouteHandler } from '../lib/router.js';
 
-const noop = () => {};
+const noop = () => new Response();
 
-function makeRoutes(defs) {
+type RouteDef = [method: string, path: string, auth?: boolean];
+
+function makeRoutes(defs: RouteDef[]): ReturnType<typeof buildRoutes> {
   return buildRoutes(
     defs.map(([method, path, auth]) => ({
       method,
@@ -26,12 +29,12 @@ describe('buildRoutes', () => {
 
   it('defaults auth to true', () => {
     const routes = buildRoutes([{ method: 'GET', path: '/me', handler: noop }]);
-    expect(routes.staticMap.get('GET /me').auth).toBe(true);
+    expect(routes.staticMap.get('GET /me')!.auth).toBe(true);
   });
 
   it('respects explicit auth: false', () => {
     const routes = buildRoutes([{ method: 'GET', path: '/stats', handler: noop, auth: false }]);
-    expect(routes.staticMap.get('GET /stats').auth).toBe(false);
+    expect(routes.staticMap.get('GET /stats')!.auth).toBe(false);
   });
 });
 
@@ -47,8 +50,8 @@ describe('matchRoute — static routes', () => {
   it('matches exact static paths', () => {
     const match = matchRoute(routes, 'GET', '/stats');
     expect(match).not.toBeNull();
-    expect(match.route.path).toBe('/stats');
-    expect(match.params).toEqual([]);
+    expect(match!.route.path).toBe('/stats');
+    expect(match!.params).toEqual([]);
   });
 
   it('matches method + path combination', () => {
@@ -70,10 +73,10 @@ describe('matchRoute — static routes', () => {
 
   it('preserves auth flag from definition', () => {
     const publicMatch = matchRoute(routes, 'GET', '/stats');
-    expect(publicMatch.route.auth).toBe(false);
+    expect(publicMatch!.route.auth).toBe(false);
 
     const authedMatch = matchRoute(routes, 'GET', '/me');
-    expect(authedMatch.route.auth).toBe(true);
+    expect(authedMatch!.route.auth).toBe(true);
   });
 });
 
@@ -87,20 +90,20 @@ describe('matchRoute — parametric routes', () => {
   it('matches parametric paths and extracts params', () => {
     const match = matchRoute(routes, 'GET', '/teams/t_abc123def456789a/context');
     expect(match).not.toBeNull();
-    expect(match.route.path).toBe('/teams/:id/context');
-    expect(match.params).toEqual(['t_abc123def456789a']);
+    expect(match!.route.path).toBe('/teams/:id/context');
+    expect(match!.params).toEqual(['t_abc123def456789a']);
   });
 
   it('matches different methods on same parametric pattern', () => {
     const join = matchRoute(routes, 'POST', '/teams/t_0000000000000000/join');
     expect(join).not.toBeNull();
-    expect(join.params).toEqual(['t_0000000000000000']);
+    expect(join!.params).toEqual(['t_0000000000000000']);
   });
 
   it('matches single-segment param routes', () => {
     const match = matchRoute(routes, 'GET', '/tools/directory/some-tool-id');
     expect(match).not.toBeNull();
-    expect(match.params).toEqual(['some-tool-id']);
+    expect(match!.params).toEqual(['some-tool-id']);
   });
 
   it('returns null for wrong method on parametric path', () => {
@@ -123,8 +126,8 @@ describe('matchRoute — parametric routes', () => {
 describe('matchRoute — static routes take priority over parametric', () => {
   // Edge case: a static path that could also match a parametric pattern.
   // Static should win because it's checked first.
-  const handler1 = () => 'static';
-  const handler2 = () => 'param';
+  const handler1 = (() => 'static') as unknown as RouteHandler;
+  const handler2 = (() => 'param') as unknown as RouteHandler;
 
   const routes = buildRoutes([
     { method: 'GET', path: '/tools/catalog', handler: handler1 },
@@ -133,12 +136,12 @@ describe('matchRoute — static routes take priority over parametric', () => {
 
   it('prefers static match over parametric', () => {
     const match = matchRoute(routes, 'GET', '/tools/catalog');
-    expect(match.route.handler).toBe(handler1);
+    expect(match!.route.handler).toBe(handler1);
   });
 
   it('falls through to parametric for non-static paths', () => {
     const match = matchRoute(routes, 'GET', '/tools/some-other');
-    expect(match.route.handler).toBe(handler2);
+    expect(match!.route.handler).toBe(handler2);
   });
 });
 
@@ -152,7 +155,7 @@ describe('matchRoute — constrained params', () => {
   it('matches valid team ID format', () => {
     const match = matchRoute(routes, 'GET', '/teams/t_abcdef0123456789/context');
     expect(match).not.toBeNull();
-    expect(match.params).toEqual(['t_abcdef0123456789']);
+    expect(match!.params).toEqual(['t_abcdef0123456789']);
   });
 
   it('rejects team IDs missing t_ prefix', () => {
