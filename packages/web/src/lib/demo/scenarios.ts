@@ -108,7 +108,7 @@ function empty(): DemoData {
     per_project_velocity: [],
     retry_patterns: [],
     conflict_correlation: [],
-    conflict_stats: { blocked_period: 0, found_period: 0 },
+    conflict_stats: { blocked_period: 0, found_period: 0, daily_blocked: [] },
     edit_velocity: [],
     memory_usage: {
       total_memories: 0,
@@ -217,6 +217,14 @@ function empty(): DemoData {
         'commitTracking',
       ],
     },
+    confused_files: [],
+    unanswered_questions: { count: 0 },
+    cross_tool_memory_flow: [],
+    memory_aging: { recent_7d: 0, recent_30d: 0, recent_90d: 0, older: 0 },
+    memory_categories: [],
+    memory_single_author_directories: [],
+    memory_supersession: { invalidated_period: 0, merged_period: 0, pending_proposals: 0 },
+    memory_secrets_shield: { blocked_period: 0, blocked_24h: 0 },
   };
   const conversation: ConversationAnalytics = {
     ok: true,
@@ -250,7 +258,7 @@ function soloCC(): DemoData {
     concurrent_edits: [],
     file_overlap: { total_files: 0, overlapping_files: 0 },
     conflict_correlation: [],
-    conflict_stats: { blocked_period: 0, found_period: 0 },
+    conflict_stats: { blocked_period: 0, found_period: 0, daily_blocked: [] },
     retry_patterns: [],
     member_analytics: base.member_analytics.slice(0, 1),
     member_analytics_total: 1,
@@ -532,7 +540,7 @@ function teamConflicts(): DemoData {
   return {
     analytics: {
       ...base,
-      conflict_stats: { blocked_period: 18, found_period: 47 },
+      conflict_stats: { blocked_period: 18, found_period: 47, daily_blocked: [] },
       file_overlap: { total_files: base.file_overlap.total_files, overlapping_files: 42 },
       retry_patterns: [
         ...base.retry_patterns,
