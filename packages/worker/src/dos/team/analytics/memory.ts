@@ -1,6 +1,7 @@
 // Memory analytics: usage stats, outcome correlation, top memories.
 
 import { createLogger } from '../../../lib/logger.js';
+import { row, rows } from '../../../lib/row.js';
 import type {
   MemoryUsageStats,
   MemoryOutcomeCorrelation,
@@ -41,8 +42,8 @@ export function queryMemoryUsage(
       [],
       scope,
     );
-    const totalRow = sql.exec(totalQ, ...totalParams).one() as Record<string, unknown>;
-    const total = (totalRow?.cnt as number) || 0;
+    const totalRow = row(sql.exec(totalQ, ...totalParams).one());
+    const total = totalRow.number('cnt');
 
     // Memories created in period (excluding soft-merged)
     const { sql: periodQ, params: periodParams } = withScope(
@@ -53,7 +54,7 @@ export function queryMemoryUsage(
       [days],
       scope,
     );
-    const periodRow = sql.exec(periodQ, ...periodParams).one() as Record<string, unknown>;
+    const periodRow = row(sql.exec(periodQ, ...periodParams).one());
 
     // Stale memories: last access (or creation, for never-accessed rows) is
     // older than STALE_MEMORY_DAYS. Excludes soft-merged. Thresholded, not
@@ -66,7 +67,7 @@ export function queryMemoryUsage(
       [STALE_MEMORY_DAYS, STALE_MEMORY_DAYS],
       scope,
     );
-    const staleRow = sql.exec(staleQ, ...staleParams).one() as Record<string, unknown>;
+    const staleRow = row(sql.exec(staleQ, ...staleParams).one());
 
     // Average memory age (excluding soft-merged)
     const { sql: ageQ, params: ageParams } = withScope(
@@ -75,29 +76,30 @@ export function queryMemoryUsage(
       [],
       scope,
     );
-    const ageRow = sql.exec(ageQ, ...ageParams).one() as Record<string, unknown>;
+    const ageRow = row(sql.exec(ageQ, ...ageParams).one());
 
     // Search telemetry from daily_metrics (period-scoped, not lifetime).
     // Scope not applied: daily_metrics has no handle column (team-wide rollup).
-    const searchRow = sql
-      .exec(
-        `SELECT COALESCE(SUM(CASE WHEN metric = 'memories_searched' THEN count ELSE 0 END), 0) AS searches,
+    const searchRow = row(
+      sql
+        .exec(
+          `SELECT COALESCE(SUM(CASE WHEN metric = 'memories_searched' THEN count ELSE 0 END), 0) AS searches,
                 COALESCE(SUM(CASE WHEN metric = 'memories_search_hits' THEN count ELSE 0 END), 0) AS hits
          FROM daily_metrics
          WHERE date > date('now', '-' || ? || ' days')
            AND metric IN ('memories_searched', 'memories_search_hits')`,
-        days,
-      )
-      .one() as Record<string, unknown>;
+          days,
+        )
+        .one(),
+    );
 
-    const searches = (searchRow?.searches as number) || 0;
-    const hits = (searchRow?.hits as number) || 0;
+    const searches = searchRow.number('searches');
+    const hits = searchRow.number('hits');
 
     // Live count of consolidation proposals awaiting review.
     // Scope not applied: consolidation_proposals has no handle column.
-    const pendingRow = safeOne(
-      sql,
-      "SELECT COUNT(*) AS cnt FROM consolidation_proposals WHERE status = 'pending'",
+    const pendingRow = row(
+      safeOne(sql, "SELECT COUNT(*) AS cnt FROM consolidation_proposals WHERE status = 'pending'"),
     );
 
     // Unaddressed formation observations by recommendation (live).
@@ -119,10 +121,11 @@ export function queryMemoryUsage(
       evolve: 0,
       discard: 0,
     };
-    for (const r of formationRows) {
-      const rec = String(r.recommendation as string);
+    for (const raw of formationRows) {
+      const r = row(raw);
+      const rec = r.string('recommendation');
       if (rec === 'keep' || rec === 'merge' || rec === 'evolve' || rec === 'discard') {
-        formationCounts[rec] = (r.cnt as number) || 0;
+        formationCounts[rec] = r.number('cnt');
       }
     }
 
@@ -131,26 +134,28 @@ export function queryMemoryUsage(
     // live review surface — a recent block is actionable, an old block is
     // audit history that lives elsewhere.
     // Scope not applied: daily_metrics has no handle column.
-    const secretsRow = sql
-      .exec(
-        `SELECT COALESCE(SUM(count), 0) AS cnt
+    const secretsRow = row(
+      sql
+        .exec(
+          `SELECT COALESCE(SUM(count), 0) AS cnt
          FROM daily_metrics
          WHERE metric = 'secrets_blocked'
            AND date > date('now', '-1 day')`,
-      )
-      .one() as Record<string, unknown>;
+        )
+        .one(),
+    );
 
     return {
       total_memories: total,
       searches,
       searches_with_results: hits,
       search_hit_rate: searches > 0 ? Math.round((hits / searches) * 1000) / 10 : 0,
-      memories_created_period: (periodRow?.created as number) || 0,
-      stale_memories: (staleRow?.cnt as number) || 0,
-      avg_memory_age_days: (ageRow?.avg_age as number) || 0,
-      pending_consolidation_proposals: (pendingRow?.cnt as number) || 0,
+      memories_created_period: periodRow.number('created'),
+      stale_memories: staleRow.number('cnt'),
+      avg_memory_age_days: ageRow.number('avg_age'),
+      pending_consolidation_proposals: pendingRow.number('cnt'),
       formation_observations_by_recommendation: formationCounts,
-      secrets_blocked_24h: (secretsRow?.cnt as number) || 0,
+      secrets_blocked_24h: secretsRow.number('cnt'),
     };
   } catch (err) {
     log.warn(`memoryUsage query failed: ${err}`);
@@ -225,7 +230,7 @@ export function queryMemoryOutcomeCorrelation(
       [days],
       scope,
     );
-    const rows = sql
+    const resultRows = sql
       .exec(
         `${q}
          GROUP BY bucket
@@ -239,15 +244,12 @@ export function queryMemoryOutcomeCorrelation(
       )
       .toArray();
 
-    return rows.map((r) => {
-      const row = r as Record<string, unknown>;
-      return {
-        bucket: row.bucket as string,
-        sessions: (row.sessions as number) || 0,
-        completed: (row.completed as number) || 0,
-        completion_rate: (row.completion_rate as number) || 0,
-      };
-    });
+    return rows(resultRows, (r) => ({
+      bucket: r.string('bucket'),
+      sessions: r.number('sessions'),
+      completed: r.number('completed'),
+      completion_rate: r.number('completion_rate'),
+    }));
   } catch (err) {
     log.warn(`memoryOutcomeCorrelation query failed: ${err}`);
     return [];
@@ -269,7 +271,7 @@ export function queryTopMemories(
       [days],
       scope,
     );
-    const rows = sql
+    const resultRows = sql
       .exec(
         `${q}
          ORDER BY access_count DESC
@@ -278,14 +280,13 @@ export function queryTopMemories(
       )
       .toArray();
 
-    return rows.map((r) => {
-      const row = r as Record<string, unknown>;
-      const text = row.text as string;
+    return rows(resultRows, (r) => {
+      const text = r.string('text');
       return {
-        id: row.id as string,
+        id: r.string('id'),
         text_preview: text.length > 120 ? text.slice(0, 120) + '...' : text,
-        access_count: (row.access_count as number) || 0,
-        last_accessed_at: (row.last_accessed_at as string) || null,
+        access_count: r.number('access_count'),
+        last_accessed_at: r.string('last_accessed_at') || null,
       };
     });
   } catch (err) {
@@ -334,7 +335,7 @@ export function queryCrossToolMemoryFlow(
       [days],
       scope,
     );
-    const rows = sql
+    const resultRows = sql
       .exec(
         `${head}
            GROUP BY host_tool
@@ -354,15 +355,12 @@ export function queryCrossToolMemoryFlow(
         CROSS_TOOL_FLOW_LIMIT,
       )
       .toArray();
-    return rows.map((r) => {
-      const row = r as Record<string, unknown>;
-      return {
-        author_tool: row.author_tool as string,
-        consumer_tool: row.consumer_tool as string,
-        memories: (row.memories as number) || 0,
-        consumer_sessions: (row.consumer_sessions as number) || 0,
-      };
-    });
+    return rows(resultRows, (r) => ({
+      author_tool: r.string('author_tool'),
+      consumer_tool: r.string('consumer_tool'),
+      memories: r.number('memories'),
+      consumer_sessions: r.number('consumer_sessions'),
+    }));
   } catch (err) {
     log.warn(`crossToolMemoryFlow query failed: ${err}`);
     return [];
@@ -380,9 +378,10 @@ export function queryCrossToolMemoryFlow(
 //   5. Who keeps memory current? (handle-aggregate × recent creation)
 export function queryMemoryAging(sql: SqlStorage): MemoryAgingComposition {
   try {
-    const row = sql
-      .exec(
-        `SELECT
+    const r = row(
+      sql
+        .exec(
+          `SELECT
            SUM(CASE WHEN created_at > datetime('now', '-7 days') THEN 1 ELSE 0 END) AS recent_7d,
            SUM(CASE WHEN created_at > datetime('now', '-30 days')
                      AND created_at <= datetime('now', '-7 days') THEN 1 ELSE 0 END) AS recent_30d,
@@ -391,13 +390,14 @@ export function queryMemoryAging(sql: SqlStorage): MemoryAgingComposition {
            SUM(CASE WHEN created_at <= datetime('now', '-90 days') THEN 1 ELSE 0 END) AS older
          FROM memories
          WHERE merged_into IS NULL AND invalid_at IS NULL`,
-      )
-      .one() as Record<string, unknown>;
+        )
+        .one(),
+    );
     return {
-      recent_7d: (row.recent_7d as number) || 0,
-      recent_30d: (row.recent_30d as number) || 0,
-      recent_90d: (row.recent_90d as number) || 0,
-      older: (row.older as number) || 0,
+      recent_7d: r.number('recent_7d'),
+      recent_30d: r.number('recent_30d'),
+      recent_90d: r.number('recent_90d'),
+      older: r.number('older'),
     };
   } catch (err) {
     log.warn(`memoryAging query failed: ${err}`);
@@ -435,7 +435,7 @@ export function queryMemoryCategories(
       [],
       scope,
     );
-    const rows = sql
+    const resultRows = sql
       .exec(
         `${head}
          GROUP BY value
@@ -445,14 +445,11 @@ export function queryMemoryCategories(
         MEMORY_CATEGORIES_LIMIT,
       )
       .toArray();
-    return rows.map((r) => {
-      const row = r as Record<string, unknown>;
-      return {
-        category: row.category as string,
-        count: (row.count as number) || 0,
-        last_used_at: (row.last_used_at as string) || null,
-      };
-    });
+    return rows(resultRows, (r) => ({
+      category: r.string('category'),
+      count: r.number('count'),
+      last_used_at: r.string('last_used_at') || null,
+    }));
   } catch (err) {
     log.warn(`memoryCategories query failed: ${err}`);
     return [];
@@ -477,7 +474,7 @@ export function queryMemorySingleAuthorDirectories(
     // A directory with single_author_count > 0 has one or more memories that
     // only one author has touched. Filter to dirs with >= MIN_TOTAL memories
     // so single-memory dirs don't dominate the list.
-    const rows = sql
+    const resultRows = sql
       .exec(
         `SELECT
            value AS directory,
@@ -502,14 +499,11 @@ export function queryMemorySingleAuthorDirectories(
         SINGLE_AUTHOR_DIRS_LIMIT,
       )
       .toArray();
-    return rows.map((r) => {
-      const row = r as Record<string, unknown>;
-      return {
-        directory: row.directory as string,
-        single_author_count: (row.single_author_count as number) || 0,
-        total_count: (row.total_count as number) || 0,
-      };
-    });
+    return rows(resultRows, (r) => ({
+      directory: r.string('directory'),
+      single_author_count: r.number('single_author_count'),
+      total_count: r.number('total_count'),
+    }));
   } catch (err) {
     log.warn(`memorySingleAuthorDirectories query failed: ${err}`);
     return [];
@@ -534,10 +528,7 @@ export function queryMemorySupersession(
       [days],
       scope,
     );
-    const invalidated = sql.exec(invalidatedQ, ...invalidatedParams).one() as Record<
-      string,
-      unknown
-    >;
+    const invalidated = row(sql.exec(invalidatedQ, ...invalidatedParams).one());
     const { sql: mergedQ, params: mergedParams } = withScope(
       `SELECT COUNT(*) AS count
          FROM memories
@@ -546,18 +537,20 @@ export function queryMemorySupersession(
       [days],
       scope,
     );
-    const merged = sql.exec(mergedQ, ...mergedParams).one() as Record<string, unknown>;
-    const pending = sql
-      .exec(
-        `SELECT COUNT(*) AS count
+    const merged = row(sql.exec(mergedQ, ...mergedParams).one());
+    const pending = row(
+      sql
+        .exec(
+          `SELECT COUNT(*) AS count
          FROM consolidation_proposals
          WHERE status = 'pending'`,
-      )
-      .one() as Record<string, unknown>;
+        )
+        .one(),
+    );
     return {
-      invalidated_period: (invalidated.count as number) || 0,
-      merged_period: (merged.count as number) || 0,
-      pending_proposals: (pending.count as number) || 0,
+      invalidated_period: invalidated.number('count'),
+      merged_period: merged.number('count'),
+      pending_proposals: pending.number('count'),
     };
   } catch (err) {
     log.warn(`memorySupersession query failed: ${err}`);
@@ -570,26 +563,30 @@ export function queryMemorySupersession(
 // cut memory-safety widget's last-24h read).
 export function queryMemorySecretsShield(sql: SqlStorage, days: number): MemorySecretsShieldStats {
   try {
-    const period = sql
-      .exec(
-        `SELECT COALESCE(SUM(value), 0) AS total
+    const period = row(
+      sql
+        .exec(
+          `SELECT COALESCE(SUM(value), 0) AS total
          FROM daily_metrics
          WHERE metric = 'secrets_blocked'
            AND date > date('now', '-' || ? || ' days')`,
-        days,
-      )
-      .one() as Record<string, unknown>;
-    const last24 = sql
-      .exec(
-        `SELECT COALESCE(SUM(value), 0) AS total
+          days,
+        )
+        .one(),
+    );
+    const last24 = row(
+      sql
+        .exec(
+          `SELECT COALESCE(SUM(value), 0) AS total
          FROM daily_metrics
          WHERE metric = 'secrets_blocked'
            AND date > date('now', '-1 day')`,
-      )
-      .one() as Record<string, unknown>;
+        )
+        .one(),
+    );
     return {
-      blocked_period: (period.total as number) || 0,
-      blocked_24h: (last24.total as number) || 0,
+      blocked_period: period.number('total'),
+      blocked_24h: last24.number('total'),
     };
   } catch (err) {
     log.warn(`memorySecretsShield query failed: ${err}`);

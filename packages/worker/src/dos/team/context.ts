@@ -19,7 +19,7 @@ import {
   METRIC_KEYS,
 } from '../../lib/constants.js';
 import { createLogger } from '../../lib/logger.js';
-import { safeParse } from '../../lib/safe-parse.js';
+import { row } from '../../lib/row.js';
 import { inferHostToolFromAgentId } from './runtime.js';
 
 const log = createLogger('TeamDO.context');
@@ -33,7 +33,7 @@ interface TelemetryBreakdown {
 
 /** Read all telemetry metrics in one scan, then partition by prefix in JS. */
 export function getTelemetryBreakdown(sql: SqlStorage): TelemetryBreakdown {
-  const rows = sql
+  const telemetryRows = sql
     .exec('SELECT metric, count FROM telemetry ORDER BY count DESC LIMIT 10000')
     .toArray();
 
@@ -42,30 +42,31 @@ export function getTelemetryBreakdown(sql: SqlStorage): TelemetryBreakdown {
   const models_seen: Array<{ agent_model: string; count: number }> = [];
   const usage: Record<string, number> = {};
 
-  for (const row of rows) {
-    const r = row as { metric: string; count: number };
-    const m = r.metric;
-    usage[m] = r.count;
+  for (const raw of telemetryRows) {
+    const r = row(raw);
+    const m = r.string('metric');
+    const count = r.number('count');
+    usage[m] = count;
 
     if (m.startsWith(METRIC_KEYS.HOST_PREFIX)) {
       if (hosts_configured.length < 10) {
         hosts_configured.push({
           host_tool: m.slice(METRIC_KEYS.HOST_PREFIX.length),
-          joins: r.count,
+          joins: count,
         });
       }
     } else if (m.startsWith(METRIC_KEYS.SURFACE_PREFIX)) {
       if (surfaces_seen.length < 10) {
         surfaces_seen.push({
           agent_surface: m.slice(METRIC_KEYS.SURFACE_PREFIX.length),
-          joins: r.count,
+          joins: count,
         });
       }
     } else if (m.startsWith(METRIC_KEYS.MODEL_PREFIX)) {
       if (models_seen.length < 10) {
         models_seen.push({
           agent_model: m.slice(METRIC_KEYS.MODEL_PREFIX.length),
-          count: r.count,
+          count: count,
         });
       }
     }
@@ -109,21 +110,19 @@ export function queryTeamContext(
     )
     .toArray()
     .map((m) => {
-      const row = m as Record<string, unknown>;
+      const raw = m as Record<string, unknown>;
+      const r = row(m);
+      const id = r.string('id');
       return {
-        ...row,
-        tags: safeParse(
-          (row.tags as string) || '[]',
-          `queryTeamContext memory=${row.id} tags`,
-          [] as string[],
-          log,
-        ),
-        categories: safeParse(
-          (row.categories as string) || '[]',
-          `queryTeamContext memory=${row.id} categories`,
-          [] as string[],
-          log,
-        ),
+        ...raw,
+        tags: r.json<string[]>('tags', {
+          default: [],
+          context: `queryTeamContext memory=${id} tags`,
+        }),
+        categories: r.json<string[]>('categories', {
+          default: [],
+          context: `queryTeamContext memory=${id} categories`,
+        }),
       } as unknown as Memory;
     });
 
@@ -144,39 +143,38 @@ export function queryTeamContext(
 
   // Build member list with status resolution
   const memberList: TeamMember[] = members.map((m) => {
-    const row = m as Record<string, unknown>;
-    const wsConnected = connectedIds.has(row.agent_id as string);
+    const r = row(m);
+    const agentId = r.string('agent_id');
+    const wsConnected = connectedIds.has(agentId);
+    const heartbeatActive = r.bool('heartbeat_active');
     const status: 'active' | 'offline' = wsConnected
       ? 'active'
-      : row.heartbeat_active
+      : heartbeatActive
         ? 'active'
         : 'offline';
+    const filesRaw = r.raw('files');
     return {
-      agent_id: row.agent_id as string,
-      handle: row.handle as string,
-      tool: (row.host_tool as string) || 'unknown',
-      host_tool: (row.host_tool as string) || 'unknown',
-      agent_surface: (row.agent_surface as string) || null,
-      transport: (row.transport as string) || null,
-      agent_model: (row.agent_model as string) || null,
+      agent_id: agentId,
+      handle: r.string('handle'),
+      tool: r.string('host_tool') || 'unknown',
+      host_tool: r.string('host_tool') || 'unknown',
+      agent_surface: r.string('agent_surface') || null,
+      transport: r.string('transport') || null,
+      agent_model: r.string('agent_model') || null,
       status,
-      framework: (row.framework as string) || null,
-      session_minutes: (row.session_minutes as number) || null,
-      seconds_since_update:
-        row.seconds_since_update != null ? (row.seconds_since_update as number) : null,
-      minutes_since_update:
-        row.minutes_since_update != null ? (row.minutes_since_update as number) : null,
-      signal_tier: wsConnected ? 'websocket' : row.heartbeat_active ? 'http' : 'none',
-      activity: row.files
+      framework: r.string('framework') || null,
+      session_minutes: r.number('session_minutes') || null,
+      seconds_since_update: r.nullableNumber('seconds_since_update'),
+      minutes_since_update: r.nullableNumber('minutes_since_update'),
+      signal_tier: wsConnected ? 'websocket' : heartbeatActive ? 'http' : 'none',
+      activity: filesRaw
         ? {
-            files: safeParse(
-              row.files as string,
-              `queryTeamContext agent=${row.agent_id} member files`,
-              [] as string[],
-              log,
-            ),
-            summary: row.summary as string,
-            updated_at: row.updated_at as string,
+            files: r.json<string[]>('files', {
+              default: [],
+              context: `queryTeamContext agent=${agentId} member files`,
+            }),
+            summary: r.raw('summary') as string,
+            updated_at: r.raw('updated_at') as string,
           }
         : null,
     };
@@ -233,22 +231,22 @@ export function queryTeamContext(
     memory_categories: memoryCategories,
     ...telemetry,
     recentSessions: recentSessions.map((s) => {
-      const row = s as Record<string, unknown>;
-      const toolFromAgent =
-        (row.host_tool as string) || inferHostToolFromAgentId(row.agent_id as string);
+      const raw = s as Record<string, unknown>;
+      const r = row(s);
+      const agentId = r.string('agent_id');
+      const storedTool = r.string('host_tool');
+      const toolFromAgent = storedTool || inferHostToolFromAgentId(agentId);
       return {
-        ...row,
+        ...raw,
         tool: toolFromAgent && toolFromAgent !== 'unknown' ? toolFromAgent : null,
-        host_tool: (row.host_tool as string) || toolFromAgent || 'unknown',
-        agent_surface: (row.agent_surface as string) || null,
-        transport: (row.transport as string) || null,
-        agent_model: (row.agent_model as string) || null,
-        files_touched: safeParse(
-          (row.files_touched as string) || '[]',
-          `queryTeamContext session agent=${row.agent_id} files_touched`,
-          [] as string[],
-          log,
-        ),
+        host_tool: storedTool || toolFromAgent || 'unknown',
+        agent_surface: r.string('agent_surface') || null,
+        transport: r.string('transport') || null,
+        agent_model: r.string('agent_model') || null,
+        files_touched: r.json<string[]>('files_touched', {
+          default: [],
+          context: `queryTeamContext session agent=${agentId} files_touched`,
+        }),
       } as unknown as SessionInfo;
     }),
   };
@@ -281,15 +279,13 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
     .toArray();
 
   const fileCounts = new Map<string, number>();
-  for (const row of activities) {
-    const r = row as Record<string, unknown>;
-    if (!r.files) continue;
-    const parsedFiles = safeParse(
-      r.files as string,
-      'queryTeamSummary activity files',
-      [] as string[],
-      log,
-    );
+  for (const raw of activities) {
+    const r = row(raw);
+    if (!r.nullableString('files')) continue;
+    const parsedFiles = r.json<string[]>('files', {
+      default: [],
+      context: 'queryTeamSummary activity files',
+    });
     for (const f of parsedFiles) {
       fileCounts.set(f, (fileCounts.get(f) || 0) + 1);
     }
@@ -319,9 +315,9 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
     )
     .toArray();
   const dailyMap = new Map<string, number>();
-  for (const row of dailyRows) {
-    const r = row as Record<string, unknown>;
-    dailyMap.set(r.d as string, (r.c as number) || 0);
+  for (const raw of dailyRows) {
+    const r = row(raw);
+    dailyMap.set(r.string('d'), r.number('c'));
   }
   const daily_sessions_7d: number[] = [];
   for (let i = 6; i >= 0; i--) {
@@ -378,30 +374,28 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
     )
     .toArray();
 
-  const active_members: ActiveMemberSummary[] = activeMembers.map((row) => {
-    const r = row as Record<string, unknown>;
-    const storedTool = r.host_tool as string | null;
-    const inferredTool = inferHostToolFromAgentId(r.agent_id as string);
+  const active_members: ActiveMemberSummary[] = activeMembers.map((raw) => {
+    const r = row(raw);
+    const agentId = r.string('agent_id');
+    const storedTool = r.nullableString('host_tool');
+    const inferredTool = inferHostToolFromAgentId(agentId);
     const hostTool = storedTool && storedTool !== 'unknown' ? storedTool : inferredTool;
     return {
-      agent_id: r.agent_id as string,
-      handle: (r.handle as string) || 'unknown',
+      agent_id: agentId,
+      handle: r.string('handle') || 'unknown',
       host_tool: hostTool,
-      agent_surface: (r.agent_surface as string) || null,
-      files: safeParse(
-        (r.files as string) || '[]',
-        'queryTeamSummary active_members files',
-        [] as string[],
-        log,
-      ),
-      summary: (r.summary as string) || null,
-      session_minutes: r.session_minutes != null ? (r.session_minutes as number) : null,
-      seconds_since_update:
-        r.seconds_since_update != null ? (r.seconds_since_update as number) : null,
+      agent_surface: r.string('agent_surface') || null,
+      files: r.json<string[]>('files', {
+        default: [],
+        context: 'queryTeamSummary active_members files',
+      }),
+      summary: r.string('summary') || null,
+      session_minutes: r.nullableNumber('session_minutes'),
+      seconds_since_update: r.nullableNumber('seconds_since_update'),
     };
   });
 
-  const activeAgentsCount = ((active[0] as Record<string, unknown>)?.c as number) || 0;
+  const activeAgentsCount = row(active[0]).number('c');
 
   // Canary for PR2 (web): the dashboard widget currently derives its "N live"
   // label by filtering active_members.length (phantom-filtered, LIMIT 20).
@@ -420,15 +414,15 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
   return {
     ok: true,
     active_agents: activeAgentsCount,
-    total_members: ((total[0] as Record<string, unknown>)?.c as number) || 0,
+    total_members: row(total[0]).number('c'),
     conflict_count: conflictCount,
-    memory_count: ((memoriesCount[0] as Record<string, unknown>)?.c as number) || 0,
-    memory_count_previous: ((memoryCountPrev[0] as Record<string, unknown>)?.c as number) || 0,
-    live_sessions: ((live[0] as Record<string, unknown>)?.c as number) || 0,
-    recent_sessions_24h: ((recent[0] as Record<string, unknown>)?.c as number) || 0,
+    memory_count: row(memoriesCount[0]).number('c'),
+    memory_count_previous: row(memoryCountPrev[0]).number('c'),
+    live_sessions: row(live[0]).number('c'),
+    recent_sessions_24h: row(recent[0]).number('c'),
     daily_sessions_7d,
-    conflicts_7d: ((conflicts7d[0] as Record<string, unknown>)?.c as number) || 0,
-    conflicts_7d_previous: ((conflicts7dPrev[0] as Record<string, unknown>)?.c as number) || 0,
+    conflicts_7d: row(conflicts7d[0]).number('c'),
+    conflicts_7d_previous: row(conflicts7dPrev[0]).number('c'),
     active_members,
     ...getTelemetryBreakdown(sql),
   };
