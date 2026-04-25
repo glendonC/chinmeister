@@ -3,15 +3,12 @@
 
 import type { DOResult, SessionInfo } from '../../types.js';
 import { normalizePath } from '../../lib/text-utils.js';
-import { createLogger } from '../../lib/logger.js';
-import { safeParse } from '../../lib/safe-parse.js';
+import { row, rows } from '../../lib/row.js';
 import { normalizeRuntimeMetadata, normalizeModelName } from './runtime.js';
 import { classifyWorkType } from './analytics/outcomes.js';
 import { isNoiseCommit } from './commit-noise.js';
 import { HEARTBEAT_STALE_WINDOW_S, ACTIVITY_MAX_FILES, METRIC_KEYS } from '../../lib/constants.js';
 import { sqlChanges, withTransaction } from '../../lib/validation.js';
-
-const log = createLogger('TeamDO.sessions');
 
 /**
  * Cap on how much time between two consecutive activities rolls into
@@ -124,7 +121,7 @@ export function endSession(
 ): DOResult<{ ok: true; outcome?: string | null; summary?: Record<string, unknown> | null }> {
   // Read session state for outcome inference before closing. duration_min is
   // computed in SQL so all time arithmetic stays in one domain.
-  const rows = sql
+  const activeRows = sql
     .exec(
       `SELECT edit_count, conflicts_hit, memories_searched, outcome,
               (julianday('now') - julianday(started_at)) * 24 * 60 AS duration_min
@@ -135,21 +132,21 @@ export function endSession(
     )
     .toArray();
 
-  if (rows.length === 0)
+  if (activeRows.length === 0)
     return { error: 'Session not found or not owned by this agent', code: 'NOT_FOUND' };
 
-  const session = rows[0] as Record<string, unknown>;
-  let outcome = session.outcome as string | null;
+  const session = row(activeRows[0]);
+  let outcome = session.nullableString('outcome');
 
   // Infer outcome only if not explicitly set via reportOutcome
   if (!outcome) {
-    const editCount = (session.edit_count as number) || 0;
-    const conflictsHit = (session.conflicts_hit as number) || 0;
-    const memoriesSearched = (session.memories_searched as number) || 0;
+    const editCount = session.number('edit_count');
+    const conflictsHit = session.number('conflicts_hit');
+    const memoriesSearched = session.number('memories_searched');
     // Duration computed server-side via julianday() so all time logic stays in
     // SQLite's domain — mixing JS Date parsing with SQLite's "YYYY-MM-DD HH:MM:SS"
     // format was brittle across timezones.
-    const durationMin = (session.duration_min as number) || 0;
+    const durationMin = session.number('duration_min');
 
     if (editCount > 0) {
       outcome = 'completed';
@@ -163,7 +160,7 @@ export function endSession(
   }
 
   // Use existing outcome if already set (via reportOutcome), else use inference
-  const existingOutcome = session.outcome as string | null;
+  const existingOutcome = session.nullableString('outcome');
   const finalOutcome = existingOutcome || outcome;
 
   sql.exec(
@@ -248,14 +245,12 @@ export function recordEdit(
 
   bumpActiveTime(sql, resolvedAgentId);
 
-  const session = sessions[0] as Record<string, unknown>;
-  const sessionId = session.id as string;
-  let files = safeParse(
-    (session.files_touched as string) || '[]',
-    `recordEdit session=${sessionId} files_touched`,
-    [] as string[],
-    log,
-  );
+  const session = row(sessions[0]);
+  const sessionId = session.string('id');
+  let files = session.json<string[]>('files_touched', {
+    default: [],
+    context: `recordEdit session=${sessionId} files_touched`,
+  });
   if (!files.includes(normalized)) {
     files.push(normalized);
     if (files.length > ACTIVITY_MAX_FILES) files = files.slice(-ACTIVITY_MAX_FILES);
@@ -278,8 +273,8 @@ export function recordEdit(
     crypto.randomUUID(),
     sessionId,
     resolvedAgentId,
-    (session.handle as string) || 'unknown',
-    (session.host_tool as string) || 'unknown',
+    session.string('handle', { default: 'unknown' }),
+    session.string('host_tool', { default: 'unknown' }),
     normalized,
     linesAdded,
     linesRemoved,
@@ -293,7 +288,7 @@ export function getSessionHistory(
   sql: SqlStorage,
   days: number,
 ): { ok: true; sessions: SessionInfo[] } {
-  const sessions = sql
+  const sessionRows = sql
     .exec(
       `SELECT handle AS owner_handle, framework, host_tool, agent_surface, transport, agent_model, started_at, ended_at,
            edit_count, files_touched, conflicts_hit, memories_saved,
@@ -307,21 +302,30 @@ export function getSessionHistory(
     )
     .toArray();
 
-  return {
-    ok: true,
-    sessions: sessions.map((s) => {
-      const row = s as Record<string, unknown>;
-      return {
-        ...row,
-        files_touched: safeParse(
-          (row.files_touched as string) || '[]',
-          `getSessionHistory handle=${row.owner_handle} files_touched`,
-          [] as string[],
-          log,
-        ),
-      } as unknown as SessionInfo;
+  const sessions = rows<SessionInfo>(sessionRows, (r) => ({
+    owner_handle: r.string('owner_handle'),
+    framework: r.string('framework'),
+    host_tool: r.string('host_tool'),
+    agent_surface: r.nullableString('agent_surface'),
+    transport: r.nullableString('transport'),
+    agent_model: r.nullableString('agent_model'),
+    started_at: r.string('started_at'),
+    ended_at: r.nullableString('ended_at'),
+    edit_count: r.number('edit_count'),
+    files_touched: r.json<string[]>('files_touched', {
+      default: [],
+      context: `getSessionHistory handle=${r.string('owner_handle')} files_touched`,
     }),
-  };
+    conflicts_hit: r.number('conflicts_hit'),
+    memories_saved: r.number('memories_saved'),
+    outcome: r.nullableString('outcome'),
+    outcome_summary: r.nullableString('outcome_summary'),
+    lines_added: r.number('lines_added'),
+    lines_removed: r.number('lines_removed'),
+    duration_minutes: r.number('duration_minutes'),
+  }));
+
+  return { ok: true, sessions };
 }
 
 export interface SessionRecord {
@@ -460,12 +464,12 @@ export function getSessionsInRange(
   }
   const whereClause = predicates.join(' AND ');
 
-  const countRow = sql
+  const countRows = sql
     .exec(`SELECT COUNT(*) AS cnt FROM sessions WHERE ${whereClause}`, ...bindings)
     .toArray();
-  const totalSessions = ((countRow[0] as Record<string, unknown>)?.cnt as number) ?? 0;
+  const totalSessions = row(countRows[0]).number('cnt');
 
-  const rows = sql
+  const sessionRows = sql
     .exec(
       `SELECT id, agent_id, handle, host_tool, agent_surface, agent_model,
               started_at, ended_at, edit_count, files_touched, conflicts_hit,
@@ -483,46 +487,42 @@ export function getSessionsInRange(
     )
     .toArray();
 
-  const sessions = rows.map((row) => {
-    const r = row as Record<string, unknown>;
+  const sessions = rows<SessionRecord>(sessionRows, (r) => {
+    const id = r.string('id');
     return {
-      id: r.id as string,
-      agent_id: r.agent_id as string,
-      handle: r.handle as string,
-      host_tool: r.host_tool as string,
-      agent_surface: (r.agent_surface as string) || null,
-      agent_model: (r.agent_model as string) || null,
-      started_at: r.started_at as string,
-      ended_at: (r.ended_at as string) || null,
-      edit_count: (r.edit_count as number) || 0,
-      files_touched: safeParse(
-        (r.files_touched as string) || '[]',
-        `getSessionsInRange id=${r.id} files_touched`,
-        [] as string[],
-        log,
-      ),
-      conflicts_hit: (r.conflicts_hit as number) || 0,
-      memories_saved: (r.memories_saved as number) || 0,
-      outcome: (r.outcome as string) || null,
-      outcome_summary: (r.outcome_summary as string) || null,
-      outcome_tags: safeParse(
-        (r.outcome_tags as string) || '[]',
-        `getSessionsInRange id=${r.id} outcome_tags`,
-        [] as string[],
-        log,
-      ),
-      lines_added: (r.lines_added as number) || 0,
-      lines_removed: (r.lines_removed as number) || 0,
-      duration_minutes: (r.duration_minutes as number) || 0,
-      first_edit_at: (r.first_edit_at as string) || null,
-      got_stuck: (r.got_stuck as number) || 0,
-      memories_searched: (r.memories_searched as number) || 0,
-      input_tokens: (r.input_tokens as number) ?? null,
-      output_tokens: (r.output_tokens as number) ?? null,
-      cache_read_tokens: (r.cache_read_tokens as number) ?? null,
-      cache_creation_tokens: (r.cache_creation_tokens as number) ?? null,
-      commit_count: (r.commit_count as number) || 0,
-      first_commit_at: (r.first_commit_at as string) || null,
+      id,
+      agent_id: r.string('agent_id'),
+      handle: r.string('handle'),
+      host_tool: r.string('host_tool'),
+      agent_surface: r.nullableString('agent_surface'),
+      agent_model: r.nullableString('agent_model'),
+      started_at: r.string('started_at'),
+      ended_at: r.nullableString('ended_at'),
+      edit_count: r.number('edit_count'),
+      files_touched: r.json<string[]>('files_touched', {
+        default: [],
+        context: `getSessionsInRange id=${id} files_touched`,
+      }),
+      conflicts_hit: r.number('conflicts_hit'),
+      memories_saved: r.number('memories_saved'),
+      outcome: r.nullableString('outcome'),
+      outcome_summary: r.nullableString('outcome_summary'),
+      outcome_tags: r.json<string[]>('outcome_tags', {
+        default: [],
+        context: `getSessionsInRange id=${id} outcome_tags`,
+      }),
+      lines_added: r.number('lines_added'),
+      lines_removed: r.number('lines_removed'),
+      duration_minutes: r.number('duration_minutes'),
+      first_edit_at: r.nullableString('first_edit_at'),
+      got_stuck: r.number('got_stuck'),
+      memories_searched: r.number('memories_searched'),
+      input_tokens: r.nullableNumber('input_tokens'),
+      output_tokens: r.nullableNumber('output_tokens'),
+      cache_read_tokens: r.nullableNumber('cache_read_tokens'),
+      cache_creation_tokens: r.nullableNumber('cache_creation_tokens'),
+      commit_count: r.number('commit_count'),
+      first_commit_at: r.nullableString('first_commit_at'),
     };
   });
 
@@ -617,10 +617,10 @@ export function recordCommits(
       )
       .toArray();
     if (sessions.length === 0) return { ok: true, recorded: 0 };
-    const session = sessions[0] as Record<string, unknown>;
-    resolvedSessionId = session.id as string;
-    resolvedHandle = (session.handle as string) || handle;
-    resolvedHostTool = (session.host_tool as string) || hostTool;
+    const session = row(sessions[0]);
+    resolvedSessionId = session.string('id');
+    resolvedHandle = session.string('handle', { default: handle });
+    resolvedHostTool = session.string('host_tool', { default: hostTool });
   }
 
   const capped = commits.slice(0, MAX_COMMITS_BATCH);
