@@ -133,7 +133,7 @@ describe('getAgentRuntime', () => {
       },
     });
 
-    expect(getAgentRuntime(request, { id: 'user-1' })).toEqual({
+    expect(getAgentRuntime(request, { id: 'user-1' } as any)).toEqual({
       agentId: 'cursor:abc123',
       hostTool: 'vscode',
       agentSurface: 'cline',
@@ -149,7 +149,7 @@ describe('getAgentRuntime', () => {
       },
     });
 
-    expect(getAgentRuntime(request, { id: 'user-1' })).toMatchObject({
+    expect(getAgentRuntime(request, { id: 'user-1' } as any)).toMatchObject({
       agentId: 'windsurf:def456',
       hostTool: 'windsurf',
       agentSurface: null,
@@ -251,8 +251,8 @@ describe('teamErrorStatus', () => {
   });
 
   it('returns 400 for null or undefined', () => {
-    expect(teamErrorStatus(null)).toBe(400);
-    expect(teamErrorStatus(undefined)).toBe(400);
+    expect(teamErrorStatus(null as any)).toBe(400);
+    expect(teamErrorStatus(undefined as any)).toBe(400);
   });
 
   it('returns correct status for structured error codes', () => {
@@ -383,7 +383,7 @@ describe('sqlChanges', () => {
         toArray: () => [{ c: 5 }],
       })),
     };
-    expect(sqlChanges(mockSql)).toBe(5);
+    expect(sqlChanges(mockSql as any)).toBe(5);
     expect(mockSql.exec).toHaveBeenCalledWith('SELECT changes() as c');
   });
 
@@ -393,7 +393,7 @@ describe('sqlChanges', () => {
         toArray: () => [{ c: 0 }],
       })),
     };
-    expect(sqlChanges(mockSql)).toBe(0);
+    expect(sqlChanges(mockSql as any)).toBe(0);
   });
 });
 
@@ -585,7 +585,7 @@ describe('requireJson', () => {
   it('returns 400 response for body with parse error', () => {
     const result = requireJson({ _parseError: 'Invalid JSON body' });
     expect(result).not.toBeNull();
-    expect(result.status).toBe(400);
+    expect(result!.status).toBe(400);
   });
 });
 
@@ -598,23 +598,29 @@ describe('withRateLimit', () => {
     };
     const handler = async () => new Response('ok', { status: 200 });
 
-    const response = await withRateLimit(mockDb, 'test-key', 5, 'Rate limit exceeded', handler);
+    const response = await withRateLimit(
+      mockDb as any,
+      'test-key',
+      5,
+      'Rate limit exceeded',
+      handler,
+    );
     expect(response.status).toBe(429);
-    const body = await response.json();
+    const body = (await response.json()) as { error: string };
     expect(body.error).toBe('Rate limit exceeded');
   });
 
   it('runs handler and consumes limit atomically on success', async () => {
-    let consumedKey = null;
+    let consumedKey: string | null = null;
     const mockDb = {
-      checkAndConsume: async (key) => {
+      checkAndConsume: async (key: string) => {
         consumedKey = key;
         return { ok: true, allowed: true, count: 3 };
       },
     };
     const handler = async () => new Response(JSON.stringify({ ok: true }), { status: 200 });
 
-    const response = await withRateLimit(mockDb, 'test-key', 5, 'limit', handler);
+    const response = await withRateLimit(mockDb as any, 'test-key', 5, 'limit', handler);
     expect(response.status).toBe(200);
     expect(consumedKey).toBe('test-key');
   });
@@ -630,7 +636,7 @@ describe('withRateLimit', () => {
     const handler = async () =>
       new Response(JSON.stringify({ error: 'Bad input' }), { status: 400 });
 
-    const response = await withRateLimit(mockDb, 'test-key', 5, 'limit', handler);
+    const response = await withRateLimit(mockDb as any, 'test-key', 5, 'limit', handler);
     expect(response.status).toBe(400);
     expect(callCount).toBe(1);
   });
@@ -645,29 +651,29 @@ describe('withRateLimit', () => {
     };
     const handler = async () => new Response('Internal error', { status: 500 });
 
-    const response = await withRateLimit(mockDb, 'test-key', 5, 'limit', handler);
+    const response = await withRateLimit(mockDb as any, 'test-key', 5, 'limit', handler);
     expect(response.status).toBe(500);
     expect(callCount).toBe(1);
   });
 
   it('different rate limit keys do not interfere', async () => {
-    const counts = { 'key-a': 5, 'key-b': 0 };
+    const counts: Record<string, number> = { 'key-a': 5, 'key-b': 0 };
     const mockDb = {
-      checkAndConsume: async (key, max) => {
-        if (counts[key] >= max) return { ok: true, allowed: false, count: counts[key] };
-        counts[key]++;
-        return { ok: true, allowed: true, count: counts[key] };
+      checkAndConsume: async (key: string, max: number) => {
+        if (counts[key]! >= max) return { ok: true, allowed: false, count: counts[key]! };
+        counts[key]!++;
+        return { ok: true, allowed: true, count: counts[key]! };
       },
     };
 
     const handler = async () => new Response('ok', { status: 200 });
 
     // key-a is at limit
-    const resA = await withRateLimit(mockDb, 'key-a', 5, 'limit A', handler);
+    const resA = await withRateLimit(mockDb as any, 'key-a', 5, 'limit A', handler);
     expect(resA.status).toBe(429);
 
     // key-b is not at limit
-    const resB = await withRateLimit(mockDb, 'key-b', 5, 'limit B', handler);
+    const resB = await withRateLimit(mockDb as any, 'key-b', 5, 'limit B', handler);
     expect(resB.status).toBe(200);
   });
 
@@ -681,7 +687,7 @@ describe('withRateLimit', () => {
       return new Response('ok', { status: 200 });
     };
 
-    await withRateLimit(mockDb, 'test-key', 5, 'limit', handler);
+    await withRateLimit(mockDb as any, 'test-key', 5, 'limit', handler);
     expect(handlerCalled).toBe(false);
   });
 });

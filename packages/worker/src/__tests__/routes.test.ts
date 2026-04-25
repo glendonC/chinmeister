@@ -24,14 +24,15 @@ async function createTeamAndJoin() {
     method: 'POST',
     headers: auth.headers,
   });
-  const { team_id } = await createRes.json();
+  const { team_id } = (await createRes.json()) as { team_id: string };
   return { ...auth, teamId: team_id };
 }
 
 // --- Memory CRUD routes ---
 
 describe('Memory routes — save', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -48,7 +49,7 @@ describe('Memory routes — save', () => {
     // 503 = AI moderation unavailable in test env (fail-safe)
     expect([201, 503]).toContain(res.status);
     if (res.status === 201) {
-      const body = await res.json();
+      const body = (await res.json()) as any;
       expect(body.ok).toBe(true);
       expect(body.id).toBeDefined();
     }
@@ -61,7 +62,7 @@ describe('Memory routes — save', () => {
       body: JSON.stringify({ tags: ['config'] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('text is required');
   });
 
@@ -81,7 +82,7 @@ describe('Memory routes — save', () => {
       body: JSON.stringify({ text: 'x'.repeat(2001), tags: ['config'] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('2000');
   });
 
@@ -92,7 +93,7 @@ describe('Memory routes — save', () => {
       body: JSON.stringify({ text: 'kill yourself', tags: ['config'] }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -136,9 +137,9 @@ describe('Memory routes — save', () => {
 });
 
 describe('Memory routes — search', () => {
-  let headers,
-    teamId,
-    memorySaved = false;
+  let headers: Record<string, string>;
+  let teamId: string;
+  let memorySaved = false;
 
   it('setup: create user, team, and save memory', async () => {
     const ctx = await createTeamAndJoin();
@@ -161,7 +162,7 @@ describe('Memory routes — search', () => {
     if (!memorySaved) return; // setup skipped due to moderation
     const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory?q=database`, { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.memories.length).toBeGreaterThan(0);
     expect(body.memories[0].text).toContain('database');
   });
@@ -172,14 +173,14 @@ describe('Memory routes — search', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.memories.length).toBeGreaterThan(0);
   });
 
   it('respects limit parameter', async () => {
     const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory?limit=1`, { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.memories.length).toBeLessThanOrEqual(1);
   });
 
@@ -194,7 +195,7 @@ describe('Memory routes — search', () => {
       headers,
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.memories).toHaveLength(0);
   });
 
@@ -205,7 +206,9 @@ describe('Memory routes — search', () => {
 });
 
 describe('Memory routes — update', () => {
-  let headers, teamId, memoryId;
+  let headers: Record<string, string>;
+  let teamId: string;
+  let memoryId: string | undefined;
 
   it('setup: create user, team, and save memory', async () => {
     const ctx = await createTeamAndJoin();
@@ -219,7 +222,7 @@ describe('Memory routes — update', () => {
     });
     // AI moderation may be unavailable in tests
     if (saveRes.status === 503) return;
-    const body = await saveRes.json();
+    const body = (await saveRes.json()) as any;
     memoryId = body.id;
   });
 
@@ -232,7 +235,7 @@ describe('Memory routes — update', () => {
     });
     expect([200, 503]).toContain(res.status);
     if (res.status === 200) {
-      const body = await res.json();
+      const body = (await res.json()) as any;
       expect(body.ok).toBe(true);
     }
   });
@@ -264,7 +267,7 @@ describe('Memory routes — update', () => {
       body: JSON.stringify({ text: 'No id provided' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('id is required');
   });
 
@@ -276,7 +279,7 @@ describe('Memory routes — update', () => {
       body: JSON.stringify({ id: memoryId }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toContain('text or tags required');
   });
 
@@ -302,7 +305,9 @@ describe('Memory routes — update', () => {
 });
 
 describe('Memory routes — delete', () => {
-  let headers, teamId, memoryId;
+  let headers: Record<string, string>;
+  let teamId: string;
+  let memoryId: string | undefined;
 
   it('setup: create user, team, and save memory', async () => {
     const ctx = await createTeamAndJoin();
@@ -316,7 +321,7 @@ describe('Memory routes — delete', () => {
     });
     // AI moderation may be unavailable in tests
     if (saveRes.status === 503) return;
-    const body = await saveRes.json();
+    const body = (await saveRes.json()) as any;
     memoryId = body.id;
   });
 
@@ -328,7 +333,7 @@ describe('Memory routes — delete', () => {
       body: JSON.stringify({ id: memoryId }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -337,7 +342,7 @@ describe('Memory routes — delete', () => {
     const res = await SELF.fetch(`http://localhost/teams/${teamId}/memory?q=Deletable`, {
       headers,
     });
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.memories).toHaveLength(0);
   });
 
@@ -354,7 +359,8 @@ describe('Memory routes — delete', () => {
 // --- Activity routes ---
 
 describe('Activity routes', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -370,15 +376,15 @@ describe('Activity routes', () => {
       body: JSON.stringify({ files: ['src/index.js'], summary: '' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
   it('activity visible in context', async () => {
     const res = await SELF.fetch(`http://localhost/teams/${teamId}/context`, { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
-    const me = body.members.find((m) => m.activity?.files?.includes('src/index.js'));
+    const body = (await res.json()) as any;
+    const me = body.members.find((m: any) => m.activity?.files?.includes('src/index.js'));
     expect(me).toBeDefined();
   });
 
@@ -434,7 +440,7 @@ describe('Activity routes', () => {
       body: JSON.stringify({ files: ['src/a.js'], summary: 'kill yourself' }),
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content blocked');
   });
 
@@ -461,7 +467,8 @@ describe('Activity routes', () => {
 // --- File report routes ---
 
 describe('File report routes', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -476,7 +483,7 @@ describe('File report routes', () => {
       body: JSON.stringify({ file: 'src/report.js' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -511,7 +518,8 @@ describe('File report routes', () => {
 // --- Lock routes ---
 
 describe('Lock routes — claim', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -526,7 +534,7 @@ describe('Lock routes — claim', () => {
       body: JSON.stringify({ files: ['src/lock.js'] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.claimed).toContain('src/lock.js');
     expect(body.blocked).toHaveLength(0);
@@ -535,9 +543,9 @@ describe('Lock routes — claim', () => {
   it('gets locked files', async () => {
     const res = await SELF.fetch(`http://localhost/teams/${teamId}/locks`, { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.locks).toBeDefined();
-    expect(body.locks.some((l) => l.file_path === 'src/lock.js')).toBe(true);
+    expect(body.locks.some((l: any) => l.file_path === 'src/lock.js')).toBe(true);
   });
 
   it('releases specific files', async () => {
@@ -547,7 +555,7 @@ describe('Lock routes — claim', () => {
       body: JSON.stringify({ files: ['src/lock.js'] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -617,7 +625,8 @@ describe('Lock routes — claim', () => {
 // --- Session routes ---
 
 describe('Session routes', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -632,7 +641,7 @@ describe('Session routes', () => {
       body: JSON.stringify({ framework: 'react' }),
     });
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
     expect(body.session_id).toBeDefined();
   });
@@ -644,7 +653,7 @@ describe('Session routes', () => {
       body: JSON.stringify({}),
     });
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -654,7 +663,7 @@ describe('Session routes', () => {
       headers,
       body: JSON.stringify({ framework: 'next' }),
     });
-    const { session_id } = await startRes.json();
+    const { session_id } = (await startRes.json()) as { session_id: string };
 
     const endRes = await SELF.fetch(`http://localhost/teams/${teamId}/sessionend`, {
       method: 'POST',
@@ -662,7 +671,7 @@ describe('Session routes', () => {
       body: JSON.stringify({ session_id }),
     });
     expect(endRes.status).toBe(200);
-    const body = await endRes.json();
+    const body = (await endRes.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -689,7 +698,7 @@ describe('Session routes', () => {
       body: JSON.stringify({ file: 'src/edit.js' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -714,7 +723,7 @@ describe('Session routes', () => {
   it('gets session history', async () => {
     const res = await SELF.fetch(`http://localhost/teams/${teamId}/history?days=7`, { headers });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.sessions).toBeDefined();
     expect(Array.isArray(body.sessions)).toBe(true);
   });
@@ -737,7 +746,7 @@ describe('Session routes', () => {
       body: JSON.stringify({ model: 'claude-3-opus' }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.ok).toBe(true);
   });
 
@@ -781,7 +790,8 @@ describe('Session routes', () => {
 // --- Conflict routes ---
 
 describe('Conflict routes', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -796,7 +806,7 @@ describe('Conflict routes', () => {
       body: JSON.stringify({ files: ['src/app.js'] }),
     });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.conflicts).toBeDefined();
     expect(body.locked).toBeDefined();
   });
@@ -845,7 +855,8 @@ describe('Auth error responses for team routes', () => {
 // --- JSON body validation ---
 
 describe('JSON body validation for team routes', () => {
-  let headers, teamId;
+  let headers: Record<string, string>;
+  let teamId: string;
 
   it('setup: create user and team', async () => {
     const ctx = await createTeamAndJoin();
@@ -864,7 +875,7 @@ describe('JSON body validation for team routes', () => {
       body: '{"text": "test"}',
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Content-Type must be application/json');
   });
 
@@ -878,7 +889,7 @@ describe('JSON body validation for team routes', () => {
       body: 'not valid json{{{',
     });
     expect(res.status).toBe(400);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.error).toBe('Invalid JSON body');
   });
 });
