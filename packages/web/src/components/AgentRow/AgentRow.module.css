@@ -153,15 +153,15 @@
 }
 
 .messageInput:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 
 .sendBtn {
   padding: 5px 12px;
   border-radius: var(--radius-sm);
   border: 1px solid transparent;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--ink);
+  color: var(--page-bg);
   font-size: var(--text-xs);
   font-weight: 500;
   font-family: var(--sans);

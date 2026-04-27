@@ -106,12 +106,9 @@
   color: var(--ink);
 }
 
-/* Vertical axis carries the alt accent (pink) — the logo-color split
- * that distinguishes the two nav axes at a glance. Stat tabs above
- * remain on --accent (lavender). */
 .itemActive .itemQuestion {
-  background: var(--accent-alt-bg);
-  color: var(--accent-alt);
+  background: var(--ghost);
+  color: var(--ink);
   font-weight: 500;
 }
 

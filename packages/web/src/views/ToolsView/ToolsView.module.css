@@ -154,7 +154,7 @@
 }
 
 .scoredHeaderActive {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .scoredRow {
@@ -190,7 +190,7 @@
 }
 
 .scoredName {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-weight: 400;
   color: var(--ink);
   letter-spacing: -0.02em;
@@ -229,14 +229,12 @@
   color: var(--page-bg);
   transition:
     background 0.12s ease,
-    color 0.12s ease,
-    transform 0.12s ease;
+    color 0.12s ease;
 }
 
 .scoredRow:hover .viewButton {
   background: var(--accent);
   color: var(--on-accent);
-  transform: scale(1.04);
 }
 
 .scoredEmpty {

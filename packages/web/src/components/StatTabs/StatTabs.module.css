@@ -75,8 +75,8 @@
 }
 
 .active .label {
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: var(--ghost);
+  color: var(--ink);
 }
 
 .value {
@@ -111,11 +111,11 @@
 /* Live-only accent: reserved for live data by the design language.
  * Historical tabs pass no `tone` so this class is never applied. */
 .accent {
-  color: color-mix(in srgb, var(--accent) 40%, var(--soft));
+  color: color-mix(in srgb, var(--live) 40%, var(--soft));
 }
 
 .active .accent {
-  color: var(--accent);
+  color: var(--live);
 }
 
 @keyframes fadeSlideIn {

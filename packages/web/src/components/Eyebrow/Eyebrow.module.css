@@ -17,8 +17,8 @@
   align-items: center;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--accent) 12%, transparent);
-  color: var(--accent);
+  background: var(--ghost);
+  color: var(--ink);
   font-family: var(--mono);
   font-size: var(--text-3xs);
   font-weight: 600;

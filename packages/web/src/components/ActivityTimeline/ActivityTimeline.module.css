@@ -25,20 +25,20 @@
   max-width: 18px;
   min-height: 10px;
   border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  background: color-mix(in srgb, var(--live) 14%, transparent);
   transition: background var(--motion-fast) ease;
 }
 
 .barCurrent {
-  background: var(--accent);
+  background: var(--live);
 }
 
 .barHovered {
-  background: color-mix(in srgb, var(--accent) 44%, transparent);
+  background: color-mix(in srgb, var(--live) 44%, transparent);
 }
 
 .barCurrent.barHovered {
-  background: color-mix(in srgb, var(--accent) 85%, transparent);
+  background: color-mix(in srgb, var(--live) 85%, transparent);
 }
 
 /* ── Footer ── */
@@ -106,7 +106,7 @@
 .statusCount {
   font-family: var(--mono);
   font-weight: 500;
-  color: var(--accent);
+  color: var(--live);
 }
 
 /* ── Hover tooltip ── */

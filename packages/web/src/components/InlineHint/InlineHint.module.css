@@ -43,7 +43,7 @@
   font-weight: 500;
   letter-spacing: var(--tracking-eyebrow);
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--ink);
   flex-shrink: 0;
 }
 
@@ -64,7 +64,7 @@
   font-weight: 500;
   letter-spacing: var(--tracking-stat);
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--ink);
   white-space: nowrap;
   flex-shrink: 0;
   opacity: 0.85;

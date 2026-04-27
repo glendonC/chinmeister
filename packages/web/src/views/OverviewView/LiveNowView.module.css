@@ -76,7 +76,7 @@
 }
 
 .agentName {
-  font-size: 0.95rem;
+  font-size: var(--text-md);
   font-weight: 500;
   color: var(--ink);
   letter-spacing: -0.02em;
@@ -136,14 +136,12 @@
   color: var(--page-bg);
   transition:
     background 0.12s ease,
-    color 0.12s ease,
-    transform 0.12s ease;
+    color 0.12s ease;
 }
 
 .agentsRow:hover .agentViewButton {
   background: var(--accent);
   color: var(--on-accent);
-  transform: scale(1.04);
 }
 
 /* Conflicts and Files tabs render via the shared FileRow component

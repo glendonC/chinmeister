@@ -1,5 +1,5 @@
 .state {
-  --state-accent: var(--accent);
+  --state-accent: var(--ink);
   display: flex;
   flex-direction: column;
   gap: var(--space-sm);
@@ -9,7 +9,7 @@
 }
 
 .neutral {
-  --state-accent: var(--accent);
+  --state-accent: var(--ink);
 }
 
 .loading {
