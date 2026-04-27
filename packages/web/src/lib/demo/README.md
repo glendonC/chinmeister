@@ -9,11 +9,11 @@ state, widget data, and Reports content all flow from here.
    switcher (`components/DemoSwitcher`).
 2. Picking a scenario writes the id to the URL and dispatches a
    `chinmeister:demo-scenario-changed` event.
-3. Three React hooks subscribe to that event and short-circuit their API
+3. React hooks subscribe to that event and short-circuit their API
    calls when demo is active:
    - `useUserAnalytics` → `analytics`
    - `useConversationAnalytics` → `conversation`
-   - `useTeamAnalytics` → live presence
+   - `useTeamExtendedAnalytics` → `analytics` (project scope)
    - `useDemoReports` → Reports runs + findings (no fallback API yet)
 4. Each scenario builder returns a `DemoData` quad covering all four. No
    widget reads from anywhere else.
@@ -50,7 +50,7 @@ poll/refresh reasserts the baseline.
 | Tools view               | `views/ToolsView/useToolsViewData`         | `dashboard` (via polling) |
 | Overview analytics       | `hooks/useUserAnalytics`                   | `analytics`               |
 | Conversation analytics   | `hooks/useConversationAnalytics`           | `conversation`            |
-| Team analytics           | `hooks/useTeamAnalytics`                   | `analytics`               |
+| Team analytics           | `hooks/useTeamExtendedAnalytics`           | `analytics`               |
 | Reports                  | `hooks/useDemoReports`                     | `reports`                 |
 | Global rank              | `hooks/useGlobalRank`                      | `globalRank`              |
 | Global stats             | `hooks/useGlobalStats`                     | `globalStats`             |

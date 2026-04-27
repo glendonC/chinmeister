@@ -57,7 +57,6 @@ async function loadProjectView({ pollingState, teamState } = {}) {
   }));
 
   vi.doMock('../../hooks/useTeamAnalytics.js', () => ({
-    useTeamAnalytics: () => ({ analytics: {}, isLoading: false, error: null }),
     useTeamExtendedAnalytics: () => ({ analytics: {}, isLoading: false, error: null }),
   }));
 
