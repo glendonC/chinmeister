@@ -60,13 +60,17 @@ export default function DemoSwitcher() {
   const activeInUrl = isDemoActive();
 
   function select(id: DemoScenarioId) {
+    // Picking a scenario implicitly turns demo on — the URL gets ?demo=id,
+    // which flips isDemoActive() to true.
     setActiveScenarioId(id);
     setOpen(false);
   }
 
-  function exit() {
-    setActiveScenarioId(null);
-    setOpen(false);
+  function toggle() {
+    // Flip the master on/off state. When turning on, fall back to whatever
+    // scenarioId resolves to (DEFAULT_SCENARIO when no param yet). Keep the
+    // panel open so the user sees the state change without a hidden swap.
+    setActiveScenarioId(activeInUrl ? null : scenarioId);
   }
 
   return (
@@ -74,12 +78,20 @@ export default function DemoSwitcher() {
       {open && (
         <div className={styles.panel} role="dialog" aria-label="Demo scenarios">
           <div className={styles.panelHead}>
-            <span className={styles.panelEyebrow}>demo scenario</span>
-            {activeInUrl && (
-              <button type="button" className={styles.exitButton} onClick={exit}>
-                exit
-              </button>
-            )}
+            <span className={styles.panelEyebrow}>demo data</span>
+            <button
+              type="button"
+              className={`${styles.toggle} ${activeInUrl ? styles.toggleOn : ''}`}
+              role="switch"
+              aria-checked={activeInUrl}
+              aria-label={activeInUrl ? 'Turn demo data off' : 'Turn demo data on'}
+              onClick={toggle}
+            >
+              <span className={styles.toggleTrack} aria-hidden="true">
+                <span className={styles.toggleThumb} />
+              </span>
+              <span className={styles.toggleLabel}>{activeInUrl ? 'on' : 'off'}</span>
+            </button>
           </div>
           <ul className={styles.list}>
             {DEMO_SCENARIO_IDS.map((id) => {
@@ -107,12 +119,12 @@ export default function DemoSwitcher() {
       )}
       <button
         type="button"
-        className={styles.trigger}
+        className={`${styles.trigger} ${activeInUrl ? '' : styles.triggerOff}`}
         aria-expanded={open}
         onClick={() => setOpen((v) => !v)}
       >
-        <span className={styles.triggerDot} />
-        <span className={styles.triggerLabel}>{active.label}</span>
+        <span className={styles.triggerDot} aria-hidden="true" />
+        <span className={styles.triggerLabel}>{activeInUrl ? active.label : 'Demo · off'}</span>
         <span className={styles.triggerCaret} aria-hidden="true">
           {open ? '↓' : '↑'}
         </span>

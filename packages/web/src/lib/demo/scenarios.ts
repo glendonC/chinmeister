@@ -8,10 +8,36 @@
 // fields that answer it, and write an override. Do not clone the whole
 // baseline; use the spread helper.
 
-import type { UserAnalytics, ConversationAnalytics } from '../apiSchemas.js';
+import type {
+  UserAnalytics,
+  ConversationAnalytics,
+  UserProfile,
+  UserTeams,
+  DashboardSummary,
+  TeamContext,
+} from '../apiSchemas.js';
 import { createBaselineAnalytics, DEFAULT_PERIOD_DAYS } from './baseline.js';
 import { createBaselineConversation } from './conversation.js';
 import { createBaselineLive, createEmptyLive, type LiveDemoData } from './live.js';
+import { createBaselineReports, createEmptyReports, type ReportsDemoData } from './reports.js';
+import { createBaselineMe, createBaselineTeams, createEmptyTeams } from './me.js';
+import {
+  createBaselineDashboard,
+  createEmptyDashboard,
+  createBaselineTeamContexts,
+  createEmptyTeamContexts,
+} from './dashboard.js';
+import {
+  createBaselineGlobalRank,
+  createEmptyGlobalRank,
+  createBaselineGlobalStats,
+  createEmptyGlobalStats,
+  createBaselineSessions,
+  createEmptySessions,
+  type SessionsDemoData,
+} from './global.js';
+import type { GlobalRank } from '../../hooks/useGlobalRank.js';
+import type { GlobalStats } from '../../hooks/useGlobalStats.js';
 import { buildDaySpine } from './rng.js';
 
 export type DemoScenarioId =
@@ -32,6 +58,14 @@ export interface DemoData {
   analytics: UserAnalytics;
   conversation: ConversationAnalytics;
   live: LiveDemoData;
+  reports: ReportsDemoData;
+  me: UserProfile;
+  teams: UserTeams;
+  dashboard: DashboardSummary;
+  teamContexts: Record<string, TeamContext>;
+  globalRank: GlobalRank;
+  globalStats: GlobalStats;
+  sessions: SessionsDemoData;
 }
 
 export interface DemoScenario {
@@ -39,6 +73,62 @@ export interface DemoScenario {
   label: string;
   description: string;
   build: () => DemoData;
+}
+
+// ── Helpers for the non-Overview slices ─────────────────────────────
+//
+// Most scenarios share the same identity/teams/dashboard/global frames —
+// the differentiating story lives in analytics/conversation/live. These
+// helpers keep that story authored in one place per builder instead of
+// repeating 7 fields per scenario. Solo scenarios narrow to one team;
+// empty/no-hooks zero everything except `me` (the user is still logged in).
+
+type DemoFrame = Pick<
+  DemoData,
+  'me' | 'teams' | 'dashboard' | 'teamContexts' | 'globalRank' | 'globalStats' | 'sessions'
+>;
+
+function baselineFrame(): DemoFrame {
+  return {
+    me: createBaselineMe(),
+    teams: createBaselineTeams(),
+    dashboard: createBaselineDashboard(),
+    teamContexts: createBaselineTeamContexts(),
+    globalRank: createBaselineGlobalRank(),
+    globalStats: createBaselineGlobalStats(),
+    sessions: createBaselineSessions(),
+  };
+}
+
+function emptyFrame(): DemoFrame {
+  return {
+    me: createBaselineMe(), // user is still logged in even when nothing has happened
+    teams: createEmptyTeams(),
+    dashboard: createEmptyDashboard(),
+    teamContexts: createEmptyTeamContexts(),
+    globalRank: createEmptyGlobalRank(),
+    globalStats: createEmptyGlobalStats(),
+    sessions: createEmptySessions(),
+  };
+}
+
+function singleTeamFrame(teamId = 'team-frontend'): DemoFrame {
+  const base = baselineFrame();
+  const team = base.teams.teams.find((t) => t.team_id === teamId);
+  const teamCtx = base.teamContexts[teamId];
+  return {
+    ...base,
+    teams: { teams: team ? [team] : [] },
+    dashboard: {
+      ...base.dashboard,
+      teams: base.dashboard.teams.filter((t) => t.team_id === teamId),
+    },
+    teamContexts: teamCtx ? { [teamId]: teamCtx } : {},
+    sessions: {
+      ...base.sessions,
+      sessions: base.sessions.sessions.filter((s) => s.team_id === teamId),
+    },
+  };
 }
 
 // ── Scenario builders ───────────────────────────────────────────────
@@ -49,6 +139,8 @@ function healthy(): DemoData {
     analytics: createBaselineAnalytics(),
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -242,7 +334,13 @@ function empty(): DemoData {
     sessions_with_conversations: 0,
     tool_coverage: { supported_tools: [], unsupported_tools: [] },
   };
-  return { analytics, conversation, live: createEmptyLive() };
+  return {
+    analytics,
+    conversation,
+    live: createEmptyLive(),
+    reports: createEmptyReports(),
+    ...emptyFrame(),
+  };
 }
 
 // Solo on Claude Code: one handle, one tool, full capture. Exercises the
@@ -331,7 +429,13 @@ function soloCC(): DemoData {
       .slice(0, 1)
       .map((s) => ({ ...s, active_agents: 1, conflict_count: 0 })),
   };
-  return { analytics, conversation, live };
+  return {
+    analytics,
+    conversation,
+    live,
+    reports: createBaselineReports(),
+    ...singleTeamFrame('team-frontend'),
+  };
 }
 
 // Solo on a non-hook MCP tool (JetBrains). No hooks, no token data, no
@@ -455,6 +559,8 @@ function soloNoHooks(): DemoData {
         },
       ],
     },
+    reports: createEmptyReports(),
+    ...singleTeamFrame('team-frontend'),
   };
 }
 
@@ -492,6 +598,8 @@ function stalePricing(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -518,6 +626,8 @@ function modelsWithoutPricing(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -533,6 +643,8 @@ function firstPeriod(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -590,6 +702,8 @@ function teamConflicts(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -629,6 +743,8 @@ function negativeDelta(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -640,6 +756,8 @@ function noLiveAgents(): DemoData {
     analytics: createBaselineAnalytics(),
     conversation: createBaselineConversation(),
     live: createEmptyLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -668,6 +786,8 @@ function memoryStale(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 
@@ -715,6 +835,8 @@ function memoryConcentrated(): DemoData {
     },
     conversation: createBaselineConversation(),
     live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
   };
 }
 

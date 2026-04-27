@@ -11,6 +11,8 @@ import {
   type ToolDirectoryEvaluation,
 } from '../../lib/apiSchemas.js';
 import { useToolCatalog } from '../../lib/useToolCatalog.js';
+import { getDemoData } from '../../lib/demo/index.js';
+import { useDemoScenario } from '../../hooks/useDemoScenario.js';
 import {
   buildCategoryJoinShare,
   buildHostJoinShare,
@@ -105,6 +107,7 @@ export interface ToolsViewData {
 export function useToolsViewData(): ToolsViewData {
   const token = useAuthStore((s) => s.token);
   const dashboardData = usePollingStore((s) => s.dashboardData);
+  const demo = useDemoScenario();
   const { catalog, categories, evaluations, loading } = useToolCatalog(token);
 
   const [activeCategory, setActiveCategory] = useState<string>('all');
@@ -122,6 +125,10 @@ export function useToolsViewData(): ToolsViewData {
 
   useEffect(() => {
     if (dashboardData) return;
+    // Demo: read directly from the scenario instead of hitting /me/dashboard.
+    // Render-time fallthrough below pulls the scenario's dashboard, so the
+    // effect just bails — polling won't populate dashboardData under demo.
+    if (demo.active) return;
     let cancelled = false;
     async function fetchDashboard() {
       try {
@@ -138,9 +145,12 @@ export function useToolsViewData(): ToolsViewData {
     return () => {
       cancelled = true;
     };
-  }, [dashboardData, token]);
+  }, [dashboardData, token, demo.active]);
 
-  const dashboardSnapshot = dashboardData || fallbackDashboardSnapshot;
+  const dashboardSnapshot =
+    dashboardData ||
+    (demo.active ? getDemoData(demo.scenarioId).dashboard : null) ||
+    fallbackDashboardSnapshot;
 
   const toolShare = useMemo<JoinShareEntry[]>(
     () => buildToolJoinShare(dashboardSnapshot?.teams || []),

@@ -15,6 +15,8 @@ import { teamActions, clearJoinedCache } from './teams.js';
 import { requestRefresh, setRefreshHandler } from './refresh.js';
 import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
 import { type PollingState, type DataStatus, buildContextReadyPatch } from './pollingTypes.js';
+import { isDemoActive, getActiveScenarioId } from '../demoMode.js';
+import { getDemoData } from '../demo/index.js';
 
 /**
  * Internal mutable state for the polling subsystem.
@@ -113,6 +115,38 @@ async function poll(): Promise<void> {
   const snapshotTeamId = teamActions.getState().activeTeamId;
   const { token } = authActions.getState();
   if (!token) return;
+
+  // Demo path: write the scenario's payload straight into the store and
+  // skip the network entirely. Mirrors the live/dashboard split — overview
+  // gets `dashboard`, project view gets the relevant teamContext.
+  if (isDemoActive()) {
+    const data = getDemoData(getActiveScenarioId());
+    if (snapshotTeamId === null) {
+      pollingStore.setState({
+        dashboardData: data.dashboard,
+        dashboardStatus: 'ready',
+        contextData: null,
+        contextStatus: 'idle',
+        contextTeamId: null,
+        pollError: null,
+        pollErrorData: null,
+        lastUpdate: new Date(),
+        consecutiveFailures: 0,
+      });
+    } else {
+      const ctx = data.teamContexts[snapshotTeamId] ?? createEmptyTeamContext();
+      pollingStore.setState({
+        ...buildContextReadyPatch(snapshotTeamId, ctx),
+        dashboardData: null,
+        dashboardStatus: 'idle',
+        pollError: null,
+        pollErrorData: null,
+        lastUpdate: new Date(),
+        consecutiveFailures: 0,
+      });
+    }
+    return;
+  }
 
   const signal = resetAbortController();
 
@@ -343,6 +377,16 @@ if (typeof document !== 'undefined') {
     } else if (authActions.getState().token) {
       startPolling();
     }
+  });
+}
+
+// Re-poll when the demo toggle flips. Force an immediate cycle so the new
+// scenario's dashboard/context lands without waiting for the next interval.
+// Real-network polling is harmless when demo is on — poll() short-circuits
+// before any fetch — so we don't need to stop the timer.
+if (typeof window !== 'undefined') {
+  window.addEventListener('chinmeister:demo-scenario-changed', () => {
+    if (authActions.getState().token) poll();
   });
 }
 

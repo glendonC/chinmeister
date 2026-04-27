@@ -6,9 +6,9 @@ import { useState, type ReactNode } from 'react';
 import clsx from 'clsx';
 import BackLink from '../../components/BackLink/BackLink.js';
 import { agentGradient } from '../../lib/agentGradient.js';
+import { useDemoReports } from '../../hooks/useDemoReports.js';
+import { getRun, getCompletedReport, getCompletedReportFor } from '../../lib/demo/index.js';
 import { REPORT_CATALOG, reportHex, type ReportDef } from './report-catalog.js';
-import { getRun } from './mock-runs.js';
-import { getCompletedReportFor, getCompletedReport } from './mock-findings.js';
 import type { Finding, CompletedReport } from './types.js';
 import styles from './ReportRunView.module.css';
 
@@ -328,7 +328,8 @@ function NotFound({ onBack }: { onBack: () => void }): ReactNode {
 // ── Main ──
 
 export default function ReportRunView({ runId, onBack }: Props): ReactNode {
-  const run = getRun(runId);
+  const reportsData = useDemoReports();
+  const run = getRun(reportsData, runId);
   if (!run) return <NotFound onBack={onBack} />;
   const report = findReport(run.reportId);
   if (!report) return <NotFound onBack={onBack} />;
@@ -371,7 +372,8 @@ export default function ReportRunView({ runId, onBack }: Props): ReactNode {
     );
   }
 
-  const completed = getCompletedReport(run.id) ?? getCompletedReportFor(run.reportId);
+  const completed =
+    getCompletedReport(reportsData, run.id) ?? getCompletedReportFor(reportsData, run.reportId);
   if (!completed) return <NotFound onBack={onBack} />;
   return <CompletedBody report={report} completed={completed} onBack={onBack} />;
 }

@@ -2,8 +2,15 @@ import { type z } from 'zod';
 import { createStore, useStore } from 'zustand';
 import { api } from '../api.js';
 import { userProfileSchema, validateResponse } from '../apiSchemas.js';
+import { isDemoActive, getActiveScenarioId } from '../demoMode.js';
+import { getDemoData } from '../demo/index.js';
 
 const TOKEN_KEY = 'chinmeister_token';
+// Synthetic token used when demo is active and no real token is in storage.
+// The api() call is bypassed entirely on the demo path, so the value never
+// reaches the wire — it's just a non-null marker so the App boot flow
+// proceeds past its `if (!t)` guard into authenticate().
+const DEMO_TOKEN = '__demo__';
 
 type UserProfile = z.infer<typeof userProfileSchema>;
 
@@ -35,7 +42,14 @@ const authStore = createStore<AuthState>((set) => ({
   },
 
   getStoredToken() {
-    return localStorage.getItem(TOKEN_KEY);
+    const stored = localStorage.getItem(TOKEN_KEY);
+    if (stored) return stored;
+    // Demo mode without a real token: hand back a synthetic so the App
+    // boot path proceeds into authenticate(), which will short-circuit on
+    // the demo path. This lets ?demo work for first-time visitors who
+    // never authenticated.
+    if (isDemoActive()) return DEMO_TOKEN;
+    return null;
   },
 
   async authenticate(t: string) {
@@ -44,6 +58,13 @@ const authStore = createStore<AuthState>((set) => ({
     inflightAuth = (async () => {
       set({ token: t });
       try {
+        // Demo path: skip the API and inject the scenario's user. Don't
+        // touch localStorage so toggling demo off restores any real token.
+        if (isDemoActive()) {
+          const me = getDemoData(getActiveScenarioId()).me;
+          set({ user: me });
+          return true;
+        }
         const rawUser = await api('GET', '/me', null, t);
         const userData = validateResponse(userProfileSchema, rawUser, 'me', {
           throwOnError: true,
@@ -68,6 +89,31 @@ const authStore = createStore<AuthState>((set) => ({
     localStorage.removeItem(TOKEN_KEY);
   },
 }));
+
+// Re-evaluate auth on demo toggle so the sidebar/profile pill reflects the
+// active mode without a page reload. Three branches:
+//   - real token in storage → re-run authenticate (real path off, demo path on)
+//   - no real token, demo just turned on → authenticate with the synthetic
+//   - no real token, demo just turned off → drop to unauthenticated so the
+//     boot screen state is honest about there being no real session.
+if (typeof window !== 'undefined') {
+  window.addEventListener('chinmeister:demo-scenario-changed', () => {
+    const stored = localStorage.getItem(TOKEN_KEY);
+    if (stored) {
+      authStore
+        .getState()
+        .authenticate(stored)
+        .catch(() => {});
+    } else if (isDemoActive()) {
+      authStore
+        .getState()
+        .authenticate(DEMO_TOKEN)
+        .catch(() => {});
+    } else {
+      authStore.setState({ token: null, user: null });
+    }
+  });
+}
 
 export function useAuthStore<T>(selector: (state: AuthState) => T): T {
   return useStore(authStore, selector);

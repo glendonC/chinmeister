@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api.js';
 import { useAuthStore } from '../lib/stores/auth.js';
+import { getDemoData } from '../lib/demo/index.js';
+import { useDemoScenario } from './useDemoScenario.js';
 
 export interface ToolStat {
   tool: string;
@@ -111,11 +113,16 @@ function parseArray<T>(val: unknown): T[] {
 }
 
 export function useGlobalStats(): GlobalStats {
+  const demo = useDemoScenario();
   const [stats, setStats] = useState<GlobalStats>(EMPTY);
   const abortRef = useRef<AbortController | null>(null);
   const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
+    // Demo: read from the scenario, skip the heartbeat + /stats fetch.
+    // Render-time fallthrough below returns the scenario payload, so no
+    // setState here.
+    if (demo.active) return;
     if (!token) return;
 
     let timer: ReturnType<typeof setInterval> | null = null;
@@ -172,7 +179,7 @@ export function useGlobalStats(): GlobalStats {
       if (timer) clearInterval(timer);
       abortRef.current?.abort();
     };
-  }, [token]);
+  }, [token, demo.active, demo.scenarioId]);
 
-  return stats;
+  return demo.active ? getDemoData(demo.scenarioId).globalStats : stats;
 }

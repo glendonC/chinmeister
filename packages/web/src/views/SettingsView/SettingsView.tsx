@@ -6,6 +6,7 @@ import { api } from '../../lib/api.js';
 import { COLOR_PALETTE, getColorHex } from '../../lib/utils.js';
 import { useTheme } from '../../lib/useTheme.js';
 import { getErrorMessage } from '../../lib/errorHelpers.js';
+import { isDemoActive } from '../../lib/demoMode.js';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
 import SectionTitle from '../../components/SectionTitle/SectionTitle.js';
 import styles from './SettingsView.module.css';
@@ -197,6 +198,11 @@ export default function SettingsView(_props: Props) {
     const previous = user?.budgets ?? null;
     const nextRecord = next as unknown as Record<string, unknown>;
     authActions.updateUser({ budgets: nextRecord });
+    // Demo: optimistic-only. The next demo toggle re-asserts the baseline.
+    if (isDemoActive()) {
+      setSavingBudgets(false);
+      return;
+    }
     try {
       await api('PUT', '/me/budgets', { budgets: nextRecord }, token);
     } catch (err: unknown) {
@@ -242,6 +248,11 @@ export default function SettingsView(_props: Props) {
       return;
     }
     setHandleForm((prev) => ({ ...prev, saving: true, error: null }));
+    if (isDemoActive()) {
+      authActions.updateUser({ handle: val });
+      setHandleForm((prev) => ({ ...prev, editing: false, saving: false }));
+      return;
+    }
     try {
       await api('PUT', '/me/handle', { handle: val }, token);
       authActions.updateUser({ handle: val });
@@ -263,6 +274,11 @@ export default function SettingsView(_props: Props) {
   async function selectColor(colorName: string): Promise<void> {
     if (colorName === user?.color || colorForm.saving) return;
     setColorForm((prev) => ({ ...prev, saving: true, error: null }));
+    if (isDemoActive()) {
+      authActions.updateUser({ color: colorName });
+      setColorForm((prev) => ({ ...prev, saving: false }));
+      return;
+    }
     try {
       await api('PUT', '/me/color', { color: colorName }, token);
       authActions.updateUser({ color: colorName });
@@ -278,6 +294,11 @@ export default function SettingsView(_props: Props) {
 
   async function handleGithubLink(): Promise<void> {
     setLinkError(null);
+    // Demo: GitHub OAuth doesn't make sense in a sandbox; show a benign error.
+    if (isDemoActive()) {
+      setLinkError('GitHub linking is disabled in demo mode.');
+      return;
+    }
     try {
       const result = await api<{ url?: string }>('POST', '/auth/github/link', null, token);
       if (typeof result?.url !== 'string' || !isValidRedirectUrl(result.url)) {
@@ -292,6 +313,11 @@ export default function SettingsView(_props: Props) {
   async function handleGithubUnlink(): Promise<void> {
     setUnlinking(true);
     setLinkError(null);
+    if (isDemoActive()) {
+      authActions.updateUser({ github_id: null, github_login: null, avatar_url: null });
+      setUnlinking(false);
+      return;
+    }
     try {
       await api('PUT', '/me/github', { action: 'unlink' }, token);
       authActions.updateUser({ github_id: null, github_login: null, avatar_url: null });
