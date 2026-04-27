@@ -10,8 +10,9 @@ import BackLink from '../../components/BackLink/BackLink.js';
 import LaunchLink from '../../components/LaunchLink/LaunchLink.js';
 import { setQueryParam } from '../../lib/router.js';
 import { useActiveRun, reportRunsActions } from '../../lib/stores/reportRuns.js';
+import { useDemoReports } from '../../hooks/useDemoReports.js';
+import { getRunsForReport } from '../../lib/demo/index.js';
 import { REPORT_CATALOG, reportHex, type ReportDef } from './report-catalog.js';
-import { getRunsForReport } from './mock-runs.js';
 import { useElapsed } from './useElapsed.js';
 import type { MockRun } from './types.js';
 import styles from './ReportDetailView.module.css';
@@ -118,13 +119,14 @@ function NotFound({ onBack }: { onBack: () => void }): ReactNode {
 // ── Main ──
 
 export default function ReportDetailView({ reportId, onBack }: Props): ReactNode {
+  const reportsData = useDemoReports();
   const report: ReportDef | undefined = REPORT_CATALOG.find((r) => r.id === reportId);
   const activeRun = useActiveRun(reportId);
 
   if (!report) return <NotFound onBack={onBack} />;
 
   const hex = reportHex(report);
-  const runs = getRunsForReport(report.id);
+  const runs = getRunsForReport(reportsData, report.id);
   const visibleRuns = runs.slice(0, COMPACT_RUN_LIMIT);
   const hiddenCount = Math.max(0, runs.length - visibleRuns.length);
 

@@ -15,9 +15,10 @@ import { useQueryParam, setQueryParam } from '../../lib/router.js';
 import { agentGradient } from '../../lib/agentGradient.js';
 import { projectGradient } from '../../lib/projectGradient.js';
 import { reportRunsActions } from '../../lib/stores/reportRuns.js';
+import { useDemoReports } from '../../hooks/useDemoReports.js';
+import { getLatestRun, getRunsForReport } from '../../lib/demo/index.js';
 import { REPORT_CATALOG, reportHex, type ReportDef } from './report-catalog.js';
 import { ReportMark } from './ReportMark.js';
-import { getLatestRun, getRunsForReport } from './mock-runs.js';
 import { computeFreshness, formatFreshness } from './freshness.js';
 import type { MockRun } from './types.js';
 import ReportRunView from './ReportRunView.js';
@@ -186,6 +187,7 @@ function CatalogView(): ReactNode {
     () => teams.find((t) => t.team_id === activeTeamId) ?? teams[0] ?? null,
     [teams, activeTeamId],
   );
+  const reportsData = useDemoReports();
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   // Content state is separate from visibility so the tooltip stays mounted
   // across mouse-leave. Only changes on mouse-enter. Pre-seeded with the
@@ -306,7 +308,7 @@ function CatalogView(): ReactNode {
 
       <div className={styles.catalog} onMouseLeave={handleCatalogLeave}>
         {REPORT_CATALOG.map((report) => {
-          const latest = getLatestRun(report.id);
+          const latest = getLatestRun(reportsData, report.id);
           const freshnessText = formatFreshness(computeFreshness(report, latest));
           return (
             <ReportRow
@@ -330,7 +332,7 @@ function CatalogView(): ReactNode {
         createPortal(
           <HoverTooltip
             report={displayReport}
-            pastRuns={getRunsForReport(displayReport.id)}
+            pastRuns={getRunsForReport(reportsData, displayReport.id)}
             expanded={isExpanded}
             style={tooltipStyle}
             visible={!!hoveredId}

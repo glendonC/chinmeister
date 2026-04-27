@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api.js';
 import { useAuthStore } from '../lib/stores/auth.js';
+import { getDemoData } from '../lib/demo/index.js';
+import { useDemoScenario } from './useDemoScenario.js';
 
 export interface MetricRank {
   value: number;
@@ -53,11 +55,15 @@ const EMPTY: GlobalRank = {
 };
 
 export function useGlobalRank(): GlobalRank {
+  const demo = useDemoScenario();
   const [rank, setRank] = useState<GlobalRank>(EMPTY);
   const abortRef = useRef<AbortController | null>(null);
   const token = useAuthStore((s) => s.token);
 
   useEffect(() => {
+    // Demo: read from the scenario, skip the API. The render-time fall-
+    // through below returns the scenario's payload, so no setState here.
+    if (demo.active) return;
     if (!token) return;
 
     async function fetch() {
@@ -148,7 +154,7 @@ export function useGlobalRank(): GlobalRank {
       clearTimeout(delay);
       abortRef.current?.abort();
     };
-  }, [token]);
+  }, [token, demo.active, demo.scenarioId]);
 
-  return rank;
+  return demo.active ? getDemoData(demo.scenarioId).globalRank : rank;
 }

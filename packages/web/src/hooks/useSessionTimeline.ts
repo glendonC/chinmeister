@@ -4,6 +4,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api.js';
 import { authActions } from '../lib/stores/auth.js';
+import { getDemoData } from '../lib/demo/index.js';
+import { useDemoScenario } from './useDemoScenario.js';
 
 export interface TimelineSession {
   id: string;
@@ -47,13 +49,30 @@ const EMPTY_TOTALS: TimelineTotals = {
 };
 
 export function useSessionTimeline(from: string, to: string): UseSessionTimelineReturn {
-  const [sessions, setSessions] = useState<TimelineSession[]>([]);
-  const [totals, setTotals] = useState<TimelineTotals>(EMPTY_TOTALS);
+  const demo = useDemoScenario();
+  const [sessions, setSessions] = useState<TimelineSession[]>(() =>
+    demo.active ? getDemoData(demo.scenarioId).sessions.sessions : [],
+  );
+  const [totals, setTotals] = useState<TimelineTotals>(() =>
+    demo.active ? getDemoData(demo.scenarioId).sessions.totals : EMPTY_TOTALS,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
+    // Demo: read from the scenario, skip the API. The from/to range is
+    // ignored for demo because the fixture is a fixed slice — fine for
+    // exercising the timeline view, doesn't pretend to be filterable.
+    if (demo.active) {
+      const scenarioSessions = getDemoData(demo.scenarioId).sessions;
+      setSessions(scenarioSessions.sessions);
+      setTotals(scenarioSessions.totals);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
@@ -87,7 +106,7 @@ export function useSessionTimeline(from: string, to: string): UseSessionTimeline
       cancelled = true;
       controller.abort();
     };
-  }, [from, to]);
+  }, [from, to, demo.active, demo.scenarioId]);
 
   return { sessions, totals, isLoading, error };
 }

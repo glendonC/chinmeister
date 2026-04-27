@@ -5,6 +5,7 @@ import { RECONCILE_INITIAL_MS, RECONCILE_MAX_MS } from '../constants.js';
 import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { setWsConnected } from './refresh.js';
+import { isDemoActive } from '../demoMode.js';
 import {
   type PollingBridge,
   type ConnectionState,
@@ -101,6 +102,11 @@ interface WsTicketResponse {
 export async function connectTeamWebSocket(teamId: string): Promise<void> {
   const { token } = authActions.getState();
   if (!token || !teamId) return;
+
+  // Demo mode: don't open a WebSocket. The polling store already populates
+  // teamContext synchronously from the demo payload, and a real WS would
+  // overwrite it with whatever the server pushes.
+  if (isDemoActive()) return;
 
   // Close any existing connection before opening a new one
   closeWebSocket();
