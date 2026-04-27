@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   DEFAULT_LAYOUT,
   defaultSlot,
+  getWidget,
   resolveWidgetAlias,
   type WidgetSlot,
   type WidgetColSpan,
@@ -132,6 +133,52 @@ function healScopeComplexityWidth(slots: WidgetSlot[]): WidgetSlot[] {
   );
 }
 
+// 2026-04-27: tool-call-errors collapsed from a 6×3 hero+top-3 panel into a
+// canonical stat card. Saved layouts at the old size leave the widget body
+// 3 rows tall with a single hero stat floating in dead space — same class
+// of bug the heatmap healer above solves. Snap any saved size > 3×2 down to
+// the new catalog default (matches every other KPI stat in the cockpit:
+// sessions, edits, cost, one-shot-rate). The widget went through a brief
+// 4×2 phase the same day; that intermediate size is also snapped.
+function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) =>
+    s.id === 'tool-call-errors' && (s.colSpan > 3 || s.rowSpan > 2)
+      ? { ...s, colSpan: 3, rowSpan: 2 }
+      : s,
+  );
+}
+
+// 2026-04-27: model-mix shrank from 4×3 to 4×2 after the active-model detail
+// moved inline into the caption (no more separate detail block, no overflow
+// risk). Saved layouts at the old 4×3 size show ~150px of empty space below
+// the strip. Heal back to the new default; users who genuinely want the
+// extra height can drag-resize.
+function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => (s.id === 'model-mix' && s.rowSpan > 2 ? { ...s, rowSpan: 2 } : s));
+}
+
+// 2026-04-27: Generic clamp against catalog min/max. Runs LAST in the heal
+// chain so any saved slot whose size now exceeds its viz constraints (e.g.
+// a stat card persisted at 6×3 from a prior catalog shape) gets normalized
+// even when no widget-specific healer above caught it. Source of truth is
+// the catalog WidgetDef's maxW/maxH (with the VIZ_MAX_CONSTRAINTS fallback
+// applied via getWidget). Matches the constraint that setSlotSize now
+// enforces on every resize gesture.
+function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => {
+    const def = getWidget(s.id);
+    if (!def) return s;
+    const maxCol = (def.maxW ?? 12) as WidgetColSpan;
+    const maxRow = (def.maxH ?? 4) as WidgetRowSpan;
+    const minCol = (def.minW ?? 3) as WidgetColSpan;
+    const minRow = (def.minH ?? 2) as WidgetRowSpan;
+    const colSpan = Math.max(minCol, Math.min(maxCol, s.colSpan)) as WidgetColSpan;
+    const rowSpan = Math.max(minRow, Math.min(maxRow, s.rowSpan)) as WidgetRowSpan;
+    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
+    return { ...s, colSpan, rowSpan };
+  });
+}
+
 // 2026-04-25: activity redesign makes the heatmap a full-width 12×3
 // read and promotes hourly-effectiveness beside work-types. Heal saved
 // layouts so existing users see the curated activity row instead of the
@@ -201,9 +248,15 @@ function loadDashboard(): DashboardLayout {
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
         const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
-        const healed = healActivityLayout(
-          healScopeComplexityWidth(
-            healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(expanded))),
+        const healed = clampToCatalogConstraints(
+          healActivityLayout(
+            healModelMixSize(
+              healToolCallErrorsSize(
+                healScopeComplexityWidth(
+                  healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(expanded))),
+                ),
+              ),
+            ),
           ),
         );
         const stored = parsed.widgets as WidgetSlot[];
@@ -348,20 +401,28 @@ export function useOverviewLayout() {
   );
 
   // Set a widget's colSpan and/or rowSpan. Both fields optional; omitted
-  // fields keep their current value.
+  // fields keep their current value. Clamps the requested size against the
+  // catalog's min/max for that widget so resize gestures (or stale UI)
+  // can't push a widget past the constraints declared on the WidgetDef.
   const setSlotSize = useCallback(
     (id: string, size: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan }) => {
+      const def = getWidget(id);
       setAndSave((prev) => ({
         ...prev,
-        widgets: prev.widgets.map((s) =>
-          s.id === id
-            ? {
-                ...s,
-                colSpan: size.colSpan ?? s.colSpan,
-                rowSpan: size.rowSpan ?? s.rowSpan,
-              }
-            : s,
-        ),
+        widgets: prev.widgets.map((s) => {
+          if (s.id !== id) return s;
+          const requestedCol = size.colSpan ?? s.colSpan;
+          const requestedRow = size.rowSpan ?? s.rowSpan;
+          const maxCol = (def?.maxW ?? 12) as WidgetColSpan;
+          const maxRow = (def?.maxH ?? 4) as WidgetRowSpan;
+          const minCol = (def?.minW ?? 3) as WidgetColSpan;
+          const minRow = (def?.minH ?? 2) as WidgetRowSpan;
+          return {
+            ...s,
+            colSpan: Math.max(minCol, Math.min(maxCol, requestedCol)) as WidgetColSpan,
+            rowSpan: Math.max(minRow, Math.min(maxRow, requestedRow)) as WidgetRowSpan,
+          };
+        }),
       }));
     },
     [setAndSave],

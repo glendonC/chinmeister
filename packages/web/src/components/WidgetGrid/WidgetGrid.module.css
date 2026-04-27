@@ -38,9 +38,9 @@
  * DragOverlay are the only signals during drag. The actual reorder and
  * grid reflow happen on drop. */
 .cellOver > .widget {
-  outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  outline: 2px solid var(--soft);
   outline-offset: -2px;
-  background: color-mix(in srgb, var(--accent) 5%, transparent);
+  background: var(--hover-bg);
 }
 
 /*
@@ -122,8 +122,8 @@
 .placeholder {
   min-width: 0;
   pointer-events: none;
-  border: 1.5px dashed var(--accent);
-  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  border: 1.5px dashed var(--soft);
+  background: var(--hover-bg);
   border-radius: var(--radius-sm);
   transition: opacity 80ms ease;
   animation: placeholderIn 120ms ease both;
@@ -221,8 +221,8 @@
 .widgetGhost {
   height: 100%;
   border-radius: var(--radius-sm);
-  border: 1.5px dashed var(--accent);
-  background: color-mix(in srgb, var(--accent) 6%, transparent);
+  border: 1.5px dashed var(--soft);
+  background: var(--hover-bg);
   pointer-events: none;
 }
 
@@ -318,7 +318,7 @@
 
 .borderSweep > span {
   position: absolute;
-  background: var(--accent);
+  background: var(--ink);
   display: block;
 }
 

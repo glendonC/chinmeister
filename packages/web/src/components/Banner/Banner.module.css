@@ -30,7 +30,7 @@
   background: linear-gradient(
     135deg,
     var(--danger-bg) 0%,
-    rgba(255, 107, 87, 0.03) 50%,
+    color-mix(in srgb, var(--danger) 3%, transparent) 50%,
     var(--warn-bg) 100%
   );
 }
@@ -38,8 +38,8 @@
 .info {
   background: linear-gradient(
     135deg,
-    var(--accent-bg) 0%,
-    rgba(29, 70, 255, 0.03) 50%,
+    var(--info-bg) 0%,
+    color-mix(in srgb, var(--info) 3%, transparent) 50%,
     var(--info-bg) 100%
   );
 }
@@ -48,8 +48,8 @@
   background: linear-gradient(
     135deg,
     var(--success-bg) 0%,
-    rgba(24, 180, 111, 0.03) 50%,
-    var(--accent-bg) 100%
+    color-mix(in srgb, var(--success) 3%, transparent) 50%,
+    var(--success-bg) 100%
   );
 }
 
@@ -80,7 +80,7 @@
 }
 
 .info .eyebrow {
-  color: var(--accent);
+  color: var(--info);
 }
 
 .success .eyebrow {
@@ -123,7 +123,7 @@
 }
 
 .info .action {
-  color: var(--accent);
+  color: var(--info);
 }
 
 .success .action {

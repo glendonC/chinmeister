@@ -134,7 +134,7 @@
 .pillMark {
   font-family: var(--mono);
   font-size: var(--text-sm);
-  font-weight: 700;
+  font-weight: 500;
   color: var(--on-accent);
   line-height: 1;
   pointer-events: none;

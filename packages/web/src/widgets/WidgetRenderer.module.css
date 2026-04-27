@@ -76,7 +76,7 @@
   top: 8px;
   right: 8px;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--text-sm);
   color: var(--soft);
   opacity: 0.38;
   transition:

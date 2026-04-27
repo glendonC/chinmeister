@@ -50,7 +50,7 @@
   background: linear-gradient(
     90deg,
     var(--ink) 0%,
-    color-mix(in srgb, var(--accent) 50%, var(--ink)) 40%,
+    color-mix(in srgb, var(--live) 50%, var(--ink)) 40%,
     var(--ink) 60%,
     var(--ink) 100%
   );

@@ -30,7 +30,7 @@
 }
 
 .accent .statValue {
-  color: var(--accent);
+  color: var(--ink);
 }
 
 .danger .statValue {

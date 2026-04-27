@@ -497,78 +497,66 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Tools & Models ────────────────────
-  // Category redesigned 2026-04-26 (post 18-month re-audit). The previous
-  // five widgets (tools, models, tool-handoffs, tool-call-errors, token-
-  // detail) were a list-of-tools / list-of-models / list-of-handoffs /
-  // list-of-errors / list-of-tokens spread that read as generic-APM
-  // territory. The redesign leads with substrate-unique signals:
-  //   - tool-handoffs: completion-weighted cross-tool flow (default head)
-  //   - tool-work-type-fit: head-to-head completion on identical work-types
-  //   - one-shot-by-tool: per-vendor first-try rate, same repo
-  //   - tool-capability-coverage: per-tool capability matrix (catalog)
-  //   - tool-call-errors: error rate hero + top patterns (catalog)
-  //   - model-mix: model session share with tab-selector (catalog)
-  //   - token-attribution: model × tool token cross-attribution (catalog)
-  // Renames: tools→tool-capability-coverage, models→model-mix,
-  //          token-detail→token-attribution. Aliases below preserve saved
-  //          layouts.
-  {
-    id: 'tool-capability-coverage',
-    name: 'capability coverage',
-    description:
-      'Per-tool capability matrix. Rows = tools, columns = data capabilities (hooks, commits, tool calls, tokens, conversations). Substrate-unique: chinmeister is the only place to see which of your tools can answer which questions, head to head.',
-    category: 'tools',
-    scope: 'both',
-    viz: 'factual-grid',
-    w: 6,
-    h: 3,
-    minW: 4,
-    minH: 2,
-    dataKeys: ['tool_comparison'],
-    drillTarget: { view: 'tools', tab: 'tools', q: 'capability' },
-  },
+  // Category redesigned 2026-04-27 after a design-team pass on the
+  // 2026-04-26 layout. Two widgets cut from the prior shape:
+  //   - tool-capability-coverage: static feature spec, not analytics
+  //   - token-attribution: model × tool matrix (B2 with model-mix, D1 weak)
+  // The category now leads with three substrate-unique signals:
+  //   - tool-handoffs: completion-weighted cross-tool flow (default)
+  //   - tool-work-type-fit: where each tool wins, by work-type (default)
+  //   - tool-call-errors: error rate + top patterns (default)
+  // Catalog-only:
+  //   - one-shot-by-tool: per-vendor first-try rate (overlap with the
+  //     cockpit one-shot-rate KPI; users add when they want the per-tool slice)
+  //   - model-mix: cost hero + share strip with click-to-inspect
+  // Renames: tools→tool-capability-coverage→cut, models→model-mix,
+  //          token-detail→token-attribution→cut. Aliases below preserve
+  //          saved layouts.
   {
     id: 'tool-work-type-fit',
     name: 'tool fit by work type',
     description:
-      'Heatmap of completion rate per (tool, work-type). Cells faded when sample size is small. Substrate-unique: head-to-head outcomes on identical work-types in the same repo. Read each row to see where each tool wins; route work to higher-completion cells.',
+      'Where each tool wins by work-type. One row per tool with its strongest work-type, completion rate, and sample. Substrate-unique: head-to-head outcomes on identical work-types in the same repo. Read it as a routing rule — send each work-type to the tool that ships it.',
     category: 'tools',
     scope: 'both',
-    viz: 'heatmap',
-    w: 8,
-    h: 3,
-    minW: 6,
+    viz: 'data-list',
+    w: 6,
+    h: 4,
+    minW: 4,
     minH: 3,
     dataKeys: ['tool_work_type', 'tool_comparison'],
     drillTarget: { view: 'tools', tab: 'tools', q: 'work-type' },
+    ownsClick: true,
   },
   {
     id: 'one-shot-by-tool',
     name: 'first-try rate by tool',
     description:
-      "Per-tool one-shot rate — % of each tool's sessions where edits worked without an Edit→Bash→Edit retry cycle. CodeBurn's killer metric, sliced by host_tool. Tools below 3 sessions render '—' to keep the bar honest.",
+      "Per-tool one-shot rate — % of each tool's sessions where edits worked without an Edit→Bash→Edit retry cycle. The same metric the cockpit one-shot-rate KPI shows, sliced by host_tool. Tools below 3 sessions render '—' to keep the bar honest.",
     category: 'tools',
     scope: 'both',
     viz: 'data-list',
-    w: 4,
+    w: 6,
     h: 3,
     minW: 4,
     minH: 2,
     dataKeys: ['tool_call_stats'],
     drillTarget: { view: 'tools', tab: 'tools', q: 'one-shot' },
+    ownsClick: true,
   },
   {
     id: 'model-mix',
     name: 'model mix',
     description:
-      'Stacked share strip of models running across all tools. Click a segment to inspect that model. Avoids the model A > B ranking anti-pattern; shows distribution as a fact.',
+      "Total spend leads; the share strip below splits by model. Click a segment to swap the caption to that model's stats. Avoids the model A > B ranking anti-pattern; share is a fact, not a recommendation.",
     category: 'tools',
     scope: 'both',
     viz: 'proportional-bar',
     w: 4,
-    h: 3,
+    h: 2,
     minW: 3,
     minH: 2,
+    maxH: 2,
     dataKeys: ['model_outcomes', 'token_usage'],
     drillTarget: { view: 'tools', tab: 'tools', q: 'models' },
   },
@@ -675,10 +663,10 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Tools (extended) ────────────────
-  // tool-handoffs is the substrate-unique headline of the redesigned Tools
-  // category. Reframed as completion-weighted flow: opacity carries file
-  // count (volume), color carries handoff_completion_rate (quality). Top-8
-  // pair cap with truthful tail row keeps the viz legible at team scale.
+  // tool-handoffs is the substrate-unique headline of the Tools category.
+  // Two-column flow: opacity carries file count (volume), color carries
+  // handoff_completion_rate (quality). Top-8 pair cap with truthful tail
+  // row keeps the viz legible at team scale.
   {
     id: 'tool-handoffs',
     name: 'cross-tool flow',
@@ -698,31 +686,17 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'tool-call-errors',
     name: 'tool call errors',
     description:
-      'Hero error rate plus the top three recurring patterns. Drill in for the frequent / recent split and per-tool error fingerprints.',
+      'Percentage of tool calls that ended in an error this period. Drill in for the top recurring patterns, the frequent / recent split, and per-tool fingerprints.',
     category: 'tools',
     scope: 'both',
-    viz: 'data-list',
-    w: 6,
-    h: 3,
-    minW: 4,
+    viz: 'stat',
+    w: 3,
+    h: 2,
+    minW: 2,
     minH: 2,
     dataKeys: ['tool_call_stats'],
     drillTarget: { view: 'tools', tab: 'errors', q: 'top' },
-  },
-  {
-    id: 'token-attribution',
-    name: 'token attribution',
-    description:
-      'Cross-attribution matrix — which tool ran which model, and how much. The substrate-unique cell: only chinmeister can fill (model × tool) because no IDE sees competitor tokens. Cells render session counts; tokens row-totalled. Cost lives in Usage.',
-    category: 'tools',
-    scope: 'both',
-    viz: 'data-list',
-    w: 6,
-    h: 4,
-    minW: 4,
-    minH: 3,
-    dataKeys: ['token_usage', 'model_outcomes'],
-    drillTarget: { view: 'tools', tab: 'errors', q: 'tokens' },
+    ownsClick: true,
   },
   // ── Conversations (revived 2026-04-25) ──
   // Two file-axis widgets that use sentiment/topic as INPUTS to coordination
@@ -1091,13 +1065,18 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
   'file-churn': [],
 
   // 2026-04-26: Tools & Models category redesign. The list-of-X grid was
-  // reframed around substrate-unique signals — capability coverage instead of
-  // tool-stats grid, model mix instead of model ranking, token attribution
-  // matrix instead of token-detail list, completion-weighted flow instead of
-  // bare flow strip. Renames preserve saved layouts.
-  tools: ['tool-capability-coverage'],
+  // reframed around substrate-unique signals — model mix instead of model
+  // ranking, completion-weighted flow instead of bare flow strip.
+  // 2026-04-27: tool-capability-coverage and token-attribution cut after a
+  // design-team pass — the first was static feature spec (not analytics),
+  // the second a redundant matrix that overlapped model-mix on substrate
+  // and generated chrome (header dots, footer prose) we kept polishing
+  // instead of fixing structurally.
+  tools: [],
   models: ['model-mix'],
-  'token-detail': ['token-attribution'],
+  'token-detail': [],
+  'tool-capability-coverage': [],
+  'token-attribution': [],
 
   // Tools cuts (7). tool-outcomes B2-redundant with the `tools` factual
   // grid (which already shows completion%). cache-efficiency is plumbing
@@ -1259,22 +1238,23 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'commit-stats', colSpan: 12, rowSpan: 2 },
   { id: 'file-rework', colSpan: 12, rowSpan: 4 },
 
-  // Tools & Models — redesigned 2026-04-26 (post 18-month re-audit). Three
-  // substrate-unique decisions, two rows:
-  //   Row 1: tool-handoffs (12×4) — completion-weighted cross-tool flow,
-  //     the headline. Sankey-style two-column SVG; opacity carries file
-  //     count, color carries handoff_completion_rate. Substrate-unique
-  //     (no IDE / APM sees competitor agents).
-  //   Row 2: tool-work-type-fit (8×3) + one-shot-by-tool (4×3) — recurring
-  //     routing decisions. Where does each tool win? Who lands first-try?
+  // Tools & Models — redesigned 2026-04-27. No matrices in the default layout.
+  //   Row 1: tool-handoffs (12×4) — completion-weighted cross-tool flow.
+  //     Two-column SVG: opacity carries file count, color carries
+  //     handoff_completion_rate. Substrate-unique (no IDE / APM sees
+  //     competitor agents).
+  //   Row 2: tool-work-type-fit (6×4) + tool-call-errors (3×2) — routing
+  //     decisions plus a single-stat reliability KPI sized to match every
+  //     other 3×2 KPI in the cockpit (sessions, edits, cost, one-shot-rate).
+  //     Detail view owns the top patterns, the frequent / recent split,
+  //     and per-tool fingerprints.
   //
-  // The previous default placements (`tools` factual grid + bare `tool-
-  // handoffs`) were demoted: capability is near-static onboarding data
-  // (belongs in catalog / discovery surface), and the bare flow viz
-  // doesn't drive an action without the completion overlay.
+  // one-shot-by-tool was demoted from default to catalog: the cockpit
+  // already carries one-shot-rate as a KPI stat, and the per-tool slice
+  // is a power-user add. Users who want both add it via the picker.
   { id: 'tool-handoffs', colSpan: 12, rowSpan: 4 },
-  { id: 'tool-work-type-fit', colSpan: 8, rowSpan: 3 },
-  { id: 'one-shot-by-tool', colSpan: 4, rowSpan: 3 },
+  { id: 'tool-work-type-fit', colSpan: 6, rowSpan: 4 },
+  { id: 'tool-call-errors', colSpan: 3, rowSpan: 2 },
 
   // memory-outcomes was demoted to catalog-only 2026-04-25 after the
   // agent-team audit. The 3-bucket session-grain proxy is honest about what

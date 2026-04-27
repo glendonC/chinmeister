@@ -24,8 +24,8 @@
 }
 
 .customizeBtnActive {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--ink);
+  color: var(--ink);
 }
 
 /* Persistent shortcut hint. Same visual weight as the kbd badges in the

@@ -116,7 +116,7 @@
 }
 
 .searchInput:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 
 .tagFilters {
@@ -149,8 +149,8 @@
 }
 
 .tagPillActive {
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: var(--ink);
+  color: var(--page-bg);
 }
 
 .tagPillClear {
@@ -164,7 +164,7 @@
 }
 
 .categoryPill:hover {
-  border-color: var(--accent);
+  border-color: var(--ink);
 }
 
 .pillCount {
@@ -230,7 +230,7 @@
 }
 
 .rosterDot[data-online] {
-  background: var(--accent);
+  background: var(--live);
 }
 
 .rosterHandle {

@@ -3,7 +3,7 @@
    Clean, minimal, Apple-inspired.
    ═══════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Manrope:wght@200;300;400;500;600&display=swap');
 @import './styles/tokens.css';
 
 :root {
@@ -48,6 +48,26 @@
    * carries the horizontal/primary axis (stat tabs, top nav). */
   --accent: #a896d4;
   --accent-bg: rgba(168, 150, 212, 0.12);
+
+  /* Live = real-time data only.
+   *
+   * Aliased to --accent so the brand color stays identical, but the
+   * SEMANTICS split: anything that pulses, streams, or represents an
+   * agent currently active uses --live; anything that's just an active
+   * chrome state (selected tab, pressed button, focused row) uses --ink.
+   *
+   * This rule is the whole point of the design language: lavender means
+   * "something is happening right now," not "this is the active control."
+   * If you find yourself reaching for --accent on a static count, a
+   * selected pill, or a focus ring — it's --ink, not --live. */
+  --live: var(--accent);
+  --live-bg: var(--accent-bg);
+
+  /* Focus ring color. Defaults to --ink so keyboard focus reads as a
+   * neutral chrome state, NOT as live data. Components can override
+   * locally when an entity color (work-type, tool color) is contextually
+   * meaningful, but the default is ink. */
+  --focus-ring: var(--ink);
 
   /* Alt accent — logo's top slab (dusty pink). Carries the vertical/
    * secondary axis (the sidebar question list). Splitting the axes
@@ -112,6 +132,9 @@
    * page bg. Matches the bump pattern used for --muted and --soft. */
   --accent: #b9a8e0;
   --accent-bg: rgba(185, 168, 224, 0.14);
+  --live: var(--accent);
+  --live-bg: var(--accent-bg);
+  --focus-ring: var(--ink);
   --accent-alt: #e0b4c4;
   --accent-alt-bg: rgba(224, 180, 196, 0.16);
   --success: #34d68a;

@@ -137,7 +137,7 @@
 }
 
 .fileButton:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 40%, transparent);
 }
 
 .fileHeadline {
@@ -168,7 +168,7 @@
 }
 
 .fileStatusCompleted {
-  color: color-mix(in srgb, var(--accent) 80%, var(--ink));
+  color: var(--ink);
 }
 
 .chevron {
@@ -242,7 +242,7 @@
 .showMore:hover,
 .showMore:focus-visible {
   background: var(--hover-bg);
-  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  border-color: var(--hairline);
   color: var(--ink);
   outline: none;
 }

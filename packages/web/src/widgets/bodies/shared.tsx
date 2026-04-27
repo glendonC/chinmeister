@@ -482,16 +482,21 @@ export function capabilityCoverageNote(
   // Full coverage — no disclosure needed.
   if (reporting.length === toolsReporting.length) return null;
 
-  // Partial capture — attribute to the tools that are reporting.
+  // Partial capture — attribute to the tools that are reporting. Truncate
+  // long lists the same way the no-coverage branch does so the note stays
+  // a quiet caption, not a 5-tool wall of names. 2-cap because partial
+  // capture is the common case and the user mostly cares "is anyone
+  // reporting this?", not the full enumeration.
   if (reporting.length > 0) {
-    const names = reporting.map((t) => getToolMeta(t).label).join(', ');
-    return `${label} from ${names}`;
+    const head = reporting.slice(0, 2).map((t) => getToolMeta(t).label);
+    const tail = reporting.length > 2 ? `, and ${reporting.length - 2} more` : '';
+    return `${label} from ${head.join(', ')}${tail}`;
   }
 
   // No reporting tool supports this capability — name which ones would.
   if (capable.length > 0) {
-    const first = capable.slice(0, 4).map((t) => getToolMeta(t).label);
-    const tail = capable.length > 4 ? `, and ${capable.length - 4} more` : '';
+    const first = capable.slice(0, 2).map((t) => getToolMeta(t).label);
+    const tail = capable.length > 2 ? `, and ${capable.length - 2} more` : '';
     return `${label} from ${first.join(', ')}${tail}`;
   }
 

@@ -123,7 +123,7 @@
 
 .sidebarToggle:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--accent-bg);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 12%, transparent);
 }
 
 .sidebarToggle:active {

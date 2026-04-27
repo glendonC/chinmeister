@@ -114,7 +114,7 @@
 }
 
 .select:focus {
-  border-color: var(--accent);
+  border-color: var(--focus-ring);
 }
 
 .vs {
@@ -208,7 +208,8 @@
 }
 
 .metricWinner {
-  color: var(--accent);
+  color: var(--ink);
+  font-weight: 500;
 }
 
 .workSection {
