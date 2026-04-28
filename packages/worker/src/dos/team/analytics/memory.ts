@@ -6,6 +6,7 @@ import type {
   MemoryUsageStats,
   MemoryOutcomeCorrelation,
   MemoryAccessEntry,
+  MemoryPerEntryOutcome,
   FormationRecommendationCounts,
   CrossToolMemoryFlowEntry,
   MemoryAgingComposition,
@@ -252,6 +253,86 @@ export function queryMemoryOutcomeCorrelation(
     }));
   } catch (err) {
     log.warn(`memoryOutcomeCorrelation query failed: ${err}`);
+    return [];
+  }
+}
+
+/**
+ * Per-memory outcome correlation. For each memory returned by at least
+ * `MIN_SESSIONS` sessions in the period, the count of returning sessions
+ * and the share that completed. Built on the memory_search_results join
+ * (migration 028 / ANALYTICS_SPEC §11) so we can answer the per-memory
+ * question §10 #7 forbids the hit-rate framing of: "sessions that read
+ * this memory completed at X%, not how often this memory got picked."
+ *
+ * Min-sample gate. Per-memory completion rates pivot wildly at low N (one
+ * session in, one session completed → 100%). The gate suppresses memories
+ * with fewer than MIN_SESSIONS in the period so the read can't surface
+ * noise as signal. Tunable in one place.
+ *
+ * Tolerance. Returns `[]` when the join table is missing (a TeamDO that
+ * has not yet run migration 028) so the analytics endpoint stays alive
+ * during a staggered upgrade. The same `safeAll`/try-catch pattern other
+ * memory queries use.
+ */
+const PER_MEMORY_MIN_SESSIONS = 3;
+const PER_MEMORY_LIMIT = 20;
+
+export function queryMemoryPerEntryOutcomes(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  days: number,
+): MemoryPerEntryOutcome[] {
+  try {
+    // Filter sessions by scope (per-handle when caller is /me/-scoped).
+    // memory_search_results carries no handle — it joins to sessions for
+    // outcome and to memories for the text preview. The scope fragment
+    // applies to the sessions table because that is where authorship lives.
+    const { sql: scopedSessions, params: scopeParams } = withScope(
+      `SELECT 1 FROM sessions s WHERE s.id = msr.session_id`,
+      [],
+      scope,
+      { handleColumn: 's.handle' },
+    );
+    const resultRows = sql
+      .exec(
+        `SELECT
+             m.id AS id,
+             m.text AS text,
+             COUNT(*) AS sessions,
+             SUM(CASE WHEN s.outcome = 'completed' THEN 1 ELSE 0 END) AS completed
+           FROM memory_search_results msr
+           JOIN sessions s ON s.id = msr.session_id
+           JOIN memories m ON m.id = msr.memory_id
+           WHERE msr.searched_at > datetime('now', '-' || ? || ' days')
+             AND m.merged_into IS NULL
+             AND m.invalid_at IS NULL
+             AND EXISTS (${scopedSessions})
+           GROUP BY m.id
+           HAVING sessions >= ?
+           ORDER BY sessions DESC, completed DESC
+           LIMIT ?`,
+        days,
+        ...scopeParams,
+        PER_MEMORY_MIN_SESSIONS,
+        PER_MEMORY_LIMIT,
+      )
+      .toArray();
+
+    return rows(resultRows, (r) => {
+      const text = r.string('text');
+      const sessions = r.number('sessions');
+      const completed = r.number('completed');
+      return {
+        id: r.string('id'),
+        text_preview: text.length > 120 ? text.slice(0, 120) + '...' : text,
+        sessions,
+        completed,
+        completion_rate: sessions > 0 ? Math.round((completed / sessions) * 1000) / 10 : 0,
+      };
+    });
+  } catch (err) {
+    log.warn(`memoryPerEntryOutcomes query failed: ${err}`);
     return [];
   }
 }

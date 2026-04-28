@@ -977,6 +977,52 @@ export function createBaselineAnalytics(): UserAnalytics {
       completion_rate: 64,
     },
   ];
+  // Per-memory outcome correlation (ANALYTICS_SPEC §11). Five demo entries
+  // span the readable range so the detail view's question is populated:
+  // a couple at high completion correlation, a couple mid, one with a
+  // below-baseline read so the user sees both sides of the signal.
+  const memory_per_entry_outcomes = [
+    {
+      id: 'mem-1',
+      text_preview:
+        'SQLite on Durable Objects has no native vector ops - use embedding similarity with memories_embeddings blob.',
+      sessions: 18,
+      completed: 16,
+      completion_rate: 88.9,
+    },
+    {
+      id: 'mem-2',
+      text_preview:
+        'Every read endpoint must verify the caller has access - never assume URL is proof of authorization.',
+      sessions: 14,
+      completed: 12,
+      completion_rate: 85.7,
+    },
+    {
+      id: 'mem-3',
+      text_preview:
+        'All AI moderation uses Llama Guard 3 via env.AI binding - strictly better than OpenAI Moderation for our taxonomy.',
+      sessions: 11,
+      completed: 8,
+      completion_rate: 72.7,
+    },
+    {
+      id: 'mem-4',
+      text_preview:
+        'Access tokens use 90-day sliding window TTL - renewed in withAuth middleware on every authenticated hit.',
+      sessions: 8,
+      completed: 5,
+      completion_rate: 62.5,
+    },
+    {
+      id: 'mem-5',
+      text_preview:
+        'DO RPC not fetch - except TeamDO.fetch for WebSocket upgrade, which sets X-Chinmeister-Verified: 1 header.',
+      sessions: 6,
+      completed: 3,
+      completion_rate: 50.0,
+    },
+  ];
   const top_memories = [
     {
       id: 'mem-1',
@@ -1641,6 +1687,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     audit_staleness,
     first_edit_stats,
     memory_outcome_correlation,
+    memory_per_entry_outcomes,
     top_memories,
     scope_complexity,
     prompt_efficiency,

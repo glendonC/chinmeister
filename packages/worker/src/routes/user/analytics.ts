@@ -161,6 +161,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
   const convEditAcc = conversations.createConvEditAcc();
   const memOutcomeAcc = conversations.createMemOutcomeAcc();
+  const perMemoryAcc = conversations.createPerMemoryAcc();
   const topMemoriesAcc = conversations.createTopMemoriesAcc();
   const memoryUsageAcc = conversations.createMemoryUsageAcc();
 
@@ -246,6 +247,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
 
     conversations.mergeConvEdit(convEditAcc, team);
     conversations.mergeMemOutcome(memOutcomeAcc, team);
+    conversations.mergePerMemory(perMemoryAcc, team);
     conversations.mergeTopMemories(topMemoriesAcc, team);
     conversations.mergeMemoryUsage(memoryUsageAcc, team);
 
@@ -321,6 +323,7 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       audit_staleness: codebase.projectAuditStaleness(auditStalenessAcc),
       first_edit_stats: sessions.projectFirstEdit(firstEditAcc),
       memory_outcome_correlation: conversations.projectMemOutcome(memOutcomeAcc),
+      memory_per_entry_outcomes: conversations.projectPerMemory(perMemoryAcc),
       top_memories: conversations.projectTopMemories(topMemoriesAcc),
       period_comparison: period.project(periodComparisonAcc),
       token_usage: tokenUsagePayload,

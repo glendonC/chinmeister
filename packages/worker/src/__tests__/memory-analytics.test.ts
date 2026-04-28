@@ -284,3 +284,137 @@ describe('queryTopMemories', () => {
     expect(a.top_memories[0].text_preview.endsWith('...')).toBe(true);
   });
 });
+
+// queryMemoryPerEntryOutcomes ─────────────────────────────────────────
+//
+// The per-memory outcome correlation is gated on the memory_search_results
+// join (migration 028). These tests lock in: empty on a fresh team, only
+// memories above the min-sample floor surface, and completion_rate
+// reflects distinct sessions that returned a memory rather than raw
+// search calls.
+
+describe('queryMemoryPerEntryOutcomes', () => {
+  it('returns empty array on a fresh team', async () => {
+    const team = getTeam('mq-pme-empty');
+    const agentId = 'claude-code:mq-pme-empty';
+    const ownerId = 'user-mq-pme-empty';
+
+    await team.join(agentId, ownerId, 'jules', 'claude-code');
+    const a = await team.getAnalytics(agentId, 7, ownerId, true);
+    expect(a.ok).toBe(true);
+    expect(a.memory_per_entry_outcomes).toEqual([]);
+  });
+
+  it('suppresses memories that fall under the min-sample floor', async () => {
+    // Per-memory rates pivot wildly at low N. The query enforces a
+    // 3-session floor; a memory returned by exactly one completed session
+    // would otherwise read as 100% with no honest signal behind it.
+    const team = getTeam('mq-pme-low-n');
+    const agentId = 'claude-code:mq-pme-low-n';
+    const ownerId = 'user-mq-pme-low-n';
+
+    await team.join(agentId, ownerId, 'kayla', 'claude-code');
+    await team.saveMemory(
+      agentId,
+      'Lonely-memory unique-token under sample floor',
+      ['ops'],
+      null,
+      'kayla',
+      null,
+      ownerId,
+    );
+
+    const sess = await team.startSession(agentId, 'kayla', 'react', ownerId);
+    expect(sess.ok).toBe(true);
+    await team.searchMemories(agentId, 'Lonely-memory', null, null, 10, ownerId);
+    await team.reportOutcome(agentId, 'completed', null, ownerId);
+    await team.endSession(agentId, sess.session_id, ownerId);
+
+    const a = await team.getAnalytics(agentId, 7, ownerId, true);
+    expect(a.ok).toBe(true);
+    // One session is below the 3-session floor; nothing should surface.
+    expect(a.memory_per_entry_outcomes).toEqual([]);
+  });
+
+  it('attributes per-memory completion across distinct sessions', async () => {
+    // Same memory returned by 3 sessions, 2 of which complete. Expect a
+    // single entry with sessions=3, completed=2, completion_rate=66.7.
+    const team = getTeam('mq-pme-attribution');
+    const agentId = 'claude-code:mq-pme-attribution';
+    const ownerId = 'user-mq-pme-attribution';
+
+    await team.join(agentId, ownerId, 'liam', 'claude-code');
+    await team.saveMemory(
+      agentId,
+      'Quark-unique-token target memory',
+      ['ops'],
+      null,
+      'liam',
+      null,
+      ownerId,
+    );
+
+    for (let i = 0; i < 3; i++) {
+      const sess = await team.startSession(agentId, 'liam', 'react', ownerId);
+      expect(sess.ok).toBe(true);
+      await team.searchMemories(agentId, 'Quark-unique-token', null, null, 10, ownerId);
+      // First two sessions complete; third abandons.
+      const outcome = i < 2 ? 'completed' : 'abandoned';
+      await team.reportOutcome(agentId, outcome, null, ownerId);
+      await team.endSession(agentId, sess.session_id, ownerId);
+    }
+
+    const a = await team.getAnalytics(agentId, 7, ownerId, true);
+    expect(a.ok).toBe(true);
+    const entry = a.memory_per_entry_outcomes.find((m) =>
+      m.text_preview.includes('Quark-unique-token'),
+    );
+    expect(entry).toBeDefined();
+    expect(entry.sessions).toBe(3);
+    expect(entry.completed).toBe(2);
+    // 2/3 = 66.666... rounded to 1dp = 66.7.
+    expect(entry.completion_rate).toBeCloseTo(66.7, 1);
+  });
+
+  it('counts a session once even when it searches the same memory twice', async () => {
+    // PRIMARY KEY (session_id, memory_id) on memory_search_results means a
+    // session that re-searches and re-fetches the same memory only counts
+    // once. The question is "did this session see this memory," not "how
+    // many times did the agent re-fetch it."
+    const team = getTeam('mq-pme-dedupe');
+    const agentId = 'claude-code:mq-pme-dedupe';
+    const ownerId = 'user-mq-pme-dedupe';
+
+    await team.join(agentId, ownerId, 'maya', 'claude-code');
+    await team.saveMemory(
+      agentId,
+      'Photon-unique-token target memory',
+      ['ops'],
+      null,
+      'maya',
+      null,
+      ownerId,
+    );
+
+    // Three sessions; each searches the same memory three times.
+    for (let i = 0; i < 3; i++) {
+      const sess = await team.startSession(agentId, 'maya', 'react', ownerId);
+      for (let k = 0; k < 3; k++) {
+        await team.searchMemories(agentId, 'Photon-unique-token', null, null, 10, ownerId);
+      }
+      await team.reportOutcome(agentId, 'completed', null, ownerId);
+      await team.endSession(agentId, sess.session_id, ownerId);
+    }
+
+    const a = await team.getAnalytics(agentId, 7, ownerId, true);
+    expect(a.ok).toBe(true);
+    const entry = a.memory_per_entry_outcomes.find((m) =>
+      m.text_preview.includes('Photon-unique-token'),
+    );
+    expect(entry).toBeDefined();
+    // 3 distinct sessions, not 9.
+    expect(entry.sessions).toBe(3);
+    expect(entry.completed).toBe(3);
+    expect(entry.completion_rate).toBe(100);
+  });
+});
