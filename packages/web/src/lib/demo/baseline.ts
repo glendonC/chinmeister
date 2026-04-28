@@ -42,7 +42,7 @@ export const DEMO_TEAMS = [
   { team_id: 'team-research', team_name: 'research', share: 0.2 },
 ] as const;
 
-// Curated realistic file list. Touch count is proportional — the top file
+// Curated realistic file list. Touch count is proportional - the top file
 // gets the lion's share, distribution follows a gentle power law so the
 // file_heatmap, file_churn, and file_rework widgets all render believable
 // top-N ordering.
@@ -83,7 +83,7 @@ const DIRECTORIES = [
 ];
 
 // Demo volume mix per canonical work type. Keys come from the shared
-// WORK_TYPES enum — the shares are the only tunable piece here, since
+// WORK_TYPES enum - the shares are the only tunable piece here, since
 // the category list itself is defined in @chinmeister/shared/analytics/work-type.
 // Keep the shares summed to ~1.0 so allocateIntegerShares divides the
 // period totals cleanly.
@@ -99,7 +99,7 @@ const WORK_TYPE_MIX: Array<{ work_type: string; share: number }> = [
 
 // Per-tool, per-work-type completion rate profile. Drives the demo heatmap so
 // the redesigned tool-work-type-fit widget shows differentiated reads instead
-// of a uniform-tinted grid. Numbers are illustrative — each tool's strengths
+// of a uniform-tinted grid. Numbers are illustrative - each tool's strengths
 // match the marketing narrative (Claude Code = backend / refactors,
 // Cursor = styling / quick UI, Aider = backend / scripts).
 const TOOL_WORK_TYPE_FIT: Record<string, Record<string, number>> = {
@@ -309,7 +309,7 @@ export function createBaselineAnalytics(): UserAnalytics {
   const totalCacheR = ledger.reduce((s, l) => s + l.totalCacheReadTokens, 0);
   const totalCacheC = ledger.reduce((s, l) => s + l.totalCacheCreationTokens, 0);
 
-  // 4. Daily distribution — sessions shape + per-tool per-day breakdown.
+  // 4. Daily distribution - sessions shape + per-tool per-day breakdown.
   const dailySessionShape = dailyVolumeShape(days, totalSessions);
   const dailyCompleted = allocateIntegerShares(totalCompleted, dailySessionShape);
   const dailyAbandoned = allocateIntegerShares(totalAbandoned, dailySessionShape);
@@ -353,7 +353,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 5. tool_daily — per-tool × per-day session/edit/line counts.
+  // 5. tool_daily - per-tool × per-day session/edit/line counts.
   const tool_daily = ledger.flatMap((l, ti) => {
     const shape = distributeAcrossDays(l.sessions, days, ti * 31);
     const editShape = allocateIntegerShares(l.totalEdits, shape);
@@ -370,7 +370,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     }));
   });
 
-  // 6. hourly_distribution — 24 hours × 7 days of week
+  // 6. hourly_distribution - 24 hours × 7 days of week
   const hourly_distribution = Array.from({ length: 7 * 24 }, (_, i) => {
     const h = i % 24;
     const dow = Math.floor(i / 24);
@@ -386,7 +386,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 7. outcome_distribution — global totals
+  // 7. outcome_distribution - global totals
   const outcome_distribution = [
     { outcome: 'completed', count: totalCompleted },
     { outcome: 'abandoned', count: totalAbandoned },
@@ -394,14 +394,14 @@ export function createBaselineAnalytics(): UserAnalytics {
     { outcome: 'unknown', count: totalUnknown },
   ].filter((o) => o.count > 0);
 
-  // 8. tool_distribution — per-tool sessions/edits
+  // 8. tool_distribution - per-tool sessions/edits
   const tool_distribution = ledger.map((l) => ({
     host_tool: l.tool.id,
     sessions: l.sessions,
     edits: l.totalEdits,
   }));
 
-  // 9. tool_outcomes — per-tool × outcome
+  // 9. tool_outcomes - per-tool × outcome
   const tool_outcomes = ledger.flatMap((l) =>
     [
       { host_tool: l.tool.id, outcome: 'completed', count: l.completed },
@@ -425,7 +425,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     total_session_hours: l.totalSessionHours,
   }));
 
-  // 11. model_outcomes — model × tool × outcome rows. Completed-only rows
+  // 11. model_outcomes - model × tool × outcome rows. Completed-only rows
   //     keep model_outcomes compact while retaining the cross-tool attribution
   //     that makes the models widget substrate-unique.
   const model_outcomes = ledger.flatMap((l) =>
@@ -471,7 +471,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     lines_added: workTypeLinesAdded[i],
     lines_removed: workTypeLinesRemoved[i],
     // Approximate distinct-file count per work type. Features touch more
-    // files, test/docs touch fewer — correlated with session scope.
+    // files, test/docs touch fewer - correlated with session scope.
     files: Math.max(
       1,
       Math.round(
@@ -544,7 +544,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 15. duration_distribution — non-negative buckets that sum to total
+  // 15. duration_distribution - non-negative buckets that sum to total
   const durationShape = [0.14, 0.28, 0.3, 0.2, 0.08];
   const durationCounts = allocateIntegerShares(totalSessions, durationShape);
   const duration_distribution = [
@@ -555,7 +555,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     { bucket: '>60min', count: durationCounts[4] },
   ];
 
-  // 16. scope_complexity — file-count buckets, completion rate declines
+  // 16. scope_complexity - file-count buckets, completion rate declines
   //     with scope (matches the narrative in the ANALYTICS_SPEC.md reports)
   const scopeShape = [0.34, 0.3, 0.22, 0.14];
   const scopeSessions = allocateIntegerShares(totalSessions, scopeShape);
@@ -590,13 +590,13 @@ export function createBaselineAnalytics(): UserAnalytics {
     },
   ];
 
-  // 17. file_heatmap — touch counts proportional to weight
+  // 17. file_heatmap - touch counts proportional to weight
   const totalFileTouches = totalEdits;
   const fileWeights = FILES.map((f) => f.weight);
   const fileTouches = allocateIntegerShares(totalFileTouches, fileWeights);
   const fileLinesAdded = allocateIntegerShares(totalLinesAdded, fileWeights);
   const fileLinesRemoved = allocateIntegerShares(totalLinesRemoved, fileWeights);
-  // Work type derived from each file path via the shared classifier —
+  // Work type derived from each file path via the shared classifier -
   // the same function the worker runs against production edits. Keeps
   // the demo aligned with production without a hand-maintained map.
   const file_heatmap = FILES.map((f, i) => ({
@@ -611,15 +611,26 @@ export function createBaselineAnalytics(): UserAnalytics {
   // 18. directory_heatmap
   const dirShape = DIRECTORIES.map((d) => d.share);
   const dirTouches = allocateIntegerShares(totalEdits, dirShape);
-  const directory_heatmap = DIRECTORIES.map((d, i) => ({
-    directory: d.directory,
-    touch_count: dirTouches[i],
-    file_count: d.files,
-    total_lines: Math.round(dirTouches[i] * 8.5),
-    completion_rate: Math.round((0.68 + hash(i + 12) * 0.18) * 100),
-  }));
+  const directory_heatmap = DIRECTORIES.map((d, i) => {
+    // Demo sessions per directory: a fraction of touches, capped to a
+    // believable range. Real data is uniquely keyed by session id so this
+    // is a synthetic stand-in for the (completed_sessions, total_sessions)
+    // pair the live query emits.
+    const totalSessions = Math.max(2, Math.round(dirTouches[i] / 4));
+    const completionRate = Math.round((0.68 + hash(i + 12) * 0.18) * 100);
+    const completedSessions = Math.round((completionRate / 100) * totalSessions);
+    return {
+      directory: d.directory,
+      touch_count: dirTouches[i],
+      file_count: d.files,
+      total_lines: Math.round(dirTouches[i] * 8.5),
+      completed_sessions: completedSessions,
+      total_sessions: totalSessions,
+      completion_rate: completionRate,
+    };
+  });
 
-  // 19. file_churn — highly-edited files with session counts
+  // 19. file_churn - highly-edited files with session counts
   const file_churn = FILES.slice(0, 10).map((f, i) => ({
     file: f.path,
     session_count: Math.max(2, Math.round(fileTouches[i] / 6)),
@@ -627,8 +638,8 @@ export function createBaselineAnalytics(): UserAnalytics {
     total_lines: fileLinesAdded[i] + fileLinesRemoved[i],
   }));
 
-  // 20. file_rework — retry ratio for stuck files
-  const REWORK_FILES = [4, 0, 2, 7, 9]; // indexes into FILES — mix of hot + mid
+  // 20. file_rework - retry ratio for stuck files
+  const REWORK_FILES = [4, 0, 2, 7, 9]; // indexes into FILES - mix of hot + mid
   const file_rework = REWORK_FILES.map((fi, i) => {
     const touches = fileTouches[fi];
     const failedEdits = Math.max(1, Math.round(touches * (0.18 - i * 0.02)));
@@ -640,14 +651,14 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 21. concurrent_edits — files multiple agents touched in overlapping windows
+  // 21. concurrent_edits - files multiple agents touched in overlapping windows
   const concurrent_edits = [0, 2, 5, 6, 8].map((fi, i) => ({
     file: FILES[fi].path,
     agents: 2 + (i % 2),
     edit_count: Math.max(3, Math.round(fileTouches[fi] * 0.22)),
   }));
 
-  // 22. audit_staleness — directories with no recent activity
+  // 22. audit_staleness - directories with no recent activity
   const audit_staleness = [
     {
       directory: 'packages/cli/lib/dashboard/screens',
@@ -659,7 +670,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     { directory: 'docs/decisions', last_edit: '', days_since: 15, prior_edit_count: 6 },
   ];
 
-  // 22.5 conversations — sentiment/topic-driven coordination signals.
+  // 22.5 conversations - sentiment/topic-driven coordination signals.
   // confused_files surfaces the file as the headline (sentiment is ranking
   // input only); cross_tool_handoff_questions models substrate-unique
   // events where one tool gave up mid-question and another picked up the
@@ -729,7 +740,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     },
   ];
 
-  // 23. member_analytics — per-handle rollups, share of total sessions
+  // 23. member_analytics - per-handle rollups, share of total sessions
   const memberShares = DEMO_MEMBERS.map((m) => m.share);
   const memberSessions = allocateIntegerShares(totalSessions, memberShares);
   const memberEdits = allocateIntegerShares(totalEdits, memberShares);
@@ -750,7 +761,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 24. member_daily_lines — per-member × day sparkline series
+  // 24. member_daily_lines - per-member × day sparkline series
   const member_daily_lines = DEMO_MEMBERS.flatMap((m, mi) => {
     const shape = distributeAcrossDays(memberSessions[mi], days, 17 + mi * 7);
     const editShape = allocateIntegerShares(memberEdits[mi], shape);
@@ -766,7 +777,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     }));
   });
 
-  // 25. per_project rollups — across the three demo teams
+  // 25. per_project rollups - across the three demo teams
   const teamShares = DEMO_TEAMS.map((t) => t.share);
   const teamSessions = allocateIntegerShares(totalSessions, teamShares);
   const teamEdits = allocateIntegerShares(totalEdits, teamShares);
@@ -798,7 +809,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     }));
   });
 
-  // 26. retry_patterns — file-centric retry rows
+  // 26. retry_patterns - file-centric retry rows
   const retry_patterns = [
     {
       file: 'packages/worker/src/dos/team/context.ts',
@@ -869,7 +880,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     },
   ];
 
-  // 28. edit_velocity — trailing 14 days
+  // 28. edit_velocity - trailing 14 days
   const edit_velocity = daily_trends.slice(-14).map((d) => {
     const hours = (d.sessions * d.avg_duration_min) / 60;
     return {
@@ -880,7 +891,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 29. prompt_efficiency — per-day avg turns per edit
+  // 29. prompt_efficiency - per-day avg turns per edit
   const prompt_efficiency = days.slice(-14).map((day, i) => ({
     day,
     avg_turns_per_edit:
@@ -904,7 +915,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     };
   });
 
-  // 31. conversation_edit_correlation — turns buckets
+  // 31. conversation_edit_correlation - turns buckets
   const ccSessions = allocateIntegerShares(
     Math.round(totalSessions * 0.64),
     [0.28, 0.36, 0.24, 0.12],
@@ -970,42 +981,42 @@ export function createBaselineAnalytics(): UserAnalytics {
     {
       id: 'mem-1',
       text_preview:
-        'SQLite on Durable Objects has no native vector ops — use embedding similarity with memories_embeddings blob.',
+        'SQLite on Durable Objects has no native vector ops - use embedding similarity with memories_embeddings blob.',
       access_count: 28,
       last_accessed_at: new Date(Date.now() - 26 * 60_000).toISOString(),
     },
     {
       id: 'mem-2',
       text_preview:
-        'Every read endpoint must verify the caller has access — never assume URL is proof of authorization.',
+        'Every read endpoint must verify the caller has access - never assume URL is proof of authorization.',
       access_count: 22,
       last_accessed_at: new Date(Date.now() - 2.8 * 3600_000).toISOString(),
     },
     {
       id: 'mem-3',
       text_preview:
-        'All AI moderation uses Llama Guard 3 via env.AI binding — strictly better than OpenAI Moderation for our taxonomy.',
+        'All AI moderation uses Llama Guard 3 via env.AI binding - strictly better than OpenAI Moderation for our taxonomy.',
       access_count: 18,
       last_accessed_at: new Date(Date.now() - 45 * 60_000).toISOString(),
     },
     {
       id: 'mem-4',
       text_preview:
-        'Access tokens use 90-day sliding window TTL — renewed in withAuth middleware on every authenticated hit.',
+        'Access tokens use 90-day sliding window TTL - renewed in withAuth middleware on every authenticated hit.',
       access_count: 15,
       last_accessed_at: new Date(Date.now() - 11 * 3600_000).toISOString(),
     },
     {
       id: 'mem-5',
       text_preview:
-        'DO RPC not fetch — except TeamDO.fetch for WebSocket upgrade, which sets X-Chinmeister-Verified: 1 header.',
+        'DO RPC not fetch - except TeamDO.fetch for WebSocket upgrade, which sets X-Chinmeister-Verified: 1 header.',
       access_count: 12,
       last_accessed_at: new Date(Date.now() - 28 * 3600_000).toISOString(),
     },
     {
       id: 'mem-6',
       text_preview:
-        'Handlers validate, DOs trust — defense in depth: DOs still cap string lengths (tool.slice(0, 100) etc.).',
+        'Handlers validate, DOs trust - defense in depth: DOs still cap string lengths (tool.slice(0, 100) etc.).',
       access_count: 9,
       last_accessed_at: new Date(Date.now() - 3.2 * 86400_000).toISOString(),
     },
@@ -1047,7 +1058,7 @@ export function createBaselineAnalytics(): UserAnalytics {
   // 35. file_overlap (team-scoped coordination stat)
   const file_overlap = { total_files: FILES.length + 142, overlapping_files: 14 };
 
-  // 36. outcome_tags — free-form outcome tags agents report
+  // 36. outcome_tags - free-form outcome tags agents report
   const outcome_tags = [
     { tag: 'shipped', count: Math.round(totalCompleted * 0.44), outcome: 'completed' },
     { tag: 'partial', count: Math.round(totalCompleted * 0.22), outcome: 'completed' },
@@ -1056,7 +1067,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     { tag: 'stale', count: Math.round(totalAbandoned * 0.3), outcome: 'abandoned' },
   ];
 
-  // 37. tool_handoffs — cross-tool file transitions with recent_files
+  // 37. tool_handoffs - cross-tool file transitions with recent_files
   const tool_handoffs = [
     {
       from_tool: 'claude-code',
@@ -1107,7 +1118,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     },
   ];
 
-  // 38. token_usage — derived from ledger
+  // 38. token_usage - derived from ledger
   const avgInputPerSession =
     sessionsWithTokens > 0 ? Math.round(totalInput / sessionsWithTokens) : 0;
   const avgOutputPerSession =
@@ -1350,7 +1361,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     // Per-host-tool one-shot rate. Uses each tool's narrative oneShotRate
     // weighted by sessions so the demo reads as differentiated competing
     // tools (Claude Code wins; Cursor middling; Aider trails). Tools without
-    // tool-call capture are excluded — they would render '—' in the widget.
+    // tool-call capture are excluded - they would render '-' in the widget.
     host_one_shot: ledger
       .filter((l) => l.tool.toolCallLogs && l.sessions > 0)
       .map((l) => ({
@@ -1428,7 +1439,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     ],
   };
 
-  // 41. period_comparison — current from ledger, previous ~14% lower so the
+  // 41. period_comparison - current from ledger, previous ~14% lower so the
   //     delta arrows have a clear positive signal out of the box.
   const previousScale = 0.86;
   const prev_cost = Math.round(totalCost * previousScale * 1.08 * 100) / 100; // higher cost per edit before
@@ -1467,7 +1478,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     },
   };
 
-  // 42. data_coverage — derive from tool capabilities
+  // 42. data_coverage - derive from tool capabilities
   const activeTools = ledger.filter((l) => l.sessions > 0).map((l) => l.tool.id);
   const capsAvailable = new Set<string>();
   for (const l of ledger) {
@@ -1488,14 +1499,14 @@ export function createBaselineAnalytics(): UserAnalytics {
     capabilities_missing: capsMissing,
   };
 
-  // 43. daily_metrics (flat metric timeline — legacy format)
+  // 43. daily_metrics (flat metric timeline - legacy format)
   const daily_metrics = daily_trends.map((d) => ({
     date: d.day,
     metric: 'sessions',
     count: d.sessions,
   }));
 
-  // Silence unused warning — wobble is exported as part of this module's
+  // Silence unused warning - wobble is exported as part of this module's
   // toolkit for scenarios that want intentional day-to-day variance.
   void wobble;
   void MODEL_PROFILES;
@@ -1540,7 +1551,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     file_heatmap,
     files_touched_total: filesTouchedTotal,
     // Mid-period snapshot with a modest breadth increase in the current
-    // half — agents exploring slightly wider surface late in the window.
+    // half - agents exploring slightly wider surface late in the window.
     // Shaped as the worker's real split (distinct-file count per half),
     // not a naive halving of the total.
     files_touched_half_split: {
@@ -1563,7 +1574,7 @@ export function createBaselineAnalytics(): UserAnalytics {
       abandoned: totalAbandoned,
       failed: totalFailed,
       unknown: totalUnknown,
-      // 0-100 scale with 1 decimal — matches worker output format
+      // 0-100 scale with 1 decimal - matches worker output format
       // (Math.round(x * 1000) / 10). Consumers render `{rate}%` directly.
       completion_rate: Math.round((totalCompleted / totalSessions) * 1000) / 10,
       prev_completion_rate: period_comparison.previous

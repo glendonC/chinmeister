@@ -349,6 +349,8 @@ const directoryHeatmapEntrySchema = baseDirectoryHeatmapEntrySchema.extend({
   touch_count: z.number().default(0),
   file_count: z.number().default(0),
   total_lines: z.number().default(0),
+  completed_sessions: z.number().default(0),
+  total_sessions: z.number().default(0),
   completion_rate: z.number().default(0),
 });
 
@@ -459,7 +461,7 @@ const tokenModelBreakdownSchema = baseTokenModelBreakdownSchema.extend({
   cache_creation_tokens: z.number().default(0),
   sessions: z.number().default(0),
   // null when the model lacks pricing or the snapshot is stale. UI renders
-  // "—" in that case instead of "$0".
+  // "-" in that case instead of "$0".
   estimated_cost_usd: z.number().nullable().default(null),
 });
 
@@ -533,7 +535,7 @@ const toolCallStatsSchema = z.object({
 
 // ── Data coverage (capability-based) ──────────────
 
-// Lines-drill support — per-member and per-project daily lines series used
+// Lines-drill support - per-member and per-project daily lines series used
 // by the Lines drill-down. Default to empty arrays so downstream consumers
 // can iterate without guarding every access; the shape is the shared
 // contract unmodified.
