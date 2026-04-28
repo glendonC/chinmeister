@@ -49,6 +49,7 @@ import {
   auditStalenessEntrySchema as baseAuditStalenessEntrySchema,
   firstEditStatsSchema as baseFirstEditStatsSchema,
   memoryOutcomeCorrelationSchema as baseMemoryOutcomeCorrelationSchema,
+  memoryPerEntryOutcomeSchema as baseMemoryPerEntryOutcomeSchema,
   memoryAccessEntrySchema as baseMemoryAccessEntrySchema,
   scopeComplexityBucketSchema as baseScopeComplexityBucketSchema,
   promptEfficiencyTrendSchema as basePromptEfficiencyTrendSchema,
@@ -404,6 +405,12 @@ const memoryOutcomeCorrelationSchema = baseMemoryOutcomeCorrelationSchema.extend
   completion_rate: z.number().default(0),
 });
 
+const memoryPerEntryOutcomeSchema = baseMemoryPerEntryOutcomeSchema.extend({
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
+});
+
 const memoryAccessEntrySchema = baseMemoryAccessEntrySchema.extend({
   access_count: z.number().default(0),
   last_accessed_at: z.string().nullable().default(null),
@@ -641,6 +648,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     by_tool: [],
   }),
   memory_outcome_correlation: z.array(memoryOutcomeCorrelationSchema).default([]),
+  memory_per_entry_outcomes: z.array(memoryPerEntryOutcomeSchema).default([]),
   top_memories: z.array(memoryAccessEntrySchema).default([]),
   scope_complexity: z.array(scopeComplexityBucketSchema).default([]),
   prompt_efficiency: z.array(promptEfficiencyTrendSchema).default([]),
@@ -729,6 +737,7 @@ export type FileOverlapStats = z.infer<typeof fileOverlapStatsSchema>;
 export type AuditStalenessEntry = z.infer<typeof auditStalenessEntrySchema>;
 export type FirstEditStats = z.infer<typeof firstEditStatsSchema>;
 export type MemoryOutcomeCorrelation = z.infer<typeof memoryOutcomeCorrelationSchema>;
+export type MemoryPerEntryOutcome = z.infer<typeof memoryPerEntryOutcomeSchema>;
 export type MemoryAccessEntry = z.infer<typeof memoryAccessEntrySchema>;
 export type ScopeComplexityBucket = z.infer<typeof scopeComplexityBucketSchema>;
 export type PromptEfficiencyTrend = z.infer<typeof promptEfficiencyTrendSchema>;
@@ -824,6 +833,7 @@ export function createEmptyUserAnalytics(): UserAnalytics {
       by_tool: [],
     },
     memory_outcome_correlation: [],
+    memory_per_entry_outcomes: [],
     top_memories: [],
     scope_complexity: [],
     prompt_efficiency: [],

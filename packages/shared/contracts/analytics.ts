@@ -611,6 +611,23 @@ export const memoryOutcomeCorrelationSchema = z.object({
 });
 export type MemoryOutcomeCorrelation = z.infer<typeof memoryOutcomeCorrelationSchema>;
 
+// Per-memory outcome correlation. For each memory returned in this period's
+// searches, the count of sessions that returned it and the completion rate
+// of those sessions. Enabled by the memory_search_results join (migration
+// 028 / ANALYTICS_SPEC section 11). Min-sample gate is enforced in the
+// query so the read can't surface high-variance per-memory rates from a
+// single session. The framing is correlation, not causation: §10 #7 forbids
+// "hit rate as quality" — the question is "sessions that read this memory
+// completed at X%, vs Y% baseline."
+export const memoryPerEntryOutcomeSchema = z.object({
+  id: z.string(),
+  text_preview: z.string(),
+  sessions: z.number(),
+  completed: z.number(),
+  completion_rate: z.number(),
+});
+export type MemoryPerEntryOutcome = z.infer<typeof memoryPerEntryOutcomeSchema>;
+
 export const memoryAccessEntrySchema = z.object({
   id: z.string(),
   text_preview: z.string(),
@@ -980,6 +997,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   audit_staleness: z.array(auditStalenessEntrySchema),
   first_edit_stats: firstEditStatsSchema,
   memory_outcome_correlation: z.array(memoryOutcomeCorrelationSchema),
+  memory_per_entry_outcomes: z.array(memoryPerEntryOutcomeSchema).default([]),
   top_memories: z.array(memoryAccessEntrySchema),
   scope_complexity: z.array(scopeComplexityBucketSchema),
   prompt_efficiency: z.array(promptEfficiencyTrendSchema),

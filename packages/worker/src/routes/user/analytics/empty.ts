@@ -158,6 +158,7 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
       by_tool: [],
     },
     memory_outcome_correlation: [],
+    memory_per_entry_outcomes: [],
     top_memories: [],
     scope_complexity: [],
     prompt_efficiency: [],

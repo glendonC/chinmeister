@@ -235,6 +235,7 @@ function empty(): DemoData {
       by_tool: [],
     },
     memory_outcome_correlation: [],
+    memory_per_entry_outcomes: [],
     top_memories: [],
     scope_complexity: [],
     prompt_efficiency: [],

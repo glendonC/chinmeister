@@ -70,6 +70,7 @@ import { queryMemberAnalytics, queryMemberCount, queryMemberDailyLines } from '.
 import {
   queryMemoryUsage,
   queryMemoryOutcomeCorrelation,
+  queryMemoryPerEntryOutcomes,
   queryTopMemories,
   queryCrossToolMemoryFlow,
   queryMemoryAging,
@@ -159,6 +160,7 @@ export function getExtendedAnalytics(
     // ── Memory ─────────────────────────────────────────────────────────
     memory_usage: queryMemoryUsage(sql, scope, days),
     memory_outcome_correlation: queryMemoryOutcomeCorrelation(sql, scope, days),
+    memory_per_entry_outcomes: queryMemoryPerEntryOutcomes(sql, scope, days),
     top_memories: queryTopMemories(sql, scope, days),
     cross_tool_memory_flow: queryCrossToolMemoryFlow(sql, scope, days),
     memory_aging: queryMemoryAging(sql),
