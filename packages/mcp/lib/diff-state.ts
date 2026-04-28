@@ -28,7 +28,7 @@ export function diffState(
     if (!prevKeys.has(key)) {
       const m = currByKey.get(key)!;
       const files = m.activity?.files;
-      const activity = files && files.length > 0 ? ` \u2014 working on ${files.join(', ')}` : '';
+      const activity = files && files.length > 0 ? ` - working on ${files.join(', ')}` : '';
       events.push(`Agent ${formatAgentLabel(m)} joined the team${activity}`);
     }
   }
@@ -102,7 +102,7 @@ export function diffState(
           : (Date.now() - new Date(m.activity.updated_at).getTime()) / 60_000;
       if (minutesOnSameActivity > STUCKNESS_THRESHOLD_MINUTES) {
         events.push(
-          `Agent ${formatAgentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min \u2014 may be stuck`,
+          `Agent ${formatAgentLabel(m)} has been on the same task for ${Math.round(minutesOnSameActivity)} min - may be stuck`,
         );
         stucknessAlerted.set(key, m.activity.updated_at);
       }
@@ -140,7 +140,7 @@ export function diffState(
     }
   }
 
-  // New messages — dedup by id when available, otherwise by a defensive composite
+  // New messages - dedup by id when available, otherwise by a defensive composite
   // key that coerces null/undefined fields to empty strings to avoid inconsistent keys.
   const prevMsgIds = new Set(
     (prev.messages || []).map(

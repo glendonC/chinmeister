@@ -31,8 +31,8 @@ export const dailyTrendSchema = z.object({
   failed: z.number().optional(),
   // Per-day cost and cost-per-edit, populated post-query by
   // enrichDailyTrendsWithPricing. Null on any day where cost is
-  // structurally unshowable — no token-capturing sessions that day,
-  // all-unpriced models, or stale pricing — so the trend widget can plot
+  // structurally unshowable - no token-capturing sessions that day,
+  // all-unpriced models, or stale pricing - so the trend widget can plot
   // these metrics without emitting bogus zeros. Optional so old payloads
   // parse cleanly.
   cost: z.number().nullable().optional(),
@@ -213,10 +213,10 @@ export const concurrentEditEntrySchema = z.object({
 export type ConcurrentEditEntry = z.infer<typeof concurrentEditEntrySchema>;
 
 // Audit 2026-04-21: Pruned to fields actual consumers read. Dropped:
-//   abandoned, failed — not rendered anywhere (completion_rate is the
+//   abandoned, failed - not rendered anywhere (completion_rate is the
 //     consumed summary; raw outcome splits were ghosted aggregation work).
-//   avg_duration_min — only shown on ModelOutcome, not member rows.
-//   total_lines_added, total_lines_removed, total_commits — wiring these up
+//   avg_duration_min - only shown on ModelOutcome, not member rows.
+//   total_lines_added, total_lines_removed, total_commits - wiring these up
 //     would commit the team-members widget to a GitHub-clone framing. They
 //     can be re-added when a drill view calls for them; the SQL is not a
 //     load-bearing source of truth.
@@ -229,7 +229,7 @@ export const memberAnalyticsSchema = z.object({
   completion_rate: z.number(),
   total_edits: z.number(),
   primary_tool: z.string().nullable(),
-  // Same semantics as toolComparisonSchema.total_session_hours —
+  // Same semantics as toolComparisonSchema.total_session_hours -
   // completed-session wall-clock sum, used as the per-teammate velocity
   // denominator in the Edits drill.
   total_session_hours: z.number(),
@@ -239,7 +239,7 @@ export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
 // Audit 2026-04-21: Regrouped from (handle, file) to file only. The old shape
 // let one noisy agent dominate the top-N: if handle-A hit Button.tsx 8 times
 // and handle-B twice, the renderer showed two rows for the same file. The
-// new shape is file-centric — attempts are summed across agents, and the
+// new shape is file-centric - attempts are summed across agents, and the
 // agent / tool distinctness counts surface the cross-agent and cross-tool
 // angle that is actually substrate-unique (vs. Claude Code's own session log
 // which is per-tool). `tools` is the list of host_tools that contributed to
@@ -287,7 +287,7 @@ export const editVelocityTrendSchema = z.object({
   total_session_hours: z.number(),
 });
 
-// Per-project (team) velocity rollup — one entry per team the caller
+// Per-project (team) velocity rollup - one entry per team the caller
 // belongs to, preserving the cross-project view that the aggregate
 // edit_velocity otherwise collapses. total_session_hours uses the same
 // `ended_at IS NOT NULL` denominator as queryEditVelocity so per-project
@@ -359,7 +359,7 @@ export const memoryUsageStatsSchema = z.object({
   pending_consolidation_proposals: z.number(),
   // Live count of unaddressed formation observations by recommendation
   // (status = 'observed'). 'keep' is the trivial case; merge/evolve/discard
-  // are flag candidates. Age does not gate — a year-old unaddressed flag
+  // are flag candidates. Age does not gate - a year-old unaddressed flag
   // still needs a decision, so this query runs without a time filter.
   formation_observations_by_recommendation: formationRecommendationCountsSchema,
   // Live count of secret-detector blocks in the last 24h. Signal that the
@@ -399,7 +399,7 @@ export type FileReworkEntry = z.infer<typeof fileReworkEntrySchema>;
 
 // Files where the user-side conversation showed confusion or frustration in
 // 2+ sessions touching the file. Sentiment is an INPUT to the file-axis
-// question — never the headline — which is the framing ANALYTICS_SPEC §10
+// question - never the headline - which is the framing ANALYTICS_SPEC §10
 // anti-pattern #1 explicitly endorses (sentiment as input to coordination).
 // retried_sessions is a sub-count of confused_sessions whose outcome was
 // abandoned/failed; useful as severity hint, kept optional so older
@@ -424,11 +424,11 @@ export type UnansweredQuestionStats = z.infer<typeof unansweredQuestionStatsSche
 // the user's last turn classified as a question, followed within H hours by
 // a session in a *different* tool that edited at least one of the same
 // files AND opened with another question or a confused/frustrated user
-// turn. The substrate-unique question this answers — which no single-tool
-// analytics surface can — is "did my agent's abandoned question survive a
+// turn. The substrate-unique question this answers - which no single-tool
+// analytics surface can - is "did my agent's abandoned question survive a
 // tool switch, or did the next tool start cold and re-ask?"
 //
-// Sentiment/topic are inputs to the ranking, not displayed metrics — the
+// Sentiment/topic are inputs to the ranking, not displayed metrics - the
 // row surfaces files, tools, and gap-time, never the message content or
 // the polarity. ANALYTICS_SPEC §10 #1 firewall preserved.
 export const crossToolHandoffEntrySchema = z.object({
@@ -452,18 +452,19 @@ export type CrossToolHandoffEntry = z.infer<typeof crossToolHandoffEntrySchema>;
 
 // Cross-tool memory flow. For each (author_tool, consumer_tool) pair, count
 // memories authored by author_tool that were available to consumer_tool's
-// sessions in the window. Honest framing: this measures availability +
-// co-presence, not exact read attribution (the per-memory join table
-// `memory_search_results` is unbuilt — see ANALYTICS_SPEC §10). Renderers
-// label rows accordingly. Detail-view English questions: which tools share
+// sessions in the window. Built on the memory_search_results join
+// (migration 028 / ANALYTICS_SPEC §11) so the read is what was actually
+// retrieved, not the available pool. Tool-axis only - per-handle flow
+// would step into ANALYTICS_SPEC §10 #4 (surveillance) and is not
+// emitted by this query. Detail-view English questions: which tools share
 // memory most? · which categories cross tools? · does cross-tool memory
 // help completion? · how fresh is shared knowledge? · which sessions
 // benefited from another tool's memory?
 export const crossToolMemoryFlowEntrySchema = z.object({
   author_tool: z.string(),
   consumer_tool: z.string(),
-  memories: z.number(),
-  consumer_sessions: z.number(),
+  memories_read: z.number(),
+  reading_sessions: z.number(),
 });
 export type CrossToolMemoryFlowEntry = z.infer<typeof crossToolMemoryFlowEntrySchema>;
 
@@ -482,7 +483,7 @@ export type MemoryAgingComposition = z.infer<typeof memoryAgingCompositionSchema
 
 // Memory categories: top agent-assigned categories on currently-live
 // memories, ranked by count, with last-touch hint per row. Categories are
-// optional at save time, so a low-coverage team will see a thin list — the
+// optional at save time, so a low-coverage team will see a thin list - the
 // empty state names that gate. Detail-view English questions: top categories?
 // · which help completion? · which directories have which categories? ·
 // who authors which? · how has the mix shifted?
@@ -534,6 +535,13 @@ export const directoryHeatmapEntrySchema = z.object({
   touch_count: z.number(),
   file_count: z.number(),
   total_lines: z.number(),
+  // Session-distinct outcome counts. The denominator is unique sessions that
+  // touched any file in this directory (not file-touch pairs), and the
+  // numerator is the subset whose outcome was 'completed'. completion_rate
+  // is derived from these and exposed alongside so cross-team aggregation can
+  // re-derive honestly instead of weighted-averaging weighted-averages.
+  completed_sessions: z.number(),
+  total_sessions: z.number(),
   completion_rate: z.number(),
 });
 export type DirectoryHeatmapEntry = z.infer<typeof directoryHeatmapEntrySchema>;
@@ -541,7 +549,7 @@ export type DirectoryHeatmapEntry = z.infer<typeof directoryHeatmapEntrySchema>;
 // Files-touched breadth breakdowns. Both read from the `edits` table with
 // `work_type` normalized on write (migration 018). Feed the Files-Touched
 // drill hero: strip viz + new-vs-revisited split. Distinct file counts, not
-// edit counts — breadth, not depth.
+// edit counts - breadth, not depth.
 export const filesByWorkTypeEntrySchema = z.object({
   work_type: z.string(),
   file_count: z.number(),
@@ -567,7 +575,7 @@ export type StucknessStats = z.infer<typeof stucknessStatsSchema>;
 
 // Audit 2026-04-21: Dropped `overlap_rate`. The percentage was a B1 ambiguity
 // in the renderer ("60%" reads as good paired work or bad collision depending
-// on context). Absolute counts stay — total_files and overlapping_files are
+// on context). Absolute counts stay - total_files and overlapping_files are
 // concrete; consumers that need a rate recompute it from the counts.
 export const fileOverlapStatsSchema = z.object({
   total_files: z.number(),
@@ -603,6 +611,23 @@ export const memoryOutcomeCorrelationSchema = z.object({
   completion_rate: z.number(),
 });
 export type MemoryOutcomeCorrelation = z.infer<typeof memoryOutcomeCorrelationSchema>;
+
+// Per-memory outcome correlation. For each memory returned in this period's
+// searches, the count of sessions that returned it and the completion rate
+// of those sessions. Enabled by the memory_search_results join (migration
+// 028 / ANALYTICS_SPEC section 11). Min-sample gate is enforced in the
+// query so the read can't surface high-variance per-memory rates from a
+// single session. The framing is correlation, not causation: §10 #7 forbids
+// "hit rate as quality" — the question is "sessions that read this memory
+// completed at X%, vs Y% baseline."
+export const memoryPerEntryOutcomeSchema = z.object({
+  id: z.string(),
+  text_preview: z.string(),
+  sessions: z.number(),
+  completed: z.number(),
+  completion_rate: z.number(),
+});
+export type MemoryPerEntryOutcome = z.infer<typeof memoryPerEntryOutcomeSchema>;
 
 export const memoryAccessEntrySchema = z.object({
   id: z.string(),
@@ -820,7 +845,7 @@ export const tokenModelBreakdownSchema = z.object({
   cache_creation_tokens: z.number().default(0),
   sessions: z.number(),
   // Null when the model isn't in our LiteLLM snapshot, or when the snapshot
-  // is >7 days stale. UI should render "—" rather than "$0" in that case.
+  // is >7 days stale. UI should render "-" rather than "$0" in that case.
   estimated_cost_usd: z.number().nullable().default(null),
 });
 export type TokenModelBreakdown = z.infer<typeof tokenModelBreakdownSchema>;
@@ -845,13 +870,13 @@ export const tokenUsageStatsSchema = z.object({
   sessions_with_token_data: z.number(),
   sessions_without_token_data: z.number(),
   /** Sum of edit_count across sessions where input_tokens IS NOT NULL.
-   *  This is the denominator for cost_per_edit — scoping to token-capturing
+   *  This is the denominator for cost_per_edit - scoping to token-capturing
    *  sessions is what prevents mixing populations (e.g. Cursor contributing
    *  edits without token data would otherwise deflate the ratio). */
   total_edits_in_token_sessions: z.number().default(0),
   /** Total USD cost across priced models. Null when pricing is stale
    *  (>7 days) OR no model in the period was in the LiteLLM snapshot.
-   *  Zero only when sessions exist but token totals are literally zero —
+   *  Zero only when sessions exist but token totals are literally zero -
    *  UI must distinguish null (unknown) from 0 (measured). */
   total_estimated_cost_usd: z.number().nullable().default(null),
   // ISO timestamp of the most recent successful LiteLLM pricing refresh, or
@@ -867,7 +892,7 @@ export const tokenUsageStatsSchema = z.object({
   models_without_pricing: z.array(z.string()).default([]),
   // Total count of unknown models, including any beyond the display cap.
   // A response with 20 in the list and total = 100 signals that the resolver
-  // is missing a large swath of real production models — much louder than
+  // is missing a large swath of real production models - much louder than
   // silently truncating. Always >= models_without_pricing.length.
   models_without_pricing_total: z.number().default(0),
   /** Cost divided by total edits across sessions with token data. Null when no edits. */
@@ -898,7 +923,7 @@ export const dataCoverageSchema = z.object({
 });
 export type DataCoverage = z.infer<typeof dataCoverageSchema>;
 
-/** Cross-team user analytics — extends base TeamAnalytics with advanced breakdowns. */
+/** Cross-team user analytics - extends base TeamAnalytics with advanced breakdowns. */
 export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   hourly_distribution: z.array(hourlyBucketSchema),
   tool_daily: z.array(toolDailyTrendSchema),
@@ -973,6 +998,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   audit_staleness: z.array(auditStalenessEntrySchema),
   first_edit_stats: firstEditStatsSchema,
   memory_outcome_correlation: z.array(memoryOutcomeCorrelationSchema),
+  memory_per_entry_outcomes: z.array(memoryPerEntryOutcomeSchema).default([]),
   top_memories: z.array(memoryAccessEntrySchema),
   scope_complexity: z.array(scopeComplexityBucketSchema),
   prompt_efficiency: z.array(promptEfficiencyTrendSchema),

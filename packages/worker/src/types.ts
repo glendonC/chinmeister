@@ -10,7 +10,6 @@
 // DO methods directly without `as any` casts.
 import type { DatabaseDO } from './dos/database/index.js';
 import type { LobbyDO } from './lobby.js';
-import type { RoomDO } from './room.js';
 import type { TeamDO } from './dos/team/index.js';
 import type { BudgetConfig } from '@chinmeister/shared/budget-config.js';
 
@@ -146,7 +145,7 @@ export interface Memory {
   text: string;
   /** JSON-parsed from stored JSON array */
   tags: string[];
-  /** JSON-parsed from stored JSON array — project-defined categories (dormant) */
+  /** JSON-parsed from stored JSON array - project-defined categories (dormant) */
   categories: string[];
   /** User handle of the memory author */
   handle: string;
@@ -439,7 +438,6 @@ export interface ModerationResult {
 export interface Env {
   DATABASE: DurableObjectNamespace<DatabaseDO>;
   LOBBY: DurableObjectNamespace<LobbyDO>;
-  ROOM: DurableObjectNamespace<RoomDO>;
   TEAM: DurableObjectNamespace<TeamDO>;
   AUTH_KV: KVNamespace;
   AI: Ai;

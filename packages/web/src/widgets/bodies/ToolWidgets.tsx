@@ -2,7 +2,7 @@
  * Tools & Models widget category.
  *
  * Five widgets:
- *   tool-handoffs        — completion-weighted cross-tool flow (default, 12×4)
+ *   tool-handoffs        — cross-tool handoff strip (default, 6×3)
  *   tool-work-type-fit   — where each tool wins by work-type (default, 6×4)
  *   tool-call-errors     — error rate hero + top patterns (default, 6×3)
  *   one-shot-by-tool     — per-tool first-try rate (catalog, 6×3)
@@ -32,13 +32,7 @@ import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import shared from '../widget-shared.module.css';
 import styles from './ToolWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import {
-  GhostRows,
-  CoverageNote,
-  capabilityCoverageNote,
-  MoreHidden,
-  StatWidget,
-} from './shared.js';
+import { GhostRows, CoverageNote, capabilityCoverageNote, StatWidget } from './shared.js';
 
 function openTools(tab: string, q: string) {
   return () => setQueryParams({ tools: tab, q });
@@ -58,33 +52,23 @@ function useIsDrillable(): boolean {
  */
 export const MIN_TOOL_SAMPLE = 3;
 
-// ── 1) tool-handoffs (Cross-Tool Flow, 12×4 default) ─────────────────
-
-interface FlowNode {
-  host_tool: string;
-  outflow: number;
-  inflow: number;
-}
+// ── 1) tool-handoffs (Cross-Tool Flow, 6×3 default) ──────────────────
 
 interface FlowLink {
   from: string;
   to: string;
   file_count: number;
   completion_rate: number;
-  avg_gap_minutes: number;
 }
 
 /**
- * Two-column SVG flow. Left = source tools (height proportional to outflow),
- * right = destination tools (height proportional to inflow). Lines connect
- * each pair; opacity carries file_count, color carries completion_rate. The
- * substrate-unique signal: no IDE or APM can see file flow across competing
- * vendor agents. Top-N capped with truthful tail row for legibility.
+ * Main-view flow strip. The overview answers one question quickly:
+ * "How much work crossed tool boundaries, and did it generally land?"
+ * Pair counts, rates, and timing belong in the Tools detail view.
  */
 function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
   const handoffs = analytics.tool_handoffs;
   const tools = analytics.tool_comparison;
-  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   if (handoffs.length === 0) {
     const toolCount = tools.length;
@@ -95,180 +79,97 @@ function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
     return <SectionEmpty>{message}</SectionEmpty>;
   }
 
-  const TOP_N = 8;
-  const visible = handoffs.slice(0, TOP_N);
-  const hidden = Math.max(0, handoffs.length - TOP_N);
-
-  // Build node aggregates from visible links so heights match what's drawn.
-  const nodeMap = new Map<string, FlowNode>();
-  const links: FlowLink[] = [];
-  for (const h of visible) {
-    const f = nodeMap.get(h.from_tool) ?? { host_tool: h.from_tool, outflow: 0, inflow: 0 };
-    f.outflow += h.file_count;
-    nodeMap.set(h.from_tool, f);
-    const t = nodeMap.get(h.to_tool) ?? { host_tool: h.to_tool, outflow: 0, inflow: 0 };
-    t.inflow += h.file_count;
-    nodeMap.set(h.to_tool, t);
-    links.push({
+  const sortedLinks: FlowLink[] = [...handoffs]
+    .sort((a, b) => b.file_count - a.file_count)
+    .map((h) => ({
       from: h.from_tool,
       to: h.to_tool,
       file_count: h.file_count,
       completion_rate: h.handoff_completion_rate,
-      avg_gap_minutes: h.avg_gap_minutes,
-    });
-  }
-  const sources = [...nodeMap.values()]
-    .filter((n) => n.outflow > 0)
-    .sort((a, b) => b.outflow - a.outflow);
-  const destinations = [...nodeMap.values()]
-    .filter((n) => n.inflow > 0)
-    .sort((a, b) => b.inflow - a.inflow);
+    }));
 
-  const maxFiles = links.reduce((m, l) => Math.max(m, l.file_count), 1);
-
-  const VIEW_W = 100;
-  const VIEW_H = 100;
-  const COL_PAD_X = 2;
-  const NODE_W = 12;
-  const NODE_GAP = 2;
-  const LEFT_X = COL_PAD_X;
-  const RIGHT_X = VIEW_W - COL_PAD_X - NODE_W;
-
-  function layoutColumn(nodes: FlowNode[], side: 'src' | 'dst') {
-    const total = nodes.reduce((s, n) => s + (side === 'src' ? n.outflow : n.inflow), 0);
-    const totalGapPx = (nodes.length - 1) * NODE_GAP;
-    const usable = Math.max(1, VIEW_H - totalGapPx);
-    const NODE_MIN_PX = 4;
-    let y = 0;
-    return nodes.map((n) => {
-      const v = side === 'src' ? n.outflow : n.inflow;
-      const raw = total > 0 ? (v / total) * usable : usable / nodes.length;
-      const h = Math.max(NODE_MIN_PX, raw);
-      const node = { node: n, x: side === 'src' ? LEFT_X : RIGHT_X, y, h };
-      y += h + NODE_GAP;
-      return node;
-    });
-  }
-
-  const srcLayout = layoutColumn(sources, 'src');
-  const dstLayout = layoutColumn(destinations, 'dst');
-  const srcByTool = new Map(srcLayout.map((s) => [s.node.host_tool, s]));
-  const dstByTool = new Map(dstLayout.map((d) => [d.node.host_tool, d]));
-
-  const hoveredLink = hoveredKey ? links.find((l) => `${l.from}->${l.to}` === hoveredKey) : null;
-
-  const totalFiles = links.reduce((s, l) => s + l.file_count, 0);
-  const weightedComplete = links.reduce((s, l) => s + (l.completion_rate * l.file_count) / 100, 0);
+  const maxBands = 5;
+  const displayLinks =
+    sortedLinks.length <= maxBands
+      ? sortedLinks
+      : [
+          ...sortedLinks.slice(0, maxBands - 1),
+          {
+            from: 'other',
+            to: 'other',
+            file_count: sortedLinks.slice(maxBands - 1).reduce((s, h) => s + h.file_count, 0),
+            completion_rate: Math.round(
+              sortedLinks
+                .slice(maxBands - 1)
+                .reduce((s, h) => s + h.completion_rate * h.file_count, 0) /
+                Math.max(
+                  1,
+                  sortedLinks.slice(maxBands - 1).reduce((s, h) => s + h.file_count, 0),
+                ),
+            ),
+          },
+        ];
+  const totalFiles = handoffs.reduce((s, h) => s + h.file_count, 0);
+  const weightedComplete = handoffs.reduce(
+    (s, h) => s + (h.handoff_completion_rate * h.file_count) / 100,
+    0,
+  );
   const avgComplete = totalFiles > 0 ? Math.round((weightedComplete / totalFiles) * 100) : 0;
+  const topLink = sortedLinks[0];
+  const fromMeta = getToolMeta(topLink.from);
+  const toMeta = getToolMeta(topLink.to);
+  const primaryPair = `${fromMeta.label} to ${toMeta.label}`;
+  const aria = sortedLinks
+    .map((h) => {
+      const from = getToolMeta(h.from).label;
+      const to = getToolMeta(h.to).label;
+      return `${from} to ${to}: ${h.file_count} files`;
+    })
+    .join(', ');
 
   return (
-    <div className={styles.flowWrap}>
-      <div className={styles.flowHead}>
-        {hoveredLink ? (
-          <span className={styles.flowHover}>
-            {getToolMeta(hoveredLink.from).label} → {getToolMeta(hoveredLink.to).label}
-            <span className={styles.flowHoverSep}>·</span>
-            <span className={styles.flowHoverNum}>{hoveredLink.file_count}</span>
-            {hoveredLink.file_count === 1 ? 'file' : 'files'}
-            <span className={styles.flowHoverSep}>·</span>
-            <span style={{ color: completionColor(hoveredLink.completion_rate) }}>
-              {hoveredLink.completion_rate}% completed
-            </span>
-            {hoveredLink.avg_gap_minutes > 0 && (
-              <>
-                <span className={styles.flowHoverSep}>·</span>
-                <span className={styles.flowHoverNum}>{hoveredLink.avg_gap_minutes}m</span>
-                gap
-              </>
-            )}
-          </span>
-        ) : (
-          <span className={styles.flowSummary}>
-            <span className={styles.flowSummaryNum}>{totalFiles}</span>
-            {totalFiles === 1 ? 'file moved' : 'files moved'}
-            <span className={styles.flowHoverSep}>·</span>
-            <span style={{ color: completionColor(avgComplete) }}>{avgComplete}% completed</span>
-          </span>
-        )}
+    <div
+      className={styles.handoffWeft}
+      role="group"
+      aria-label={`${totalFiles} files handed off across tools. ${avgComplete} percent completed after handoff. Flow mix: ${aria}`}
+    >
+      <div className={styles.handoffLead}>
+        <span className={styles.handoffLeadValue}>{totalFiles.toLocaleString()}</span>
+        <span className={styles.handoffLeadLabel}>
+          {totalFiles === 1 ? 'file handed off' : 'files handed off'}
+        </span>
       </div>
-      <svg
-        className={styles.flowSvg}
-        viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-        preserveAspectRatio="none"
-        role="img"
-        aria-label="Cross-tool file handoff flow"
-      >
-        {links.map((l, i) => {
-          const s = srcByTool.get(l.from);
-          const d = dstByTool.get(l.to);
-          if (!s || !d) return null;
-          const x1 = s.x + NODE_W;
-          const y1 = s.y + s.h / 2;
-          const x2 = d.x;
-          const y2 = d.y + d.h / 2;
-          const dx = (x2 - x1) / 2;
-          const path = `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
-          const opacity = 0.18 + 0.65 * (l.file_count / maxFiles);
-          const color = completionColor(l.completion_rate);
-          const key = `${l.from}->${l.to}`;
-          const isHovered = hoveredKey === key;
-          const dim = hoveredKey != null && !isHovered;
+      <div className={styles.handoffStrip} aria-hidden="true">
+        {displayLinks.map((link, i) => {
+          const meta = link.from === 'other' ? null : getToolMeta(link.from);
           return (
-            <path
-              key={key}
-              d={path}
-              stroke={color}
-              strokeWidth={isHovered ? 1.4 : 0.8}
-              strokeOpacity={isHovered ? 1 : dim ? 0.08 : opacity}
-              fill="none"
-              vectorEffect="non-scaling-stroke"
-              style={{ cursor: 'pointer', transition: 'stroke-width 140ms, stroke-opacity 140ms' }}
-              onMouseEnter={() => setHoveredKey(key)}
-              onMouseLeave={() => setHoveredKey(null)}
-              onFocus={() => setHoveredKey(key)}
-              onBlur={() => setHoveredKey(null)}
-              tabIndex={0}
-              aria-label={`${l.from} to ${l.to}, ${l.file_count} files, ${l.completion_rate}% completion`}
-              data-row-index={i}
+            <span
+              key={`${link.from}->${link.to}-${i}`}
+              className={styles.handoffSegment}
+              style={
+                {
+                  flexGrow: link.file_count,
+                  flexBasis: 0,
+                  minWidth: 2,
+                  background: meta?.color ?? 'var(--soft)',
+                  '--cell-index': i,
+                } as CSSProperties
+              }
+              title={
+                link.from === 'other'
+                  ? `${link.file_count} files across other handoff pairs`
+                  : `${getToolMeta(link.from).label} to ${getToolMeta(link.to).label}: ${link.file_count} files`
+              }
             />
           );
         })}
-        {srcLayout.map(({ node, x, y, h }) => {
-          const meta = getToolMeta(node.host_tool);
-          return (
-            <g key={`src-${node.host_tool}`}>
-              <rect x={x} y={y} width={NODE_W} height={h} fill={meta.color} opacity={0.7} />
-              <text
-                x={x - 1}
-                y={y + h / 2}
-                textAnchor="end"
-                dominantBaseline="middle"
-                className={styles.flowNodeLabel}
-              >
-                {meta.label}
-              </text>
-            </g>
-          );
-        })}
-        {dstLayout.map(({ node, x, y, h }) => {
-          const meta = getToolMeta(node.host_tool);
-          return (
-            <g key={`dst-${node.host_tool}`}>
-              <rect x={x} y={y} width={NODE_W} height={h} fill={meta.color} opacity={0.7} />
-              <text
-                x={x + NODE_W + 1}
-                y={y + h / 2}
-                textAnchor="start"
-                dominantBaseline="middle"
-                className={styles.flowNodeLabel}
-              >
-                {meta.label}
-              </text>
-            </g>
-          );
-        })}
-      </svg>
-      <MoreHidden count={hidden} />
+      </div>
+      <div className={styles.handoffSummary}>
+        <span className={styles.handoffCompletion} style={{ color: completionColor(avgComplete) }}>
+          {avgComplete}% landed
+        </span>
+        <span className={styles.handoffPair}>{primaryPair}</span>
+      </div>
     </div>
   );
 }
