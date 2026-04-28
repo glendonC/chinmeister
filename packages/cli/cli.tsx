@@ -6,7 +6,6 @@ import { loadConfig, configExists, deleteConfig } from './lib/config.js';
 import type { ChinmeisterConfig } from './lib/config.js';
 import { api } from './lib/api.js';
 import { Welcome } from './lib/init.jsx';
-import { Chat } from './lib/chat.jsx';
 import { Customize } from './lib/customize.jsx';
 import { Dashboard } from './lib/dashboard/index.jsx';
 import { ControlShell } from './lib/shell.jsx';
@@ -24,7 +23,7 @@ if (parseInt(process.version.slice(1)) < 22) {
 
 // Hand off to an MCP/hook/channel runtime module in the same process.
 // Same-process import is required because MCP uses stdin/stdout for JSON-RPC
-// and hooks need direct stdio access — child_process would add broken-pipe risk.
+// and hooks need direct stdio access - child_process would add broken-pipe risk.
 // The never-resolving promise keeps the top-level await alive so the imported
 // module's signal handlers and event loops continue running.
 interface HandOffOptions {
@@ -44,7 +43,7 @@ async function handOffToRuntime(
     process.argv = [node, script, ...process.argv.slice(3)];
   }
   await import(modulePath);
-  // Keep process alive — the imported module owns the event loop from here.
+  // Keep process alive - the imported module owns the event loop from here.
   await new Promise<void>(() => {});
 }
 
@@ -152,7 +151,7 @@ if (process.argv[2] === 'run') {
   process.exit(exitCode);
 }
 
-// Handle dashboard command — open web dashboard in browser
+// Handle dashboard command - open web dashboard in browser
 if (process.argv[2] === 'dashboard') {
   const { openDashboard } = await import('./lib/open-dashboard.js');
   await openDashboard();
@@ -163,7 +162,6 @@ const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', 
 const SPINNER_INTERVAL_MS = 80;
 const PRIMARY_MODES: ModeItem[] = [
   { key: 'dashboard', label: 'dashboard', shortLabel: 'dashboard', accent: 'cyan' },
-  { key: 'chat', label: 'chat', shortLabel: 'chat', accent: 'magenta' },
   { key: 'customize', label: 'settings', shortLabel: 'settings', accent: 'green' },
 ];
 
@@ -274,8 +272,6 @@ function App(): React.ReactNode {
         );
       case 'welcome':
         return <Welcome onComplete={onSetup} />;
-      case 'chat':
-        return <Chat config={config} user={user} navigate={navigate} />;
       case 'customize':
         return (
           <Customize config={config} user={user} navigate={navigate} refreshUser={refreshUser} />

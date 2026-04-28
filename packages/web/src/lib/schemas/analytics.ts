@@ -49,6 +49,7 @@ import {
   auditStalenessEntrySchema as baseAuditStalenessEntrySchema,
   firstEditStatsSchema as baseFirstEditStatsSchema,
   memoryOutcomeCorrelationSchema as baseMemoryOutcomeCorrelationSchema,
+  memoryPerEntryOutcomeSchema as baseMemoryPerEntryOutcomeSchema,
   memoryAccessEntrySchema as baseMemoryAccessEntrySchema,
   scopeComplexityBucketSchema as baseScopeComplexityBucketSchema,
   promptEfficiencyTrendSchema as basePromptEfficiencyTrendSchema,
@@ -308,8 +309,8 @@ const crossToolHandoffEntrySchema = baseCrossToolHandoffEntrySchema.extend({
 });
 
 const crossToolMemoryFlowEntrySchema = baseCrossToolMemoryFlowEntrySchema.extend({
-  memories: z.number().default(0),
-  consumer_sessions: z.number().default(0),
+  memories_read: z.number().default(0),
+  reading_sessions: z.number().default(0),
 });
 
 const memoryAgingCompositionSchema = baseMemoryAgingCompositionSchema.extend({
@@ -349,6 +350,8 @@ const directoryHeatmapEntrySchema = baseDirectoryHeatmapEntrySchema.extend({
   touch_count: z.number().default(0),
   file_count: z.number().default(0),
   total_lines: z.number().default(0),
+  completed_sessions: z.number().default(0),
+  total_sessions: z.number().default(0),
   completion_rate: z.number().default(0),
 });
 
@@ -397,6 +400,12 @@ const firstEditStatsSchema = baseFirstEditStatsSchema.extend({
 });
 
 const memoryOutcomeCorrelationSchema = baseMemoryOutcomeCorrelationSchema.extend({
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
+});
+
+const memoryPerEntryOutcomeSchema = baseMemoryPerEntryOutcomeSchema.extend({
   sessions: z.number().default(0),
   completed: z.number().default(0),
   completion_rate: z.number().default(0),
@@ -459,7 +468,7 @@ const tokenModelBreakdownSchema = baseTokenModelBreakdownSchema.extend({
   cache_creation_tokens: z.number().default(0),
   sessions: z.number().default(0),
   // null when the model lacks pricing or the snapshot is stale. UI renders
-  // "—" in that case instead of "$0".
+  // "-" in that case instead of "$0".
   estimated_cost_usd: z.number().nullable().default(null),
 });
 
@@ -533,7 +542,7 @@ const toolCallStatsSchema = z.object({
 
 // ── Data coverage (capability-based) ──────────────
 
-// Lines-drill support — per-member and per-project daily lines series used
+// Lines-drill support - per-member and per-project daily lines series used
 // by the Lines drill-down. Default to empty arrays so downstream consumers
 // can iterate without guarding every access; the shape is the shared
 // contract unmodified.
@@ -639,6 +648,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     by_tool: [],
   }),
   memory_outcome_correlation: z.array(memoryOutcomeCorrelationSchema).default([]),
+  memory_per_entry_outcomes: z.array(memoryPerEntryOutcomeSchema).default([]),
   top_memories: z.array(memoryAccessEntrySchema).default([]),
   scope_complexity: z.array(scopeComplexityBucketSchema).default([]),
   prompt_efficiency: z.array(promptEfficiencyTrendSchema).default([]),
@@ -727,6 +737,7 @@ export type FileOverlapStats = z.infer<typeof fileOverlapStatsSchema>;
 export type AuditStalenessEntry = z.infer<typeof auditStalenessEntrySchema>;
 export type FirstEditStats = z.infer<typeof firstEditStatsSchema>;
 export type MemoryOutcomeCorrelation = z.infer<typeof memoryOutcomeCorrelationSchema>;
+export type MemoryPerEntryOutcome = z.infer<typeof memoryPerEntryOutcomeSchema>;
 export type MemoryAccessEntry = z.infer<typeof memoryAccessEntrySchema>;
 export type ScopeComplexityBucket = z.infer<typeof scopeComplexityBucketSchema>;
 export type PromptEfficiencyTrend = z.infer<typeof promptEfficiencyTrendSchema>;
@@ -822,6 +833,7 @@ export function createEmptyUserAnalytics(): UserAnalytics {
       by_tool: [],
     },
     memory_outcome_correlation: [],
+    memory_per_entry_outcomes: [],
     top_memories: [],
     scope_complexity: [],
     prompt_efficiency: [],

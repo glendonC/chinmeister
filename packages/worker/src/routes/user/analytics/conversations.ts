@@ -9,6 +9,7 @@ import type {
   ConversationEditCorrelation,
   MemoryAccessEntry,
   MemoryOutcomeCorrelation,
+  MemoryPerEntryOutcome,
   MemoryUsageStats,
 } from '@chinmeister/shared/contracts/analytics.js';
 import type { TeamResult } from './types.js';
@@ -87,6 +88,62 @@ export function projectMemOutcome(acc: MemOutcomeAcc): MemoryOutcomeCorrelation[
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([bucket, v]) => ({
       bucket,
+      sessions: v.sessions,
+      completed: v.completed,
+      completion_rate: rate(v.completed, v.sessions),
+    }));
+}
+
+// ── memory_per_entry_outcomes ───────────────────
+//
+// Cross-team merge for the per-memory outcome correlation. Each team emits
+// {id, text_preview, sessions, completed, completion_rate}; the merge sums
+// the underlying counts and re-derives the rate. completion_rate from any
+// single team is a convenience field for that team's read; we never average
+// rates across teams (would smear small-N teams against large-N ones).
+//
+// Memory IDs are unique per team. Two teams cannot collide on the same id,
+// so the merge is essentially a flat concatenation by id; the Map key is
+// the id alone, no namespacing needed.
+
+interface PerMemoryBucket {
+  text_preview: string;
+  sessions: number;
+  completed: number;
+}
+
+export type PerMemoryAcc = Map<string, PerMemoryBucket>;
+
+export function createPerMemoryAcc(): PerMemoryAcc {
+  return new Map();
+}
+
+export function mergePerMemory(acc: PerMemoryAcc, team: TeamResult): void {
+  for (const m of team.memory_per_entry_outcomes ?? []) {
+    const existing = acc.get(m.id);
+    if (!existing) {
+      acc.set(m.id, {
+        text_preview: m.text_preview,
+        sessions: m.sessions,
+        completed: m.completed,
+      });
+    } else {
+      // Same id appearing twice would be a contract violation (memory ids
+      // are TeamDO-scoped) but accumulate defensively so a hypothetical
+      // future global memory does not silently lose count.
+      existing.sessions += m.sessions;
+      existing.completed += m.completed;
+    }
+  }
+}
+
+export function projectPerMemory(acc: PerMemoryAcc): MemoryPerEntryOutcome[] {
+  return [...acc.entries()]
+    .sort(([, a], [, b]) => b.sessions - a.sessions)
+    .slice(0, 20)
+    .map(([id, v]) => ({
+      id,
+      text_preview: v.text_preview,
       sessions: v.sessions,
       completed: v.completed,
       completion_rate: rate(v.completed, v.sessions),

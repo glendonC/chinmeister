@@ -1,5 +1,5 @@
 // Empty-teams response. Returned when the caller has no teams (or filtered
-// them all out) — the schema requires these fields to be present with
+// them all out) - the schema requires these fields to be present with
 // zero-shaped values, so we build them explicitly here rather than
 // running the accumulators against an empty fan-out.
 
@@ -158,6 +158,7 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
       by_tool: [],
     },
     memory_outcome_correlation: [],
+    memory_per_entry_outcomes: [],
     top_memories: [],
     scope_complexity: [],
     prompt_efficiency: [],

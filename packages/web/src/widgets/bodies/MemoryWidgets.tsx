@@ -1,6 +1,7 @@
 import { useState, type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
+import { MoreHidden } from './shared.js';
 import s from './MemoryWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
@@ -22,6 +23,7 @@ import type { WidgetBodyProps, WidgetRegistry } from './types.js';
  */
 
 const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
+const MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS = 5;
 const TOP_CATEGORIES_VISIBLE = 8;
 const FLOW_PAIRS_VISIBLE = 6;
 const SINGLE_AUTHOR_VISIBLE = 8;
@@ -150,26 +152,29 @@ function MemoryAgingCurveWidget({ analytics }: WidgetBodyProps) {
 
 // ── memory across tools (subgrid table) ─────────────
 //
-// FROM | TO | MEMORIES | SESSIONS — same shape as live-agents. Tool-color
+// FROM | TO | READS | SESSIONS — same shape as live-agents. Tool-color
 // dot beside each tool label. No bars; ranking is implicit in row order.
+// Counts are actual reads off the memory_search_results join, not the
+// available-to-read pool.
 
 function MemoryCrossToolFlowWidget({ analytics }: WidgetBodyProps) {
   const flow = analytics.cross_tool_memory_flow;
   if (flow.length === 0) {
     return (
       <SectionEmpty>
-        Cross-tool flow appears once two tools have memories and active sessions.
+        Cross-tool flow appears once one tool&apos;s sessions read another tool&apos;s memories.
       </SectionEmpty>
     );
   }
-  const sorted = [...flow].sort((a, b) => b.memories - a.memories);
+  const sorted = [...flow].sort((a, b) => b.memories_read - a.memories_read);
   const visible = sorted.slice(0, FLOW_PAIRS_VISIBLE);
+  const hidden = sorted.length - visible.length;
   return (
     <div className={s.flowTable}>
       <div className={s.tableHeader}>
         <span>From</span>
         <span>To</span>
-        <span className={s.tableHeaderNum}>Memories</span>
+        <span className={s.tableHeaderNum}>Reads</span>
         <span className={s.tableHeaderNum}>Sessions</span>
       </div>
       <div className={s.tableBody}>
@@ -190,12 +195,13 @@ function MemoryCrossToolFlowWidget({ analytics }: WidgetBodyProps) {
                 <span className={s.tableToolDot} style={{ background: to.color }} />
                 <span className={s.tableToolName}>{to.label}</span>
               </span>
-              <span className={s.tableNum}>{fmt(f.memories)}</span>
-              <span className={s.tableNumSecondary}>{fmt(f.consumer_sessions)}</span>
+              <span className={s.tableNum}>{fmt(f.memories_read)}</span>
+              <span className={s.tableNumSecondary}>{fmt(f.reading_sessions)}</span>
             </div>
           );
         })}
       </div>
+      <MoreHidden count={hidden} />
     </div>
   );
 }
@@ -221,6 +227,7 @@ function MemoryBusFactorWidget({ analytics }: WidgetBodyProps) {
     return sb - sa;
   });
   const visible = sorted.slice(0, SINGLE_AUTHOR_VISIBLE);
+  const hidden = sorted.length - visible.length;
   return (
     <div className={s.concTable}>
       <div className={s.tableHeader}>
@@ -251,6 +258,7 @@ function MemoryBusFactorWidget({ analytics }: WidgetBodyProps) {
           );
         })}
       </div>
+      <MoreHidden count={hidden} />
     </div>
   );
 }
@@ -318,9 +326,21 @@ function MemoryOutcomesWidget({ analytics }: WidgetBodyProps) {
       </SectionEmpty>
     );
   }
+  // Per-bucket floor: a bucket with 1-2 sessions can render 100% completion
+  // and read as "memory works" when it's just noise. Drop sub-floor buckets,
+  // and require at least two cleared buckets so the chart is a comparison,
+  // not a lone bar.
+  const visible = moc.filter((m) => m.sessions >= MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS);
+  if (visible.length < 2) {
+    return (
+      <SectionEmpty>
+        Need {MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS}+ sessions in 2+ buckets to compare.
+      </SectionEmpty>
+    );
+  }
   return (
     <div className={s.outcomeBars}>
-      {moc.map((m, i) => (
+      {visible.map((m, i) => (
         <div key={m.bucket} className={s.outcomeRow} style={{ '--row-index': i } as CSSProperties}>
           <span className={s.outcomeLabel}>{m.bucket}</span>
           <span

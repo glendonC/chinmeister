@@ -88,7 +88,7 @@ export default function MemoryDetailView({
   const distinctPairs = useMemo(() => {
     const set = new Set<string>();
     for (const f of flow) {
-      if (f.memories > 0) set.add(`${f.author_tool}|${f.consumer_tool}`);
+      if (f.memories_read > 0) set.add(`${f.author_tool}|${f.consumer_tool}`);
     }
     return set.size;
   }, [flow]);
@@ -312,6 +312,62 @@ function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
         </span>
       ),
       relatedLinks: getCrossLinks('memory', 'health', 'outcomes'),
+    });
+  }
+
+  // Q-per-memory: outcome correlation at the per-memory grain. Built on the
+  // memory_search_results join (migration 028 / ANALYTICS_SPEC §11). Only
+  // populated when the team has memories that crossed the min-sample floor
+  // in the period; the slot disappears otherwise. ANALYTICS_SPEC §10 #7
+  // explicitly forbids "search hit rate as quality"; this question stays
+  // strictly inside the correlation framing — we render completion rate
+  // per memory, not popularity-as-quality.
+  const perMemory = analytics.memory_per_entry_outcomes;
+  if (perMemory.length > 0) {
+    const periodCompleted = moc.reduce((s, b) => s + b.completed, 0);
+    const periodSessions = moc.reduce((s, b) => s + b.sessions, 0);
+    const baselineRate =
+      periodSessions > 0 ? Math.round((periodCompleted / periodSessions) * 1000) / 10 : null;
+    const sortedByRate = [...perMemory].sort((a, b) => b.completion_rate - a.completion_rate);
+    const topMem = sortedByRate[0];
+    const topAnswer =
+      baselineRate != null ? (
+        <>
+          Sessions that read the top-correlated memory completed{' '}
+          <Metric tone={topMem.completion_rate >= baselineRate ? 'positive' : 'warning'}>
+            {topMem.completion_rate}%
+          </Metric>{' '}
+          of the time, against a <Metric>{baselineRate}%</Metric> period baseline.
+        </>
+      ) : (
+        <>
+          Sessions that read the top-correlated memory completed{' '}
+          <Metric>{topMem.completion_rate}%</Metric> of the time.
+        </>
+      );
+    questions.push({
+      id: 'per-memory',
+      question: 'Which memories correlate with completed sessions?',
+      answer: topAnswer,
+      children: (
+        <BreakdownList
+          items={sortedByRate.slice(0, 10).map((entry) => ({
+            key: entry.id,
+            label: <span className={styles.memoryPreview}>{entry.text_preview}</span>,
+            fillPct: entry.completion_rate,
+            fillColor: completionColorRate(entry.completion_rate),
+            value: (
+              <>
+                {entry.completion_rate}%
+                <BreakdownMeta>
+                  {' · '}
+                  {fmtCount(entry.completed)}/{fmtCount(entry.sessions)} sessions
+                </BreakdownMeta>
+              </>
+            ),
+          }))}
+        />
+      ),
     });
   }
 
@@ -551,10 +607,10 @@ function FreshnessPanel({ analytics }: { analytics: UserAnalytics }) {
 
 // ── Cross-tool panel ────────────────────────────────
 //
-// Author→consumer flow with twin micro-bars (memories written, sessions
-// reachable). Bar 1 max is the max memories across pairs; bar 2 max is
-// the max consumer_sessions, heterogeneous scales let the eye compare
-// strengths within each axis without one number dwarfing the other.
+// Author→consumer flow with twin micro-bars (memories actually read,
+// reading sessions). Bar 1 max is the max memories_read across pairs; bar
+// 2 max is the max reading_sessions, heterogeneous scales let the eye
+// compare strengths within each axis without one number dwarfing the other.
 
 function CrossToolPanel({ analytics }: { analytics: UserAnalytics }) {
   const activeId = useQueryParam('q');
@@ -564,24 +620,25 @@ function CrossToolPanel({ analytics }: { analytics: UserAnalytics }) {
     return (
       <div className={styles.panel}>
         <span className={styles.empty}>
-          Cross-tool flow appears once two tools have memories AND active sessions in this window.
+          Cross-tool flow appears once one tool&apos;s sessions read another tool&apos;s memories in
+          this window.
         </span>
       </div>
     );
   }
 
-  const sortedFlow = [...flow].sort((a, b) => b.memories - a.memories);
+  const sortedFlow = [...flow].sort((a, b) => b.memories_read - a.memories_read);
   const visible = sortedFlow.slice(0, 8);
-  const maxMemories = Math.max(...visible.map((f) => f.memories), 1);
-  const maxSessions = Math.max(...visible.map((f) => f.consumer_sessions), 1);
+  const maxReads = Math.max(...visible.map((f) => f.memories_read), 1);
+  const maxSessions = Math.max(...visible.map((f) => f.reading_sessions), 1);
 
   const top = visible[0];
   const flowAnswer = top ? (
     <>
-      <Metric>{getToolMeta(top.author_tool).label}</Metric> writes the most memories that{' '}
-      <Metric>{getToolMeta(top.consumer_tool).label}</Metric> sessions can read,{' '}
-      <Metric>{fmtCount(top.memories)}</Metric> available across{' '}
-      <Metric>{fmtCount(top.consumer_sessions)}</Metric> sessions.
+      <Metric>{getToolMeta(top.consumer_tool).label}</Metric> sessions read the most memories
+      written by <Metric>{getToolMeta(top.author_tool).label}</Metric>,{' '}
+      <Metric>{fmtCount(top.memories_read)}</Metric> distinct memories across{' '}
+      <Metric>{fmtCount(top.reading_sessions)}</Metric> sessions.
     </>
   ) : null;
 
@@ -603,17 +660,17 @@ function CrossToolPanel({ analytics }: { analytics: UserAnalytics }) {
                 to={{ id: f.consumer_tool, label: toMeta.label, color: toMeta.color }}
                 bars={[
                   {
-                    label: 'memories',
-                    value: f.memories,
-                    max: maxMemories,
+                    label: 'memories read',
+                    value: f.memories_read,
+                    max: maxReads,
                     color: fromMeta.color,
-                    display: fmtCount(f.memories),
+                    display: fmtCount(f.memories_read),
                   },
                   {
-                    label: 'reachable sessions',
-                    value: f.consumer_sessions,
+                    label: 'reading sessions',
+                    value: f.reading_sessions,
                     max: maxSessions,
-                    display: fmtCount(f.consumer_sessions),
+                    display: fmtCount(f.reading_sessions),
                   },
                 ]}
               />

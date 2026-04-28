@@ -6,6 +6,7 @@ import type {
   MemoryUsageStats,
   MemoryOutcomeCorrelation,
   MemoryAccessEntry,
+  MemoryPerEntryOutcome,
   FormationRecommendationCounts,
   CrossToolMemoryFlowEntry,
   MemoryAgingComposition,
@@ -20,7 +21,7 @@ const log = createLogger('TeamDO.analytics');
 
 // Days since last access (or since creation, for never-accessed memories)
 // before a memory counts as stale. Feeds memory-health's `stale` stat.
-// Named constant so the threshold lives in one place — a future stale-list
+// Named constant so the threshold lives in one place - a future stale-list
 // widget or a tunable setting can read from here instead of re-hardcoding.
 const STALE_MEMORY_DAYS = 30;
 
@@ -34,7 +35,7 @@ export function queryMemoryUsage(
     // memories the caller authored (per ANALYTICS_SPEC.md §10, per-user
     // memory access tracking is deferred).
 
-    // Total memories — exclude soft-merged rows so the count reflects what
+    // Total memories - exclude soft-merged rows so the count reflects what
     // search would actually return. The merged rows stay in the table for
     // unmerge recourse but are not "live" memory.
     const { sql: totalQ, params: totalParams } = withScope(
@@ -58,7 +59,7 @@ export function queryMemoryUsage(
 
     // Stale memories: last access (or creation, for never-accessed rows) is
     // older than STALE_MEMORY_DAYS. Excludes soft-merged. Thresholded, not
-    // period-windowed — age is absolute, so this field is 'all-time' scope.
+    // period-windowed - age is absolute, so this field is 'all-time' scope.
     const { sql: staleQ, params: staleParams } = withScope(
       `SELECT COUNT(*) AS cnt FROM memories
          WHERE merged_into IS NULL AND invalid_at IS NULL
@@ -104,7 +105,7 @@ export function queryMemoryUsage(
 
     // Unaddressed formation observations by recommendation (live).
     // `status = 'observed'` means the auditor flagged it but no reviewer has
-    // acted yet — that is the live review-queue signal the memory-safety
+    // acted yet - that is the live review-queue signal the memory-safety
     // widget surfaces. Age does not gate the queue; a year-old unaddressed
     // flag still needs a decision.
     // Scope not applied: formation_observations has no handle column.
@@ -131,7 +132,7 @@ export function queryMemoryUsage(
 
     // Live count of secret-detector blocks in the last 24h. Fixed window
     // (not the global date picker) because the memory-safety widget is a
-    // live review surface — a recent block is actionable, an old block is
+    // live review surface - a recent block is actionable, an old block is
     // audit history that lives elsewhere.
     // Scope not applied: daily_metrics has no handle column.
     const secretsRow = row(
@@ -204,9 +205,9 @@ export function queryMemoryOutcomeCorrelation(
 ): MemoryOutcomeCorrelation[] {
   try {
     // Three-bucket split:
-    //   hit memory          — at least one search call returned results
-    //   searched, no results — searched but every call came back empty
-    //   no search           — did not search memory at all
+    //   hit memory          - at least one search call returned results
+    //   searched, no results - searched but every call came back empty
+    //   no search           - did not search memory at all
     // Bucketing on hits (not raw search count) keeps the correlation honest
     // under hybrid + MMR retrieval: a session that searches and gets noise
     // is materially different from one that searches and finds relevant
@@ -256,6 +257,86 @@ export function queryMemoryOutcomeCorrelation(
   }
 }
 
+/**
+ * Per-memory outcome correlation. For each memory returned by at least
+ * `MIN_SESSIONS` sessions in the period, the count of returning sessions
+ * and the share that completed. Built on the memory_search_results join
+ * (migration 028 / ANALYTICS_SPEC §11) so we can answer the per-memory
+ * question §10 #7 forbids the hit-rate framing of: "sessions that read
+ * this memory completed at X%, not how often this memory got picked."
+ *
+ * Min-sample gate. Per-memory completion rates pivot wildly at low N (one
+ * session in, one session completed → 100%). The gate suppresses memories
+ * with fewer than MIN_SESSIONS in the period so the read can't surface
+ * noise as signal. Tunable in one place.
+ *
+ * Tolerance. Returns `[]` when the join table is missing (a TeamDO that
+ * has not yet run migration 028) so the analytics endpoint stays alive
+ * during a staggered upgrade. The same `safeAll`/try-catch pattern other
+ * memory queries use.
+ */
+const PER_MEMORY_MIN_SESSIONS = 3;
+const PER_MEMORY_LIMIT = 20;
+
+export function queryMemoryPerEntryOutcomes(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  days: number,
+): MemoryPerEntryOutcome[] {
+  try {
+    // Filter sessions by scope (per-handle when caller is /me/-scoped).
+    // memory_search_results carries no handle — it joins to sessions for
+    // outcome and to memories for the text preview. The scope fragment
+    // applies to the sessions table because that is where authorship lives.
+    const { sql: scopedSessions, params: scopeParams } = withScope(
+      `SELECT 1 FROM sessions s WHERE s.id = msr.session_id`,
+      [],
+      scope,
+      { handleColumn: 's.handle' },
+    );
+    const resultRows = sql
+      .exec(
+        `SELECT
+             m.id AS id,
+             m.text AS text,
+             COUNT(*) AS sessions,
+             SUM(CASE WHEN s.outcome = 'completed' THEN 1 ELSE 0 END) AS completed
+           FROM memory_search_results msr
+           JOIN sessions s ON s.id = msr.session_id
+           JOIN memories m ON m.id = msr.memory_id
+           WHERE msr.searched_at > datetime('now', '-' || ? || ' days')
+             AND m.merged_into IS NULL
+             AND m.invalid_at IS NULL
+             AND EXISTS (${scopedSessions})
+           GROUP BY m.id
+           HAVING sessions >= ?
+           ORDER BY sessions DESC, completed DESC
+           LIMIT ?`,
+        days,
+        ...scopeParams,
+        PER_MEMORY_MIN_SESSIONS,
+        PER_MEMORY_LIMIT,
+      )
+      .toArray();
+
+    return rows(resultRows, (r) => {
+      const text = r.string('text');
+      const sessions = r.number('sessions');
+      const completed = r.number('completed');
+      return {
+        id: r.string('id'),
+        text_preview: text.length > 120 ? text.slice(0, 120) + '...' : text,
+        sessions,
+        completed,
+        completion_rate: sessions > 0 ? Math.round((completed / sessions) * 1000) / 10 : 0,
+      };
+    });
+  } catch (err) {
+    log.warn(`memoryPerEntryOutcomes query failed: ${err}`);
+    return [];
+  }
+}
+
 export function queryTopMemories(
   sql: SqlStorage,
   scope: AnalyticsScope,
@@ -296,13 +377,24 @@ export function queryTopMemories(
 }
 
 // Cross-tool memory flow: pairs of (author_tool, consumer_tool) where the
-// consumer_tool ran sessions in the period that COULD have read memories
-// authored by author_tool. Honest framing: this measures co-presence
-// (consumer_tool had sessions while author_tool's memories existed) and
-// the AVAILABLE memory pool — not exact read attribution. The per-memory
-// `memory_search_results` join table is unbuilt (ANALYTICS_SPEC §10), so
-// we cannot say which sessions read which memories. The renderer labels
-// each row "available to" not "read by" to keep the framing honest.
+// consumer_tool's sessions actually retrieved memories the author_tool wrote
+// in the window. Built on the memory_search_results join (migration 028)
+// so the count is reads, not the available pool. The PK on
+// (session_id, memory_id) means a session that re-fetches the same memory
+// twice still only counts once toward `reading_sessions`, and the
+// COUNT(DISTINCT memory_id) keeps `memories_read` honest under repeated
+// search rounds.
+//
+// Tool axis only. The query intentionally drops the handle dimension so the
+// detail view cannot pivot to per-developer flow; that pivot is the
+// surveillance shape ANALYTICS_SPEC §10 #4 forbids. Scope filtering still
+// applies to consumer sessions so /me/-scope answers "what other tools'
+// memories did MY sessions read."
+//
+// Tolerance. Returns `[]` when memory_search_results is missing (older
+// TeamDOs that have not yet run migration 028) so the analytics endpoint
+// stays alive during a staggered upgrade. Same try/catch pattern the M.2
+// per-memory query uses.
 //
 // Detail-view English questions this anchors:
 //   1. Which tools share memory most? (this widget)
@@ -318,38 +410,30 @@ export function queryCrossToolMemoryFlow(
   days: number,
 ): CrossToolMemoryFlowEntry[] {
   try {
-    const { sql: head, params } = withScope(
-      `WITH active_authors AS (
-           SELECT host_tool, COUNT(*) AS memory_count
-           FROM memories
-           WHERE merged_into IS NULL AND invalid_at IS NULL
-             AND host_tool IS NOT NULL AND host_tool != 'unknown'
-           GROUP BY host_tool
-           HAVING memory_count > 0
-         ),
-         active_consumers AS (
-           SELECT host_tool, COUNT(*) AS session_count
-           FROM sessions
-           WHERE started_at > datetime('now', '-' || ? || ' days')
-             AND host_tool IS NOT NULL AND host_tool != 'unknown'`,
+    const { sql: q, params } = withScope(
+      `SELECT
+           m.host_tool AS author_tool,
+           s.host_tool AS consumer_tool,
+           COUNT(DISTINCT msr.memory_id) AS memories_read,
+           COUNT(DISTINCT msr.session_id) AS reading_sessions
+         FROM memory_search_results msr
+         JOIN sessions s ON s.id = msr.session_id
+         JOIN memories m ON m.id = msr.memory_id
+         WHERE msr.searched_at > datetime('now', '-' || ? || ' days')
+           AND m.merged_into IS NULL
+           AND m.invalid_at IS NULL
+           AND m.host_tool IS NOT NULL AND m.host_tool != 'unknown'
+           AND s.host_tool IS NOT NULL AND s.host_tool != 'unknown'
+           AND m.host_tool != s.host_tool`,
       [days],
       scope,
+      { handleColumn: 's.handle' },
     );
     const resultRows = sql
       .exec(
-        `${head}
-           GROUP BY host_tool
-           HAVING session_count > 0
-         )
-         SELECT
-           a.host_tool AS author_tool,
-           c.host_tool AS consumer_tool,
-           a.memory_count AS memories,
-           c.session_count AS consumer_sessions
-         FROM active_authors a
-         CROSS JOIN active_consumers c
-         WHERE a.host_tool != c.host_tool
-         ORDER BY (a.memory_count * c.session_count) DESC
+        `${q}
+         GROUP BY author_tool, consumer_tool
+         ORDER BY memories_read DESC, reading_sessions DESC
          LIMIT ?`,
         ...params,
         CROSS_TOOL_FLOW_LIMIT,
@@ -358,8 +442,8 @@ export function queryCrossToolMemoryFlow(
     return rows(resultRows, (r) => ({
       author_tool: r.string('author_tool'),
       consumer_tool: r.string('consumer_tool'),
-      memories: r.number('memories'),
-      consumer_sessions: r.number('consumer_sessions'),
+      memories_read: r.number('memories_read'),
+      reading_sessions: r.number('reading_sessions'),
     }));
   } catch (err) {
     log.warn(`crossToolMemoryFlow query failed: ${err}`);
@@ -368,10 +452,10 @@ export function queryCrossToolMemoryFlow(
 }
 
 // Memory aging composition. Currently-live memories bucketed by age. Lifetime
-// scope by design — picker doesn't apply (catalog timeScope='all-time').
+// scope by design - picker doesn't apply (catalog timeScope='all-time').
 //
 // Detail-view English questions this anchors:
-//   1. Is knowledge fresh? (this widget — composition bar)
+//   1. Is knowledge fresh? (this widget - composition bar)
 //   2. Which categories age fastest? (categories × age bucket)
 //   3. Are we accumulating or replacing? (created vs invalidated trend)
 //   4. Which directories have fresh knowledge? (memory.tags or path heuristic)
@@ -412,7 +496,7 @@ export function queryMemoryAging(sql: SqlStorage): MemoryAgingComposition {
 // state names the gate.
 //
 // Detail-view English questions this anchors:
-//   1. Top categories? (this widget — ranked list)
+//   1. Top categories? (this widget - ranked list)
 //   2. Which categories help completion? (category × outcome correlation)
 //   3. Which directories have which categories? (heatmap)
 //   4. Who authors which categories? (handle-blind handle counts × category)
