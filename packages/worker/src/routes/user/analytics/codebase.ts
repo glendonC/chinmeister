@@ -82,7 +82,7 @@ export function projectHeatmap(acc: HeatmapAcc): FileHeatmapEntry[] {
 // user-scope sum treats every team as a separate repo with its own file
 // tree, which matches chinmeister's one-team-per-project model. A user with
 // matching paths across two teams (e.g., `src/index.ts` in each) sees the
-// file counted once per team — semantically correct because they are
+// file counted once per team - semantically correct because they are
 // different files in different projects.
 
 export interface FilesTouchedTotalAcc {
@@ -104,7 +104,7 @@ export function projectFilesTouchedTotal(acc: FilesTouchedTotalAcc): number {
 // ── files_touched_half_split ─────────────────────
 //
 // Mirrors the files_touched_total aggregation: each team contributes its own
-// in-window split, summed cross-team. Same one-team-per-project semantic —
+// in-window split, summed cross-team. Same one-team-per-project semantic -
 // distinct paths in different repos are different files, so summation is
 // valid. Returns null when no team reported a split (all windows too short).
 // `hasAny` gates null vs zero so the widget can distinguish "can't compute"
@@ -210,13 +210,19 @@ export function projectFileRework(acc: FileReworkAcc): FileReworkEntry[] {
 }
 
 // ── directory_heatmap ────────────────────────────
-
+//
+// Cross-team rollup of the per-team directory heatmap. The per-team query
+// emits session-distinct `completed_sessions` / `total_sessions` so this
+// merge can sum the underlying tallies and re-derive completion_rate from
+// the totals. Weighted-averaging the per-team rates (the prior approach)
+// double-counted sessions touching multiple files within a directory and
+// drifted further out as more teams contributed.
 interface DirHeatmapBucket {
   touch_count: number;
   file_count: number;
   total_lines: number;
-  rate_sum: number;
-  rate_count: number;
+  completed_sessions: number;
+  total_sessions: number;
 }
 
 export type DirHeatmapAcc = Map<string, DirHeatmapBucket>;
@@ -227,19 +233,18 @@ export function createDirHeatmapAcc(): DirHeatmapAcc {
 
 export function mergeDirHeatmap(acc: DirHeatmapAcc, team: TeamResult): void {
   for (const dh of team.directory_heatmap ?? []) {
-    const tc = dh.touch_count;
     const existing = acc.get(dh.directory) ?? {
       touch_count: 0,
       file_count: 0,
       total_lines: 0,
-      rate_sum: 0,
-      rate_count: 0,
+      completed_sessions: 0,
+      total_sessions: 0,
     };
-    existing.touch_count += tc;
+    existing.touch_count += dh.touch_count;
     existing.file_count += dh.file_count;
     existing.total_lines += dh.total_lines;
-    existing.rate_sum += dh.completion_rate * tc;
-    existing.rate_count += tc;
+    existing.completed_sessions += dh.completed_sessions ?? 0;
+    existing.total_sessions += dh.total_sessions ?? 0;
     acc.set(dh.directory, existing);
   }
 }
@@ -253,7 +258,10 @@ export function projectDirHeatmap(acc: DirHeatmapAcc): DirectoryHeatmapEntry[] {
       touch_count: v.touch_count,
       file_count: v.file_count,
       total_lines: v.total_lines,
-      completion_rate: v.rate_count > 0 ? round1(v.rate_sum / v.rate_count) : 0,
+      completed_sessions: v.completed_sessions,
+      total_sessions: v.total_sessions,
+      completion_rate:
+        v.total_sessions > 0 ? round1((v.completed_sessions / v.total_sessions) * 100) : 0,
     }));
 }
 
@@ -395,7 +403,7 @@ export function projectFilesByWorkType(acc: FilesByWorkTypeAcc): FilesByWorkType
 //
 // Each team independently classifies its own files as new or revisited
 // relative to the window. Summing across teams preserves the per-project
-// judgement — a file that is "new" in project A and "revisited" in project B
+// judgement - a file that is "new" in project A and "revisited" in project B
 // is one of each at user scope because the two file paths live in different
 // repos and thus have independent first-seen timestamps.
 

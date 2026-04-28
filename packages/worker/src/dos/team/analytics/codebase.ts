@@ -22,22 +22,22 @@ const log = createLogger('TeamDO.analytics');
  * Threshold constants for the codebase analytics queries. Extracted from
  * inline SQL so each magic number has a name, a rationale, and a single
  * point-of-change when we learn from real production distributions. Keep
- * the comments close to the constants — callers should understand *why*
+ * the comments close to the constants - callers should understand *why*
  * a number is what it is before changing it.
  *
  * Tuning approach: start conservative (higher thresholds), widen if the
  * widgets stay sparse at team scale. Never go lower than the documented
- * minimums — the widgets assume "meaningful activity" and below these
+ * minimums - the widgets assume "meaningful activity" and below these
  * floors they surface noise, not signal.
  */
 
 /** File-churn floor: a file must appear in this many distinct sessions before
- *  it ranks. `>= 2` is the minimum meaningful definition — a single-session
+ *  it ranks. `>= 2` is the minimum meaningful definition - a single-session
  *  touch isn't churn. Raise if the list feels noisy at scale. */
 const FILE_CHURN_MIN_SESSIONS = 2;
 
 /** Concurrent-edits floor: how many distinct agents must have touched a file
- *  for it to count as a collision. `>= 2` is structural — you cannot have a
+ *  for it to count as a collision. `>= 2` is structural - you cannot have a
  *  "collision" with one agent. Not tunable beyond this floor. */
 const CONCURRENT_EDITS_MIN_AGENTS = 2;
 
@@ -52,7 +52,7 @@ const FILE_REWORK_MIN_FAILED_EDITS = 1;
 /** Cold-directory floors: a directory must have had `prior_edit_count` real
  *  activity before it qualifies as "cold" (prevents random test files from
  *  cluttering the list), and must be `stale_days` past its last touch. Both
- *  are ripe for tuning once we have real team-scale data — the 14-day
+ *  are ripe for tuning once we have real team-scale data - the 14-day
  *  staleness window is a reasonable working-week * 2 heuristic, and the
  *  edit-count floor is set to filter out fire-and-forget files. */
 const COLD_DIR_STALE_DAYS = 14;
@@ -73,13 +73,13 @@ function extractDirectory(filePath: string): string {
 }
 
 /**
- * File churn — operation-level measurement from the `edits` table, uncapped.
+ * File churn - operation-level measurement from the `edits` table, uncapped.
  *
  * Intentional dual data path with `queryFileHeatmapEnhanced`: that query reads
  * the per-session `files_touched` JSON (capped at 50 entries per session,
  * presence-based), while this query reads the raw `edits` table (uncapped,
  * one row per edit operation). The two widgets measure related but distinct
- * signals — do not unify them without a conscious decision to collapse the
+ * signals - do not unify them without a conscious decision to collapse the
  * distinction. See `file-churn` vs `files` widget verdicts in the codebase
  * rubric pass (2026-04-21).
  */
@@ -126,7 +126,7 @@ export function queryFileChurn(
 
 // Groups by agent_id (per-session agent instance), NOT handle (per-user). The
 // primary chinmeister use case is one user running multiple agents across tools
-// (Claude Code + Cursor + Windsurf) — those agents share a handle but have
+// (Claude Code + Cursor + Windsurf) - those agents share a handle but have
 // distinct agent_ids. Grouping by handle would silently return zero in exactly
 // the scenario this widget exists to surface. Grouping by agent_id catches
 // both the solo-multi-tool case and the team case (different users → different
@@ -171,13 +171,13 @@ export function queryConcurrentEdits(
 }
 
 /**
- * File heatmap — presence-based measurement from `sessions.files_touched`,
+ * File heatmap - presence-based measurement from `sessions.files_touched`,
  * capped at 50 files per session by recordEdit.
  *
  * Intentional dual data path with `queryFileChurn`: this query reads the
  * per-session JSON array (presence-based; one row per distinct file in a
  * session's touched list), while queryFileChurn reads the raw `edits` table
- * (uncapped, operation-based). The two widgets surface different signals —
+ * (uncapped, operation-based). The two widgets surface different signals -
  * "most worked-on files in this period" (this one) vs "files with the widest
  * session spread" (churn). Do not unify without collapsing that distinction.
  */
@@ -280,68 +280,80 @@ export function queryDirectoryHeatmap(
   days: number,
 ): DirectoryHeatmapEntry[] {
   try {
+    // Session-distinct rollup. The previous implementation pre-aggregated
+    // per file via SUM(case outcome=completed)/COUNT(*) and then weighted-
+    // averaged those file rates by touch count, which double-counts a
+    // session that touches several files in the same directory. The fix
+    // reads raw (session, file) pairs and dedupes by session_id when
+    // computing completion. completion_rate is recomputed from the
+    // distinct counts and exposed alongside so the cross-team merge can
+    // re-derive honestly from the underlying tallies. Only sessions with
+    // a terminal outcome contribute to total_sessions; in-flight sessions
+    // (NULL outcome) carry no completion signal yet.
     const { sql: q, params } = withScope(
       `SELECT
-           value AS file,
-           COUNT(*) AS touch_count,
-           COALESCE(SUM(lines_added + lines_removed), 0) AS total_lines,
-           ROUND(CAST(SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
-             / NULLIF(COUNT(*), 0) * 100, 1) AS completion_rate
-         FROM sessions, json_each(sessions.files_touched)
-         WHERE started_at > datetime('now', '-' || ? || ' days')
-           AND files_touched != '[]'`,
+           s.id AS session_id,
+           s.outcome AS outcome,
+           COALESCE(s.lines_added, 0) + COALESCE(s.lines_removed, 0) AS lines,
+           value AS file
+         FROM sessions s, json_each(s.files_touched)
+         WHERE s.started_at > datetime('now', '-' || ? || ' days')
+           AND s.files_touched != '[]'`,
       [days],
       scope,
     );
-    // Query file-level data and roll up to directories in JS
-    // (SQLite lacks a clean dirname function)
-    const rawRows = sql
-      .exec(
-        `${q}
-         GROUP BY value`,
-        ...params,
-      )
-      .toArray();
+    const rawRows = sql.exec(q, ...params).toArray();
 
-    const dirMap = new Map<
-      string,
-      {
-        touch_count: number;
-        file_count: number;
-        total_lines: number;
-        completed_sum: number;
-        total_sum: number;
-      }
-    >();
+    interface DirAcc {
+      touch_count: number;
+      files: Set<string>;
+      total_lines: number;
+      completed_sessions: Set<string>;
+      total_sessions: Set<string>;
+    }
+    const dirMap = new Map<string, DirAcc>();
 
     for (const raw of rawRows) {
       const r = row(raw);
-      const dir = extractDirectory(r.string('file'));
-      const existing = dirMap.get(dir) || {
-        touch_count: 0,
-        file_count: 0,
-        total_lines: 0,
-        completed_sum: 0,
-        total_sum: 0,
-      };
-      const touches = r.number('touch_count');
-      existing.touch_count += touches;
-      existing.file_count += 1;
-      existing.total_lines += r.number('total_lines');
-      existing.completed_sum += r.number('completion_rate') * touches;
-      existing.total_sum += touches;
-      dirMap.set(dir, existing);
+      const file = r.string('file');
+      if (!file) continue;
+      const dir = extractDirectory(file);
+      let acc = dirMap.get(dir);
+      if (!acc) {
+        acc = {
+          touch_count: 0,
+          files: new Set(),
+          total_lines: 0,
+          completed_sessions: new Set(),
+          total_sessions: new Set(),
+        };
+        dirMap.set(dir, acc);
+      }
+      acc.touch_count += 1;
+      acc.files.add(file);
+      acc.total_lines += r.number('lines');
+      const sessionId = r.string('session_id');
+      const outcome = r.nullableString('outcome');
+      if (sessionId && outcome) {
+        acc.total_sessions.add(sessionId);
+        if (outcome === 'completed') acc.completed_sessions.add(sessionId);
+      }
     }
 
     return [...dirMap.entries()]
-      .map(([directory, v]) => ({
-        directory,
-        touch_count: v.touch_count,
-        file_count: v.file_count,
-        total_lines: v.total_lines,
-        completion_rate:
-          v.total_sum > 0 ? Math.round((v.completed_sum / v.total_sum) * 10) / 10 : 0,
-      }))
+      .map(([directory, v]) => {
+        const total = v.total_sessions.size;
+        const completed = v.completed_sessions.size;
+        return {
+          directory,
+          touch_count: v.touch_count,
+          file_count: v.files.size,
+          total_lines: v.total_lines,
+          completed_sessions: completed,
+          total_sessions: total,
+          completion_rate: total > 0 ? Math.round((completed / total) * 1000) / 10 : 0,
+        };
+      })
       .sort((a, b) => b.touch_count - a.touch_count)
       .slice(0, 30);
   } catch (err) {
@@ -427,7 +439,7 @@ export function queryAuditStaleness(sql: SqlStorage, scope: AnalyticsScope): Aud
 // Distinct file count per work_type within the window. Reads `edits.work_type`
 // (normalized on write via migration 018) so the grouping is O(1) lookups
 // rather than re-classifying paths at query time. Unlike `file_heatmap`, this
-// is uncapped — every work_type bucket gets its real file count, which is what
+// is uncapped - every work_type bucket gets its real file count, which is what
 // the Files-Touched breadth strip visualises.
 export function queryFilesByWorkType(
   sql: SqlStorage,
@@ -464,7 +476,7 @@ export function queryFilesByWorkType(
 // Files touched in the window split by first-seen-ever: "new" if the file's
 // earliest edit anywhere in history falls inside the window, "revisited" if it
 // was first touched before the window opened. Answers "was this week's breadth
-// expansion or familiar ground?" without inventing a new column — the
+// expansion or familiar ground?" without inventing a new column - the
 // (file_path, created_at) index powers the per-file MIN/MAX.
 //
 // HAVING gates the outer sum to files active in the period, so MIN across the
