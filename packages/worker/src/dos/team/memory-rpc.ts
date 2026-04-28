@@ -83,6 +83,32 @@ export async function rpcSearchMemories(
         `UPDATE sessions SET memories_search_hits = memories_search_hits + 1 WHERE agent_id = ? AND ended_at IS NULL`,
         resolved,
       );
+      // Per-memory join (migration 028 / ANALYTICS_SPEC §11). Record which
+      // specific memories were returned so analytics can attribute outcome
+      // correlation to individual memories instead of the binary
+      // hit-vs-no-hit grain. Look up the active session id once; skip the
+      // join writes when no active session exists (search outside of an
+      // open session, e.g. dashboard probes). PRIMARY KEY (session_id,
+      // memory_id) deduplicates repeat searches that return the same
+      // memory inside a single session — the question is "did this
+      // session see this memory" not "how many times".
+      const sessionRow = ctx.sql
+        .exec(
+          `SELECT id FROM sessions WHERE agent_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1`,
+          resolved,
+        )
+        .toArray()[0] as { id?: string } | undefined;
+      const sessionId = sessionRow?.id;
+      if (sessionId) {
+        for (const m of result.memories) {
+          if (!m.id) continue;
+          ctx.sql.exec(
+            `INSERT OR IGNORE INTO memory_search_results (session_id, memory_id) VALUES (?, ?)`,
+            sessionId,
+            m.id,
+          );
+        }
+      }
     }
     return result;
   });

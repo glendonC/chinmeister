@@ -858,6 +858,42 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '028_memory_search_results',
+    up(sql) {
+      // Per-memory search-result join (ANALYTICS_SPEC §11). Each row records
+      // that a session's search returned a specific memory. Without this
+      // table memory-outcome analysis collapses to the binary "session
+      // hit memory vs didn't" grain (the existing memory_outcome_correlation
+      // bucket). With it, queries can attribute completion correlation to
+      // individual memories.
+      //
+      // Important framing: §10 #7 names "search hit rate as quality" as an
+      // anti-pattern. Read queries must surface PER-MEMORY OUTCOME
+      // CORRELATION (sessions returning this memory completed at X%) not
+      // raw popularity. The schema enables both reads; the implementation
+      // contract is to only ship the correlation framing.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS memory_search_results (
+          session_id TEXT NOT NULL,
+          memory_id TEXT NOT NULL,
+          searched_at TEXT NOT NULL DEFAULT (datetime('now')),
+          PRIMARY KEY (session_id, memory_id)
+        )
+      `);
+      // Per-memory aggregation needs an index on memory_id; per-session
+      // joins read by session_id (the PK leftmost column) so they don't
+      // need an extra index.
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_memory_search_results_memory ON memory_search_results(memory_id)',
+      );
+      // Window scans (period analytics) read by searched_at; index keeps
+      // the per-period rollup linear in matching rows, not full table.
+      sql.exec(
+        'CREATE INDEX IF NOT EXISTS idx_memory_search_results_searched_at ON memory_search_results(searched_at)',
+      );
+    },
+  },
 ];
 
 export function ensureSchema(
