@@ -160,7 +160,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'live-agents',
     name: 'live agents',
-    description: 'Agents working right now',
+    description: 'Agents working in this team right now, across every tool you use.',
     category: 'live',
     scope: 'both',
     viz: 'live-list',
@@ -175,7 +175,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'live-conflicts',
     name: 'live conflicts',
-    description: 'Files being edited by more than one agent right now',
+    description:
+      "Files multiple agents are editing right now. Coordinate on these before they stomp on each other's edits.",
     category: 'live',
     scope: 'both',
     viz: 'data-list',
@@ -190,7 +191,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'files-in-play',
     name: 'files being edited',
-    description: 'Files currently being edited',
+    description:
+      'Files at least one agent has open right now, across every tool. A glance here before you pick what to work on next.',
     category: 'live',
     scope: 'both',
     viz: 'data-list',
@@ -205,7 +207,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'claimed-files',
     name: 'claimed files',
-    description: 'Files reserved by agents via chinmeister_claim_files',
+    description:
+      'Files an agent has reserved so others stay out while it works. Claims that hang around for a while are worth a look.',
     category: 'live',
     scope: 'project',
     viz: 'data-list',
@@ -223,7 +226,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'sessions',
     name: 'sessions',
     description:
-      'Scalar session count with period delta. Canonical anchor for the session dimension.',
+      'How many agent sessions ran across every tool this period. Click in for outcomes, cost, or files.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -238,7 +241,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'edits',
     name: 'edits',
-    description: 'Total edits made by agents',
+    description:
+      'How many file edits your agents made this period. Read it next to outcomes and one-shot rate; volume only matters if the work ships.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -253,7 +257,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'lines-added',
     name: 'lines added',
-    description: 'Total lines of code added',
+    description:
+      'Lines your agents added this period. A volume signal, not a productivity score, so read it next to outcomes and rework.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -268,7 +273,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'lines-removed',
     name: 'lines removed',
-    description: 'Total lines of code removed',
+    description:
+      'Lines your agents removed this period. A volume signal, not a productivity score, so read it next to outcomes and rework.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -283,7 +289,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'files-touched',
     name: 'files touched',
-    description: 'Unique files edited by agents',
+    description:
+      'Unique files your agents touched this period. Click in to see where the work concentrated.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -298,7 +305,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'cost',
     name: 'cost',
-    description: 'Estimated cost from token usage',
+    description:
+      'Estimated spend from token usage across every tool and model this period. Click in to find expensive sessions or models worth swapping.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -313,7 +321,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'cost-per-edit',
     name: 'cost per edit',
-    description: 'Average cost per file edit across sessions with token data',
+    description:
+      'Estimated cost per file edit, across sessions where we have token data. Read it next to outcomes; a high ratio with low completion is the waste signal, not the ratio on its own.',
     category: 'usage',
     scope: 'both',
     viz: 'stat',
@@ -346,7 +355,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'outcomes',
     name: 'outcomes',
-    description: 'Finished, abandoned, and failed sessions',
+    description:
+      'How sessions ended this period: finished, abandoned, or failed. Click in for the full list with per-file context.',
     category: 'outcomes',
     scope: 'both',
     viz: 'outcome-bar',
@@ -368,7 +378,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'outcome-trend',
     name: 'completion rate trend',
-    description: 'Daily completion rate over time',
+    description: 'Your daily completion rate over time.',
     category: 'outcomes',
     scope: 'both',
     viz: 'sparkline',
@@ -383,7 +393,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'one-shot-rate',
     name: 'one-shot rate',
-    description: 'Percentage of sessions where edits worked without retry',
+    description: 'How often your agents got the edit right on the first try, no retry needed.',
     category: 'outcomes',
     scope: 'both',
     viz: 'stat',
@@ -398,7 +408,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'stuckness',
     name: 'stuck sessions',
-    description: 'Sessions where the agent stalled for 15+ minutes',
+    description: 'Sessions where the agent went quiet for 15 minutes or more.',
     category: 'outcomes',
     scope: 'both',
     // viz: 'stat' so the hero value uses --display-hero like one-shot-rate,
@@ -422,7 +432,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'heatmap',
     name: 'activity heatmap',
-    description: 'When you run sessions by hour and day of week',
+    description: 'When you run agent sessions, by hour and day of week.',
     category: 'activity',
     scope: 'both',
     viz: 'heatmap',
@@ -437,7 +447,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'work-types',
     name: 'work types',
     description:
-      'Thick weft strip (width = share) with one summary line; tail merges at 6+ types. Full table in activity detail.',
+      'What kinds of work your agents are doing. Click in to see which ones ship and which ones stall.',
     category: 'activity',
     scope: 'both',
     viz: 'proportional-bar',
@@ -454,7 +464,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'commit-stats',
     name: 'commits',
-    description: 'Hook-captured commits from agent sessions, rolled up across tools',
+    description:
+      'Commits your agents made this period, across every tool. The git-side proof that sessions are actually shipping. Captured for tools with hook integration.',
     category: 'codebase',
     scope: 'both',
     viz: 'stat-row',
@@ -468,7 +479,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'directories',
     name: 'top directories',
-    description: 'Top 10 directories by touch count, with per-directory completion rate',
+    description:
+      'The 8 directories your agents work in most, with how often sessions there finish cleanly. The low-completion ones are the recurring trouble spots.',
     category: 'codebase',
     scope: 'both',
     viz: 'bar-chart',
@@ -483,7 +495,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'files',
     name: 'top files',
-    description: 'Top 10 files by touch count, with completion rate and line changes',
+    description:
+      'The 8 files your agents touched most this period, with completion rate and lines changed. The hotspots.',
     category: 'codebase',
     scope: 'both',
     viz: 'data-list',
@@ -516,7 +529,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'tool-work-type-fit',
     name: 'tool fit by work type',
     description:
-      'Where each tool wins by work-type. One row per tool with its strongest work-type, completion rate, and sample. Substrate-unique: head-to-head outcomes on identical work-types in the same repo. Read it as a routing rule — send each work-type to the tool that ships it.',
+      'Which tool finishes each kind of work most reliably in this repo. One row per tool, showing its strongest work type, completion rate, and sample size. Read it as a routing rule for where to send the next refactor or bug fix.',
     category: 'tools',
     scope: 'both',
     viz: 'data-list',
@@ -530,9 +543,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'one-shot-by-tool',
-    name: 'first-try rate by tool',
+    name: 'one-shot rate by tool',
     description:
-      "Per-tool one-shot rate — % of each tool's sessions where edits worked without an Edit→Bash→Edit retry cycle. The same metric the cockpit one-shot-rate KPI shows, sliced by host_tool. Tools below 3 sessions render '—' to keep the bar honest.",
+      "How often each tool's edits work the first time, no retry. Tools with fewer than 3 sessions show a dash.",
     category: 'tools',
     scope: 'both',
     viz: 'data-list',
@@ -548,7 +561,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'model-mix',
     name: 'model mix',
     description:
-      "Total spend leads; the share strip below splits by model. Click a segment to swap the caption to that model's stats. Avoids the model A > B ranking anti-pattern; share is a fact, not a recommendation.",
+      'How your spend splits across the AI models your tools use. Click a segment to inspect a single model. Share is a fact, not a recommendation that one model beats another.',
     category: 'tools',
     scope: 'both',
     viz: 'proportional-bar',
@@ -566,7 +579,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'projects',
     name: 'projects',
     description:
-      'Cross-project comparator: tool mix, 7-day activity, shared memory growth, conflict trend',
+      'Compare your projects on tool mix, 7-day activity, shared memory growth, and conflict trend.',
     category: 'usage',
     scope: 'overview',
     viz: 'project-list',
@@ -600,7 +613,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'scope-complexity',
     name: 'completion by scope',
-    description: 'Completion rate bucketed by files touched per session',
+    description: 'How completion rate changes as sessions touch more files.',
     category: 'outcomes',
     scope: 'both',
     viz: 'bucket-chart',
@@ -617,7 +630,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'file-rework',
     name: 'files in failed sessions',
     description:
-      "Top 10 files where edits often land inside sessions that end abandoned or failed. Percentage is the share of this file's edits attached to failing sessions — high values flag files that recur in sessions that don't complete, not necessarily that the edits themselves were broken.",
+      "The 8 files that keep showing up in sessions that don't finish. The percentage is each file's fail rate: the share of its edits that landed inside non-completing sessions, not retry on the edit itself. Worth a careful look before editing again.",
     category: 'codebase',
     scope: 'both',
     viz: 'data-list',
@@ -633,7 +646,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'audit-staleness',
     name: 'cold directories',
     description:
-      'Directories with prior activity but no touches in 14+ days — ownership gaps and pruning candidates',
+      'Directories that used to see activity but have not been touched in 14 days or more. Ownership gaps and good candidates for pruning.',
     category: 'codebase',
     scope: 'both',
     viz: 'data-list',
@@ -649,7 +662,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'concurrent-edits',
     name: 'edit collisions',
-    description: 'Top 10 files touched by multiple agents this period — coordination hotspots',
+    description: 'The 8 files multiple agents touched most this period. Coordination hotspots.',
     category: 'codebase',
     scope: 'both',
     viz: 'data-list',
@@ -663,30 +676,31 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Tools (extended) ────────────────
-  // tool-handoffs is the substrate-unique headline of the Tools category.
-  // Two-column flow: opacity carries file count (volume), color carries
-  // handoff_completion_rate (quality). Top-8 pair cap with truthful tail
-  // row keeps the viz legible at team scale.
+  // tool-handoffs is a half-width flow strip entry point into the Tools flow
+  // detail. The main widget reports volume, landed context, and pair mix;
+  // pair-by-pair rates, timing, and recent files belong in the detail view.
   {
     id: 'tool-handoffs',
     name: 'cross-tool flow',
     description:
-      'Files that move between different tools, weighted by completion rate. The substrate-unique signal: no IDE or APM can show files that travel across competing vendor agents in the same repo. Hover a line to inspect the pair.',
+      'How files travel between your tools, with landed context and a compact view of the top pairs. Click in for pair-by-pair flow, gaps, and outcomes.',
     category: 'tools',
     scope: 'both',
-    viz: 'bar-chart',
-    w: 12,
-    h: 4,
-    minW: 8,
+    viz: 'proportional-bar',
+    w: 6,
+    h: 3,
+    minW: 6,
     minH: 3,
+    maxW: 6,
+    maxH: 3,
     dataKeys: ['tool_handoffs', 'tool_comparison'],
     drillTarget: { view: 'tools', tab: 'flow', q: 'pairs' },
   },
   {
     id: 'tool-call-errors',
-    name: 'tool call errors',
+    name: 'tool call error rate',
     description:
-      'Percentage of tool calls that ended in an error this period. Drill in for the top recurring patterns, the frequent / recent split, and per-tool fingerprints.',
+      "How often your agents' tool calls fail this period. Click in to see the most common errors. Captured for tools with hook integration.",
     category: 'tools',
     scope: 'both',
     viz: 'stat',
@@ -709,7 +723,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'confused-files',
     name: 'files where the agent struggled',
     description:
-      'Files where 2+ sessions had user messages classified confused or frustrated. Surfaces the file (a coordination axis), not the sentiment — sentiment is the input that ranks files. Read these files alongside their memories before editing; consider a stronger model for confused regions.',
+      'Files where multiple sessions had messages flagged as confused or frustrated. Worth reading these alongside their memories before you edit them. Captured for tools with conversation logs.',
     category: 'conversations',
     scope: 'both',
     viz: 'data-list',
@@ -723,7 +737,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'unanswered-questions',
     name: 'questions in abandoned sessions',
     description:
-      "Count of user messages classified as questions inside sessions that ended abandoned — intent the agent couldn't fulfill. A navigation aid: open these sessions to see what was asked, then save the context as a memory or spawn a clarifying session.",
+      "Questions you asked in sessions that got abandoned, things the agent couldn't follow through on. Click in for the filtered session list. Captured for tools with conversation logs.",
     category: 'conversations',
     scope: 'both',
     viz: 'stat',
@@ -750,7 +764,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'cross-tool-handoff-questions',
     name: 'cross-tool question handoffs',
     description:
-      'Events where a session abandoned with the user mid-question and a session in a different tool picked up the same file with another question or a confused turn. Substrate-unique to chinmeister: no single-tool surface can see both sides of the handoff. Read each pair to decide whether to save context as a memory, claim the file, or set a routing rule.',
+      "When one tool's session left a question hanging and a second tool picked up the same file with another question or a confused turn. Captured for tools with conversation logs.",
     category: 'conversations',
     scope: 'both',
     viz: 'data-list',
@@ -768,9 +782,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   // to default after MemoryDetailView pattern lands.
   {
     id: 'memory-cross-tool-flow',
-    name: 'memory across tools',
+    name: 'cross-tool memory',
     description:
-      "Memories one tool wrote that another tool's sessions could read. Available-to, not read-by — exact attribution is pending.",
+      "Memories one tool wrote that another tool's sessions could read. Proof that knowledge is moving between your tools. Note: this counts what's available to read, not what's actually been read; exact attribution is still being worked on.",
     category: 'memory',
     scope: 'both',
     viz: 'data-list',
@@ -784,7 +798,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'memory-aging-curve',
     name: 'memory freshness',
-    description: 'Live memories under 30 days old. Lifetime scope; the picker does not apply.',
+    description:
+      'How many of your live memories were saved in the last 30 days. A low share means staleness is piling up.',
     category: 'memory',
     scope: 'both',
     viz: 'proportional-bar',
@@ -799,8 +814,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'memory-categories',
-    name: 'knowledge categories',
-    description: 'Top agent-tagged categories. Empty until agents tag on save.',
+    name: 'memory categories',
+    description:
+      'Freeform categories your agents tag memories with. Stays empty until agents start tagging.',
     category: 'memory',
     scope: 'both',
     viz: 'bar-chart',
@@ -818,9 +834,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
   {
     id: 'memory-health',
-    name: 'memory',
+    name: 'memory totals',
     description:
-      'Total live memories with average age and stale count. Lifetime scope; the picker does not apply.',
+      'How many memories you have live, how old they are on average, and how many have gone stale. Across every tool that wrote them.',
     category: 'memory',
     scope: 'both',
     viz: 'stat-row',
@@ -836,7 +852,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'memory-bus-factor',
     name: 'memory concentration',
     description:
-      'Directories where memories cluster on one author. Directory-axis, never names handles.',
+      'Directories where almost all the memory comes from a single person. Shows the share each directory carries, with a warn marker at 80% and up. Directory only, never names anyone.',
     category: 'memory',
     scope: 'both',
     viz: 'data-list',
@@ -851,7 +867,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'memory-supersession-flow',
     name: 'memory hygiene',
     description:
-      'Pending consolidation proposals with invalidated and merged counts for the window. Quiet until Memory Hygiene Autopilot runs on cadence.',
+      'Pending consolidation proposals, with how many got invalidated or merged. Stays quiet until Memory Hygiene runs on its cadence.',
     category: 'memory',
     scope: 'both',
     viz: 'stat-row',
@@ -867,7 +883,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'memory-secrets-shield',
     name: 'secrets blocked',
     description:
-      'Secret writes the shield caught before reaching shared memory. Substrate-unique — only chinmeister sees cross-tool memory writes.',
+      'Secrets caught before they were saved into shared memory. Chinmeister sees writes from every tool, so it catches what no individual tool can.',
     category: 'memory',
     scope: 'both',
     viz: 'stat-row',
@@ -882,7 +898,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'hourly-effectiveness',
     name: 'completion rate by hour',
     description:
-      'Cross-tool completion by clock hour, cockpit as a “diel” strip: 24 filaments, bar height = completion, intensity = session volume, strongest 3h window ringed. ActivityDetailView keeps curves and by-tool breakdowns.',
+      'How often agent sessions finish cleanly, by clock hour, across every tool. Your strongest 3-hour window is highlighted.',
     category: 'activity',
     scope: 'both',
     viz: 'bar-chart',
@@ -897,7 +913,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     id: 'file-overlap',
     name: 'file overlap',
     description:
-      "Share of files this period that multiple agents touched. Surfaces the team-overlap scalar that no IDE produces. Solo users see an honest 'requires 2+ agents' empty state — the populated branch is gated on team_size > 1. Anchors questions like overlap rate by directory, period trend, average agents-per-file in the overlap subset, claim coverage of overlap files, and tool-pair contribution.",
+      "Share of files this period that more than one agent worked on. The kind of cross-agent visibility no single IDE has. Solo users see a 'requires 2+ agents' empty state. Not a directional metric; high overlap can also mean paired work.",
     category: 'team',
     scope: 'both',
     viz: 'stat-row',
@@ -910,8 +926,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
 
   {
     id: 'memory-outcomes',
-    name: 'outcomes by memory',
-    description: 'How memory usage correlates with session success',
+    name: 'outcomes by memory use',
+    description:
+      "How often sessions that read memory finish, compared to sessions that didn't. A rough session-level proxy for now. Per-memory attribution is still being worked on, so this isn't a true per-memory ROI.",
     category: 'memory',
     scope: 'both',
     viz: 'bar-chart',
@@ -926,7 +943,8 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   {
     id: 'conflicts-blocked',
     name: 'conflicts blocked',
-    description: 'Edits the PreToolUse hook prevented this period',
+    description:
+      'Edits chinmeister stopped this period before two agents could collide on the same file. The coordination layer doing its job.',
     category: 'team',
     scope: 'both',
     viz: 'stat-row',
@@ -1238,22 +1256,16 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'commit-stats', colSpan: 12, rowSpan: 2 },
   { id: 'file-rework', colSpan: 12, rowSpan: 4 },
 
-  // Tools & Models — redesigned 2026-04-27. No matrices in the default layout.
-  //   Row 1: tool-handoffs (12×4) — completion-weighted cross-tool flow.
-  //     Two-column SVG: opacity carries file count, color carries
-  //     handoff_completion_rate. Substrate-unique (no IDE / APM sees
-  //     competitor agents).
-  //   Row 2: tool-work-type-fit (6×4) + tool-call-errors (3×2) — routing
-  //     decisions plus a single-stat reliability KPI sized to match every
-  //     other 3×2 KPI in the cockpit (sessions, edits, cost, one-shot-rate).
-  //     Detail view owns the top patterns, the frequent / recent split,
-  //     and per-tool fingerprints.
+  // Tools & Models — redesigned 2026-04-27 and tightened 2026-04-28.
+  // tool-work-type-fit owns the richer routing table. tool-handoffs is the
+  // half-width flow read; pair/gap breakdowns live in Tools detail. Error
+  // pattern breakdowns stay behind the compact tool-call-errors entry point.
   //
   // one-shot-by-tool was demoted from default to catalog: the cockpit
   // already carries one-shot-rate as a KPI stat, and the per-tool slice
   // is a power-user add. Users who want both add it via the picker.
-  { id: 'tool-handoffs', colSpan: 12, rowSpan: 4 },
   { id: 'tool-work-type-fit', colSpan: 6, rowSpan: 4 },
+  { id: 'tool-handoffs', colSpan: 6, rowSpan: 3 },
   { id: 'tool-call-errors', colSpan: 3, rowSpan: 2 },
 
   // memory-outcomes was demoted to catalog-only 2026-04-25 after the
