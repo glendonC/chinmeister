@@ -20,20 +20,21 @@ export const ACTIVITY_DEFAULT_LAYOUT: WidgetSlot[] = [
 ];
 
 // Trends tab - historical reflection. Bigger charts, full coverage.
+// Layout ids resolve through the alias map at load, so renames or cuts in
+// the catalog are absorbed transparently. Keep the array honest against
+// the current catalog so the catalog-parity test stays meaningful.
 export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
-  // session-trend was cut 2026-04-24 (see widget-catalog.ts Trends
-  // block). Outcomes snaps to its natural 8 cols - was 4 only because
-  // session-trend filled the other 8. No forced backfill on the row.
+  // Outcomes sits at its natural 8 cols. No forced backfill on the row;
+  // users add other widgets via the picker if they want the leftover 4
+  // cols filled.
   { id: 'outcomes', colSpan: 8, rowSpan: 3 },
   { id: 'heatmap', colSpan: 12, rowSpan: 3 },
   { id: 'work-types', colSpan: 6, rowSpan: 3 },
   { id: 'hourly-effectiveness', colSpan: 6, rowSpan: 3 },
   { id: 'directories', colSpan: 6, rowSpan: 4 },
   { id: 'files', colSpan: 6, rowSpan: 4 },
-  { id: 'tools', colSpan: 6, rowSpan: 3 },
-  { id: 'models', colSpan: 6, rowSpan: 3 },
-  { id: 'stuckness', colSpan: 6, rowSpan: 3 },
-  { id: 'first-edit', colSpan: 6, rowSpan: 3 },
-  { id: 'topics', colSpan: 6, rowSpan: 3 },
-  { id: 'prompt-clarity', colSpan: 6, rowSpan: 3 },
+  { id: 'tool-work-type-fit', colSpan: 6, rowSpan: 4 },
+  { id: 'tool-handoffs', colSpan: 6, rowSpan: 3 },
+  { id: 'model-mix', colSpan: 4, rowSpan: 2 },
+  { id: 'stuckness', colSpan: 4, rowSpan: 2 },
 ];

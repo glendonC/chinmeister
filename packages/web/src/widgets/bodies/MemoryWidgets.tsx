@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { MoreHidden } from './shared.js';
@@ -27,7 +27,6 @@ const MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS = 5;
 const TOP_CATEGORIES_VISIBLE = 8;
 const FLOW_PAIRS_VISIBLE = 6;
 const SINGLE_AUTHOR_VISIBLE = 8;
-const TOP_MEMORIES_VISIBLE = 8;
 
 function fmt(n: number): string {
   return n.toLocaleString();
@@ -426,57 +425,11 @@ function MemorySecretsShieldWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// ── top memories (type ladder, same primitive as categories) ──
-
-function TopMemoriesWidget({ analytics }: WidgetBodyProps) {
-  const [nowMs] = useState(() => Date.now());
-  const tm = analytics.top_memories;
-  if (tm.length === 0) return <SectionEmpty>No memories accessed.</SectionEmpty>;
-  const visible = tm.slice(0, TOP_MEMORIES_VISIBLE);
-  return (
-    <div className={s.ladder}>
-      {visible.map((m, i) => {
-        const rank = i / Math.max(visible.length - 1, 1);
-        const weight = Math.round(600 - rank * 200);
-        const color = i === 0 ? 'var(--ink)' : i < 3 ? 'var(--ink)' : 'var(--muted)';
-        const days = m.last_accessed_at
-          ? Math.max(0, Math.floor((nowMs - new Date(m.last_accessed_at).getTime()) / 86_400_000))
-          : null;
-        return (
-          <div
-            key={m.id}
-            className={s.ladderRow}
-            style={{ '--row-index': i } as CSSProperties}
-            title={m.text_preview}
-          >
-            <span
-              className={s.ladderName}
-              style={
-                {
-                  '--ladder-weight': weight,
-                  '--ladder-color': color,
-                } as CSSProperties
-              }
-            >
-              {m.text_preview}
-            </span>
-            <span className={s.ladderCount}>
-              {fmt(m.access_count)}
-              {days !== null && ` · ${days === 0 ? 'today' : `${days}d`}`}
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
 export const memoryWidgets: WidgetRegistry = {
   'memory-outcomes': MemoryOutcomesWidget,
   'memory-cross-tool-flow': MemoryCrossToolFlowWidget,
   'memory-aging-curve': MemoryAgingCurveWidget,
   'memory-categories': MemoryCategoriesWidget,
-  'top-memories': TopMemoriesWidget,
   'memory-health': MemoryHealthWidget,
   'memory-bus-factor': MemoryBusFactorWidget,
   'memory-supersession-flow': MemorySupersessionFlowWidget,

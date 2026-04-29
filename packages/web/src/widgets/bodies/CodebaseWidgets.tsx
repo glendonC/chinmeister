@@ -3,7 +3,7 @@ import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import sharedStyles from '../widget-shared.module.css';
 import styles from './CodebaseWidgets.module.css';
 import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
-import { setQueryParams, useRoute } from '../../lib/router.js';
+import { setQueryParams } from '../../lib/router.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import {
   capabilityCoverageNote,
@@ -17,11 +17,6 @@ import {
 
 function openCodebase(tab: string, q: string) {
   return () => setQueryParams({ codebase: tab, q });
-}
-
-function useIsDrillable(): boolean {
-  const route = useRoute();
-  return route.view === 'overview';
 }
 
 function outcomeRateColor(rate: number): string {
@@ -142,7 +137,6 @@ interface DirArc {
 
 function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   const dirs = analytics.directory_heatmap;
-  const drillable = useIsDrillable();
 
   const arcs = useMemo<DirArc[]>(() => {
     const top = dirs.slice(0, DIR_RING_SLICES);
@@ -228,33 +222,21 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
                   {completionPct}%
                 </span>
               </span>
-              {drillable && <span className={styles.viewButton}>View</span>}
+              <span className={styles.viewButton}>View</span>
             </>
           );
-          if (drillable) {
-            return (
-              <button
-                key={d.directory}
-                type="button"
-                role="row"
-                className={styles.dirDataRow}
-                style={{ '--row-index': i } as CSSProperties}
-                onClick={openCodebase('directories', 'top-dirs')}
-                aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
-              >
-                {content}
-              </button>
-            );
-          }
           return (
-            <div
+            <button
               key={d.directory}
+              type="button"
               role="row"
               className={styles.dirDataRow}
               style={{ '--row-index': i } as CSSProperties}
+              onClick={openCodebase('directories', 'top-dirs')}
+              aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
             >
               {content}
-            </div>
+            </button>
           );
         })}
         {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more directories</div>}
@@ -272,7 +254,6 @@ const FILES_VISIBLE = 8;
 
 function FilesWidget({ analytics }: WidgetBodyProps) {
   const files = analytics.file_heatmap;
-  const drillable = useIsDrillable();
   if (files.length === 0) {
     const tools = analytics.data_coverage?.tools_reporting ?? [];
     return (
@@ -338,33 +319,21 @@ function FilesWidget({ analytics }: WidgetBodyProps) {
                 <span className={styles.beamChurnNone}>—</span>
               )}
             </span>
-            {drillable && <span className={styles.viewButton}>View</span>}
+            <span className={styles.viewButton}>View</span>
           </>
         );
-        if (drillable) {
-          return (
-            <button
-              key={f.file}
-              type="button"
-              role="row"
-              className={styles.beamRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openCodebase('landscape', 'landscape')}
-              aria-label={`Open file landscape detail · ${f.file} ${f.touch_count} touches`}
-            >
-              {content}
-            </button>
-          );
-        }
         return (
-          <div
+          <button
             key={f.file}
+            type="button"
             role="row"
             className={styles.beamRow}
             style={{ '--row-index': i } as CSSProperties}
+            onClick={openCodebase('landscape', 'landscape')}
+            aria-label={`Open file landscape detail · ${f.file} ${f.touch_count} touches`}
           >
             {content}
-          </div>
+          </button>
         );
       })}
       {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
@@ -427,7 +396,6 @@ function ReworkSpark({ ratio, max, color }: { ratio: number; max: number; color:
 
 function FileReworkWidget({ analytics }: WidgetBodyProps) {
   const fr = analytics.file_rework;
-  const drillable = useIsDrillable();
   if (fr.length === 0) return <SectionEmpty>No rework signal</SectionEmpty>;
   const visible = fr.slice(0, FILE_REWORK_VISIBLE);
   const hidden = fr.length - visible.length;
@@ -461,33 +429,21 @@ function FileReworkWidget({ analytics }: WidgetBodyProps) {
             </span>
             <span className={styles.lollipopNum}>{f.failed_edits.toLocaleString()}</span>
             <span className={styles.lollipopNum}>{f.total_edits.toLocaleString()}</span>
-            {drillable && <span className={styles.viewButton}>View</span>}
+            <span className={styles.viewButton}>View</span>
           </>
         );
-        if (drillable) {
-          return (
-            <button
-              key={f.file}
-              type="button"
-              role="row"
-              className={styles.lollipopRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openCodebase('risk', 'failing-files')}
-              aria-label={`Open rework detail · ${f.file} ${f.rework_ratio}% rework`}
-            >
-              {content}
-            </button>
-          );
-        }
         return (
-          <div
+          <button
             key={f.file}
+            type="button"
             role="row"
             className={styles.lollipopRow}
             style={{ '--row-index': i } as CSSProperties}
+            onClick={openCodebase('risk', 'failing-files')}
+            aria-label={`Open rework detail · ${f.file} ${f.rework_ratio}% rework`}
           >
             {content}
-          </div>
+          </button>
         );
       })}
       {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
@@ -506,7 +462,6 @@ const STALE_MASS_MAX = 18;
 
 function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
   const data = analytics.audit_staleness;
-  const drillable = useIsDrillable();
   if (data.length === 0) {
     return (
       <SectionEmpty>
@@ -557,31 +512,20 @@ function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
                 {d.days_since}d
               </span>
             </span>
-            {drillable && <span className={styles.viewButton}>View</span>}
+            <span className={styles.viewButton}>View</span>
           </>
         );
-        if (drillable) {
-          return (
-            <button
-              key={d.directory}
-              type="button"
-              className={styles.thermoLane}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openCodebase('directories', 'cold-dirs')}
-              aria-label={`Open cold directories · ${d.directory} ${d.days_since} days`}
-            >
-              {lane}
-            </button>
-          );
-        }
         return (
-          <div
+          <button
             key={d.directory}
+            type="button"
             className={styles.thermoLane}
             style={{ '--row-index': i } as CSSProperties}
+            onClick={openCodebase('directories', 'cold-dirs')}
+            aria-label={`Open cold directories · ${d.directory} ${d.days_since} days`}
           >
             {lane}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -604,7 +548,6 @@ function contentionColor(agents: number): string {
 
 function ConcurrentEditsWidget({ analytics }: WidgetBodyProps) {
   const ce = analytics.concurrent_edits;
-  const drillable = useIsDrillable();
   if (ce.length === 0) {
     if (isSoloTeam(analytics)) {
       return (
@@ -666,33 +609,21 @@ function ConcurrentEditsWidget({ analytics }: WidgetBodyProps) {
               </span>
               <span className={styles.collisionEditsValue}>{f.edit_count.toLocaleString()}</span>
             </span>
-            {drillable && <span className={styles.viewButton}>View</span>}
+            <span className={styles.viewButton}>View</span>
           </>
         );
-        if (drillable) {
-          return (
-            <button
-              key={f.file}
-              type="button"
-              role="row"
-              className={styles.collisionRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openCodebase('risk', 'collisions')}
-              aria-label={`Open collisions detail · ${f.file} ${f.agents} agents`}
-            >
-              {content}
-            </button>
-          );
-        }
         return (
-          <div
+          <button
             key={f.file}
+            type="button"
             role="row"
             className={styles.collisionRow}
             style={{ '--row-index': i } as CSSProperties}
+            onClick={openCodebase('risk', 'collisions')}
+            aria-label={`Open collisions detail · ${f.file} ${f.agents} agents`}
           >
             {content}
-          </div>
+          </button>
         );
       })}
       {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
