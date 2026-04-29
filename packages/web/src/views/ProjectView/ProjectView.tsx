@@ -42,7 +42,7 @@ import ProjectMemoryTab from './ProjectMemoryTab.jsx';
 import SpawnForm from '../../components/SpawnAgentModal/SpawnAgentModal.jsx';
 import { useDetailDrills } from '../../hooks/useDetailDrills.js';
 import LiveNowView from '../OverviewView/LiveNowView.js';
-import UsageDetailView from '../OverviewView/UsageDetailView.js';
+import UsageDetailView from '../OverviewView/UsageDetailView/UsageDetailView.js';
 import OutcomesDetailView from '../OverviewView/OutcomesDetailView.js';
 import ActivityDetailView from '../OverviewView/ActivityDetailView.js';
 import CodebaseDetailView from '../OverviewView/CodebaseDetailView.js';
