@@ -83,9 +83,9 @@ describe('ProjectsWidget — team name binding', () => {
 
 describe('ProjectsWidget — column headers + view button', () => {
   it('renders mono-uppercase column headers above the rows', async () => {
-    // Column headers match the LiveAgents/LiveConflicts pattern — mono,
+    // Column headers match the LiveAgents/LiveConflicts pattern: mono,
     // uppercase, tracking-table letter spacing. Locks against a regression
-    // where the header row was removed in favor of inline cell labels.
+    // that strips the header row in favor of inline cell labels.
     const Projects = await loadProjectsWidget();
     const r = render(
       Projects,

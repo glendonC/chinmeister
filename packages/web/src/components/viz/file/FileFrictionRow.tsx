@@ -38,9 +38,6 @@ function clamp01(value: number): number {
  * `concurrent-edits`, `audit-staleness`, `memory-bus-factor`); the
  * primitive standardizes the visuals so they read as variants of one
  * pattern rather than five reinventions.
- *
- * Phase 1 lands the primitive; Phase 3 migrates the existing widget
- * bodies onto it.
  */
 export default function FileFrictionRow({
   label,

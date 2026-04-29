@@ -44,14 +44,12 @@ export default defineConfig({
       exclude: ['src/**/*.test.*'],
       reporter: ['text', 'json-summary'],
       reportsDirectory: './coverage',
-      // Thresholds enforce current coverage floor (~2% margin below actual).
-      // Actuals as of 2026-04-27: stmts 29.3, branches 21.3, funcs 25.3, lines 30.7.
-      // The drop from the 2026-04-04 baseline (~70%) is structural: the
-      // dashboard category/detail views, widget bodies, and viz primitives
-      // landed without unit tests. They are exercised end-to-end via the
-      // demo overlay and Playwright (e2e/), but the v8 reporter does not
-      // credit those paths. Raising these is on the roadmap; treat them as
-      // a regression gate for now, not a quality target.
+      // Thresholds enforce a coverage floor with ~2% margin below current
+      // actuals. The numbers look low because dashboard category/detail
+      // views, widget bodies, and viz primitives are exercised end-to-end
+      // via the demo overlay and Playwright (e2e/), but the v8 reporter
+      // does not credit those paths. Raising these is on the roadmap;
+      // treat them as a regression gate, not a quality target.
       thresholds: {
         statements: 27,
         branches: 19,

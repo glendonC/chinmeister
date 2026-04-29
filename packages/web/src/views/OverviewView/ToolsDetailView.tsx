@@ -40,11 +40,11 @@ import styles from './ToolsDetailView.module.css';
  *   flow   — handoff pairs, gap (cross-tool latency)
  *   errors — top errors by tool, recent errors timeline, token costs
  *
- * The synthesizer's pre-pass cut Q3 of flow (handoff completion vs
- * single-tool baseline; Simpson's-paradox-adjacent). Models stays a
- * sub-question of Tools per the 2026-04-25 demote — promoting it would
- * multiply §10 #5 surface area without the work-type filter affordance
- * that mitigation requires. */
+ * Q3 of flow (handoff completion vs single-tool baseline) is intentionally
+ * absent because it is Simpson's-paradox-adjacent. Models is a
+ * sub-question of Tools rather than its own tab: promoting it multiplies
+ * the model-ranking surface area without the work-type filter affordance
+ * that would mitigate it. */
 
 const TOOLS_TABS = ['tools', 'flow', 'errors'] as const;
 type ToolsTab = (typeof TOOLS_TABS)[number];

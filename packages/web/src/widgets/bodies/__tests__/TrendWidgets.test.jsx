@@ -15,10 +15,8 @@ async function loadModule() {
   ]);
   return {
     OutcomeTrendWidget: trendsMod.trendWidgets['outcome-trend'],
-    // Canonical empty UserAnalytics builder. Used to live in
-    // lib/schemas/analytics.ts (createEmptyUserAnalytics); now consolidated
-    // with createEmptyAnalytics in lib/demo/empty.ts which both the demo
-    // toggle and the live-mode hooks share.
+    // Canonical empty UserAnalytics builder, shared by the demo toggle
+    // and the live-mode hooks via lib/demo/empty.ts.
     createEmptyUserAnalytics: emptyMod.createEmptyAnalytics,
   };
 }

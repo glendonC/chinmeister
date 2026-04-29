@@ -581,12 +581,10 @@ export default function OverviewView() {
     );
   }
 
-  // Active widgets with valid definitions. The earlier N≥2 gate on
-  // `projects` (added in 369a4f4 to avoid one-row duplication of Overview's
-  // aggregated stats) was lifted with the comparator redesign: tools mix,
-  // 7-day activity sparkline, memory growth delta, and conflicts trend
-  // aren't surfaced anywhere else on Overview, so the widget earns its
-  // slot at N=1 as a single-project scorecard rather than a comparator.
+  // Active widgets with valid definitions. The `projects` widget renders
+  // at N=1 too: tools mix, 7-day activity sparkline, memory growth delta,
+  // and conflicts trend aren't surfaced anywhere else on Overview, so a
+  // single-project scorecard still earns its slot.
   const activeSlots = slots.filter((s) => Boolean(getWidget(s.id)));
 
   return (
