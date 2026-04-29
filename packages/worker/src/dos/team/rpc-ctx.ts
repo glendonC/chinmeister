@@ -20,6 +20,10 @@ import type { ContextCache } from './context-cache.js';
 export interface RpcCtx {
   sql: SqlStorage;
   env: Env;
+  /** Underlying DurableObjectState. Exposed so RPC bodies that need direct
+   *  WebSocket access (presence helpers, socket teardown on leave) can read
+   *  tags and call `getWebSockets` without going through TeamDO. */
+  doState: DurableObjectState;
   transact: <T>(fn: () => T) => T;
   ensureSchema: () => void;
   recordMetric: (metric: string) => void;

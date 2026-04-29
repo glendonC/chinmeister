@@ -68,6 +68,17 @@ export function join(
 /**
  * Leave a team. Removes member, their activity, and their locks.
  * If ownerId is provided, only removes if the agent belongs to that owner.
+ *
+ * team_owners lifecycle: rows in this table persist by design. Access to live
+ * data is gated by the membership row plus handle scope at query time, not by
+ * the team_owners row, so a stale roster row is not load-bearing. The only
+ * branch below that drops it is the "last agent left" path, which keeps the
+ * roster row from outliving the user's last presence on the team. Beyond that,
+ * team_owners is the historical-attribution anchor for sessions, edits, and
+ * memory authored under the now-departed handle, deleting it on every leave
+ * would orphan that history. WebSocket revocation happens at the rpc layer
+ * (see rpcLeave in membership-rpc.ts) before this function runs, so by the
+ * time we get here, no live socket can read the rows we are about to delete.
  */
 export function leave(
   sql: SqlStorage,

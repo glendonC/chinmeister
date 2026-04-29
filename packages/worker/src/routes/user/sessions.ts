@@ -19,12 +19,17 @@ function todayStr(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Filter param shapes. Handles are alnum + underscore per the registration
-// rules; host_tool ids are alnum + hyphen. Both cap at 64 so we never bind
-// oversized strings into DO SQL. Anything outside the whitelist silently
-// drops the filter rather than 400ing - this cross-team list route treats
-// unknown inputs as "no filter."
-const HANDLE_RE = /^[A-Za-z0-9_]{1,64}$/;
+// Filter param shape. host_tool ids are alnum + hyphen, capped at 64 so we
+// never bind oversized strings into DO SQL. Anything outside the whitelist
+// silently drops the filter rather than 400ing, this cross-team list route
+// treats unknown inputs as "no filter."
+//
+// Note: this route is hard-scoped to the caller's own handle (see filters
+// below). A `handle` query param is intentionally not accepted, accepting
+// one would let any authenticated team member enumerate a teammate's
+// per-session metadata (outcome summaries, file lists, token usage). The
+// only timeline consumer is useSessionTimeline in the web package, which
+// passes from/to only.
 const HOST_TOOL_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
 export const handleUserSessions = authedRoute(async ({ request, user, env }) => {
@@ -33,10 +38,11 @@ export const handleUserSessions = authedRoute(async ({ request, user, env }) => 
   const to = url.searchParams.get('to') || todayStr();
 
   const hostToolParam = url.searchParams.get('host_tool');
-  const handleParam = url.searchParams.get('handle');
-  const filters: { hostTool?: string; handle?: string } = {};
+  // Always scope to the caller's own handle. The DO method accepts an
+  // optional handle filter, but here we always populate it from user.handle
+  // to prevent cross-user enumeration.
+  const filters: { hostTool?: string; handle?: string } = { handle: user.handle };
   if (hostToolParam && HOST_TOOL_RE.test(hostToolParam)) filters.hostTool = hostToolParam;
-  if (handleParam && HANDLE_RE.test(handleParam)) filters.handle = handleParam;
 
   const db = getDB(env);
   const teamsResult = rpc(await db.getUserTeams(user.id));

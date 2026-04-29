@@ -12,6 +12,14 @@ export const RECONCILE_INITIAL_MS = 30_000;
 /** Maximum reconciliation poll interval (5 minutes). */
 export const RECONCILE_MAX_MS = 300_000;
 
+/**
+ * WebSocket close code sent by the worker when a member's access has been
+ * revoked (explicit leave, future kick). Range 4000-4999 is reserved for
+ * app-private codes per RFC 6455. Matches MEMBERSHIP_REVOKED_CLOSE_CODE in
+ * packages/worker/src/dos/team/presence.ts; both sides must agree.
+ */
+export const MEMBERSHIP_REVOKED_CLOSE_CODE = 4001;
+
 // --- Display limits ---
 
 /** Max recent sessions shown in the project view sidebar. */

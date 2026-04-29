@@ -1,7 +1,11 @@
 import { api, getRuntimeTargets } from '../api.js';
 import { applyDelta } from '@chinmeister/shared/dashboard-ws.js';
 import type { TeamContext } from '../apiSchemas.js';
-import { RECONCILE_INITIAL_MS, RECONCILE_MAX_MS } from '../constants.js';
+import {
+  RECONCILE_INITIAL_MS,
+  RECONCILE_MAX_MS,
+  MEMBERSHIP_REVOKED_CLOSE_CODE,
+} from '../constants.js';
 import { authActions } from './auth.js';
 import { teamActions } from './teams.js';
 import { setWsConnected } from './refresh.js';
@@ -222,7 +226,7 @@ export async function connectTeamWebSocket(teamId: string): Promise<void> {
       }
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event: CloseEvent) => {
       // Only act if this is still the active generation - prevents a
       // replaced connection from interfering with its successor.
       if (wsGeneration !== gen) return;
@@ -233,6 +237,22 @@ export async function connectTeamWebSocket(teamId: string): Promise<void> {
         reconcileTimer = null;
       }
       reconcileDelay = RECONCILE_INITIAL_MS;
+
+      // Code 4001 = membership_revoked. The server has explicitly removed
+      // this user (self-leave or future kick), so do NOT restart polling and
+      // do NOT bump reconnectAttempt. Drop back to overview and refresh the
+      // team list so the now-revoked team disappears from the sidebar.
+      if (event.code === MEMBERSHIP_REVOKED_CLOSE_CODE) {
+        setConnectionState({ status: 'offline', since: Date.now() });
+        if (teamActions.getState().activeTeamId === teamId) {
+          teamActions.selectTeam(null);
+        }
+        if (authActions.getState().token) {
+          teamActions.loadTeams(false).catch(() => {});
+        }
+        return;
+      }
+
       // Fall back to polling if we're still on this team AND still authenticated
       if (teamActions.getState().activeTeamId === teamId && authActions.getState().token) {
         reconnectAttempt++;

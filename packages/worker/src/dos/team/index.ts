@@ -445,6 +445,7 @@ export class TeamDO extends DurableObject<Env> {
     return {
       sql: this.sql,
       env: this.env,
+      doState: this.ctx,
       transact: this.#transact,
       ensureSchema: () => this.#ensureSchema(),
       recordMetric: (m) => this.#recordMetric(m),
