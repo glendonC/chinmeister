@@ -9,13 +9,22 @@ import { withRateLimit } from '../../lib/validation.js';
 import { authedRoute } from '../../lib/middleware.js';
 import { auditLog } from '../../lib/audit.js';
 import { withDORetry } from '../../lib/cross-do.js';
-import { RATE_LIMIT_TEAMS, MAX_NAME_LENGTH } from '../../lib/constants.js';
+import { RATE_LIMIT_TEAMS, RATE_LIMIT_TEAMS_READS, MAX_NAME_LENGTH } from '../../lib/constants.js';
 
 const log = createLogger('routes.user.teams');
 
 export const handleGetUserTeams = authedRoute(async ({ user, env }) => {
-  const result = rpc(await getDB(env).getUserTeams(user.id));
-  return json({ ok: true, teams: result.teams });
+  const db = getDB(env);
+  return withRateLimit(
+    db,
+    `uteams:${user.id}`,
+    RATE_LIMIT_TEAMS_READS,
+    'Teams read limit reached. Try again later.',
+    async () => {
+      const result = rpc(await db.getUserTeams(user.id));
+      return json({ ok: true, teams: result.teams });
+    },
+  );
 });
 
 export const handleCreateTeam = authedRoute(async ({ request, user, env }) => {

@@ -657,3 +657,91 @@ describe('GET /me/sessions', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// --- Rate limits on /me read endpoints ---
+//
+// Read endpoints that fan out across all of a user's teams (or run heavy
+// per-call aggregation) carry a 24h sliding-window per-user budget. These
+// tests pre-seed each per-prefix bucket to its max, then assert the next
+// request returns 429. Each prefix is checked independently so a user near
+// the analytics limit can still hit dashboard.
+
+async function seedLimit(userId: string, key: string, by: number) {
+  const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+  // consumeRateLimit accepts a `by` so we credit the whole budget in one
+  // call, no per-request loop required.
+  await db.consumeRateLimit(`${key}:${userId}`, by);
+  return userId;
+}
+
+describe('GET /me/dashboard rate limit', () => {
+  it('returns 429 once the dashboard prefix is exhausted', async () => {
+    const { user, headers } = await createAuthUser();
+    await seedLimit(user.id, 'dash', 20000);
+    const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('3600');
+  });
+
+  it('does not count against the analytics bucket', async () => {
+    const { user, headers } = await createAuthUser();
+    // Exhaust the analytics bucket; dashboard must still pass.
+    await seedLimit(user.id, 'uana', 600);
+    const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
+    expect(res.status).not.toBe(429);
+  });
+});
+
+describe('GET /me/analytics rate limit', () => {
+  it('returns 429 once the analytics prefix is exhausted', async () => {
+    const { user, headers } = await createAuthUser();
+    await seedLimit(user.id, 'uana', 600);
+    const res = await SELF.fetch('http://localhost/me/analytics?days=30', { headers });
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('3600');
+  });
+
+  it('does not count against the dashboard bucket', async () => {
+    const { user, headers } = await createAuthUser();
+    // Exhaust the dashboard bucket; analytics must still pass.
+    await seedLimit(user.id, 'dash', 20000);
+    const res = await SELF.fetch('http://localhost/me/analytics?days=30', { headers });
+    expect(res.status).not.toBe(429);
+  });
+});
+
+describe('GET /me/sessions rate limit', () => {
+  it('returns 429 once the sessions prefix is exhausted', async () => {
+    const { user, headers } = await createAuthUser();
+    await seedLimit(user.id, 'usess', 600);
+    const res = await SELF.fetch('http://localhost/me/sessions', { headers });
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('3600');
+  });
+
+  it('does not count against the analytics bucket', async () => {
+    const { user, headers } = await createAuthUser();
+    // Exhaust the analytics bucket; sessions must still pass.
+    await seedLimit(user.id, 'uana', 600);
+    const res = await SELF.fetch('http://localhost/me/sessions', { headers });
+    expect(res.status).not.toBe(429);
+  });
+});
+
+describe('GET /me/teams rate limit', () => {
+  it('returns 429 once the teams prefix is exhausted', async () => {
+    const { user, headers } = await createAuthUser();
+    await seedLimit(user.id, 'uteams', 1200);
+    const res = await SELF.fetch('http://localhost/me/teams', { headers });
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('3600');
+  });
+
+  it('does not count against the dashboard bucket', async () => {
+    const { user, headers } = await createAuthUser();
+    // Exhaust the dashboard bucket; teams listing must still pass.
+    await seedLimit(user.id, 'dash', 20000);
+    const res = await SELF.fetch('http://localhost/me/teams', { headers });
+    expect(res.status).not.toBe(429);
+  });
+});
