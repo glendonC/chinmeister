@@ -1,129 +1,21 @@
-import { useMemo, type CSSProperties } from 'react';
+import { type CSSProperties } from 'react';
+
 import {
-  DetailView,
   FocusedDetailView,
   Metric,
   getCrossLinks,
-  type DetailTabDef,
   type FocusedQuestion,
-} from '../../components/DetailView/index.js';
-import RangePills from '../../components/RangePills/RangePills.jsx';
-import { getToolMeta } from '../../lib/toolMeta.js';
-import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
-import { useTabs } from '../../hooks/useTabs.js';
-import { setQueryParam, useQueryParam } from '../../lib/router.js';
-import { completionColor, workTypeColor } from '../../widgets/utils.js';
-import type { UserAnalytics } from '../../lib/apiSchemas.js';
-import { RANGES, formatScope, type RangeDays } from './overview-utils.js';
-import { MISSING_DELTA, formatRateDelta } from './detailDelta.js';
-import styles from './OutcomesDetailView.module.css';
+} from '../../../../components/DetailView/index.js';
+import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
+import { getToolMeta } from '../../../../lib/toolMeta.js';
+import { arcPath, computeArcSlices } from '../../../../lib/svgArcs.js';
+import { completionColor } from '../../../../widgets/utils.js';
+import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
-/* OutcomesDetailView — "did the work land" at scale.
- *
- * Mirrors the UsageDetailView structure (DetailView shell, DetailSection
- * blocks, tab-driven panels) but answers a different question family:
- *
- *   sessions — completion health, stuckness, first edit, duration shape
- *   retries  — one-shot rate, scope completion scale
- *   types    — work-type completion bars
- *
- * Deliberate duplication: DurationStrip lives here as well as in
- * UsageDetailView (the Sessions panel uses it there). Extracting it to
- * a shared primitive is the right next step once a third caller lands;
- * duplicating for v1 avoids premature refactor. */
+import { fmtCount, formatMinutes } from '../format.js';
+import styles from '../OutcomesDetailView.module.css';
 
-const OUTCOMES_TABS = ['sessions', 'retries', 'types'] as const;
-type OutcomesTab = (typeof OUTCOMES_TABS)[number];
-
-function isOutcomesTab(value: string | null | undefined): value is OutcomesTab {
-  return (OUTCOMES_TABS as readonly string[]).includes(value ?? '');
-}
-
-interface Props {
-  analytics: UserAnalytics;
-  initialTab?: string | null;
-  onBack: () => void;
-  rangeDays: RangeDays;
-  onRangeChange: (next: RangeDays) => void;
-  // Label for the back chevron. "Overview" on the cross-project surface,
-  // "Project" when ProjectView mounts the same detail. Default keeps
-  // existing OverviewView call sites unchanged.
-  backLabel?: string;
-}
-
-function fmtCount(n: number): string {
-  return n.toLocaleString();
-}
-
-export default function OutcomesDetailView({
-  analytics,
-  initialTab,
-  onBack,
-  rangeDays,
-  onRangeChange,
-  backLabel = 'Overview',
-}: Props) {
-  const resolved: OutcomesTab = isOutcomesTab(initialTab) ? initialTab : 'sessions';
-  const tabControl = useTabs(OUTCOMES_TABS, resolved);
-  const { activeTab } = tabControl;
-
-  const cs = analytics.completion_summary;
-  const oneShot = analytics.tool_call_stats;
-  const pc = analytics.period_comparison;
-
-  const tabs: Array<DetailTabDef<OutcomesTab>> = [
-    {
-      id: 'sessions',
-      label: 'Completion',
-      value: cs.total_sessions > 0 ? `${Math.round(cs.completion_rate)}%` : '--',
-      delta: formatRateDelta(cs.completion_rate, pc.previous?.completion_rate),
-    },
-    {
-      id: 'retries',
-      label: 'One-shot',
-      value: oneShot.one_shot_sessions > 0 ? `${oneShot.one_shot_rate}%` : '--',
-      delta: MISSING_DELTA,
-    },
-    {
-      id: 'types',
-      label: 'By work type',
-      value: fmtCount(analytics.work_type_outcomes.length),
-      delta: MISSING_DELTA,
-    },
-  ];
-
-  const scopeSubtitle = useMemo(() => {
-    const activeTools = analytics.tool_comparison.filter((t) => t.sessions > 0).length;
-    return (
-      formatScope([
-        { count: activeTools, singular: 'tool' },
-        { count: analytics.teams_included, singular: 'project' },
-      ]) || undefined
-    );
-  }, [analytics]);
-
-  return (
-    <DetailView
-      backLabel={backLabel}
-      onBack={onBack}
-      title="outcomes"
-      subtitle={scopeSubtitle}
-      actions={<RangePills value={rangeDays} onChange={onRangeChange} options={RANGES} />}
-      tabs={tabs}
-      tabControl={tabControl}
-      idPrefix="outcomes"
-      tablistLabel="Outcomes sections"
-    >
-      {activeTab === 'sessions' && <SessionsPanel analytics={analytics} />}
-      {activeTab === 'retries' && <RetriesPanel analytics={analytics} />}
-      {activeTab === 'types' && <WorkTypesPanel analytics={analytics} />}
-    </DetailView>
-  );
-}
-
-// ── Sessions panel ──────────────────────────────────
-
-function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
+export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
   const cs = analytics.completion_summary;
   const stuck = analytics.stuckness;
   const fe = analytics.first_edit_stats;
@@ -137,7 +29,7 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
   const byTool = fe.by_tool.filter((t) => t.avg_minutes > 0).slice(0, 6);
   const durTotal = dd.reduce((s, b) => s + b.count, 0);
 
-  // Tones: completion rate → positive, stuck rate → warning, time/count
+  // Tones: completion rate -> positive, stuck rate -> warning, time/count
   // neutral. Same vocabulary as UsageDetailView so the system reads as
   // one object across both detail views.
   const completionAnswer = (
@@ -176,7 +68,7 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
       return (
         <>
           Median time to first edit is <Metric>{median} min</Metric>, ranging{' '}
-          <Metric>{minTool}</Metric>–<Metric>{maxTool} min</Metric> across{' '}
+          <Metric>{minTool}</Metric>-<Metric>{maxTool} min</Metric> across{' '}
           <Metric>{byTool.length} tools</Metric>.
         </>
       );
@@ -245,132 +137,6 @@ function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
     />
   );
 }
-
-// ── Retries panel ───────────────────────────────────
-
-function RetriesPanel({ analytics }: { analytics: UserAnalytics }) {
-  const oneShot = analytics.tool_call_stats;
-  const sc = analytics.scope_complexity.filter((b) => b.sessions > 0);
-  const retriesActiveId = useQueryParam('q');
-
-  if (oneShot.one_shot_sessions === 0 && sc.length < 2) {
-    return (
-      <span className={styles.empty}>
-        One-shot success needs tool call logs (Claude Code today). Scope complexity needs at least
-        two populated buckets.
-      </span>
-    );
-  }
-
-  const oneShotAnswer = (
-    <>
-      <Metric tone="positive">{oneShot.one_shot_rate}%</Metric> of{' '}
-      <Metric>{fmtCount(oneShot.one_shot_sessions)}</Metric> sessions with tool call data landed
-      their edits without a retry cycle.
-    </>
-  );
-
-  const questions: FocusedQuestion[] = [];
-  if (oneShot.one_shot_sessions > 0) {
-    questions.push({
-      id: 'one-shot',
-      question: 'How often do edits work on the first try?',
-      answer: oneShotAnswer,
-      children: <OneShotBlock oneShot={oneShot} />,
-      relatedLinks: getCrossLinks('outcomes', 'retries', 'one-shot'),
-    });
-  }
-  if (sc.length >= 2) {
-    questions.push({
-      id: 'scope',
-      question: 'Does scope hurt completion?',
-      answer: completionTrendSentence(sc),
-      children: <ScopeLadder sc={sc} />,
-    });
-  }
-
-  return (
-    <FocusedDetailView
-      questions={questions}
-      activeId={retriesActiveId}
-      onSelect={(id) => setQueryParam('q', id)}
-    />
-  );
-}
-
-// ── Work-types panel ────────────────────────────────
-
-function WorkTypesPanel({ analytics }: { analytics: UserAnalytics }) {
-  const wto = analytics.work_type_outcomes;
-  const wtActiveId = useQueryParam('q');
-
-  if (wto.length === 0) {
-    return (
-      <span className={styles.empty}>
-        Appears after sessions touch files. Each session is assigned its primary work type from the
-        file set.
-      </span>
-    );
-  }
-
-  const worst = [...wto].sort((a, b) => a.completion_rate - b.completion_rate)[0];
-  const best = [...wto].sort((a, b) => b.completion_rate - a.completion_rate)[0];
-
-  const worstTone = worst.completion_rate < 40 ? 'negative' : 'warning';
-  const answer = (
-    <>
-      <Metric>{best.work_type}</Metric> completes at{' '}
-      <Metric tone="positive">{best.completion_rate}%</Metric>; <Metric>{worst.work_type}</Metric>{' '}
-      trails at <Metric tone={worstTone}>{worst.completion_rate}%</Metric>.
-    </>
-  );
-
-  const maxRate = Math.max(...wto.map((x) => x.completion_rate), 1);
-  const questions: FocusedQuestion[] = [
-    {
-      id: 'finish',
-      question: 'Which kinds of work finish?',
-      answer,
-      children: (
-        <div className={styles.wtList}>
-          {wto.map((w, i) => (
-            <div
-              key={w.work_type}
-              className={styles.wtRow}
-              style={{ '--row-index': i } as CSSProperties}
-            >
-              <span className={styles.wtLabel}>{w.work_type}</span>
-              <div className={styles.wtBarTrack}>
-                <div
-                  className={styles.wtBarFill}
-                  style={{
-                    width: `${(w.completion_rate / maxRate) * 100}%`,
-                    background: workTypeColor(w.work_type),
-                  }}
-                />
-              </div>
-              <span className={styles.wtValue}>
-                {w.completion_rate}%
-                <span className={styles.wtValueSoft}>{fmtCount(w.sessions)} sessions</span>
-              </span>
-            </div>
-          ))}
-        </div>
-      ),
-      relatedLinks: getCrossLinks('outcomes', 'types', 'finish'),
-    },
-  ];
-
-  return (
-    <FocusedDetailView
-      questions={questions}
-      activeId={wtActiveId}
-      onSelect={(id) => setQueryParam('q', id)}
-    />
-  );
-}
-
-// ── Viz components ──────────────────────────────────
 
 const RING_CX = 110;
 const RING_CY = 110;
@@ -639,85 +405,6 @@ function CompletionTrendDetail({ trends }: { trends: UserAnalytics['daily_trends
       </div>
     </div>
   );
-}
-
-function OneShotBlock({ oneShot }: { oneShot: UserAnalytics['tool_call_stats'] }) {
-  return (
-    <div className={styles.stuckRow}>
-      <span className={styles.stuckHero}>
-        <span className={styles.stuckValue}>{oneShot.one_shot_rate}</span>
-        <span className={styles.stuckUnit}>%</span>
-      </span>
-      <div className={styles.stuckFacts}>
-        <span className={styles.stuckFact}>
-          <span className={styles.stuckFactValue}>{fmtCount(oneShot.one_shot_sessions)}</span>{' '}
-          sessions with tool call data
-        </span>
-        <span className={styles.stuckFact}>
-          {fmtCount(oneShot.total_calls)} tool calls · {oneShot.error_rate}% errored
-        </span>
-        <span className={styles.stuckFact}>
-          Detected via Edit → Bash → Edit retry patterns in Claude Code JSONL
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ScopeLadder({ sc }: { sc: UserAnalytics['scope_complexity'] }) {
-  return (
-    <div className={styles.scopeLadder}>
-      {sc.map((b, i) => {
-        const color = completionColor(b.completion_rate);
-        return (
-          <div
-            key={b.bucket}
-            className={styles.scopeLadderRow}
-            style={{ '--row-index': i, '--scope-rate': `${b.completion_rate}%` } as CSSProperties}
-          >
-            <span className={styles.scopeLadderBucket}>{b.bucket}</span>
-            <span className={styles.scopeLadderTrack}>
-              <span className={styles.scopeLadderFill} style={{ background: color }} />
-            </span>
-            <span className={styles.scopeLadderRate} style={{ color }}>
-              {b.completion_rate}%
-            </span>
-            <span className={styles.scopeLadderFacts}>
-              <span>
-                <span className={styles.scopeLadderFactValue}>{fmtCount(b.sessions)}</span> sessions
-              </span>
-              <span>
-                <span className={styles.scopeLadderFactValue}>
-                  {formatMinutes(b.avg_duration_min)}m
-                </span>{' '}
-                average
-              </span>
-            </span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Copy helpers ────────────────────────────────────
-
-function formatMinutes(n: number): string {
-  if (n >= 10) return String(Math.round(n));
-  return n.toFixed(1);
-}
-
-function completionTrendSentence(sc: UserAnalytics['scope_complexity']): string {
-  const first = sc[0];
-  const last = sc[sc.length - 1];
-  const diff = last.completion_rate - first.completion_rate;
-  if (Math.abs(diff) < 5) {
-    return `Completion holds roughly flat across scope: ${first.completion_rate}% at ${first.bucket}, ${last.completion_rate}% at ${last.bucket}.`;
-  }
-  if (diff < 0) {
-    return `Completion drops from ${first.completion_rate}% at ${first.bucket} to ${last.completion_rate}% at ${last.bucket}. Larger scope sessions fail more.`;
-  }
-  return `Completion rises from ${first.completion_rate}% at ${first.bucket} to ${last.completion_rate}% at ${last.bucket} — wider scope doesn't hurt in this window.`;
 }
 
 function completionDailyTrendSentence(trends: UserAnalytics['daily_trends']) {

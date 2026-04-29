@@ -63,7 +63,7 @@ import { useDemoScenario } from '../../hooks/useDemoScenario.js';
 import { getDemoData } from '../../lib/demo/index.js';
 import LiveNowView from './LiveNowView.js';
 import UsageDetailView from './UsageDetailView/UsageDetailView.js';
-import OutcomesDetailView from './OutcomesDetailView.js';
+import OutcomesDetailView from './OutcomesDetailView/OutcomesDetailView.js';
 import ActivityDetailView from './ActivityDetailView/ActivityDetailView.js';
 import CodebaseDetailView from './CodebaseDetailView/CodebaseDetailView.js';
 import ToolsDetailView from './ToolsDetailView/ToolsDetailView.js';
