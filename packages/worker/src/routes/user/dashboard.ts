@@ -11,6 +11,14 @@ import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 
 const log = createLogger('routes.user.teams');
 
+// Locked from Phase 0: 15s max-age + 60s SWR. Dashboard summary is the hot
+// path for live polling; a tight max-age keeps the user feeling current
+// while still letting Cloudflare's edge cache absorb burst polling.
+// `private` because every team summary is owner-scoped.
+const CACHE_HEADERS = {
+  'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
+};
+
 export const handleDashboardSummary = authedRoute(async ({ user, env }) => {
   const db = getDB(env);
   return withRateLimit(
@@ -23,12 +31,16 @@ export const handleDashboardSummary = authedRoute(async ({ user, env }) => {
       const teams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
 
       if (teams.length === 0) {
-        return json({
-          teams: [],
-          degraded: false,
-          failed_teams: [],
-          truncated: false,
-        });
+        return json(
+          {
+            teams: [],
+            degraded: false,
+            failed_teams: [],
+            truncated: false,
+          },
+          200,
+          { headers: CACHE_HEADERS },
+        );
       }
 
       const capped = teams.slice(0, MAX_DASHBOARD_TEAMS);
@@ -122,10 +134,12 @@ export const handleDashboardSummary = authedRoute(async ({ user, env }) => {
           failedTeams.length === 1
             ? 'Project summary is temporarily unavailable.'
             : 'Project summaries are temporarily unavailable.';
+        // No Cache-Control on the all-failed path: a 503 should not be
+        // cached, edge or otherwise.
         return json({ ...response, error }, 503);
       }
 
-      return json(response);
+      return json(response, 200, { headers: CACHE_HEADERS });
     },
   );
 });

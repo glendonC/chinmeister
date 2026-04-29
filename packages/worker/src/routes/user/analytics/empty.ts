@@ -36,6 +36,7 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
       unknown: 0,
       completion_rate: 0,
       prev_completion_rate: null,
+      prev_total_sessions: 0,
     },
     tool_comparison: [],
     work_type_distribution: [],
@@ -167,6 +168,7 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
     tool_handoffs: [],
     teams_included: 0,
     degraded: false,
+    truncated_teams: 0,
     per_project_velocity: [],
   };
 }

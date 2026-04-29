@@ -92,11 +92,23 @@ async function buildUserAnalytics(
   // Cap days for multi-team aggregation to bound memory usage.
   const effectiveDays = teamsList.length > 1 ? Math.min(days, CROSS_TEAM_MAX_DAYS) : days;
 
+  // Headers shipped with every /me/analytics response (including the empty
+  // path). Locked from Phase 0: 60s max-age + 120s SWR matches the typical
+  // dashboard render cadence without hiding fresh inserts behind a long
+  // cache. `private` because the response is owner-scoped.
+  const CACHE_HEADERS = {
+    'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
+  };
+
   if (teamsList.length === 0) {
-    return json(buildEmptyAnalyticsResponse(days), 200, { schema: userAnalyticsSchema });
+    return json(buildEmptyAnalyticsResponse(days), 200, {
+      schema: userAnalyticsSchema,
+      headers: CACHE_HEADERS,
+    });
   }
 
   const capped = teamsList.slice(0, MAX_DASHBOARD_TEAMS);
+  const truncatedTeams = Math.max(0, teamsList.length - capped.length);
   const results = await Promise.allSettled(
     capped.map(async (teamEntry) => {
       const team = getTeam(env, teamEntry.team_id);
@@ -353,8 +365,9 @@ async function buildUserAnalytics(
       data_coverage: buildDataCoverage(activeToolsAcc),
       teams_included: included,
       degraded: failed > 0,
+      truncated_teams: truncatedTeams,
     },
     200,
-    { schema: userAnalyticsSchema },
+    { schema: userAnalyticsSchema, headers: CACHE_HEADERS },
   );
 }

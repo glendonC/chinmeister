@@ -28,10 +28,27 @@ function renderComponent(Component) {
   };
 }
 
+const DEFAULT_ANALYTICS = {
+  ok: true,
+  period_days: 30,
+  file_heatmap: [],
+  daily_trends: [],
+  tool_distribution: [],
+  outcome_distribution: [],
+  daily_metrics: [],
+  hourly_distribution: [],
+  model_outcomes: [],
+  tool_outcomes: [],
+  teams_included: 0,
+  degraded: false,
+  truncated_teams: 0,
+};
+
 async function loadOverviewView({
   pollingState,
   authState = { user: { handle: 'alice', color: 'cyan' } },
   teamState = { teams: [], teamsError: null, selectTeam: vi.fn() },
+  analyticsOverride = null,
 } = {}) {
   vi.resetModules();
 
@@ -72,23 +89,63 @@ async function loadOverviewView({
 
   vi.doMock('../../hooks/useUserAnalytics.js', () => ({
     useUserAnalytics: () => ({
-      analytics: {
-        ok: true,
-        period_days: 30,
-        file_heatmap: [],
-        daily_trends: [],
-        tool_distribution: [],
-        outcome_distribution: [],
-        daily_metrics: [],
-        hourly_distribution: [],
-        model_outcomes: [],
-        tool_outcomes: [],
-        teams_included: 0,
-        degraded: false,
-      },
+      analytics: { ...DEFAULT_ANALYTICS, ...(analyticsOverride ?? {}) },
       isLoading: false,
       error: null,
     }),
+  }));
+
+  // Mock @dnd-kit/core + WidgetGrid + WidgetCatalog: vi.resetModules()
+  // reloads dnd-kit but not the top-level `import React` in this test
+  // file, so dnd-kit's internal `useRef` calls see a null React
+  // dispatcher and crash. None of these surfaces carry any of the
+  // assertions these tests target (we're checking the truncation /
+  // period-clamp banners, which live in OverviewView itself), so
+  // pass-through stubs keep the rendering path live without dragging
+  // the harness through the dnd-kit bootstrap.
+  vi.doMock('@dnd-kit/core', () => ({
+    DndContext: ({ children }) => <div>{children}</div>,
+    DragOverlay: ({ children }) => <div>{children}</div>,
+    PointerSensor: function PointerSensor() {},
+    KeyboardSensor: function KeyboardSensor() {},
+    useSensor: () => null,
+    useSensors: () => [],
+    useDroppable: () => ({ setNodeRef: () => {}, isOver: false }),
+    useDraggable: () => ({
+      setNodeRef: () => {},
+      attributes: {},
+      listeners: {},
+      transform: null,
+      isDragging: false,
+    }),
+  }));
+  vi.doMock('@dnd-kit/sortable', () => ({
+    arrayMove: (arr) => arr,
+    SortableContext: ({ children }) => <div>{children}</div>,
+    useSortable: () => ({
+      setNodeRef: () => {},
+      attributes: {},
+      listeners: {},
+      transform: null,
+      transition: null,
+      isDragging: false,
+    }),
+  }));
+  vi.doMock('@dnd-kit/utilities', () => ({
+    CSS: { Translate: { toString: () => '' }, Transform: { toString: () => '' } },
+    getEventCoordinates: () => ({ x: 0, y: 0 }),
+  }));
+  vi.doMock('../../components/WidgetGrid/WidgetGrid.js', () => ({
+    WidgetGrid: function MockWidgetGrid() {
+      return <div data-testid="widget-grid" />;
+    },
+    GRID_DROPPABLE_ID: 'grid-droppable',
+    snapChipToCursor: () => null,
+  }));
+  vi.doMock('../../widgets/WidgetCatalog.js', () => ({
+    WidgetCatalog: function MockWidgetCatalog() {
+      return null;
+    },
   }));
 
   vi.doMock('../../components/EmptyState/EmptyState.js', () => ({
@@ -228,6 +285,115 @@ describe('OverviewView states', () => {
     expect(container.querySelector('[data-testid="status-state"]')?.textContent).toContain(
       'Could not load project overview',
     );
+
+    unmount();
+  });
+
+  it('renders truncation notice when truncated_teams > 0', async () => {
+    const OverviewView = await loadOverviewView({
+      pollingState: {
+        dashboardData: {
+          teams: [{ team_id: 't1', team_name: 'one' }],
+          failed_teams: [],
+        },
+        dashboardStatus: 'ready',
+        pollError: null,
+        pollErrorData: null,
+        lastUpdate: null,
+      },
+      teamState: {
+        teams: [{ team_id: 't1', team_name: 'one' }],
+        teamsError: null,
+        selectTeam: vi.fn(),
+      },
+      analyticsOverride: { teams_included: 25, truncated_teams: 3 },
+    });
+    const { container, unmount } = renderComponent(OverviewView);
+
+    expect(container.textContent).toContain('Projects capped');
+    expect(container.textContent).toContain('Showing 25 of 28 projects');
+
+    unmount();
+  });
+
+  it('does not render truncation notice when truncated_teams === 0', async () => {
+    const OverviewView = await loadOverviewView({
+      pollingState: {
+        dashboardData: {
+          teams: [{ team_id: 't1', team_name: 'one' }],
+          failed_teams: [],
+        },
+        dashboardStatus: 'ready',
+        pollError: null,
+        pollErrorData: null,
+        lastUpdate: null,
+      },
+      teamState: {
+        teams: [{ team_id: 't1', team_name: 'one' }],
+        teamsError: null,
+        selectTeam: vi.fn(),
+      },
+      analyticsOverride: { teams_included: 1, truncated_teams: 0 },
+    });
+    const { container, unmount } = renderComponent(OverviewView);
+
+    expect(container.textContent).not.toContain('Projects capped');
+
+    unmount();
+  });
+
+  it('renders period clamp notice when period_days < requested range', async () => {
+    // Default rangeDays is 30; the response carries period_days=30. The
+    // banner only fires when the response window is SHORTER than the
+    // selected range - simulate that by feeding period_days=7.
+    const OverviewView = await loadOverviewView({
+      pollingState: {
+        dashboardData: {
+          teams: [{ team_id: 't1', team_name: 'one' }],
+          failed_teams: [],
+        },
+        dashboardStatus: 'ready',
+        pollError: null,
+        pollErrorData: null,
+        lastUpdate: null,
+      },
+      teamState: {
+        teams: [{ team_id: 't1', team_name: 'one' }],
+        teamsError: null,
+        selectTeam: vi.fn(),
+      },
+      analyticsOverride: { teams_included: 1, truncated_teams: 0, period_days: 7 },
+    });
+    const { container, unmount } = renderComponent(OverviewView);
+
+    expect(container.textContent).toContain('Range capped');
+    expect(container.textContent).toContain('Showing the last 7 days');
+
+    unmount();
+  });
+
+  it('does not render period clamp notice when period_days matches range', async () => {
+    const OverviewView = await loadOverviewView({
+      pollingState: {
+        dashboardData: {
+          teams: [{ team_id: 't1', team_name: 'one' }],
+          failed_teams: [],
+        },
+        dashboardStatus: 'ready',
+        pollError: null,
+        pollErrorData: null,
+        lastUpdate: null,
+      },
+      teamState: {
+        teams: [{ team_id: 't1', team_name: 'one' }],
+        teamsError: null,
+        selectTeam: vi.fn(),
+      },
+      analyticsOverride: { teams_included: 1, truncated_teams: 0, period_days: 30 },
+    });
+    const { container, unmount } = renderComponent(OverviewView);
+
+    expect(container.textContent).not.toContain('Range capped');
 
     unmount();
   });

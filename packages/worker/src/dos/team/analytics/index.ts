@@ -105,7 +105,7 @@ export function getExtendedAnalytics(
   scope: AnalyticsScope,
   days: number,
   tzOffsetMinutes: number = 0,
-): Omit<UserAnalytics, 'teams_included' | 'degraded'> {
+): Omit<UserAnalytics, 'teams_included' | 'degraded' | 'truncated_teams'> {
   const base = getAnalytics(sql, scope, days, tzOffsetMinutes);
   return {
     ...base,

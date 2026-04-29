@@ -15,6 +15,14 @@ import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 
 const log = createLogger('routes.user.sessions');
 
+// Locked from Phase 0: 15s max-age + 60s SWR. /me/sessions backs the live
+// activity timeline, which polls aggressively; a short max-age is enough to
+// absorb that burst without lagging behind newly-recorded sessions. Private
+// because every session row is caller-scoped.
+const CACHE_HEADERS = {
+  'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
+};
+
 function todayStr(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -56,11 +64,15 @@ export const handleUserSessions = authedRoute(async ({ request, user, env }) => 
       const teams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
 
       if (teams.length === 0) {
-        return json({
-          ok: true,
-          sessions: [],
-          totals: { sessions: 0, edits: 0, lines_added: 0, lines_removed: 0, tools: [] },
-        });
+        return json(
+          {
+            ok: true,
+            sessions: [],
+            totals: { sessions: 0, edits: 0, lines_added: 0, lines_removed: 0, tools: [] },
+          },
+          200,
+          { headers: CACHE_HEADERS },
+        );
       }
 
       const capped = teams.slice(0, MAX_DASHBOARD_TEAMS);
@@ -110,7 +122,7 @@ export const handleUserSessions = authedRoute(async ({ request, user, env }) => 
         tools: [...new Set(allSessions.map((s) => s.host_tool as string).filter(Boolean))],
       };
 
-      return json({ ok: true, sessions: allSessions, totals });
+      return json({ ok: true, sessions: allSessions, totals }, 200, { headers: CACHE_HEADERS });
     },
   );
 });

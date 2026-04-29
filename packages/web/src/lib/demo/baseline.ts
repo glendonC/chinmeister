@@ -1594,6 +1594,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     period_days: periodDays,
     teams_included: DEMO_TEAMS.length,
     degraded: false,
+    truncated_teams: 0,
     file_heatmap,
     files_touched_total: filesTouchedTotal,
     // Mid-period snapshot with a modest breadth increase in the current
@@ -1626,6 +1627,9 @@ export function createBaselineAnalytics(): UserAnalytics {
       prev_completion_rate: period_comparison.previous
         ? period_comparison.previous.completion_rate
         : null,
+      prev_total_sessions: period_comparison.previous
+        ? period_comparison.previous.total_sessions
+        : 0,
     },
     tool_comparison,
     work_type_distribution,

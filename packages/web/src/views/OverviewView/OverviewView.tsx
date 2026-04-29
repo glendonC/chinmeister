@@ -784,6 +784,42 @@ export default function OverviewView() {
               </div>
             )}
 
+            {/*
+              Period clamp notice. The worker caps multi-team aggregation at
+              CROSS_TEAM_MAX_DAYS (30) to bound memory; when the user picks
+              a longer range, the response carries the actual capped window
+              in period_days. Surface it so the chart isn't silently lying
+              about its window. Uses --muted (not --accent) per the design
+              language: this is static informational state, not a real-time
+              signal.
+            */}
+            {analytics.period_days > 0 && analytics.period_days < rangeDays && (
+              <div className={styles.infoNotice}>
+                <span className={styles.infoNoticeLabel}>Range capped</span>
+                <span className={styles.infoNoticeText}>
+                  Showing the last {analytics.period_days} days. Cross-project analytics cap longer
+                  ranges to keep responses fast.
+                </span>
+              </div>
+            )}
+
+            {/*
+              Truncation notice. When the user belongs to more teams than
+              MAX_DASHBOARD_TEAMS (25), the route drops the overflow and
+              ships truncated_teams = N - 25. The banner is honest about
+              "showing N of M": the alternative was a silent partial that
+              looked like all-projects.
+            */}
+            {analytics.truncated_teams > 0 && (
+              <div className={styles.infoNotice}>
+                <span className={styles.infoNoticeLabel}>Projects capped</span>
+                <span className={styles.infoNoticeText}>
+                  Showing {analytics.teams_included} of{' '}
+                  {analytics.teams_included + analytics.truncated_teams} projects.
+                </span>
+              </div>
+            )}
+
             {/* ── Widget Grid ── */}
             <div className={styles.gridBleed}>
               <WidgetGrid
