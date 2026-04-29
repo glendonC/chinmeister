@@ -24,14 +24,9 @@ function openOutcomes(tab: string) {
  *   scope-complexity     — scope band (6×3)
  *   work-type-outcomes   — horizontal bars (6×3)
  *
- * `first-edit` and `duration-dist` used to live here; both were cut
- * 2026-04-24 per the Widget-Detail Precedent (WIDGET_RUBRIC.md). Each
- * already had an honest home inside the Usage detail Sessions panel —
- * a widget-shaped duplicate wasn't earning its main-view seat.
- *
- * Coverage notes only render in empty states. Populated states keep
- * the widget body chromeless — the widget title names the metric;
- * repeating it below the value is filler. ──────────────────────── */
+ * Coverage notes only render in empty states. Populated states keep the
+ * widget body chromeless: the widget title names the metric; repeating it
+ * below the value is filler. ──────────────────────── */
 
 // ── Outcomes ring + clickable row table ─────────────
 //

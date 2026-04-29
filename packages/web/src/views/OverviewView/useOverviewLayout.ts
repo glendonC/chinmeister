@@ -92,59 +92,51 @@ function resolveAliases(slots: WidgetSlot[]): WidgetSlot[] {
   return out;
 }
 
-// 2026-04: catalog `w` for live-agents was 12 until we narrowed it to 6 to
-// match DEFAULT_LAYOUT. Users who toggled live-agents off/on (or who
-// drag-added it from the catalog) before the fix have it persisted at
-// colSpan: 12 - full width - even though the curated default has always
-// placed it at half-width next to live-conflicts. Snap that one slot back.
-// Removable once enough time has passed that stale storage has cycled out.
+// Saved-layout healers. Each function snaps a single widget's persisted
+// span back to the catalog default when the persisted shape doesn't fit the
+// current renderer. Users with stale localStorage from earlier catalog
+// shapes hit one of these healers on next load; power users who genuinely
+// want the older size can drag-resize after the snap.
 //
 // Healers are exported for unit testing. Order matters in the chain
 // (heal-then-clamp), so each healer is verified in isolation plus a final
 // integration test pins the chain composition. Application code goes
 // through `healAll` rather than calling the helpers directly.
+
+// live-agents at colSpan: 12 sprawls full width even though the curated
+// default places it at half-width next to live-conflicts. Snap to 6.
 export function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'live-agents' && s.colSpan === 12 ? { ...s, colSpan: 6 } : s));
 }
 
-// 2026-04-22: catalog `w` for projects was 12 until the comparator-table
-// redesign narrowed it to 8. Same situation as live-agents above - users
-// with persisted colSpan: 12 see the new table sprawl across the full row
-// because the grid has way more leftover space than the cells need. Heal
-// back to the new default so the redesign actually lands. Power users who
-// genuinely want it at 12 can drag-resize back; the cost of one-time reset
-// is lower than leaving the widget visibly broken for existing users.
+// projects at colSpan: 12 sprawls across the full row because the
+// comparator table has way more leftover space than the cells need. Heal
+// back to the 8-col catalog default.
 export function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'projects' && s.colSpan === 12 ? { ...s, colSpan: 8 } : s));
 }
 
-// 2026-04-24: outcomes widget went from ring-only at 4×3 to ring + 4-column
-// table at 8×3. The table (OUTCOME | COUNT | SHARE | TREND) can't render
-// in the old 4-col slot - labels clip, headers collide. Snap any saved
-// outcomes slot that's narrower than its new minimum (6 cols) up to the
-// new default (8). session-trend was cut the same day so its paired
-// healer is gone - saved layouts drop the slot via WIDGET_ALIASES.
+// outcomes renders as a hero stat + 4-column table (OUTCOME | COUNT |
+// SHARE | TREND) that can't fit in a 4-col slot - labels clip, headers
+// collide. Snap any saved slot narrower than the 6-col minimum up to the
+// 8-col default.
 export function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'outcomes' && s.colSpan < 6 ? { ...s, colSpan: 8 } : s));
 }
 
-// 2026-04-25: scope-complexity moved from a row/table experiment to a
-// scope-tax composition. The design needs enough horizontal room for the
-// hero + bucket marks to breathe; 6-col saved slots collapse into cramped
-// typography. Heal existing saved layouts to the catalog's 8-col default.
+// scope-complexity needs enough horizontal room for the hero + bucket
+// marks to breathe; 6-col slots collapse into cramped typography. Heal
+// up to the 8-col default.
 export function healScopeComplexityWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) =>
     s.id === 'scope-complexity' && s.colSpan < 8 ? { ...s, colSpan: 8 } : s,
   );
 }
 
-// 2026-04-27: tool-call-errors collapsed from a 6×3 hero+top-3 panel into a
-// canonical stat card. Saved layouts at the old size leave the widget body
-// 3 rows tall with a single hero stat floating in dead space - same class
-// of bug the heatmap healer above solves. Snap any saved size > 3×2 down to
-// the new catalog default (matches every other KPI stat in the cockpit:
-// sessions, edits, cost, one-shot-rate). The widget went through a brief
-// 4×2 phase the same day; that intermediate size is also snapped.
+// tool-call-errors is a canonical stat card. Saved layouts larger than
+// 3×2 leave a single hero stat floating in dead space; snap down to the
+// 3×2 default that matches every other KPI stat in the cockpit (sessions,
+// edits, cost, one-shot-rate).
 export function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) =>
     s.id === 'tool-call-errors' && (s.colSpan > 3 || s.rowSpan > 2)
@@ -153,22 +145,16 @@ export function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
   );
 }
 
-// 2026-04-27: model-mix shrank from 4×3 to 4×2 after the active-model detail
-// moved inline into the caption (no more separate detail block, no overflow
-// risk). Saved layouts at the old 4×3 size show ~150px of empty space below
-// the strip. Heal back to the new default; users who genuinely want the
-// extra height can drag-resize.
+// model-mix renders as a strip with the active-model detail inline in the
+// caption; rowSpan > 2 leaves ~150px of empty space below the strip.
 export function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'model-mix' && s.rowSpan > 2 ? { ...s, rowSpan: 2 } : s));
 }
 
-// 2026-04-29: file-overlap and conflicts-blocked were viz: 'stat-row' (maxW
-// 12) until the team-category cleanup made them bare StatWidget composites.
-// Saved layouts at the old size show a single small hero floating in a
-// half-row of empty space, breaking the visual uniformity with the other KPI
-// stats (cost, edits, sessions, stuckness, one-shot-rate at 3×2). Snap any
-// saved size > 3×2 down to the new catalog default. Power users who want
-// them wider can drag-resize, same trade-off as healLiveAgentsWidth.
+// file-overlap and conflicts-blocked are bare StatWidget composites at
+// 3×2. Saved layouts at larger sizes show a single small hero floating in
+// a half-row of empty space, breaking visual uniformity with the other
+// KPI stats (cost, edits, sessions, stuckness, one-shot-rate at 3×2).
 export function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) =>
     (s.id === 'file-overlap' || s.id === 'conflicts-blocked') && (s.colSpan > 3 || s.rowSpan > 2)
@@ -177,13 +163,13 @@ export function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
   );
 }
 
-// 2026-04-27: Generic clamp against catalog min/max. Runs LAST in the heal
-// chain so any saved slot whose size now exceeds its viz constraints (e.g.
-// a stat card persisted at 6×3 from a prior catalog shape) gets normalized
-// even when no widget-specific healer above caught it. Source of truth is
-// the catalog WidgetDef's maxW/maxH (with the VIZ_MAX_CONSTRAINTS fallback
-// applied via getWidget). Matches the constraint that setSlotSize now
-// enforces on every resize gesture.
+// Generic clamp against catalog min/max. Runs LAST in the heal chain so
+// any saved slot whose size now exceeds its viz constraints (e.g. a stat
+// card persisted at 6×3 from a prior catalog shape) gets normalized even
+// when no widget-specific healer above caught it. Source of truth is the
+// catalog WidgetDef's maxW/maxH (with the VIZ_MAX_CONSTRAINTS fallback
+// applied via getWidget). Matches the constraint that setSlotSize enforces
+// on every resize gesture.
 export function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => {
     const def = getWidget(s.id);
@@ -199,10 +185,10 @@ export function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
   });
 }
 
-// 2026-04-25: activity redesign makes the heatmap a full-width 12×3
-// read and promotes hourly-effectiveness beside work-types. Heal saved
-// layouts so existing users see the curated activity row instead of the
-// old 8×4 heatmap with unused vertical space.
+// Activity row: heatmap full-width 12×3, with hourly-effectiveness paired
+// beside work-types at 6 cols each. Heal saved layouts so existing users
+// see the curated row instead of an 8×4 heatmap with unused vertical
+// space.
 export function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
   const hasHourly = slots.some((s) => s.id === 'hourly-effectiveness');
   const out: WidgetSlot[] = [];

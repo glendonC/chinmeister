@@ -14,12 +14,11 @@ import type { Lock } from '../../lib/schemas/common.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { FilePath } from './shared.js';
 
-// Simultaneous-visibility cap per the 04-19 audit: cap-at-3 hid 70% of a
-// 10-agent team behind a "+N more" link, which defeated the cockpit thesis
-// (cross-tool presence at a glance). 8 matches the 2026-04-13 worked-
-// example threshold where horizontal overflow was first surfaced; beyond
-// that the SectionOverflow link is the honest fallback. Widget body scrolls
-// if the cap exceeds the current rowSpan height.
+// Simultaneous-visibility cap. Capping at 3 hides most of a 10-agent team
+// behind a "+N more" link, which defeats the cockpit thesis (cross-tool
+// presence at a glance). 8 is the threshold beyond which horizontal
+// overflow forces the SectionOverflow link as the honest fallback. Widget
+// body scrolls if the cap exceeds the current rowSpan height.
 const LIVE_AGENTS_CAP = 8;
 
 // files-in-play is preemptive coordination ("don't touch what's in flight"),

@@ -159,9 +159,8 @@ function CostWidget({ analytics }: WidgetBodyProps) {
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.cost ?? 0);
   const ariaDelta = deltaAriaSuffix(delta);
   // Populated state paints ONLY load-bearing degradation reasons (stale
-  // pricing, unpriced models). Capability attribution was dropped 2026-
-  // 04-29 — cockpit stat cards stay bare; partial-capture lives on a
-  // dedicated data-quality surface.
+  // pricing, unpriced models). Cockpit stat cards stay bare; partial-
+  // capture lives on a dedicated data-quality surface.
   const degraded = costDegradedReason(t);
   return (
     <>

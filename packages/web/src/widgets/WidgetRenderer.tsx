@@ -41,12 +41,10 @@ function WidgetRendererInner({ widgetId, ...bodyProps }: WidgetRendererProps) {
   const Body = widgetBodies[widgetId];
   const body = Body ? <Body {...bodyProps} /> : <SectionEmpty>Unknown widget</SectionEmpty>;
 
-  // The auto-painted CapabilityFooter was removed 2026-04-29: it stacked
-  // an attribution line under every capability-gated stat card on every
-  // load, regardless of whether the user could act on it. Bodies now own
-  // their disclosure and only paint it where it's load-bearing (empty
-  // states that would be opaque without it). Partial-capture across the
-  // catalog will live on a dedicated data-quality surface.
+  // Bodies own their capability disclosure and only paint it where it's
+  // load-bearing (empty states that would be opaque without it).
+  // Partial-capture across the catalog lives on a dedicated data-quality
+  // surface, not stacked under every capability-gated stat card.
 
   if (!wrapClick) {
     return (
