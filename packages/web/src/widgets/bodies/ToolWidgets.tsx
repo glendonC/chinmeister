@@ -13,13 +13,13 @@
  *   - Head-to-head completion on identical work-types (tool-work-type-fit)
  *   - Per-vendor first-try rate on the same repo (one-shot-by-tool)
  *
- * Design language: chromeless. No cards, no dividers — hierarchy from font
- * weight, opacity, and color. Mono for labels and metadata. Em-dash for
- * unmeasured, 0 for measured zero. Stagger via --row-index × 35ms. Accent is
- * reserved for live data; static counts use --ink. Coverage notes for any
- * metric gated on a deep-capture capability. Decoration dots and chrome
- * outlines were stripped 2026-04-27 — color carries through the rate, not
- * through brand bullets adjacent to labels.
+ * Design language: chromeless. No cards, no dividers; hierarchy comes from
+ * font weight, opacity, and color. Mono for labels and metadata. Em-dash
+ * for unmeasured, 0 for measured zero. Stagger via --row-index × 35ms.
+ * Accent is reserved for live data; static counts use --ink. Coverage
+ * notes for any metric gated on a deep-capture capability. No decoration
+ * dots or chrome outlines: color carries through the rate, not through
+ * brand bullets adjacent to labels.
  */
 
 import { useMemo, useState, type CSSProperties } from 'react';

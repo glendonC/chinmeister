@@ -181,10 +181,8 @@ function ConflictsBlockedWidget({ analytics }: WidgetBodyProps) {
   // forcing an arrow against a 0 baseline would lie.
   const delta = splitPeriodDelta(cs.daily_blocked ?? [], (d) => d.blocked);
   const value = cs.blocked_period.toLocaleString();
-  // Populated state stays bare. Partial-capture disclosure was dropped
-  // 2026-04-29 alongside the WidgetRenderer auto-footer cleanup —
-  // capability attribution belongs on the data-quality surface, not
-  // stacked under every cockpit stat.
+  // Populated state stays bare. Capability attribution belongs on the
+  // data-quality surface, not stacked under every cockpit stat.
   return (
     <StatWidget
       value={value}
@@ -195,14 +193,13 @@ function ConflictsBlockedWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// file-overlap revived 2026-04-25 (post 18-month re-audit). Cut originally
-// for an A3 lie in the populated branch (didn't consult isSoloTeam). At
-// team scale this is the substrate-unique scalar "what share of files
-// this period saw multiple agents touch them" that no IDE produces.
-// Detail questions: overlap rate by directory, period trend, average
-// agents-per-file in overlap subset, claim coverage of overlap files
-// (when auto-claim ships), tool-pair contribution. All live in the
-// codebase Risk drill, not under the hero.
+// At team scale, file-overlap is the substrate-unique scalar "what share
+// of files this period saw multiple agents touch them" that no IDE
+// produces. Populated only when team_size > 1; the solo branch shows the
+// empty state. Detail questions (overlap rate by directory, period trend,
+// average agents-per-file in overlap subset, claim coverage when
+// auto-claim ships, tool-pair contribution) live in the codebase Risk
+// drill, not under the hero.
 //
 // Hero is the rate (overlapping/total as %). NO tone color on the hero,
 // high overlap isn't inherently bad (paired work) and low overlap isn't

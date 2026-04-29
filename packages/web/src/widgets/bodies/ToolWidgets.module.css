@@ -5,12 +5,10 @@
  * Mono for labels and metadata. Stagger via --row-index × 35ms (45ms for
  * dense table rows). Accent reserved for live data; static counts use --ink.
  *
- * Shared list/stat/coverage primitives come from widget-shared.module.css —
+ * Shared list/stat/coverage primitives come from widget-shared.module.css;
  * this module owns only the per-widget visualizations specific to tools.
- *
- * 2026-04-27: heatmap, capability matrix, token-attribution matrix, and
- * every brand-color decoration dot adjacent to a label were stripped.
- * Color carries through the rate, not through bullets.
+ * No brand-color decoration dots adjacent to labels: color carries through
+ * the rate, not through bullets.
  */
 
 /* ================================================================
