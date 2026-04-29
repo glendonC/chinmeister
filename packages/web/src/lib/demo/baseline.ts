@@ -1595,6 +1595,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     teams_included: DEMO_TEAMS.length,
     degraded: false,
     truncated_teams: 0,
+    failure_labels: {},
     file_heatmap,
     files_touched_total: filesTouchedTotal,
     // Mid-period snapshot with a modest breadth increase in the current

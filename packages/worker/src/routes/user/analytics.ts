@@ -21,6 +21,7 @@ import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 import { ANALYTICS_MAX_DAYS, CROSS_TEAM_MAX_DAYS } from './analytics/constants.js';
 import { buildEmptyAnalyticsResponse } from './analytics/empty.js';
 import type { TeamResult } from './analytics/types.js';
+import { classifyTeamThrow, isTeamPayloadShapeOk } from './analytics/failure-labels.js';
 import * as dailyTrends from './analytics/daily-trends.js';
 import * as outcomes from './analytics/outcomes.js';
 import * as tokens from './analytics/tokens.js';
@@ -120,20 +121,46 @@ async function buildUserAnalytics(
         // scope refactor closes. Team-tier admin views (when they ship) build
         // a separate route that explicitly passes empty scope and gates on a
         // role check.
-        return rpc(
-          await withTimeout(
-            team.getAnalyticsForOwner(user.id, effectiveDays, tzOffsetMinutes, {
-              handle: user.handle,
-            }) as unknown as Promise<TeamResult>,
-            DO_CALL_TIMEOUT_MS,
-          ),
+        const raw = await withTimeout(
+          team.getAnalyticsForOwner(user.id, effectiveDays, tzOffsetMinutes, {
+            handle: user.handle,
+          }) as unknown as Promise<TeamResult>,
+          DO_CALL_TIMEOUT_MS,
         );
+        const value = rpc(raw);
+        // DO returned an error envelope (the RPC convention: `{ error }`
+        // instead of throw for expected failures). Normalize the label
+        // so dashboards distinguish "DO refused" from "RPC blew up."
+        if (value.error) {
+          log.warn('team analytics rpc returned error', {
+            teamId: teamEntry.team_id,
+            error: value.error,
+          });
+          return { error: 'rpc_error', error_detail: value.error } satisfies TeamResult;
+        }
+        // Structural sanity check on the per-team payload before it hits
+        // the merge accumulators. A wildly-wrong shape (null, primitive,
+        // missing the daily_trends array) would otherwise crash merge with
+        // an opaque 'unhandled' label and bury the real cause.
+        if (!isTeamPayloadShapeOk(value)) {
+          log.warn('team analytics returned malformed payload', {
+            teamId: teamEntry.team_id,
+            valueType: typeof value,
+          });
+          return {
+            error: 'shape_mismatch',
+            error_detail: `expected object with daily_trends array, got ${typeof value}`,
+          } satisfies TeamResult;
+        }
+        return value;
       } catch (err) {
+        const classified = classifyTeamThrow(err);
         log.error('failed to fetch team analytics', {
           teamId: teamEntry.team_id,
-          error: getErrorMessage(err),
+          label: classified.error,
+          error: classified.error_detail,
         });
-        return { error: 'timeout' } satisfies TeamResult;
+        return classified;
       }
     }),
   );
@@ -199,6 +226,14 @@ async function buildUserAnalytics(
 
   let included = 0;
   let failed = 0;
+  // Per-label failure tally. Surfaces in the response so the dashboard
+  // can show "1 team timed out, 2 RPC errors" instead of a single opaque
+  // `degraded: true`. Keys are the structural categories from TeamResult;
+  // counts not team IDs so client never sees which team failed.
+  const failureLabels: Record<string, number> = {};
+  const bumpFailure = (label: string) => {
+    failureLabels[label] = (failureLabels[label] ?? 0) + 1;
+  };
 
   // Iterate team results and fold each into every accumulator. Indexed
   // loop so per-project merges can correlate `results[i]` with the
@@ -211,15 +246,26 @@ async function buildUserAnalytics(
     const teamEntry = capped[i];
     if (!r || !teamEntry) {
       failed++;
+      bumpFailure('unhandled');
       continue;
     }
     if (r.status === 'rejected') {
+      // Promise.allSettled rejections only happen if our wrapper itself
+      // throws synchronously, which the try/catch above should preclude.
+      // If we land here, surface it as 'unhandled' for parity with the
+      // catch branch's label.
       failed++;
+      bumpFailure('unhandled');
+      log.error('team analytics promise rejected', {
+        teamId: teamEntry.team_id,
+        error: getErrorMessage(r.reason),
+      });
       continue;
     }
     const team = r.value;
     if (team.error) {
       failed++;
+      bumpFailure(team.error);
       continue;
     }
     const teamIndex = included;
@@ -366,6 +412,7 @@ async function buildUserAnalytics(
       teams_included: included,
       degraded: failed > 0,
       truncated_teams: truncatedTeams,
+      failure_labels: failureLabels,
     },
     200,
     { schema: userAnalyticsSchema, headers: CACHE_HEADERS },

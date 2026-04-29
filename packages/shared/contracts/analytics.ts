@@ -1139,6 +1139,13 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   // misread the response as "all your projects" when it isn't). Distinct from
   // `degraded`, which is per-team RPC failure, not a deliberate cap.
   truncated_teams: z.number().default(0),
+  // Per-label tally of fan-out failures. Keys are structural categories
+  // (timeout, rpc_error, unhandled, shape_mismatch); values are counts of
+  // teams that hit each label. Counts only, team IDs are never exposed,
+  // because that would leak which project failed to whom. The dashboard
+  // can render "1 timeout" + "2 rpc_error" instead of an opaque
+  // `degraded: true`. Empty object on the success path.
+  failure_labels: z.record(z.string(), z.number()).default({}),
   data_coverage: dataCoverageSchema.optional(),
 });
 export type UserAnalytics = z.infer<typeof userAnalyticsSchema>;
