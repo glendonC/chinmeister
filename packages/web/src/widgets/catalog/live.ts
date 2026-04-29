@@ -1,0 +1,74 @@
+import type { WidgetDef } from './types.js';
+
+// Live (presence / coordination) widgets — real-time snapshots that bypass the
+// global date picker. Every entry uses `timeScope: 'live'` and `fitContent` so
+// quiet teams collapse the cell instead of reserving empty vertical space.
+export const LIVE_WIDGETS: WidgetDef[] = [
+  {
+    id: 'live-agents',
+    name: 'live agents',
+    description: 'Agents working in this team right now, across every tool you use.',
+    category: 'live',
+    scope: 'both',
+    viz: 'live-list',
+    w: 6,
+    h: 4,
+    minW: 4,
+    minH: 2,
+    dataKeys: ['dashboard'],
+    timeScope: 'live',
+    fitContent: true,
+  },
+  {
+    id: 'live-conflicts',
+    name: 'live conflicts',
+    description:
+      "Files multiple agents are editing right now. Coordinate on these before they stomp on each other's edits.",
+    category: 'live',
+    scope: 'both',
+    viz: 'data-list',
+    w: 6,
+    h: 3,
+    minW: 4,
+    minH: 2,
+    dataKeys: ['dashboard'],
+    timeScope: 'live',
+    fitContent: true,
+  },
+  {
+    id: 'files-in-play',
+    name: 'files being edited',
+    description:
+      'Files at least one agent has open right now, across every tool. A glance here before you pick what to work on next.',
+    category: 'live',
+    scope: 'both',
+    viz: 'data-list',
+    w: 6,
+    h: 3,
+    minW: 4,
+    minH: 2,
+    dataKeys: ['dashboard'],
+    timeScope: 'live',
+    fitContent: true,
+  },
+  {
+    id: 'claimed-files',
+    name: 'claimed files',
+    description:
+      'Files an agent has reserved so others stay out while it works. Claims that hang around for a while are worth a look.',
+    category: 'live',
+    scope: 'project',
+    viz: 'data-list',
+    w: 6,
+    h: 3,
+    minW: 4,
+    minH: 2,
+    dataKeys: ['dashboard'],
+    timeScope: 'live',
+    fitContent: true,
+    // Drill opens the LiveNow Files tab where claims show up alongside
+    // unclaimed files-in-play, so a single surface answers "what is
+    // anyone holding right now and how long has it been held."
+    drillTarget: { view: 'live', tab: 'files' },
+  },
+];
