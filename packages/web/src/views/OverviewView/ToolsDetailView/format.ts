@@ -1,6 +1,4 @@
-export function fmtCount(n: number): string {
-  return n.toLocaleString();
-}
+export { fmtCount } from '../../../widgets/utils.js';
 
 // Completion tone helper used inside the flow-pairs answer prose.
 export function completionTone(rate: number): 'positive' | 'warning' | 'negative' {
