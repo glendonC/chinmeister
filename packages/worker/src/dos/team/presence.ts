@@ -1,8 +1,7 @@
 // Pure helpers for reading team presence from Hibernation WebSocket tags.
 //
 // Each helper takes the DurableObjectState directly so it can be unit-tested
-// without standing up a whole DO. Semantics are unchanged from the inlined
-// versions that used to live on TeamDO.
+// without standing up a whole DO.
 
 /** Agent IDs with an active `role:agent` WebSocket connection. */
 export function getConnectedAgentIds(ctx: DurableObjectState): Set<string> {

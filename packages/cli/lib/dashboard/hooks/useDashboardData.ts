@@ -1,13 +1,11 @@
 /**
- * Derived data for the dashboard view - combined agent rows, memory lists,
+ * Derived data for the dashboard view: combined agent rows, memory lists,
  * selection clamping, viewport windows.
  *
- * Was previously packaged as a `DataProvider` React context, but it had
- * exactly one consumer (DashboardViewComponent). Making it a hook keeps
- * the memoisation, removes the context-plumbing indirection, and lets the
- * consumer pass hook returns explicitly instead of pulling them through
- * siblings. The reducer state is read through useView() because it's
- * genuinely multi-consumer.
+ * Implemented as a hook with a single consumer (DashboardViewComponent)
+ * to keep the memoisation while avoiding context-plumbing indirection.
+ * The reducer state is read through useView() because it has multiple
+ * consumers at different nesting levels.
  */
 import { useEffect, useMemo } from 'react';
 import { basename } from 'path';

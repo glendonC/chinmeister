@@ -442,9 +442,9 @@ describe('agent-identity', () => {
     });
 
     it('resolves GitHub Copilot as a distinct tool from VS Code', () => {
-      // Copilot sessions used to fold into `vscode`; now they route to
-      // `copilot` so analytics can attribute cost/tokens/conversation
-      // signals to the actual product, not the host editor.
+      // Copilot routes to `copilot`, not `vscode`, so analytics can
+      // attribute cost/tokens/conversation signals to the actual product
+      // rather than the host editor.
       expect(inferToolFromClientInfo('GitHub Copilot')).toBe('copilot');
       expect(inferToolFromClientInfo('copilot')).toBe('copilot');
     });

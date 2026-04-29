@@ -125,9 +125,9 @@ async function checkConflict(team, teamId, input) {
 async function reportEdit(team, teamId, input) {
   const filePath = extractFilePath(input, hostId);
   if (!filePath) {
-    // Silent exit used to hide capture gaps (unknown host payload shape,
-    // malformed JSON, stdin cutoff). Log so operators can see *why* the
-    // edit didn't land - the hook still exits 0 to avoid blocking.
+    // Log so operators can see *why* the edit didn't land. Silent exit
+    // would hide capture gaps (unknown host payload shape, malformed JSON,
+    // stdin cutoff). The hook still exits 0 to avoid blocking.
     const shape = input && typeof input === 'object' ? Object.keys(input).join(',') : typeof input;
     log.warn(`report-edit: no file_path for host=${hostId} (payload keys: ${shape})`);
     process.exit(0);

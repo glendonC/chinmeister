@@ -1,7 +1,6 @@
 // Per-report Lucide icon. Stroke is painted in a single solid color -
-// the report's accent - giving each report a quiet identity cue
-// without the gradient decoration that previously made the catalog
-// feel performative.
+// the report's accent - giving each report a quiet identity cue without
+// gradient decoration; gradients on these marks read as performative.
 
 import type { ReactNode } from 'react';
 import { Brain, Compass, Flame, GitMerge, type LucideIcon } from 'lucide-react';

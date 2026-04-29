@@ -246,11 +246,11 @@ function VizIllustration({ viz }: { viz: WidgetViz }) {
 // ── Filter mode: what to show ─────────────────────
 
 type ShowFilter = 'all' | 'active' | 'inactive';
-// Labels read as the answer to "Show:" — `Added` / `Available` map to the
-// user's mental model (widgets I've put on my dashboard vs. ones I could
-// add) far better than the engineering vocabulary `active` / `inactive`,
-// which gives no hint about what's being filtered. The internal enum
-// keeps the original names so all the filter logic is unchanged.
+// Labels read as the answer to "Show:" - `Added` / `Available` map to
+// the user's mental model (widgets I've put on my dashboard vs. ones I
+// could add) far better than the engineering vocabulary `active` /
+// `inactive`. The internal enum keeps `active` / `inactive` so the
+// filter logic stays compact.
 const SHOW_LABELS: Record<ShowFilter, string> = {
   all: 'All',
   active: 'Added',

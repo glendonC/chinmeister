@@ -184,13 +184,13 @@
 
 /* File cell rendering uses the shared `FilePath` primitive in
  * widgets/bodies/shared.tsx (filename ink + sans 500, parent muted +
- * mono xs). The local class set was removed when FilePath landed. */
+ * mono xs). No local class set here. */
 
 /* ── Status cell ─────────────────────────────────────────────────
  *
- * Pure state word — never a handle. Handles live in the Editors column,
- * and crossing that boundary (as a previous `mismatch @handle` pattern
- * did) created column-role confusion.
+ * Pure state word — never a handle. Handles live in the Editors column;
+ * mixing a handle into the status word (e.g. `mismatch @handle`) creates
+ * column-role confusion.
  *
  *   claimed    — lock exists and the holder is one of the editors.
  *   unclaimed  — no lock. Explicit word because an uncoordinated

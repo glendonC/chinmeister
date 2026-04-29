@@ -1,21 +1,16 @@
 /**
- * Dashboard view state - reducer + flash notifications.
+ * Dashboard view state: reducer + flash notifications.
  *
- * This file used to host a mega-provider with seven contexts (View,
- * Connection, Agent, Composer, Memory, Integration, Data). Six of those
- * had exactly one consumer and existed purely to shuttle hook returns
- * between sibling components. They've been collapsed: DashboardProviders
- * now builds the hooks and passes them explicitly as props, and the
- * DataProvider body lives as a hook at ./hooks/useDashboardData.ts.
+ * ViewProvider has multiple consumers at different nesting levels (the
+ * outer DashboardProviders reads `flash`; the inner DashboardViewComponent
+ * reads `state`, `dispatch`, and `notice`), which is when a context
+ * genuinely earns its keep. Other dashboard hooks pass through
+ * DashboardProviders explicitly as props because they each have a single
+ * consumer; the DataProvider body lives as a hook at
+ * ./hooks/useDashboardData.ts.
  *
- * ViewProvider stays because it has multiple consumers at different
- * nesting levels (the outer DashboardProviders reads `flash` from it,
- * and the inner DashboardViewComponent reads `state`, `dispatch`, and
- * `notice`) - that's the case where a context genuinely earns its
- * keep.
- *
- * useCommandSuggestions stays here because it's still the command
- * palette logic; it has no context dependency, just args in, list out.
+ * useCommandSuggestions lives here as the command-palette logic. It has
+ * no context dependency: args in, list out.
  */
 import React, {
   createContext,

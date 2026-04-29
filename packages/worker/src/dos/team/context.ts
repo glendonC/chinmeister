@@ -365,13 +365,13 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
 
   // Active member details for the overview agents panel.
   // Phantom filter: a row is phantom when BOTH the stored host_tool is
-  // missing/unknown AND the agent_id prefix is missing/unknown. Rows where
-  // detection failed but the agent_id prefix is meaningful (e.g.
-  // 'claude-code:abc:def' with host_tool='unknown') used to be dropped here,
-  // which hid legitimate CC instances whose MCP handshake hadn't populated
-  // host_tool by join time. The mapper below recovers host_tool from the
-  // agent_id prefix in that case. ORDER BY last_heartbeat DESC so the
-  // LIMIT 20 truncation is deterministic.
+  // missing/unknown AND the agent_id prefix is missing/unknown. Rows
+  // where detection failed but the agent_id prefix is meaningful (e.g.
+  // 'claude-code:abc:def' with host_tool='unknown') stay visible: the
+  // mapper below recovers host_tool from the agent_id prefix so
+  // legitimate Claude Code instances aren't hidden when an MCP handshake
+  // hasn't populated host_tool by join time. ORDER BY last_heartbeat DESC
+  // so the LIMIT 20 truncation is deterministic.
   const activeMembers = sql
     .exec(
       `SELECT m.agent_id, m.handle, m.host_tool, m.agent_surface,
