@@ -157,6 +157,21 @@ function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'model-mix' && s.rowSpan > 2 ? { ...s, rowSpan: 2 } : s));
 }
 
+// 2026-04-29: file-overlap and conflicts-blocked were viz: 'stat-row' (maxW
+// 12) until the team-category cleanup made them bare StatWidget composites.
+// Saved layouts at the old size show a single small hero floating in a
+// half-row of empty space, breaking the visual uniformity with the other KPI
+// stats (cost, edits, sessions, stuckness, one-shot-rate at 3×2). Snap any
+// saved size > 3×2 down to the new catalog default. Power users who want
+// them wider can drag-resize, same trade-off as healLiveAgentsWidth.
+function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) =>
+    (s.id === 'file-overlap' || s.id === 'conflicts-blocked') && (s.colSpan > 3 || s.rowSpan > 2)
+      ? { ...s, colSpan: 3, rowSpan: 2 }
+      : s,
+  );
+}
+
 // 2026-04-27: Generic clamp against catalog min/max. Runs LAST in the heal
 // chain so any saved slot whose size now exceeds its viz constraints (e.g.
 // a stat card persisted at 6×3 from a prior catalog shape) gets normalized
@@ -250,10 +265,12 @@ function loadDashboard(): DashboardLayout {
         const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
         const healed = clampToCatalogConstraints(
           healActivityLayout(
-            healModelMixSize(
-              healToolCallErrorsSize(
-                healScopeComplexityWidth(
-                  healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(expanded))),
+            healTeamStatSize(
+              healModelMixSize(
+                healToolCallErrorsSize(
+                  healScopeComplexityWidth(
+                    healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(expanded))),
+                  ),
                 ),
               ),
             ),
