@@ -150,6 +150,15 @@ export const completionSummarySchema = z.object({
   unknown: z.number().default(0),
   completion_rate: z.number().default(0),
   prev_completion_rate: z.number().nullable().default(null),
+  // Total sessions in the previous-window comparison query. Required to
+  // weight prev_completion_rate correctly when merging across teams: a
+  // user with 100 prev sessions at 60% and 200 prev sessions at 40% must
+  // collapse to 46.67% (weighted by prev_total_sessions), not 50% (a
+  // simple per-team average) and not the broken weight-by-current-total
+  // approximation we shipped before this companion field existed.
+  // Defaults to 0 so older payloads parse cleanly; consumers gate on
+  // prev_completion_rate != null before using it.
+  prev_total_sessions: z.number().default(0),
 });
 export type CompletionSummary = z.infer<typeof completionSummarySchema>;
 
@@ -962,6 +971,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     unknown: 0,
     completion_rate: 0,
     prev_completion_rate: null,
+    prev_total_sessions: 0,
   }),
   tool_comparison: z.array(toolComparisonSchema).default([]),
   work_type_distribution: z.array(workTypeDistributionSchema).default([]),
@@ -1123,6 +1133,12 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   }),
   teams_included: z.number().default(0),
   degraded: z.boolean().default(false),
+  // Number of teams the route dropped before fan-out due to MAX_DASHBOARD_TEAMS.
+  // Zero means every team the user belongs to was included; positive means N
+  // teams were truncated (and the UI must surface that visibly so users don't
+  // misread the response as "all your projects" when it isn't). Distinct from
+  // `degraded`, which is per-team RPC failure, not a deliberate cap.
+  truncated_teams: z.number().default(0),
   data_coverage: dataCoverageSchema.optional(),
 });
 export type UserAnalytics = z.infer<typeof userAnalyticsSchema>;

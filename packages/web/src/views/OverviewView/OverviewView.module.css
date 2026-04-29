@@ -81,6 +81,34 @@
 }
 
 /*
+ * Static informational notice. Used for truncation and period-clamp
+ * messaging. Distinct from .summaryNotice (which uses --danger red for
+ * partial-data warnings); this variant stays in --muted because the
+ * information is factual, not an error or live-state signal. Per the
+ * design language: short, single-line, no boxes, no accent color.
+ */
+.infoNotice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-md);
+}
+
+.infoNoticeLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.infoNoticeText {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+/*
  * Visually hidden but available to assistive tech. Used by the layout
  * change live region.
  */

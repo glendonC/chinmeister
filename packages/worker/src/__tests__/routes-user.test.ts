@@ -549,6 +549,62 @@ describe('GET /me/analytics', () => {
     const res = await SELF.fetch('http://localhost/me/analytics');
     expect(res.status).toBe(401);
   });
+
+  it('emits Cache-Control: private, max-age=60, stale-while-revalidate=120', async () => {
+    // Phase 0 lock: dashboards poll often; max-age=60 amortizes the
+    // fan-out across the 5s-poll window without hiding fresh inserts.
+    // private because the response is owner-scoped.
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/analytics?days=30', { headers });
+    expect(res.status).toBe(200);
+    const cc = res.headers.get('Cache-Control');
+    expect(cc).toBe('private, max-age=60, stale-while-revalidate=120');
+  });
+
+  it('reports truncated_teams when the user belongs to more than MAX_DASHBOARD_TEAMS', async () => {
+    // Seed 27 teams directly through DatabaseDO. Going through POST /teams
+    // would burn through RATE_LIMIT_TEAMS=5/day before the 26th team and
+    // also load every TeamDO unnecessarily. The route only reads from
+    // user_teams to fan-out, so direct DB seeding is the cheap path that
+    // exercises the truncation code without spinning up 27 DOs.
+    const { user, headers } = await createAuthUser();
+    const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+    const totalTeams = 27;
+    for (let i = 0; i < totalTeams; i++) {
+      await db.addUserTeam(user.id, `t-trunc-${user.id}-${i}`, `team-${i}`);
+    }
+
+    const res = await SELF.fetch('http://localhost/me/analytics?days=30', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.ok).toBe(true);
+    // MAX_DASHBOARD_TEAMS = 25, so 27 - 25 = 2 truncated.
+    expect(body.truncated_teams).toBe(totalTeams - 25);
+  });
+
+  it('reports truncated_teams=0 when the user belongs to <= MAX_DASHBOARD_TEAMS', async () => {
+    const { headers } = await createAuthUser();
+    await SELF.fetch('http://localhost/teams', { method: 'POST', headers });
+    const res = await SELF.fetch('http://localhost/me/analytics?days=7', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.truncated_teams).toBe(0);
+  });
+
+  it('clamps period_days to CROSS_TEAM_MAX_DAYS for multi-team requests', async () => {
+    // CROSS_TEAM_MAX_DAYS = 30. A user with 2+ teams asking for 90 days
+    // gets back period_days=30; the UI banner reads that field to render
+    // the "Range capped" notice.
+    const { user, headers } = await createAuthUser();
+    const db = env.DATABASE.get(env.DATABASE.idFromName('main'));
+    await db.addUserTeam(user.id, `t-clamp-${user.id}-a`, 'team-a');
+    await db.addUserTeam(user.id, `t-clamp-${user.id}-b`, 'team-b');
+
+    const res = await SELF.fetch('http://localhost/me/analytics?days=90', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(body.period_days).toBe(30);
+  });
 });
 
 // --- GET /me/sessions ---
@@ -655,6 +711,28 @@ describe('GET /me/sessions', () => {
   it('requires auth', async () => {
     const res = await SELF.fetch('http://localhost/me/sessions');
     expect(res.status).toBe(401);
+  });
+
+  it('emits Cache-Control: private, max-age=15, stale-while-revalidate=60', async () => {
+    // /me/sessions backs the active timeline; max-age=15 keeps the wall
+    // clock honest while still absorbing burst polling.
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/sessions', { headers });
+    expect(res.status).toBe(200);
+    const cc = res.headers.get('Cache-Control');
+    expect(cc).toBe('private, max-age=15, stale-while-revalidate=60');
+  });
+});
+
+// --- GET /me/dashboard cache control ---
+
+describe('GET /me/dashboard cache control', () => {
+  it('emits Cache-Control: private, max-age=15, stale-while-revalidate=60', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/dashboard', { headers });
+    expect(res.status).toBe(200);
+    const cc = res.headers.get('Cache-Control');
+    expect(cc).toBe('private, max-age=15, stale-while-revalidate=60');
   });
 });
 

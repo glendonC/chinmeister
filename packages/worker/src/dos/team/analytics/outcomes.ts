@@ -160,8 +160,14 @@ export function queryCompletionSummary(
     const completed = c.number('completed');
     const completionRate = total > 0 ? Math.round((completed / total) * 1000) / 10 : 0;
 
-    // Previous period for comparison
+    // Previous period for comparison. Both prev_completion_rate and
+    // prev_total_sessions ship together so the cross-team merge in
+    // routes/user/analytics/outcomes.ts can weight the previous-window
+    // completion rate by its OWN denominator rather than approximating
+    // it with the current-window total (which is wrong for any user
+    // whose volume changes period over period).
     let prevRate: number | null = null;
+    let prevTotal = 0;
     try {
       const { sql: prevQ, params: prevParams } = withScope(
         `SELECT
@@ -175,9 +181,9 @@ export function queryCompletionSummary(
       );
       const prev = sql.exec(prevQ, ...prevParams).toArray();
       const p = row(prev[0]);
-      const pTotal = p.number('total_sessions');
+      prevTotal = p.number('total_sessions');
       const pCompleted = p.number('completed');
-      if (pTotal > 0) prevRate = Math.round((pCompleted / pTotal) * 1000) / 10;
+      if (prevTotal > 0) prevRate = Math.round((pCompleted / prevTotal) * 1000) / 10;
     } catch {
       // previous period comparison is best-effort
     }
@@ -190,6 +196,7 @@ export function queryCompletionSummary(
       unknown: c.number('unknown'),
       completion_rate: completionRate,
       prev_completion_rate: prevRate,
+      prev_total_sessions: prevTotal,
     };
   } catch (err) {
     log.warn(`completionSummary query failed: ${err}`);
@@ -201,6 +208,7 @@ export function queryCompletionSummary(
       unknown: 0,
       completion_rate: 0,
       prev_completion_rate: null,
+      prev_total_sessions: 0,
     };
   }
 }
