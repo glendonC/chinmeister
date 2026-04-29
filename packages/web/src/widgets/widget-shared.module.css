@@ -339,6 +339,26 @@ button.rowBase {
   text-align: left;
 }
 
+/* Cross-project disambiguator. Sits after the path on Overview live
+ * widgets where two router.ts rows from different repos would otherwise
+ * render identically. Same monospace as the parent prefix, --soft tone
+ * (one tier under the immediate parent), small size, prefixed with a
+ * thin space + middle dot for separation without a divider element. */
+.filePathTeam {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  flex-shrink: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.filePathTeam::before {
+  content: ' · ';
+}
+
 /* ── Data rows (generic list rows) ────────────────── */
 
 .dataList {

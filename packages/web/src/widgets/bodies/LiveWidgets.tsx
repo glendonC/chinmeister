@@ -135,6 +135,11 @@ interface FileRowProps {
   // adds noise without information. Defaults to true so existing call
   // sites (the LiveNowView drill-in) keep their full layout.
   showStatus?: boolean;
+  // Cross-project disambiguator. When the rendered set spans 2+ teams,
+  // the parent passes through a per-row teamLabel so two router.ts rows
+  // from different repos do not look identical. Single-project surfaces
+  // pass null and the FilePath stays bare.
+  teamLabel?: string | null;
 }
 
 // Shared row for live-conflicts and files-in-play. Subgrid columns:
@@ -151,7 +156,14 @@ interface FileRowProps {
 //               the coordination signal.
 //   Editors   — up to 3 tool-colored handles + `+N` overflow. Cell font-
 //               weight scales with editor count for at-a-glance severity.
-function FileRow({ group, lock, index, onClick, showStatus = true }: FileRowProps) {
+function FileRow({
+  group,
+  lock,
+  index,
+  onClick,
+  showStatus = true,
+  teamLabel = null,
+}: FileRowProps) {
   const editors = sortEditors(group.agents);
   const visibleEditors = editors.slice(0, EDITOR_CAP);
   const extra = editors.length - visibleEditors.length;
@@ -172,7 +184,7 @@ function FileRow({ group, lock, index, onClick, showStatus = true }: FileRowProp
       style={{ '--row-index': index } as CSSProperties}
       onClick={onClick}
     >
-      <FilePath path={group.file} order="name-first" />
+      <FilePath path={group.file} order="name-first" teamLabel={teamLabel} />
 
       {showStatus && (
         <span className={styles.conflictStatusCell}>
@@ -242,6 +254,15 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
   // disappears on Overview where it does not.
   const showStatus = conflicts.some((c) => locksByFile.has(c.file));
 
+  // Cross-project disambiguator. Two router.ts rows from different repos
+  // would otherwise render identically on Overview. The strip already
+  // groups files by (team, file) in live-data.ts, so showing the team
+  // identity per row when the rendered set spans 2+ teams costs no extra
+  // data plumbing. Single-project surfaces (Project tab) collapse to one
+  // teamId and the suffix stays hidden.
+  const teamCount = new Set(conflicts.map((c) => c.teamId)).size;
+  const showTeam = teamCount > 1;
+
   if (conflicts.length === 0) {
     return (
       <SectionEmpty>
@@ -266,6 +287,7 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
             lock={locksByFile.get(c.file)}
             index={i}
             showStatus={showStatus}
+            teamLabel={showTeam ? c.teamName : null}
             onClick={() => setQueryParams({ live: '', 'live-tab': 'conflicts' })}
           />
         ))}
@@ -300,6 +322,13 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
   // every row. Project, where locks exist, keeps the full layout.
   const showStatus = visible.some((f) => locksByFile.has(f.file));
 
+  // Same cross-project gate as LiveConflictsWidget. teamLabel renders
+  // only when the visible set spans 2+ teams. Computed off `visible` not
+  // `allFiles` so a single-team prefix still hides the suffix even when
+  // the unrendered tail spans multiple repos.
+  const teamCount = new Set(visible.map((f) => f.teamId)).size;
+  const showTeam = teamCount > 1;
+
   if (visible.length === 0) {
     return (
       <SectionEmpty>
@@ -324,6 +353,7 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
             lock={locksByFile.get(f.file)}
             index={i}
             showStatus={showStatus}
+            teamLabel={showTeam ? f.teamName : null}
             onClick={() => setQueryParams({ live: '', 'live-tab': 'files' })}
           />
         ))}

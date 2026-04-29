@@ -400,17 +400,25 @@ export function MoreHidden({ count }: { count: number }) {
  *   `order='name-first'` renders `name dir/` — the scannable variant used
  *   by conversation and live widgets where the basename is identity. On
  *   overflow, the tail of the prefix gets ellipsed.
+ *
+ * Optional `teamLabel` renders a quiet project disambiguator after the path,
+ * for cross-project surfaces (Overview live widgets) where the same filename
+ * can come from two different repos. The label sits at --soft, monospaced,
+ * small. It is hidden when the surface is single-project so the strip stays
+ * uncluttered. No card, no divider, hierarchy by font weight and opacity.
  */
 export function FilePath({
   path,
   order = 'parent-first',
   parentSegments = 2,
   className,
+  teamLabel,
 }: {
   path: string;
   order?: 'parent-first' | 'name-first';
   parentSegments?: number;
   className?: string;
+  teamLabel?: string | null;
 }) {
   const { parent, name } = formatFilePath(path, parentSegments);
   const parentClass =
@@ -419,8 +427,14 @@ export function FilePath({
       : styles.filePathParent;
   const parentEl = parent ? <span className={parentClass}>{parent}</span> : null;
   const nameEl = <span className={styles.filePathName}>{name}</span>;
+  const teamEl = teamLabel ? (
+    <span className={styles.filePathTeam} title={teamLabel}>
+      {teamLabel}
+    </span>
+  ) : null;
+  const titleAttr = teamLabel ? `${path} · ${teamLabel}` : path;
   return (
-    <span className={clsx(styles.filePath, className)} title={path}>
+    <span className={clsx(styles.filePath, className)} title={titleAttr}>
       {order === 'parent-first' ? (
         <>
           {parentEl}
@@ -432,6 +446,7 @@ export function FilePath({
           {parentEl}
         </>
       )}
+      {teamEl}
     </span>
   );
 }
