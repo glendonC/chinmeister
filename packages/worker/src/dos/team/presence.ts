@@ -28,6 +28,24 @@ export function getAllConnectedMemberIds(ctx: DurableObjectState): Set<string> {
   );
 }
 
+/**
+ * Custom WebSocket close code used when a member's access has been revoked
+ * (explicit leave or future kick). Range 4000-4999 is reserved for app-private
+ * codes per RFC 6455, so the client can distinguish revocation from a 1006
+ * abnormal close and stop reconnecting.
+ */
+export const MEMBERSHIP_REVOKED_CLOSE_CODE = 4001;
+
+/**
+ * Sockets tagged with the given agentId. Tags are written by `acceptWebSocket`
+ * in handleFetch with `[resolvedAgentId, 'role:*', 'spawn:*']`, so a tag-filtered
+ * `getWebSockets(agentId)` returns every live socket for that agent across all
+ * roles (agent, daemon, watcher).
+ */
+export function getSocketsForAgent(ctx: DurableObjectState, agentId: string): WebSocket[] {
+  return ctx.getWebSockets(agentId);
+}
+
 /** All connected sockets with spawn capability (identified by `spawn:*` tags). */
 export function getExecutorSockets(ctx: DurableObjectState): WebSocket[] {
   const executors: WebSocket[] = [];

@@ -35,7 +35,7 @@ class MockWebSocket {
   readyState: number;
   onopen: (() => void) | null = null;
   onmessage: ((evt: { data: string }) => void) | null = null;
-  onclose: (() => void) | null = null;
+  onclose: ((evt: { code: number; reason: string }) => void) | null = null;
   onerror: (() => void) | null = null;
   close: ReturnType<typeof vi.fn>;
 
@@ -57,9 +57,9 @@ class MockWebSocket {
     this.onmessage?.({ data: typeof data === 'string' ? data : JSON.stringify(data) });
   }
 
-  simulateClose() {
+  simulateClose(code = 1006, reason = '') {
     this.readyState = 3; // CLOSED
-    this.onclose?.();
+    this.onclose?.({ code, reason });
   }
 
   simulateError() {
@@ -112,9 +112,15 @@ async function loadWebSocketModule({
     },
   }));
   const teamState = mutableTeamState ?? { activeTeamId };
+  const selectTeamMock = vi.fn((id: string | null) => {
+    teamState.activeTeamId = id ?? '';
+  });
+  const loadTeamsMock = vi.fn(() => Promise.resolve());
   vi.doMock('../teams.js', () => ({
     teamActions: {
       getState: () => teamState,
+      selectTeam: selectTeamMock,
+      loadTeams: loadTeamsMock,
     },
   }));
 
@@ -126,7 +132,14 @@ async function loadWebSocketModule({
   (globalThis as Record<string, unknown>).WebSocket = MockWebSocket;
 
   const mod = await import('../websocket.js');
-  return { ...mod, apiMock, setWsConnectedMock, authSubscribers };
+  return {
+    ...mod,
+    apiMock,
+    setWsConnectedMock,
+    authSubscribers,
+    selectTeamMock,
+    loadTeamsMock,
+  };
 }
 
 beforeEach(() => {
@@ -226,6 +239,33 @@ describe('websocket store', () => {
 
       expect(hasActiveWebSocket()).toBe(false);
       expect(() => closeWebSocket()).not.toThrow();
+    });
+
+    it('treats close code 4001 (membership_revoked) as terminal: no reconnect', async () => {
+      // Server-side path: TeamDO.leave() (and any future kick) sends a final
+      // `membership_revoked` frame, then closes with custom code 4001. The
+      // client must NOT keep polling or reconnecting to a team it has been
+      // removed from. Instead it drops back to overview and refreshes the
+      // team list so the now-revoked team disappears.
+      const apiMock = vi.fn().mockResolvedValue({ ticket: 'tix_abc' });
+      const { connectTeamWebSocket, setPollingBridge, selectTeamMock, loadTeamsMock } =
+        await loadWebSocketModule({ apiMock });
+
+      const bridge = createBridgeMock();
+      setPollingBridge(bridge as unknown as PollingBridge);
+
+      await connectTeamWebSocket('t_ws');
+      const ws = MockWebSocket.instances[0];
+      ws.simulateOpen();
+      ws.simulateClose(4001, 'membership_revoked');
+
+      // Polling must NOT restart, the connection has been intentionally
+      // terminated by the server.
+      expect(bridge.restartPolling).not.toHaveBeenCalled();
+      // The active team is dropped back to overview and the team list is
+      // refreshed so the revoked team disappears from the sidebar.
+      expect(selectTeamMock).toHaveBeenCalledWith(null);
+      expect(loadTeamsMock).toHaveBeenCalled();
     });
   });
 

@@ -550,3 +550,110 @@ describe('GET /me/analytics', () => {
     expect(res.status).toBe(401);
   });
 });
+
+// --- GET /me/sessions ---
+//
+// /me/sessions is hard-scoped to the caller's own handle. The route never
+// honors a `?handle=` query param. This is a security-critical assertion:
+// previous behavior forwarded `handle` to the DO, letting any team member
+// enumerate a teammate's per-session metadata (outcome summaries, files
+// touched, token usage, commit timing).
+
+describe('GET /me/sessions', () => {
+  it('returns the caller-scoped sessions and ignores ?handle=', async () => {
+    // Create user A and user B, both join the same team. User B records a
+    // session with edits. User A then calls /me/sessions?handle=<B-handle>.
+    // The response must NOT contain user B's session.
+    const a = await createAuthUser();
+    const b = await createAuthUser();
+
+    // A creates a team
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers: a.headers,
+    });
+    expect(createRes.status).toBe(201);
+    const { team_id } = (await createRes.json()) as { team_id: string };
+
+    // B joins the same team
+    const joinRes = await SELF.fetch(`http://localhost/teams/${team_id}/join`, {
+      method: 'POST',
+      headers: b.headers,
+    });
+    expect(joinRes.status).toBe(200);
+
+    // B starts a session and records an edit, so there is a row to leak.
+    // The /join route registered B with agentId = user.id (no X-Agent-Id
+    // header was sent), so we use that same id here.
+    const team = env.TEAM.get(env.TEAM.idFromName(team_id));
+    const bAgentId = b.user.id;
+    const sess = await team.startSession(
+      bAgentId,
+      b.user.handle,
+      'react',
+      'claude-code',
+      b.user.id,
+    );
+    expect(sess.ok).toBe(true);
+    await team.recordEdit(bAgentId, 'src/secret.js', 10, 0, b.user.id);
+    await team.endSession(bAgentId, sess.session_id, b.user.id);
+
+    // A calls /me/sessions with B's handle in the query. A is on the team
+    // and authenticated. The response must contain only A's sessions (zero),
+    // not B's.
+    const res = await SELF.fetch(
+      `http://localhost/me/sessions?handle=${encodeURIComponent(b.user.handle)}`,
+      { headers: a.headers },
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      sessions: Array<{ handle: string; files_touched?: string[] }>;
+      totals: { sessions: number };
+    };
+    // None of B's data must appear.
+    expect(body.sessions.find((s) => s.handle === b.user.handle)).toBeUndefined();
+    // Every returned row (if any) must be A's own.
+    for (const s of body.sessions) {
+      expect(s.handle).toBe(a.user.handle);
+    }
+  });
+
+  it('returns the caller-scoped sessions even when ?handle= is omitted', async () => {
+    // Sanity check that the default path still works after the handle param
+    // was removed: a user with their own session sees it.
+    const a = await createAuthUser();
+
+    const createRes = await SELF.fetch('http://localhost/teams', {
+      method: 'POST',
+      headers: a.headers,
+    });
+    const { team_id } = (await createRes.json()) as { team_id: string };
+
+    // The /teams POST registered A with agentId = user.id (default), so we
+    // reuse that here for the session.
+    const team = env.TEAM.get(env.TEAM.idFromName(team_id));
+    const aAgentId = a.user.id;
+    const sess = await team.startSession(
+      aAgentId,
+      a.user.handle,
+      'react',
+      'claude-code',
+      a.user.id,
+    );
+    expect(sess.ok).toBe(true);
+    await team.recordEdit(aAgentId, 'src/own.js', 1, 0, a.user.id);
+
+    const res = await SELF.fetch('http://localhost/me/sessions', { headers: a.headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      sessions: Array<{ handle: string }>;
+    };
+    // Caller's own session must be present.
+    expect(body.sessions.some((s) => s.handle === a.user.handle)).toBe(true);
+  });
+
+  it('requires auth', async () => {
+    const res = await SELF.fetch('http://localhost/me/sessions');
+    expect(res.status).toBe(401);
+  });
+});

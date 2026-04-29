@@ -184,6 +184,85 @@ describe('Identity resolution - prefix matching', () => {
   });
 });
 
+// --- Leave: WebSocket subscription teardown ---
+//
+// The test pool cannot establish a real WebSocket handshake (workerd needs
+// the full upgrade dance), so we cannot directly assert "the close frame was
+// sent and the client received code 4001." We can, however, assert the
+// surrounding invariants that prove the teardown ran:
+//
+//   1. After leave(), a fresh WS upgrade attempt for the same agent is
+//      rejected with 403 (the member row is gone, so resolveOwnedAgentId
+//      returns null).
+//   2. leave() with no live sockets does not throw and returns ok:true,
+//      so the teardown helper handles the empty-socket-set case cleanly.
+//   3. team_owners persists when one of the user's agents leaves but other
+//      agents remain (existing behavior, regression-guarded here).
+//
+// The deeper assertion (that the websocket frame and 4001 close fire) is
+// covered by code review of revokeMemberSockets in membership-rpc.ts; the
+// WS upgrade path is exercised in production. This gap is documented in
+// the campaign report.
+
+describe('Leave: WebSocket subscription teardown', () => {
+  const team = () => getTeam('leave-ws-teardown');
+
+  it('post-leave WS upgrade attempt is rejected with 403', async () => {
+    await team().join('cursor:lwt1', 'user-lwt1', 'alice', 'cursor');
+
+    // After leave, the member row is gone, so WS upgrade is denied at the
+    // membership check. We exercise the path that would otherwise complete
+    // a handshake: the workerd test pool can short-circuit at the membership
+    // check, but a successful path tries to return a WebSocket and fails
+    // because the test request lacks Upgrade: websocket. So we only assert
+    // the post-leave 403, which is the security-relevant invariant.
+    const leaveRes = await team().leave('cursor:lwt1', 'user-lwt1');
+    expect(leaveRes.ok).toBe(true);
+
+    const afterLeave = await team().fetch(
+      new Request('http://localhost/ws?agentId=cursor:lwt1&ownerId=user-lwt1&role=agent', {
+        headers: { 'X-Chinmeister-Verified': '1' },
+      }),
+    );
+    expect(afterLeave.status).toBe(403);
+    const text = await afterLeave.text();
+    expect(text).toContain('Not a member');
+  });
+
+  it('leave() with no live sockets does not throw and succeeds', async () => {
+    // Direct exercise of the teardown helper's empty-set path. There are no
+    // live WebSockets in the test environment, so revokeMemberSockets must
+    // be a no-op, and leave() must return ok:true.
+    await team().join('cursor:lwt2', 'user-lwt2', 'bob', 'cursor');
+    const res = await team().leave('cursor:lwt2', 'user-lwt2');
+    expect(res.ok).toBe(true);
+  });
+
+  it('owner with multiple agents: leaving one preserves the other', async () => {
+    // revokeMemberSockets queries `members` by owner_id and only tears down
+    // sockets for the leaving agent. The user's other agents must remain
+    // valid members. This guards against a regression where revocation
+    // accidentally widens to "all agents owned by this user."
+    await team().join('cursor:lwt3a', 'user-lwt3', 'carol', 'cursor');
+    await team().join('claude:lwt3b', 'user-lwt3', 'carol', 'claude');
+
+    const res = await team().leave('cursor:lwt3a', 'user-lwt3');
+    expect(res.ok).toBe(true);
+
+    // The second agent must still heartbeat successfully.
+    const hb = await team().heartbeat('claude:lwt3b', 'user-lwt3');
+    expect(hb.ok).toBe(true);
+
+    // The first agent must be gone.
+    const ws = await team().fetch(
+      new Request('http://localhost/ws?agentId=cursor:lwt3a&ownerId=user-lwt3&role=agent', {
+        headers: { 'X-Chinmeister-Verified': '1' },
+      }),
+    );
+    expect(ws.status).toBe(403);
+  });
+});
+
 // --- Multiple agents per owner ---
 
 describe('Multiple agents per owner', () => {
