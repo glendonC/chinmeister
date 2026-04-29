@@ -1,11 +1,10 @@
 // @vitest-environment jsdom
 
-// memory-outcomes is the only memory widget after the 2026-04-25 audit cut
-// memory-activity, memory-health, memory-safety, and top-memories. Two
-// sample-size gates lock the chart's honesty:
-//   total floor (10 sessions) — below this the period is too sparse to
-//     compare anything (avoids rubric C1 fail of one-bar bar chart).
-//   per-bucket floor (5 sessions) and a min-2-bucket guard — block the case
+// memory-outcomes is the only default memory widget. Two sample-size
+// gates lock the chart's honesty:
+//   total floor (10 sessions): below this the period is too sparse to
+//     compare anything (a one-bar bar chart is not a comparison).
+//   per-bucket floor (5 sessions) and a min-2-bucket guard: block the case
 //     where a bucket of 1-2 sessions reads as 100% completion and the
 //     widget reads as a comparison even though only one bucket cleared.
 

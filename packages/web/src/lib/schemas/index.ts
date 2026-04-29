@@ -1,10 +1,8 @@
 // Barrel re-export of all schema modules + validateResponse helper.
 //
 // Analytics schemas come from @chinmeister/shared/contracts/analytics.js
-// directly; the previous web-side mirror was deleted in favor of the shared
-// schemas now carrying every default the consumer needs. See the schema
-// consolidation note in the contract file for the drift mode that prompted
-// the change.
+// directly. The shared schemas carry every default the consumer needs, so
+// a payload missing optional fields still parses to a usable shape.
 
 export * from './common.js';
 export * from '@chinmeister/shared/contracts/analytics.js';

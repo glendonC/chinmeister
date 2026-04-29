@@ -454,8 +454,8 @@ function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
 // ── Freshness panel ─────────────────────────────────
 //
 // Aging composition, presented as a proportional bar with a hero share
-// inline above it (per Phase 3 widget rework spec, readable at 1s),
-// followed by an accumulating-vs-replacing read across the four buckets.
+// inline above it (readable at 1s), followed by an accumulating-vs-
+// replacing read across the four buckets.
 
 const AGE_COLORS: Record<string, string> = {
   '0-7d': 'var(--success)',

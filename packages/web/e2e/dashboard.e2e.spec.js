@@ -270,14 +270,13 @@ test('switches between overview projects through the sidebar', async ({ page }) 
   await expect(page.getByRole('heading', { name: 'Beta Team' })).toBeVisible();
 });
 
-// MemoryRow's delete affordance moved behind a row-expand + two-step
-// confirm-then-commit interaction, and the inline Edit/Save flow this test
-// originally covered was removed. The remaining behaviors are exercised by
-// dedicated unit tests:
+// MemoryRow's delete affordance is gated behind a row-expand + two-step
+// confirm-then-commit interaction; there is no inline Edit/Save flow.
+// The behaviors live in dedicated unit tests:
 //   - delete confirm/commit + onBlur cancel:
 //     packages/web/src/components/MemoryRow/MemoryRow.test.jsx
-//   - WebSocket-driven memory delta: covered by the websocket store tests
-//     in packages/web/src/lib/stores/__tests__/websocket.test.ts
-// Left as test.skip so the file stays a touch-point if/when the inline
-// editor returns and a true end-to-end run is worth re-establishing.
+//   - WebSocket-driven memory delta: the websocket store tests in
+//     packages/web/src/lib/stores/__tests__/websocket.test.ts
+// Left as test.skip so the file stays a touch-point if an inline editor
+// returns and a true end-to-end run is worth re-establishing.
 test.skip('deletes memory, then applies a live memory delta', async ({ page: _page }) => {});

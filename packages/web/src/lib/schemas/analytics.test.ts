@@ -1,8 +1,7 @@
 /**
  * Schema-defaults invariant for the consolidated analytics contract.
  *
- * The web copy of these schemas was deleted in favor of the shared schemas in
- * @chinmeister/shared/contracts/analytics.js. The shared schemas now carry
+ * The shared schemas in @chinmeister/shared/contracts/analytics.js carry
  * every default the consumer needs, so a payload missing optional fields
  * still parses to a usable shape. This test pins that contract:
  *
@@ -11,10 +10,9 @@
  *   3. The set of fields that REQUIRE explicit input is small and listed,
  *      so adding a new required field forces a deliberate choice rather
  *      than silently breaking older producers.
- *   4. total_estimated_cost_usd accepts null on every consumer that touches
- *      it. This is the active drift bug from before the consolidation: the
- *      web schema had `z.number().default(0)`, which rejected null and
- *      caused validateResponse to drop the entire response.
+ *   4. total_estimated_cost_usd accepts null on every consumer that
+ *      touches it. A `z.number().default(0)` here would reject null and
+ *      cause validateResponse to drop the entire response.
  */
 import { describe, it, expect } from 'vitest';
 import {

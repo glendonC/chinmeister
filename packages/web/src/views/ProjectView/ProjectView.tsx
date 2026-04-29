@@ -127,11 +127,10 @@ export default function ProjectView(_props: Props) {
   const liveTabParam = useQueryParam('live-tab');
   const focusAgentId = live.param && live.param.length > 0 ? live.param : null;
 
-  // Analytics fetch gate. Originally gated solely on `isAnalytical`
-  // (activity/trends tabs). Detail views consume the same UserAnalytics
+  // Analytics fetch gate. Detail views consume the same UserAnalytics
   // payload, so opening any drill from any tab needs the fetch active or
-  // the panel paints the empty fixture. Widen with `anyOpen` so e.g. the
-  // memory tab plus a Usage drill still gets data.
+  // the panel paints the empty fixture. `anyOpen` widens the gate beyond
+  // the analytical tabs so a drill from any tab still gets data.
   const analyticsActive = isAnalytical || anyOpen;
   const { analytics } = useTeamExtendedAnalytics(activeTeamId, rangeDays, analyticsActive);
   const { data: conversationData } = useConversationAnalytics(
