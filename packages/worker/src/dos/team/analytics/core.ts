@@ -203,6 +203,12 @@ export function queryDailyTrends(
       completed: r.number('completed'),
       abandoned: r.number('abandoned'),
       failed: r.number('failed'),
+      // Cost fields are populated downstream by enrichDailyTrendsWithPricing.
+      // Initialize to null so the structural shape matches the contract before
+      // the enrichment layer runs; null is also the steady-state value when
+      // pricing is unavailable for a given day, so this is a safe baseline.
+      cost: null,
+      cost_per_edit: null,
     }));
   } catch (err) {
     log.warn(`dailyTrends query failed: ${err}`);

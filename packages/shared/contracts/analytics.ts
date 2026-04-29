@@ -9,9 +9,17 @@ import { z } from 'zod';
 
 // ── Base analytics types ─────────────────────────
 
+// Numeric counters across the analytics surface default to 0 so consumers
+// that call schema.parse({}) get a usable empty object, and so a missing
+// field on an older payload never short-circuits the whole response. Strings
+// stay required: handles, days, model names, and outcomes are identity-
+// bearing - a missing one is a producer bug, not a backward-compat case.
+// Nullable scalars (cost fields, primary_tool) default to null so callers can
+// distinguish "not measured" from "measured zero."
+
 export const fileHeatmapEntrySchema = z.object({
   file: z.string(),
-  touch_count: z.number(),
+  touch_count: z.number().default(0),
   work_type: z.string().optional(),
   outcome_rate: z.number().optional(),
   total_lines_added: z.number().optional(),
@@ -21,53 +29,53 @@ export type FileHeatmapEntry = z.infer<typeof fileHeatmapEntrySchema>;
 
 export const dailyTrendSchema = z.object({
   day: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
-  lines_added: z.number(),
-  lines_removed: z.number(),
-  avg_duration_min: z.number(),
-  completed: z.number().optional(),
-  abandoned: z.number().optional(),
-  failed: z.number().optional(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
   // Per-day cost and cost-per-edit, populated post-query by
   // enrichDailyTrendsWithPricing. Null on any day where cost is
   // structurally unshowable - no token-capturing sessions that day,
   // all-unpriced models, or stale pricing - so the trend widget can plot
-  // these metrics without emitting bogus zeros. Optional so old payloads
-  // parse cleanly.
-  cost: z.number().nullable().optional(),
-  cost_per_edit: z.number().nullable().optional(),
+  // these metrics without emitting bogus zeros. Default null so older
+  // payloads parse cleanly.
+  cost: z.number().nullable().default(null),
+  cost_per_edit: z.number().nullable().default(null),
 });
 export type DailyTrend = z.infer<typeof dailyTrendSchema>;
 
 export const outcomeCountSchema = z.object({
   outcome: z.string(),
-  count: z.number(),
+  count: z.number().default(0),
 });
 export type OutcomeCount = z.infer<typeof outcomeCountSchema>;
 
 export const toolDistributionSchema = z.object({
   host_tool: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
 });
 export type ToolDistribution = z.infer<typeof toolDistributionSchema>;
 
 export const dailyMetricEntrySchema = z.object({
   date: z.string(),
   metric: z.string(),
-  count: z.number(),
+  count: z.number().default(0),
 });
 export type DailyMetricEntry = z.infer<typeof dailyMetricEntrySchema>;
 
 export const teamAnalyticsSchema = z.object({
   ok: z.literal(true),
-  period_days: z.number(),
-  file_heatmap: z.array(fileHeatmapEntrySchema),
-  daily_trends: z.array(dailyTrendSchema),
-  tool_distribution: z.array(toolDistributionSchema),
-  outcome_distribution: z.array(outcomeCountSchema),
-  daily_metrics: z.array(dailyMetricEntrySchema),
+  period_days: z.number().default(0),
+  file_heatmap: z.array(fileHeatmapEntrySchema).default([]),
+  daily_trends: z.array(dailyTrendSchema).default([]),
+  tool_distribution: z.array(toolDistributionSchema).default([]),
+  outcome_distribution: z.array(outcomeCountSchema).default([]),
+  daily_metrics: z.array(dailyMetricEntrySchema).default([]),
   // Uncapped COUNT(DISTINCT file_path) from the edits table. Distinct from
   // file_heatmap.length, which is capped at HEATMAP_LIMIT=50 and is meant
   // for the ranked "most-touched files" list, not a scalar total.
@@ -93,19 +101,19 @@ export type TeamAnalytics = z.infer<typeof teamAnalyticsSchema>;
 export const hourlyBucketSchema = z.object({
   hour: z.number(),
   dow: z.number(),
-  sessions: z.number(),
-  edits: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
 });
 export type HourlyBucket = z.infer<typeof hourlyBucketSchema>;
 
 export const toolDailyTrendSchema = z.object({
   host_tool: z.string(),
   day: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
-  lines_added: z.number(),
-  lines_removed: z.number(),
-  avg_duration_min: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  avg_duration_min: z.number().default(0),
 });
 export type ToolDailyTrend = z.infer<typeof toolDailyTrendSchema>;
 
@@ -117,67 +125,67 @@ export const modelOutcomeSchema = z.object({
   // attribution no single-tool dashboard can produce).
   host_tool: z.string().nullable().default(null),
   outcome: z.string(),
-  count: z.number(),
-  avg_duration_min: z.number(),
-  total_edits: z.number(),
-  total_lines_added: z.number(),
-  total_lines_removed: z.number(),
+  count: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_lines_added: z.number().default(0),
+  total_lines_removed: z.number().default(0),
 });
 export type ModelOutcome = z.infer<typeof modelOutcomeSchema>;
 
 export const toolOutcomeSchema = z.object({
   host_tool: z.string(),
   outcome: z.string(),
-  count: z.number(),
+  count: z.number().default(0),
 });
 export type ToolOutcome = z.infer<typeof toolOutcomeSchema>;
 
 // ── Workflow intelligence ────────────────────────
 
 export const completionSummarySchema = z.object({
-  total_sessions: z.number(),
-  completed: z.number(),
-  abandoned: z.number(),
-  failed: z.number(),
-  unknown: z.number(),
-  completion_rate: z.number(),
-  prev_completion_rate: z.number().nullable(),
+  total_sessions: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
+  unknown: z.number().default(0),
+  completion_rate: z.number().default(0),
+  prev_completion_rate: z.number().nullable().default(null),
 });
 export type CompletionSummary = z.infer<typeof completionSummarySchema>;
 
 export const toolComparisonSchema = z.object({
   host_tool: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  abandoned: z.number(),
-  failed: z.number(),
-  completion_rate: z.number(),
-  avg_duration_min: z.number(),
-  total_edits: z.number(),
-  total_lines_added: z.number(),
-  total_lines_removed: z.number(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
+  completion_rate: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_lines_added: z.number().default(0),
+  total_lines_removed: z.number().default(0),
   // Wall-clock hours summed across completed sessions only (ended_at
   // IS NOT NULL). Matches queryEditVelocity's denominator so per-tool
   // rates in the Edits drill reconcile with the aggregate sparkline.
-  total_session_hours: z.number(),
+  total_session_hours: z.number().default(0),
 });
 export type ToolComparison = z.infer<typeof toolComparisonSchema>;
 
 export const workTypeDistributionSchema = z.object({
   work_type: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
-  lines_added: z.number(),
-  lines_removed: z.number(),
-  files: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
+  files: z.number().default(0),
 });
 export type WorkTypeDistribution = z.infer<typeof workTypeDistributionSchema>;
 
 export const toolWorkTypeBreakdownSchema = z.object({
   host_tool: z.string(),
   work_type: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
   /** Sessions touching this work-type that ended outcome='completed'. Used
    *  alongside `sessions` so the renderer can show absolute completed counts
    *  next to the rate (preserves the rate-without-volume D3a failure mode
@@ -193,22 +201,22 @@ export type ToolWorkTypeBreakdown = z.infer<typeof toolWorkTypeBreakdownSchema>;
 
 export const fileChurnEntrySchema = z.object({
   file: z.string(),
-  session_count: z.number(),
-  total_edits: z.number(),
-  total_lines: z.number(),
+  session_count: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_lines: z.number().default(0),
 });
 export type FileChurnEntry = z.infer<typeof fileChurnEntrySchema>;
 
 export const durationBucketSchema = z.object({
   bucket: z.string(),
-  count: z.number(),
+  count: z.number().default(0),
 });
 export type DurationBucket = z.infer<typeof durationBucketSchema>;
 
 export const concurrentEditEntrySchema = z.object({
   file: z.string(),
-  agents: z.number(),
-  edit_count: z.number(),
+  agents: z.number().default(0),
+  edit_count: z.number().default(0),
 });
 export type ConcurrentEditEntry = z.infer<typeof concurrentEditEntrySchema>;
 
@@ -224,15 +232,15 @@ export type ConcurrentEditEntry = z.infer<typeof concurrentEditEntrySchema>;
 // raw numerator + denominator; averaging per-team rates is wrong.
 export const memberAnalyticsSchema = z.object({
   handle: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  completion_rate: z.number(),
-  total_edits: z.number(),
-  primary_tool: z.string().nullable(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
+  total_edits: z.number().default(0),
+  primary_tool: z.string().nullable().default(null),
   // Same semantics as toolComparisonSchema.total_session_hours -
   // completed-session wall-clock sum, used as the per-teammate velocity
   // denominator in the Edits drill.
-  total_session_hours: z.number(),
+  total_session_hours: z.number().default(0),
 });
 export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
 
@@ -247,33 +255,33 @@ export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
 // retried this file.
 export const retryPatternSchema = z.object({
   file: z.string(),
-  attempts: z.number(),
-  agents: z.number(),
-  tools: z.array(z.string()),
-  final_outcome: z.string().nullable(),
-  resolved: z.boolean(),
+  attempts: z.number().default(0),
+  agents: z.number().default(0),
+  tools: z.array(z.string()).default([]),
+  final_outcome: z.string().nullable().default(null),
+  resolved: z.boolean().default(false),
 });
 export type RetryPattern = z.infer<typeof retryPatternSchema>;
 
 export const conflictCorrelationSchema = z.object({
   bucket: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type ConflictCorrelation = z.infer<typeof conflictCorrelationSchema>;
 
 export const conflictDailyEntrySchema = z.object({
   day: z.string(),
-  blocked: z.number(),
+  blocked: z.number().default(0),
 });
 export type ConflictDailyEntry = z.infer<typeof conflictDailyEntrySchema>;
 
 export const conflictStatsSchema = z.object({
   /** Hook-sourced blocks: PreToolUse calls that found conflicts and prevented the edit. */
-  blocked_period: z.number(),
+  blocked_period: z.number().default(0),
   /** Every detection in the period, including advisory MCP-tool lookups. */
-  found_period: z.number(),
+  found_period: z.number().default(0),
   /** Daily breakdown of blocked counts over the period. Default to [] for
    *  older producers; renderer falls back to the scalar-only view when empty. */
   daily_blocked: z.array(conflictDailyEntrySchema).default([]),
@@ -282,9 +290,9 @@ export type ConflictStats = z.infer<typeof conflictStatsSchema>;
 
 export const editVelocityTrendSchema = z.object({
   day: z.string(),
-  edits_per_hour: z.number(),
-  lines_per_hour: z.number(),
-  total_session_hours: z.number(),
+  edits_per_hour: z.number().default(0),
+  lines_per_hour: z.number().default(0),
+  total_session_hours: z.number().default(0),
 });
 
 // Per-project (team) velocity rollup - one entry per team the caller
@@ -297,12 +305,12 @@ export const editVelocityTrendSchema = z.object({
 // section.
 export const projectVelocityRollupSchema = z.object({
   team_id: z.string(),
-  team_name: z.string().nullable(),
-  sessions: z.number(),
-  total_edits: z.number(),
-  total_session_hours: z.number(),
-  edits_per_hour: z.number(),
-  primary_tool: z.string().nullable(),
+  team_name: z.string().nullable().default(null),
+  sessions: z.number().default(0),
+  total_edits: z.number().default(0),
+  total_session_hours: z.number().default(0),
+  edits_per_hour: z.number().default(0),
+  primary_tool: z.string().nullable().default(null),
 });
 export type ProjectVelocityRollup = z.infer<typeof projectVelocityRollupSchema>;
 export type EditVelocityTrend = z.infer<typeof editVelocityTrendSchema>;
@@ -316,10 +324,10 @@ export type EditVelocityTrend = z.infer<typeof editVelocityTrendSchema>;
 export const memberDailyLineTrendSchema = z.object({
   handle: z.string(),
   day: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
-  lines_added: z.number(),
-  lines_removed: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
 });
 export type MemberDailyLineTrend = z.infer<typeof memberDailyLineTrendSchema>;
 
@@ -330,70 +338,75 @@ export type MemberDailyLineTrend = z.infer<typeof memberDailyLineTrendSchema>;
 // Powers the Lines drill's per-project split view.
 export const projectLinesTrendSchema = z.object({
   team_id: z.string(),
-  team_name: z.string().nullable(),
+  team_name: z.string().nullable().default(null),
   day: z.string(),
-  sessions: z.number(),
-  edits: z.number(),
-  lines_added: z.number(),
-  lines_removed: z.number(),
+  sessions: z.number().default(0),
+  edits: z.number().default(0),
+  lines_added: z.number().default(0),
+  lines_removed: z.number().default(0),
 });
 export type ProjectLinesTrend = z.infer<typeof projectLinesTrendSchema>;
 
 export const formationRecommendationCountsSchema = z.object({
-  keep: z.number(),
-  merge: z.number(),
-  evolve: z.number(),
-  discard: z.number(),
+  keep: z.number().default(0),
+  merge: z.number().default(0),
+  evolve: z.number().default(0),
+  discard: z.number().default(0),
 });
 export type FormationRecommendationCounts = z.infer<typeof formationRecommendationCountsSchema>;
 
 export const memoryUsageStatsSchema = z.object({
-  total_memories: z.number(),
-  searches: z.number(),
-  searches_with_results: z.number(),
-  search_hit_rate: z.number(),
-  memories_created_period: z.number(),
-  stale_memories: z.number(),
-  avg_memory_age_days: z.number(),
+  total_memories: z.number().default(0),
+  searches: z.number().default(0),
+  searches_with_results: z.number().default(0),
+  search_hit_rate: z.number().default(0),
+  memories_created_period: z.number().default(0),
+  stale_memories: z.number().default(0),
+  avg_memory_age_days: z.number().default(0),
   // Live count of consolidation proposals awaiting human / agent review.
-  pending_consolidation_proposals: z.number(),
+  pending_consolidation_proposals: z.number().default(0),
   // Live count of unaddressed formation observations by recommendation
   // (status = 'observed'). 'keep' is the trivial case; merge/evolve/discard
   // are flag candidates. Age does not gate - a year-old unaddressed flag
   // still needs a decision, so this query runs without a time filter.
-  formation_observations_by_recommendation: formationRecommendationCountsSchema,
+  formation_observations_by_recommendation: formationRecommendationCountsSchema.default({
+    keep: 0,
+    merge: 0,
+    evolve: 0,
+    discard: 0,
+  }),
   // Live count of secret-detector blocks in the last 24h. Signal that the
   // filter is doing work; counts before-and-after force=true. Windowed at
   // 24h (not the global period picker) so the memory-safety review surface
   // stays live: a recent block is actionable, an old block is audit history.
-  secrets_blocked_24h: z.number(),
+  secrets_blocked_24h: z.number().default(0),
 });
 export type MemoryUsageStats = z.infer<typeof memoryUsageStatsSchema>;
 
 export const workTypeOutcomeSchema = z.object({
   work_type: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  abandoned: z.number(),
-  failed: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  abandoned: z.number().default(0),
+  failed: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type WorkTypeOutcome = z.infer<typeof workTypeOutcomeSchema>;
 
 export const conversationEditCorrelationSchema = z.object({
   bucket: z.string(),
-  sessions: z.number(),
-  avg_edits: z.number(),
-  avg_lines: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  avg_edits: z.number().default(0),
+  avg_lines: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type ConversationEditCorrelation = z.infer<typeof conversationEditCorrelationSchema>;
 
 export const fileReworkEntrySchema = z.object({
   file: z.string(),
-  total_edits: z.number(),
-  failed_edits: z.number(),
-  rework_ratio: z.number(),
+  total_edits: z.number().default(0),
+  failed_edits: z.number().default(0),
+  rework_ratio: z.number().default(0),
 });
 export type FileReworkEntry = z.infer<typeof fileReworkEntrySchema>;
 
@@ -406,8 +419,8 @@ export type FileReworkEntry = z.infer<typeof fileReworkEntrySchema>;
 // producers stay parseable.
 export const confusedFileEntrySchema = z.object({
   file: z.string(),
-  confused_sessions: z.number(),
-  retried_sessions: z.number(),
+  confused_sessions: z.number().default(0),
+  retried_sessions: z.number().default(0),
 });
 export type ConfusedFileEntry = z.infer<typeof confusedFileEntrySchema>;
 
@@ -416,7 +429,7 @@ export type ConfusedFileEntry = z.infer<typeof confusedFileEntrySchema>;
 // surfaced as a navigation aid (same shape as live-conflicts: number drives
 // drill into the underlying sessions).
 export const unansweredQuestionStatsSchema = z.object({
-  count: z.number(),
+  count: z.number().default(0),
 });
 export type UnansweredQuestionStats = z.infer<typeof unansweredQuestionStatsSchema>;
 
@@ -444,7 +457,7 @@ export const crossToolHandoffEntrySchema = z.object({
    *  multi-tool, different for cross-developer handoffs. */
   handle_to: z.string(),
   /** Minutes between S1.ended_at and S2.started_at. */
-  gap_minutes: z.number(),
+  gap_minutes: z.number().default(0),
   /** ISO timestamp of the picking-up session's start (sort key). */
   handoff_at: z.string(),
 });
@@ -463,8 +476,8 @@ export type CrossToolHandoffEntry = z.infer<typeof crossToolHandoffEntrySchema>;
 export const crossToolMemoryFlowEntrySchema = z.object({
   author_tool: z.string(),
   consumer_tool: z.string(),
-  memories_read: z.number(),
-  reading_sessions: z.number(),
+  memories_read: z.number().default(0),
+  reading_sessions: z.number().default(0),
 });
 export type CrossToolMemoryFlowEntry = z.infer<typeof crossToolMemoryFlowEntrySchema>;
 
@@ -474,10 +487,10 @@ export type CrossToolMemoryFlowEntry = z.infer<typeof crossToolMemoryFlowEntrySc
 // fresh? · which categories age fastest? · accumulating or replacing? ·
 // which directories have fresh knowledge? · who keeps memory current?
 export const memoryAgingCompositionSchema = z.object({
-  recent_7d: z.number(),
-  recent_30d: z.number(),
-  recent_90d: z.number(),
-  older: z.number(),
+  recent_7d: z.number().default(0),
+  recent_30d: z.number().default(0),
+  recent_90d: z.number().default(0),
+  older: z.number().default(0),
 });
 export type MemoryAgingComposition = z.infer<typeof memoryAgingCompositionSchema>;
 
@@ -489,8 +502,8 @@ export type MemoryAgingComposition = z.infer<typeof memoryAgingCompositionSchema
 // who authors which? · how has the mix shifted?
 export const memoryCategoryEntrySchema = z.object({
   category: z.string(),
-  count: z.number(),
-  last_used_at: z.string().nullable(),
+  count: z.number().default(0),
+  last_used_at: z.string().nullable().default(null),
 });
 export type MemoryCategoryEntry = z.infer<typeof memoryCategoryEntrySchema>;
 
@@ -501,8 +514,8 @@ export type MemoryCategoryEntry = z.infer<typeof memoryCategoryEntrySchema>;
 // resilience trend, concentrated dirs by traffic, team-wide authorship spread.
 export const memorySingleAuthorDirectoryEntrySchema = z.object({
   directory: z.string(),
-  single_author_count: z.number(),
-  total_count: z.number(),
+  single_author_count: z.number().default(0),
+  total_count: z.number().default(0),
 });
 export type MemorySingleAuthorDirectoryEntry = z.infer<
   typeof memorySingleAuthorDirectoryEntrySchema
@@ -514,9 +527,9 @@ export type MemorySingleAuthorDirectoryEntry = z.infer<
 // depth + age, categories with most supersession, merge clustering by
 // directory, median memory lifespan.
 export const memorySupersessionStatsSchema = z.object({
-  invalidated_period: z.number(),
-  merged_period: z.number(),
-  pending_proposals: z.number(),
+  invalidated_period: z.number().default(0),
+  merged_period: z.number().default(0),
+  pending_proposals: z.number().default(0),
 });
 export type MemorySupersessionStats = z.infer<typeof memorySupersessionStatsSchema>;
 
@@ -525,24 +538,24 @@ export type MemorySupersessionStats = z.infer<typeof memorySupersessionStatsSche
 // questions: how many leaks attempted, which tools tried, trend, patterns
 // caught most, false-positive cost.
 export const memorySecretsShieldStatsSchema = z.object({
-  blocked_period: z.number(),
-  blocked_24h: z.number(),
+  blocked_period: z.number().default(0),
+  blocked_24h: z.number().default(0),
 });
 export type MemorySecretsShieldStats = z.infer<typeof memorySecretsShieldStatsSchema>;
 
 export const directoryHeatmapEntrySchema = z.object({
   directory: z.string(),
-  touch_count: z.number(),
-  file_count: z.number(),
-  total_lines: z.number(),
+  touch_count: z.number().default(0),
+  file_count: z.number().default(0),
+  total_lines: z.number().default(0),
   // Session-distinct outcome counts. The denominator is unique sessions that
   // touched any file in this directory (not file-touch pairs), and the
   // numerator is the subset whose outcome was 'completed'. completion_rate
   // is derived from these and exposed alongside so cross-team aggregation can
   // re-derive honestly instead of weighted-averaging weighted-averages.
-  completed_sessions: z.number(),
-  total_sessions: z.number(),
-  completion_rate: z.number(),
+  completed_sessions: z.number().default(0),
+  total_sessions: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type DirectoryHeatmapEntry = z.infer<typeof directoryHeatmapEntrySchema>;
 
@@ -552,24 +565,24 @@ export type DirectoryHeatmapEntry = z.infer<typeof directoryHeatmapEntrySchema>;
 // edit counts - breadth, not depth.
 export const filesByWorkTypeEntrySchema = z.object({
   work_type: z.string(),
-  file_count: z.number(),
+  file_count: z.number().default(0),
 });
 export type FilesByWorkTypeEntry = z.infer<typeof filesByWorkTypeEntrySchema>;
 
 export const filesNewVsRevisitedSchema = z.object({
   // File's earliest edit ever is inside the current window.
-  new_files: z.number(),
+  new_files: z.number().default(0),
   // File was first touched before the window opened but also touched within it.
-  revisited_files: z.number(),
+  revisited_files: z.number().default(0),
 });
 export type FilesNewVsRevisited = z.infer<typeof filesNewVsRevisitedSchema>;
 
 export const stucknessStatsSchema = z.object({
-  total_sessions: z.number(),
-  stuck_sessions: z.number(),
-  stuckness_rate: z.number(),
-  stuck_completion_rate: z.number(),
-  normal_completion_rate: z.number(),
+  total_sessions: z.number().default(0),
+  stuck_sessions: z.number().default(0),
+  stuckness_rate: z.number().default(0),
+  stuck_completion_rate: z.number().default(0),
+  normal_completion_rate: z.number().default(0),
 });
 export type StucknessStats = z.infer<typeof stucknessStatsSchema>;
 
@@ -578,37 +591,39 @@ export type StucknessStats = z.infer<typeof stucknessStatsSchema>;
 // on context). Absolute counts stay - total_files and overlapping_files are
 // concrete; consumers that need a rate recompute it from the counts.
 export const fileOverlapStatsSchema = z.object({
-  total_files: z.number(),
-  overlapping_files: z.number(),
+  total_files: z.number().default(0),
+  overlapping_files: z.number().default(0),
 });
 export type FileOverlapStats = z.infer<typeof fileOverlapStatsSchema>;
 
 export const auditStalenessEntrySchema = z.object({
   directory: z.string(),
   last_edit: z.string(),
-  days_since: z.number(),
-  prior_edit_count: z.number(),
+  days_since: z.number().default(0),
+  prior_edit_count: z.number().default(0),
 });
 export type AuditStalenessEntry = z.infer<typeof auditStalenessEntrySchema>;
 
 export const firstEditStatsSchema = z.object({
-  avg_minutes_to_first_edit: z.number(),
-  median_minutes_to_first_edit: z.number(),
-  by_tool: z.array(
-    z.object({
-      host_tool: z.string(),
-      avg_minutes: z.number(),
-      sessions: z.number(),
-    }),
-  ),
+  avg_minutes_to_first_edit: z.number().default(0),
+  median_minutes_to_first_edit: z.number().default(0),
+  by_tool: z
+    .array(
+      z.object({
+        host_tool: z.string(),
+        avg_minutes: z.number().default(0),
+        sessions: z.number().default(0),
+      }),
+    )
+    .default([]),
 });
 export type FirstEditStats = z.infer<typeof firstEditStatsSchema>;
 
 export const memoryOutcomeCorrelationSchema = z.object({
   bucket: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type MemoryOutcomeCorrelation = z.infer<typeof memoryOutcomeCorrelationSchema>;
 
@@ -623,26 +638,26 @@ export type MemoryOutcomeCorrelation = z.infer<typeof memoryOutcomeCorrelationSc
 export const memoryPerEntryOutcomeSchema = z.object({
   id: z.string(),
   text_preview: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type MemoryPerEntryOutcome = z.infer<typeof memoryPerEntryOutcomeSchema>;
 
 export const memoryAccessEntrySchema = z.object({
   id: z.string(),
   text_preview: z.string(),
-  access_count: z.number(),
-  last_accessed_at: z.string().nullable(),
+  access_count: z.number().default(0),
+  last_accessed_at: z.string().nullable().default(null),
 });
 export type MemoryAccessEntry = z.infer<typeof memoryAccessEntrySchema>;
 
 export const scopeComplexityBucketSchema = z.object({
   bucket: z.string(),
-  sessions: z.number(),
-  avg_edits: z.number(),
-  avg_duration_min: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  avg_edits: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type ScopeComplexityBucket = z.infer<typeof scopeComplexityBucketSchema>;
 
@@ -651,22 +666,22 @@ export const promptEfficiencyTrendSchema = z.object({
   // Nullable: the worker emits null for days with no conversation+edit
   // activity (NULLIF on zero edits → no outer COALESCE). The client
   // treats null as "skip this point" rather than rendering a zero floor.
-  avg_turns_per_edit: z.number().nullable(),
-  sessions: z.number(),
+  avg_turns_per_edit: z.number().nullable().default(null),
+  sessions: z.number().default(0),
 });
 export type PromptEfficiencyTrend = z.infer<typeof promptEfficiencyTrendSchema>;
 
 export const hourlyEffectivenessSchema = z.object({
   hour: z.number(),
-  sessions: z.number(),
-  completion_rate: z.number(),
-  avg_edits: z.number(),
+  sessions: z.number().default(0),
+  completion_rate: z.number().default(0),
+  avg_edits: z.number().default(0),
 });
 export type HourlyEffectiveness = z.infer<typeof hourlyEffectivenessSchema>;
 
 export const outcomeTagCountSchema = z.object({
   tag: z.string(),
-  count: z.number(),
+  count: z.number().default(0),
   outcome: z.string(),
 });
 export type OutcomeTagCount = z.infer<typeof outcomeTagCountSchema>;
@@ -674,17 +689,17 @@ export type OutcomeTagCount = z.infer<typeof outcomeTagCountSchema>;
 export const toolHandoffRecentFileSchema = z.object({
   file_path: z.string(),
   last_transition_at: z.string(),
-  a_edits: z.number(),
-  b_edits: z.number(),
-  completed: z.boolean(),
+  a_edits: z.number().default(0),
+  b_edits: z.number().default(0),
+  completed: z.boolean().default(false),
 });
 export type ToolHandoffRecentFile = z.infer<typeof toolHandoffRecentFileSchema>;
 
 export const toolHandoffSchema = z.object({
   from_tool: z.string(),
   to_tool: z.string(),
-  file_count: z.number(),
-  handoff_completion_rate: z.number(),
+  file_count: z.number().default(0),
+  handoff_completion_rate: z.number().default(0),
   avg_gap_minutes: z.number().default(0),
   recent_files: z.array(toolHandoffRecentFileSchema).default([]),
 });
@@ -694,11 +709,11 @@ export type ToolHandoff = z.infer<typeof toolHandoffSchema>;
 
 export const toolCallFrequencySchema = z.object({
   tool: z.string(),
-  calls: z.number(),
-  errors: z.number(),
-  error_rate: z.number(),
-  avg_duration_ms: z.number(),
-  sessions: z.number(),
+  calls: z.number().default(0),
+  errors: z.number().default(0),
+  error_rate: z.number().default(0),
+  avg_duration_ms: z.number().default(0),
+  sessions: z.number().default(0),
 });
 export type ToolCallFrequency = z.infer<typeof toolCallFrequencySchema>;
 
@@ -713,17 +728,17 @@ export const hostToolOneShotSchema = z.object({
   host_tool: z.string(),
   /** % of this tool's sessions with edits where edits worked without an
    *  Edit→Bash→Edit retry cycle (0-100). */
-  one_shot_rate: z.number(),
+  one_shot_rate: z.number().default(0),
   /** Sessions with edits used as the denominator. UI gates the metric on a
    *  minimum sample size (≥3) to avoid one-of-one displays. */
-  sessions: z.number(),
+  sessions: z.number().default(0),
 });
 export type HostToolOneShot = z.infer<typeof hostToolOneShotSchema>;
 
 export const toolCallErrorPatternSchema = z.object({
   tool: z.string(),
   error_preview: z.string(),
-  count: z.number(),
+  count: z.number().default(0),
   // ISO timestamp of the most recent occurrence. Lets the errors widget
   // surface a recency pane alongside frequency so rare-but-recent errors
   // don't get buried under high-count historical ones. Nullable to stay
@@ -734,25 +749,25 @@ export type ToolCallErrorPattern = z.infer<typeof toolCallErrorPatternSchema>;
 
 export const toolCallTimelineSchema = z.object({
   hour: z.number(),
-  calls: z.number(),
-  errors: z.number(),
+  calls: z.number().default(0),
+  errors: z.number().default(0),
 });
 export type ToolCallTimeline = z.infer<typeof toolCallTimelineSchema>;
 
 export const toolCallStatsSchema = z.object({
-  total_calls: z.number(),
-  total_errors: z.number(),
-  error_rate: z.number(),
-  avg_duration_ms: z.number(),
-  calls_per_session: z.number(),
-  research_to_edit_ratio: z.number(),
+  total_calls: z.number().default(0),
+  total_errors: z.number().default(0),
+  error_rate: z.number().default(0),
+  avg_duration_ms: z.number().default(0),
+  calls_per_session: z.number().default(0),
+  research_to_edit_ratio: z.number().default(0),
   /** Percentage of sessions where the first edit succeeded without retry (0-100). */
-  one_shot_rate: z.number(),
+  one_shot_rate: z.number().default(0),
   /** Number of sessions with edits used in the one-shot calculation. */
-  one_shot_sessions: z.number(),
-  frequency: z.array(toolCallFrequencySchema),
-  error_patterns: z.array(toolCallErrorPatternSchema),
-  hourly_activity: z.array(toolCallTimelineSchema),
+  one_shot_sessions: z.number().default(0),
+  frequency: z.array(toolCallFrequencySchema).default([]),
+  error_patterns: z.array(toolCallErrorPatternSchema).default([]),
+  hourly_activity: z.array(toolCallTimelineSchema).default([]),
   /** Per-host-tool one-shot breakdown. Empty for older producers. Renderer
    *  gates per-row on a minimum sample size to avoid one-of-one displays. */
   host_one_shot: z.array(hostToolOneShotSchema).default([]),
@@ -763,56 +778,56 @@ export type ToolCallStats = z.infer<typeof toolCallStatsSchema>;
 
 export const commitToolBreakdownSchema = z.object({
   host_tool: z.string(),
-  commits: z.number(),
-  avg_files_changed: z.number(),
-  avg_lines: z.number(),
+  commits: z.number().default(0),
+  avg_files_changed: z.number().default(0),
+  avg_lines: z.number().default(0),
 });
 export type CommitToolBreakdown = z.infer<typeof commitToolBreakdownSchema>;
 
 export const dailyCommitSchema = z.object({
   day: z.string(),
-  commits: z.number(),
+  commits: z.number().default(0),
 });
 export type DailyCommit = z.infer<typeof dailyCommitSchema>;
 
 export const commitOutcomeCorrelationSchema = z.object({
   bucket: z.string(),
-  sessions: z.number(),
-  completed: z.number(),
-  completion_rate: z.number(),
+  sessions: z.number().default(0),
+  completed: z.number().default(0),
+  completion_rate: z.number().default(0),
 });
 export type CommitOutcomeCorrelation = z.infer<typeof commitOutcomeCorrelationSchema>;
 
 export const commitEditRatioBucketSchema = z.object({
   bucket: z.string(),
-  sessions: z.number(),
-  completion_rate: z.number(),
-  avg_edits: z.number(),
-  avg_commits: z.number(),
+  sessions: z.number().default(0),
+  completion_rate: z.number().default(0),
+  avg_edits: z.number().default(0),
+  avg_commits: z.number().default(0),
 });
 export type CommitEditRatioBucket = z.infer<typeof commitEditRatioBucketSchema>;
 
 export const commitStatsSchema = z.object({
-  total_commits: z.number(),
-  commits_per_session: z.number(),
-  sessions_with_commits: z.number(),
-  avg_time_to_first_commit_min: z.number().nullable(),
-  by_tool: z.array(commitToolBreakdownSchema),
-  daily_commits: z.array(dailyCommitSchema),
-  outcome_correlation: z.array(commitOutcomeCorrelationSchema),
-  commit_edit_ratio: z.array(commitEditRatioBucketSchema),
+  total_commits: z.number().default(0),
+  commits_per_session: z.number().default(0),
+  sessions_with_commits: z.number().default(0),
+  avg_time_to_first_commit_min: z.number().nullable().default(null),
+  by_tool: z.array(commitToolBreakdownSchema).default([]),
+  daily_commits: z.array(dailyCommitSchema).default([]),
+  outcome_correlation: z.array(commitOutcomeCorrelationSchema).default([]),
+  commit_edit_ratio: z.array(commitEditRatioBucketSchema).default([]),
 });
 export type CommitStats = z.infer<typeof commitStatsSchema>;
 
 // ── Period-over-period comparison ────────────────
 
 export const periodMetricsSchema = z.object({
-  completion_rate: z.number(),
-  avg_duration_min: z.number(),
-  stuckness_rate: z.number(),
-  memory_hit_rate: z.number(),
-  edit_velocity: z.number(),
-  total_sessions: z.number(),
+  completion_rate: z.number().default(0),
+  avg_duration_min: z.number().default(0),
+  stuckness_rate: z.number().default(0),
+  memory_hit_rate: z.number().default(0),
+  edit_velocity: z.number().default(0),
+  total_sessions: z.number().default(0),
   /** Total USD cost for this period's token-capturing sessions. Null when
    *  pricing is stale, no token data was captured, or every model in the
    *  period was missing from LiteLLM pricing. Both windows are priced
@@ -830,8 +845,18 @@ export const periodMetricsSchema = z.object({
 export type PeriodMetrics = z.infer<typeof periodMetricsSchema>;
 
 export const periodComparisonSchema = z.object({
-  current: periodMetricsSchema,
-  previous: periodMetricsSchema.nullable(),
+  current: periodMetricsSchema.default({
+    completion_rate: 0,
+    avg_duration_min: 0,
+    stuckness_rate: 0,
+    memory_hit_rate: 0,
+    edit_velocity: 0,
+    total_sessions: 0,
+    total_estimated_cost_usd: null,
+    total_edits_in_token_sessions: 0,
+    cost_per_edit: null,
+  }),
+  previous: periodMetricsSchema.nullable().default(null),
 });
 export type PeriodComparison = z.infer<typeof periodComparisonSchema>;
 
@@ -839,11 +864,11 @@ export type PeriodComparison = z.infer<typeof periodComparisonSchema>;
 
 export const tokenModelBreakdownSchema = z.object({
   agent_model: z.string(),
-  input_tokens: z.number(),
-  output_tokens: z.number(),
+  input_tokens: z.number().default(0),
+  output_tokens: z.number().default(0),
   cache_read_tokens: z.number().default(0),
   cache_creation_tokens: z.number().default(0),
-  sessions: z.number(),
+  sessions: z.number().default(0),
   // Null when the model isn't in our LiteLLM snapshot, or when the snapshot
   // is >7 days stale. UI should render "-" rather than "$0" in that case.
   estimated_cost_usd: z.number().nullable().default(null),
@@ -852,23 +877,23 @@ export type TokenModelBreakdown = z.infer<typeof tokenModelBreakdownSchema>;
 
 export const tokenToolBreakdownSchema = z.object({
   host_tool: z.string(),
-  input_tokens: z.number(),
-  output_tokens: z.number(),
+  input_tokens: z.number().default(0),
+  output_tokens: z.number().default(0),
   cache_read_tokens: z.number().default(0),
   cache_creation_tokens: z.number().default(0),
-  sessions: z.number(),
+  sessions: z.number().default(0),
 });
 export type TokenToolBreakdown = z.infer<typeof tokenToolBreakdownSchema>;
 
 export const tokenUsageStatsSchema = z.object({
-  total_input_tokens: z.number(),
-  total_output_tokens: z.number(),
+  total_input_tokens: z.number().default(0),
+  total_output_tokens: z.number().default(0),
   total_cache_read_tokens: z.number().default(0),
   total_cache_creation_tokens: z.number().default(0),
-  avg_input_per_session: z.number(),
-  avg_output_per_session: z.number(),
-  sessions_with_token_data: z.number(),
-  sessions_without_token_data: z.number(),
+  avg_input_per_session: z.number().default(0),
+  avg_output_per_session: z.number().default(0),
+  sessions_with_token_data: z.number().default(0),
+  sessions_without_token_data: z.number().default(0),
   /** Sum of edit_count across sessions where input_tokens IS NOT NULL.
    *  This is the denominator for cost_per_edit - scoping to token-capturing
    *  sessions is what prevents mixing populations (e.g. Cursor contributing
@@ -899,8 +924,8 @@ export const tokenUsageStatsSchema = z.object({
   cost_per_edit: z.number().nullable().default(null),
   /** cache_read_tokens / (input + cache_read + cache_creation). 0-1, null when no tokens. */
   cache_hit_rate: z.number().nullable().default(null),
-  by_model: z.array(tokenModelBreakdownSchema),
-  by_tool: z.array(tokenToolBreakdownSchema),
+  by_model: z.array(tokenModelBreakdownSchema).default([]),
+  by_tool: z.array(tokenToolBreakdownSchema).default([]),
 });
 export type TokenUsageStats = z.infer<typeof tokenUsageStatsSchema>;
 
@@ -911,48 +936,71 @@ export type TokenUsageStats = z.infer<typeof tokenUsageStatsSchema>;
  */
 export const dataCoverageSchema = z.object({
   /** Tools that contributed data to this analytics response. */
-  tools_reporting: z.array(z.string()),
+  tools_reporting: z.array(z.string()).default([]),
   /** Active tools that lacked capability to contribute specific data. */
-  tools_without_data: z.array(z.string()),
+  tools_without_data: z.array(z.string()).default([]),
   /** Ratio of tools_reporting to total active tools (0-1). */
-  coverage_rate: z.number(),
+  coverage_rate: z.number().default(0),
   /** Data capabilities that are covered by at least one active tool. */
-  capabilities_available: z.array(z.string()),
+  capabilities_available: z.array(z.string()).default([]),
   /** Data capabilities that no active tool supports. */
-  capabilities_missing: z.array(z.string()),
+  capabilities_missing: z.array(z.string()).default([]),
 });
 export type DataCoverage = z.infer<typeof dataCoverageSchema>;
 
 /** Cross-team user analytics - extends base TeamAnalytics with advanced breakdowns. */
 export const userAnalyticsSchema = teamAnalyticsSchema.extend({
-  hourly_distribution: z.array(hourlyBucketSchema),
-  tool_daily: z.array(toolDailyTrendSchema),
-  model_outcomes: z.array(modelOutcomeSchema),
-  tool_outcomes: z.array(toolOutcomeSchema),
-  completion_summary: completionSummarySchema,
-  tool_comparison: z.array(toolComparisonSchema),
-  work_type_distribution: z.array(workTypeDistributionSchema),
-  tool_work_type: z.array(toolWorkTypeBreakdownSchema),
-  file_churn: z.array(fileChurnEntrySchema),
-  duration_distribution: z.array(durationBucketSchema),
-  concurrent_edits: z.array(concurrentEditEntrySchema),
-  member_analytics: z.array(memberAnalyticsSchema),
+  hourly_distribution: z.array(hourlyBucketSchema).default([]),
+  tool_daily: z.array(toolDailyTrendSchema).default([]),
+  model_outcomes: z.array(modelOutcomeSchema).default([]),
+  tool_outcomes: z.array(toolOutcomeSchema).default([]),
+  completion_summary: completionSummarySchema.default({
+    total_sessions: 0,
+    completed: 0,
+    abandoned: 0,
+    failed: 0,
+    unknown: 0,
+    completion_rate: 0,
+    prev_completion_rate: null,
+  }),
+  tool_comparison: z.array(toolComparisonSchema).default([]),
+  work_type_distribution: z.array(workTypeDistributionSchema).default([]),
+  tool_work_type: z.array(toolWorkTypeBreakdownSchema).default([]),
+  file_churn: z.array(fileChurnEntrySchema).default([]),
+  duration_distribution: z.array(durationBucketSchema).default([]),
+  concurrent_edits: z.array(concurrentEditEntrySchema).default([]),
+  member_analytics: z.array(memberAnalyticsSchema).default([]),
   // Uncapped count of distinct handles with activity in the window. Ships
   // alongside member_analytics (which is capped at 50 per team) so the
   // renderer can surface a truthful "+N more" affordance when the team
   // has more active members than the rendered list.
-  member_analytics_total: z.number(),
-  retry_patterns: z.array(retryPatternSchema),
-  conflict_correlation: z.array(conflictCorrelationSchema),
-  conflict_stats: conflictStatsSchema,
-  edit_velocity: z.array(editVelocityTrendSchema),
+  member_analytics_total: z.number().default(0),
+  retry_patterns: z.array(retryPatternSchema).default([]),
+  conflict_correlation: z.array(conflictCorrelationSchema).default([]),
+  conflict_stats: conflictStatsSchema.default({
+    blocked_period: 0,
+    found_period: 0,
+    daily_blocked: [],
+  }),
+  edit_velocity: z.array(editVelocityTrendSchema).default([]),
   // Lines drill axes. Default to [] so older producers stay compatible.
   member_daily_lines: z.array(memberDailyLineTrendSchema).default([]),
   per_project_lines: z.array(projectLinesTrendSchema).default([]),
   per_project_velocity: z.array(projectVelocityRollupSchema).default([]),
-  memory_usage: memoryUsageStatsSchema,
-  work_type_outcomes: z.array(workTypeOutcomeSchema),
-  conversation_edit_correlation: z.array(conversationEditCorrelationSchema),
+  memory_usage: memoryUsageStatsSchema.default({
+    total_memories: 0,
+    searches: 0,
+    searches_with_results: 0,
+    search_hit_rate: 0,
+    memories_created_period: 0,
+    stale_memories: 0,
+    avg_memory_age_days: 0,
+    pending_consolidation_proposals: 0,
+    formation_observations_by_recommendation: { keep: 0, merge: 0, evolve: 0, discard: 0 },
+    secrets_blocked_24h: 0,
+  }),
+  work_type_outcomes: z.array(workTypeOutcomeSchema).default([]),
+  conversation_edit_correlation: z.array(conversationEditCorrelationSchema).default([]),
   // Conversation widgets revived 2026-04-25. Both gate on conversationLogs
   // capability (Claude Code + Aider today). Default to empty/zero for
   // older producers and tools without conversation capture.
@@ -987,30 +1035,94 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     blocked_period: 0,
     blocked_24h: 0,
   }),
-  file_rework: z.array(fileReworkEntrySchema),
-  directory_heatmap: z.array(directoryHeatmapEntrySchema),
+  file_rework: z.array(fileReworkEntrySchema).default([]),
+  directory_heatmap: z.array(directoryHeatmapEntrySchema).default([]),
   // Files-touched breadth anatomy. Both default to sensible empties so
   // older producers parse cleanly; the UI gates on length / sum.
   files_by_work_type: z.array(filesByWorkTypeEntrySchema).default([]),
   files_new_vs_revisited: filesNewVsRevisitedSchema.default({ new_files: 0, revisited_files: 0 }),
-  stuckness: stucknessStatsSchema,
-  file_overlap: fileOverlapStatsSchema,
-  audit_staleness: z.array(auditStalenessEntrySchema),
-  first_edit_stats: firstEditStatsSchema,
-  memory_outcome_correlation: z.array(memoryOutcomeCorrelationSchema),
+  stuckness: stucknessStatsSchema.default({
+    total_sessions: 0,
+    stuck_sessions: 0,
+    stuckness_rate: 0,
+    stuck_completion_rate: 0,
+    normal_completion_rate: 0,
+  }),
+  file_overlap: fileOverlapStatsSchema.default({ total_files: 0, overlapping_files: 0 }),
+  audit_staleness: z.array(auditStalenessEntrySchema).default([]),
+  first_edit_stats: firstEditStatsSchema.default({
+    avg_minutes_to_first_edit: 0,
+    median_minutes_to_first_edit: 0,
+    by_tool: [],
+  }),
+  memory_outcome_correlation: z.array(memoryOutcomeCorrelationSchema).default([]),
   memory_per_entry_outcomes: z.array(memoryPerEntryOutcomeSchema).default([]),
-  top_memories: z.array(memoryAccessEntrySchema),
-  scope_complexity: z.array(scopeComplexityBucketSchema),
-  prompt_efficiency: z.array(promptEfficiencyTrendSchema),
-  hourly_effectiveness: z.array(hourlyEffectivenessSchema),
-  outcome_tags: z.array(outcomeTagCountSchema),
-  tool_handoffs: z.array(toolHandoffSchema),
-  period_comparison: periodComparisonSchema,
-  token_usage: tokenUsageStatsSchema,
-  tool_call_stats: toolCallStatsSchema,
-  commit_stats: commitStatsSchema,
-  teams_included: z.number(),
-  degraded: z.boolean(),
+  top_memories: z.array(memoryAccessEntrySchema).default([]),
+  scope_complexity: z.array(scopeComplexityBucketSchema).default([]),
+  prompt_efficiency: z.array(promptEfficiencyTrendSchema).default([]),
+  hourly_effectiveness: z.array(hourlyEffectivenessSchema).default([]),
+  outcome_tags: z.array(outcomeTagCountSchema).default([]),
+  tool_handoffs: z.array(toolHandoffSchema).default([]),
+  period_comparison: periodComparisonSchema.default({
+    current: {
+      completion_rate: 0,
+      avg_duration_min: 0,
+      stuckness_rate: 0,
+      memory_hit_rate: 0,
+      edit_velocity: 0,
+      total_sessions: 0,
+      total_estimated_cost_usd: null,
+      total_edits_in_token_sessions: 0,
+      cost_per_edit: null,
+    },
+    previous: null,
+  }),
+  token_usage: tokenUsageStatsSchema.default({
+    total_input_tokens: 0,
+    total_output_tokens: 0,
+    total_cache_read_tokens: 0,
+    total_cache_creation_tokens: 0,
+    avg_input_per_session: 0,
+    avg_output_per_session: 0,
+    sessions_with_token_data: 0,
+    sessions_without_token_data: 0,
+    total_edits_in_token_sessions: 0,
+    total_estimated_cost_usd: null,
+    pricing_refreshed_at: null,
+    pricing_is_stale: false,
+    models_without_pricing: [],
+    models_without_pricing_total: 0,
+    cost_per_edit: null,
+    cache_hit_rate: null,
+    by_model: [],
+    by_tool: [],
+  }),
+  tool_call_stats: toolCallStatsSchema.default({
+    total_calls: 0,
+    total_errors: 0,
+    error_rate: 0,
+    avg_duration_ms: 0,
+    calls_per_session: 0,
+    research_to_edit_ratio: 0,
+    one_shot_rate: 0,
+    one_shot_sessions: 0,
+    frequency: [],
+    error_patterns: [],
+    hourly_activity: [],
+    host_one_shot: [],
+  }),
+  commit_stats: commitStatsSchema.default({
+    total_commits: 0,
+    commits_per_session: 0,
+    sessions_with_commits: 0,
+    avg_time_to_first_commit_min: null,
+    by_tool: [],
+    daily_commits: [],
+    outcome_correlation: [],
+    commit_edit_ratio: [],
+  }),
+  teams_included: z.number().default(0),
+  degraded: z.boolean().default(false),
   data_coverage: dataCoverageSchema.optional(),
 });
 export type UserAnalytics = z.infer<typeof userAnalyticsSchema>;

@@ -1,177 +1,138 @@
 /**
- * Contract-sync guard for the analytics schemas.
+ * Schema-defaults invariant for the consolidated analytics contract.
  *
- * packages/shared/contracts/analytics.ts is the source of truth; this file
- * (analytics.ts alongside) wraps each base schema with `.default()` decorators
- * for resilient UI rendering. That parallel layer is fragile: if shared adds a
- * new schema, web silently doesn't wrap it; if shared removes a field, web's
- * `.extend({ ... })` re-creates it with a default and hides the removal.
+ * The web copy of these schemas was deleted in favor of the shared schemas in
+ * @chinmeister/shared/contracts/analytics.js. The shared schemas now carry
+ * every default the consumer needs, so a payload missing optional fields
+ * still parses to a usable shape. This test pins that contract:
  *
- * This test lists every Zod schema exported from shared and asserts that web
- * either imports it (as baseXSchema) or has an explicit opt-out recorded in
- * the INTENTIONALLY_UNWRAPPED allowlist. Any drift forces a human decision:
- * wrap the new schema, or add it to the allowlist with a reason.
- *
- * The allowlist is deliberately small. Adding to it should be rare and well-
- * justified - each entry represents a deliberate decision not to surface a
- * shared analytics primitive in the UI.
+ *   1. userAnalyticsSchema.parse({ ok: true }) succeeds (defaults fill in).
+ *   2. teamAnalyticsSchema.parse({ ok: true }) succeeds (defaults fill in).
+ *   3. The set of fields that REQUIRE explicit input is small and listed,
+ *      so adding a new required field forces a deliberate choice rather
+ *      than silently breaking older producers.
+ *   4. total_estimated_cost_usd accepts null on every consumer that touches
+ *      it. This is the active drift bug from before the consolidation: the
+ *      web schema had `z.number().default(0)`, which rejected null and
+ *      caused validateResponse to drop the entire response.
  */
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
-import { dirname, resolve } from 'path';
-import { fileURLToPath } from 'url';
-import * as SharedAnalytics from '@chinmeister/shared/contracts/analytics.js';
+import {
+  teamAnalyticsSchema,
+  userAnalyticsSchema,
+  tokenUsageStatsSchema,
+  periodMetricsSchema,
+  dailyTrendSchema,
+} from '@chinmeister/shared/contracts/analytics.js';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const WEB_SCHEMA_FILE = resolve(__dirname, 'analytics.ts');
-const SHARED_SCHEMA_FILE = resolve(__dirname, '../../../../shared/contracts/analytics.ts');
-
-/**
- * Shared analytics primitives that web intentionally does not wrap as a
- * baseXSchema. Each must have a reason - typically because it's a rollup
- * whose sub-schemas are already wrapped individually, or because it's a
- * top-level response envelope that web re-composes from wrapped pieces.
- *
- * Add entries sparingly. If you're adding a new schema to shared, prefer
- * wrapping it in web/src/lib/schemas/analytics.ts over adding it here.
- */
-const INTENTIONALLY_UNWRAPPED: Record<string, string> = {
-  // Top-level response envelopes - web rebuilds its own versions using
-  // wrapped sub-schemas.
-  teamAnalyticsSchema: 'web composes its own teamAnalyticsSchema',
-  userAnalyticsSchema: 'web composes its own userAnalyticsSchema',
-
-  // Rollups whose sub-schemas are wrapped individually by web.
-  toolCallStatsSchema: 'rollup of toolCallFrequency/Error/Timeline which web imports separately',
-  periodComparisonSchema: 'rollup of current/previous periodMetrics which web imports directly',
-  tokenUsageStatsSchema:
-    'rollup of tokenModelBreakdown/tokenToolBreakdown which web imports separately',
-
-  // Sub-schemas of commitStats that web consumes transitively via
-  // commitStatsSchema.extend() - do not need independent wrappers.
-  commitToolBreakdownSchema: 'composed into commitStatsSchema',
-  dailyCommitSchema: 'composed into commitStatsSchema',
-  commitOutcomeCorrelationSchema: 'composed into commitStatsSchema',
-  commitEditRatioBucketSchema: 'composed into commitStatsSchema',
-
-  // Sub-schemas consumed transitively by their parent schemas that web
-  // imports. Listing each with the parent it's composed into.
-  formationRecommendationCountsSchema: 'composed into memoryUsageStatsSchema',
-  toolHandoffRecentFileSchema: 'composed into toolHandoffSchema (recent_files array)',
-};
-
-function listSharedZodSchemas(): string[] {
-  return Object.keys(SharedAnalytics).filter(
-    (k) =>
-      k.endsWith('Schema') && typeof (SharedAnalytics as Record<string, unknown>)[k] === 'object',
-  );
-}
-
-function listWebBaseImports(): Set<string> {
-  const content = readFileSync(WEB_SCHEMA_FILE, 'utf-8');
-  const re = /(\w+Schema)\s+as\s+base\w+Schema/g;
-  const found = new Set<string>();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(content)) !== null) {
-    found.add(m[1]);
-  }
-  return found;
-}
-
-describe('analytics contract-sync: web wraps every shared schema', () => {
-  it('every shared schema is imported by web or on the allowlist', () => {
-    const shared = listSharedZodSchemas();
-    const webImports = listWebBaseImports();
-
-    const drifted = shared.filter(
-      (name) => !webImports.has(name) && !(name in INTENTIONALLY_UNWRAPPED),
-    );
-
-    expect(
-      drifted,
-      [
-        'Contract drift: shared/contracts/analytics.ts exports Zod schemas',
-        'that web/src/lib/schemas/analytics.ts neither imports nor has on the',
-        'INTENTIONALLY_UNWRAPPED allowlist.',
-        '',
-        'Drifted schemas: ' + drifted.join(', '),
-        '',
-        "Fix: either add the schema to web's base-import list and wrap it",
-        'with appropriate .default() values, or add it to INTENTIONALLY_',
-        'UNWRAPPED with a reason.',
-      ].join('\n'),
-    ).toEqual([]);
+describe('analytics schema defaults', () => {
+  it('teamAnalyticsSchema parses a minimal envelope with defaults', () => {
+    const result = teamAnalyticsSchema.safeParse({ ok: true });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const v = result.data;
+    expect(v.ok).toBe(true);
+    expect(v.file_heatmap).toEqual([]);
+    expect(v.daily_trends).toEqual([]);
+    expect(v.tool_distribution).toEqual([]);
+    expect(v.outcome_distribution).toEqual([]);
+    expect(v.daily_metrics).toEqual([]);
+    expect(v.files_touched_total).toBe(0);
+    expect(v.files_touched_half_split).toBeNull();
   });
 
-  it('no stale allowlist entries - every entry still exists in shared', () => {
-    const shared = new Set(listSharedZodSchemas());
-    const stale = Object.keys(INTENTIONALLY_UNWRAPPED).filter((name) => !shared.has(name));
-
-    expect(
-      stale,
-      'Stale allowlist entries: these schemas no longer exist in shared. Remove them from INTENTIONALLY_UNWRAPPED: ' +
-        stale.join(', '),
-    ).toEqual([]);
+  it('userAnalyticsSchema parses a minimal envelope with defaults', () => {
+    const result = userAnalyticsSchema.safeParse({ ok: true });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    const v = result.data;
+    // Inherited from teamAnalyticsSchema.
+    expect(v.daily_trends).toEqual([]);
+    expect(v.tool_distribution).toEqual([]);
+    // User-only arrays.
+    expect(v.hourly_distribution).toEqual([]);
+    expect(v.member_analytics).toEqual([]);
+    expect(v.member_analytics_total).toBe(0);
+    expect(v.tool_handoffs).toEqual([]);
+    expect(v.scope_complexity).toEqual([]);
+    expect(v.confused_files).toEqual([]);
+    // User-only object defaults.
+    expect(v.completion_summary.total_sessions).toBe(0);
+    expect(v.completion_summary.prev_completion_rate).toBeNull();
+    expect(v.token_usage.total_estimated_cost_usd).toBeNull();
+    expect(v.token_usage.cost_per_edit).toBeNull();
+    expect(v.token_usage.cache_hit_rate).toBeNull();
+    expect(v.period_comparison.current.total_estimated_cost_usd).toBeNull();
+    expect(v.period_comparison.current.cost_per_edit).toBeNull();
+    expect(v.period_comparison.previous).toBeNull();
+    expect(v.commit_stats.total_commits).toBe(0);
+    expect(v.commit_stats.avg_time_to_first_commit_min).toBeNull();
+    expect(v.tool_call_stats.host_one_shot).toEqual([]);
+    expect(v.memory_usage.total_memories).toBe(0);
+    expect(v.memory_usage.formation_observations_by_recommendation.keep).toBe(0);
+    expect(v.memory_aging.recent_7d).toBe(0);
+    expect(v.degraded).toBe(false);
+    expect(v.teams_included).toBe(0);
   });
 
-  it('every web base-import still exists in shared', () => {
-    const shared = new Set(listSharedZodSchemas());
-    const webImports = Array.from(listWebBaseImports());
-    const orphans = webImports.filter((name) => !shared.has(name));
+  // The fields below are the FINITE list of inputs that the consumer cannot
+  // synthesize a default for. If a future PR adds a required field anywhere
+  // in this surface, this list grows and the test fails - that is the
+  // intended forcing function. Either give the new field a default in
+  // shared/contracts/analytics.ts, or add it here with a justification.
+  it('userAnalyticsSchema requires only `ok` at the envelope level', () => {
+    // Envelope-level required fields. `period_days` defaults to 0 so a
+    // producer that omits it is treated as a degenerate empty window
+    // rather than dropped.
+    const minimal = userAnalyticsSchema.safeParse({ ok: true });
+    expect(minimal.success).toBe(true);
 
-    expect(
-      orphans,
-      'Orphaned base imports: web imports these from shared but shared no longer exports them: ' +
-        orphans.join(', '),
-    ).toEqual([]);
+    // Drop ok → fail.
+    const noOk = userAnalyticsSchema.safeParse({});
+    expect(noOk.success).toBe(false);
+
+    // Wrong ok value → fail.
+    const wrongOk = userAnalyticsSchema.safeParse({ ok: false });
+    expect(wrongOk.success).toBe(false);
   });
 
-  it('shared contracts file is readable at expected path', () => {
-    // Guards against a future refactor silently breaking the path resolution
-    // that would make the drift test pass vacuously.
-    const content = readFileSync(SHARED_SCHEMA_FILE, 'utf-8');
-    expect(content.length).toBeGreaterThan(100);
-    expect(content).toMatch(/export const \w+Schema\s*=/);
-  });
-});
-
-// ── Shape-level alignment check ──────────────────────────────────────────
-//
-// For each schema web imports as baseX, the shared schema's top-level shape
-// keys must be a subset of the web schema's shape keys. If shared adds a new
-// field to an existing schema, web should still expose it even if unwrapped
-// (z.extend() preserves parent keys). This catches the edge case where web's
-// .extend({}) accidentally replaces an object-typed field instead of merging
-// its children.
-
-describe('analytics contract-sync: shape coverage', () => {
-  it('every shared schema shape is preserved through web extension', async () => {
-    // Import web lazily because importing the full module pulls UI deps.
-    const Web = await import('./analytics.js');
-
-    const webBase = listWebBaseImports();
-    const mismatches: string[] = [];
-
-    for (const name of webBase) {
-      const sharedSchema = (SharedAnalytics as Record<string, unknown>)[name];
-      if (!sharedSchema || typeof sharedSchema !== 'object') continue;
-      // Only z.object schemas have `.shape`.
-      const sharedShape = (sharedSchema as { shape?: Record<string, unknown> }).shape;
-      if (!sharedShape) continue;
-
-      // Web doesn't re-export the extended schemas under the same name, so we
-      // can't easily compare pairs. Instead, check that each rolled-up schema
-      // in web (teamAnalyticsSchema, userAnalyticsSchema, etc.) resolves when
-      // validated against fixtures - that's covered by other tests.
-      // Here we just confirm shared's shape exists and is non-empty.
-      if (Object.keys(sharedShape).length === 0) {
-        mismatches.push(`${name} has no shape keys in shared`);
-      }
+  it('total_estimated_cost_usd is nullable across every consumer', () => {
+    // tokenUsageStatsSchema: worker emits null when pricing is stale or
+    // when every observed model is unpriced. The pre-consolidation web
+    // schema had this as z.number().default(0), which threw away the
+    // whole response on null.
+    const tu = tokenUsageStatsSchema.safeParse({ total_estimated_cost_usd: null });
+    expect(tu.success).toBe(true);
+    if (tu.success) {
+      expect(tu.data.total_estimated_cost_usd).toBeNull();
     }
 
-    // Meta-check: ensure the web module actually loaded (catches lazy-import
-    // wiring regressions).
-    expect(typeof Web.createEmptyAnalytics).toBe('function');
-    expect(mismatches).toEqual([]);
+    // periodMetricsSchema: same null path through the period comparison
+    // enrich step.
+    const pm = periodMetricsSchema.safeParse({
+      total_estimated_cost_usd: null,
+      cost_per_edit: null,
+    });
+    expect(pm.success).toBe(true);
+    if (pm.success) {
+      expect(pm.data.total_estimated_cost_usd).toBeNull();
+      expect(pm.data.cost_per_edit).toBeNull();
+    }
+
+    // Sanity: a numeric value also parses.
+    const numeric = tokenUsageStatsSchema.safeParse({ total_estimated_cost_usd: 1.23 });
+    expect(numeric.success).toBe(true);
+    if (numeric.success) {
+      expect(numeric.data.total_estimated_cost_usd).toBe(1.23);
+    }
+  });
+
+  it('dailyTrendSchema cost fields default to null when omitted', () => {
+    const result = dailyTrendSchema.safeParse({ day: '2026-04-29' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.sessions).toBe(0);
+    expect(result.data.cost).toBeNull();
+    expect(result.data.cost_per_edit).toBeNull();
   });
 });
