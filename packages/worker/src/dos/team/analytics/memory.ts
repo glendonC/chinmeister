@@ -643,8 +643,7 @@ export function queryMemorySupersession(
 }
 
 // Secrets shield stats. blocked_period rolls up daily_metrics over the
-// picker window; blocked_24h is the live counter (matches the previously
-// cut memory-safety widget's last-24h read).
+// picker window; blocked_24h is the live last-24h counter.
 export function queryMemorySecretsShield(sql: SqlStorage, days: number): MemorySecretsShieldStats {
   try {
     const period = row(

@@ -64,7 +64,7 @@ describe('isWorkType', () => {
     }
   });
 
-  it('rejects drift labels that used to live in the demo', () => {
+  it('rejects non-canonical labels that look plausible but are not in WORK_TYPES', () => {
     expect(isWorkType('feature')).toBe(false);
     expect(isWorkType('fix')).toBe(false);
     expect(isWorkType('refactor')).toBe(false);

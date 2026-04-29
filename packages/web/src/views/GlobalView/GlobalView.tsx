@@ -848,8 +848,8 @@ export default function GlobalView(): ReactNode {
   }, [userCompletionRate]);
 
   // Community tool-count histogram - how many distinct tools each developer
-  // uses. Computed at /stats, previously unrendered. Surfaces the user's own
-  // tool count against the community distribution.
+  // uses. Computed at /stats. Surfaces the user's own tool count against
+  // the community distribution.
   const toolCountHisto = useMemo(() => {
     if (gs.toolCountDistribution.length === 0) return [];
     const totalUsers = gs.toolCountDistribution.reduce((s, d) => s + d.users, 0);

@@ -54,9 +54,9 @@ describe('dashboardSummarySchema', () => {
     const parsed = dashboardSummarySchema.parse({
       teams: [{ team_id: 't1' }],
     });
-    // These used to silently default to 0 - hiding server omission.
     // The renderer must see `undefined` so "server said zero" and "server
-    // omitted" stay distinguishable.
+    // omitted" stay distinguishable; defaulting to 0 here would hide the
+    // omission.
     expect(parsed.teams[0].conflict_count).toBeUndefined();
     expect(parsed.teams[0].total_members).toBeUndefined();
     expect(parsed.teams[0].live_sessions).toBeUndefined();

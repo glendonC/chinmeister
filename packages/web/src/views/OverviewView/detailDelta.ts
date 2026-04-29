@@ -3,9 +3,9 @@ import { formatCost } from '../../widgets/utils.js';
 /**
  * Shared delta helpers for the OverviewView detail surfaces (Usage, Outcomes,
  * Codebase, Activity, Tools, Memory). Each detail view's tab strip shows a
- * scalar value with a small arrow+magnitude pill underneath. Originally the
- * helpers were copy-pasted across three views; consolidated here so every
- * delta on every tab is computed and rendered identically.
+ * scalar value with a small arrow+magnitude pill underneath. Centralizing
+ * the helpers ensures every delta on every tab is computed and rendered
+ * identically.
  *
  * Em-dash placeholder for tabs without a comparable previous-period value
  * (e.g. files-touched has no per-day breakdown). Keeps the delta caption

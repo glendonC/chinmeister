@@ -2,9 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { classifyError } from '../utils/errors.js';
 
 /**
- * These tests exercise the connection error classification that was
- * previously inlined in dashboard/connection.jsx and is now shared.
- * They specifically validate the WebSocket/polling error handling paths.
+ * Tests for the shared connection error classification helper. They
+ * validate the WebSocket and polling error handling paths.
  */
 
 describe('connection error classification', () => {

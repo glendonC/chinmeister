@@ -43,14 +43,13 @@ function fileBasename(path: string): string {
 }
 
 /**
- * File constellation: each file is a dot at (touches, completion%). Replaces
- * the old "Most-touched files" + "Highest rework ratio" list pair - one 2D
- * viz fuses the two questions (activity × effectiveness) that previously
- * required two ranked lists to read.
+ * File constellation: each file is a dot at (touches, completion%). One 2D
+ * viz fuses two questions (activity × effectiveness) so they can be read
+ * together instead of from a pair of ranked lists.
  *
  * Upper-right = high-touch solid files. Upper-left = low-touch one-shot
- * wins. Lower-right = high-touch failing files (the "problem" quadrant,
- * subsumes the rework section). Lower-left = abandoned fragments.
+ * wins. Lower-right = high-touch failing files (the "problem" quadrant).
+ * Lower-left = abandoned fragments.
  */
 export default function FileConstellation({ entries, activeWorkType, ariaLabel }: Props) {
   const dataset = useMemo(() => {

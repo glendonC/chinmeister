@@ -9,12 +9,12 @@
 //   - InternalUsageSection - research-to-edit ratio + top internal tools
 //   - SessionShapeSection  - timeline replay of a representative session
 //
-// `ModelPairingsSection` was cut: it duplicated `model_outcomes` and
-// `tool_comparison`, both of which already render elsewhere.
-// `ScopeComplexitySection` was cut: the canonical `scope_complexity`
-// field is session-level, not per-tool, so a per-tool drill rendering
-// it is a granularity mismatch. The team-wide scope-complexity widget
-// on the overview owns that question.
+// Per-tool model pairings and scope-complexity drills are intentionally
+// absent: model pairings duplicate `model_outcomes` and `tool_comparison`
+// which already render elsewhere, and `scope_complexity` is a
+// session-level field, so a per-tool drill of it is a granularity
+// mismatch. The team-wide scope-complexity widget on the overview owns
+// that question.
 
 import type { CSSProperties } from 'react';
 import {
