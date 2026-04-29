@@ -65,7 +65,7 @@ import LiveNowView from './LiveNowView.js';
 import UsageDetailView from './UsageDetailView/UsageDetailView.js';
 import OutcomesDetailView from './OutcomesDetailView.js';
 import ActivityDetailView from './ActivityDetailView.js';
-import CodebaseDetailView from './CodebaseDetailView.js';
+import CodebaseDetailView from './CodebaseDetailView/CodebaseDetailView.js';
 import ToolsDetailView from './ToolsDetailView/ToolsDetailView.js';
 import MemoryDetailView from './MemoryDetailView.js';
 import { RANGES, type RangeDays, summarizeNames } from './overview-utils.js';
