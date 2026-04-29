@@ -190,7 +190,9 @@ async function loadProjectView({ pollingState, teamState, search = '' } = {}) {
     default: stub('usage'),
   }));
   vi.doMock('../OverviewView/OutcomesDetailView.js', () => ({ default: stub('outcomes') }));
-  vi.doMock('../OverviewView/ActivityDetailView.js', () => ({ default: stub('activity') }));
+  vi.doMock('../OverviewView/ActivityDetailView/ActivityDetailView.js', () => ({
+    default: stub('activity'),
+  }));
   vi.doMock('../OverviewView/CodebaseDetailView/CodebaseDetailView.js', () => ({
     default: stub('codebase'),
   }));
