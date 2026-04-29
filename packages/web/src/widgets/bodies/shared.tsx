@@ -15,6 +15,41 @@ import styles from '../widget-shared.module.css';
  *  stats join the strip. */
 export type StatDeltaFormat = 'count' | 'usd' | 'usd-fine';
 
+/**
+ * In-window delta: split a daily series in half by position and compare
+ * sums. Preferred over `period_comparison` for stat deltas because the
+ * worker's 30-day session retention structurally empties the
+ * `[days*2, days]`-ago previous window used by `queryPeriodComparison`,
+ * so that delta is null for every production user. Splitting the current
+ * window sidesteps retention and keeps the delta honest for any period.
+ * Returns null with fewer than two observed days. For odd counts the
+ * single middle day is dropped so both halves span the same day count.
+ */
+export function splitPeriodDelta<T>(
+  days: T[],
+  select: (row: T) => number,
+): { current: number; previous: number } | null {
+  if (days.length < 2) return null;
+  const mid = Math.floor(days.length / 2);
+  const currentStart = days.length % 2 === 0 ? mid : mid + 1;
+  const previous = days.slice(0, mid).reduce((s, d) => s + select(d), 0);
+  const current = days.slice(currentStart).reduce((s, d) => s + select(d), 0);
+  return { current, previous };
+}
+
+/**
+ * Screen-reader suffix mirroring the visual delta glyph (↑/↓/→). Empty
+ * when the visual delta is suppressed (null or previous <= 0).
+ */
+export function deltaAriaSuffix(delta: { current: number; previous: number } | null): string {
+  if (!delta || delta.previous <= 0) return '';
+  const diff = delta.current - delta.previous;
+  if (diff === 0) return ', no change from the previous half of this period';
+  const magnitude = Math.abs(Math.round(diff * 10) / 10).toLocaleString();
+  const direction = diff > 0 ? 'up' : 'down';
+  return `, ${direction} ${magnitude} from the previous half of this period`;
+}
+
 export const SENTIMENT_COLORS: Record<string, string> = {
   positive: 'var(--success)',
   neutral: 'var(--soft)',
@@ -465,13 +500,14 @@ export function hasCostData(tu: CostReliabilityInput): boolean {
 }
 
 /**
- * Explain the em-dash. Called when `hasCostData` returns false; picks the most
- * specific reason so the CoverageNote under the stat tells the user *why* the
- * widget isn't showing a number. Falls through to the standard capability
- * attribution for the zero-sessions case (first-day solo etc.) — returning
- * null there is fine, the widget just shows a bare em-dash.
+ * Transient or environmental reasons the cost number is degraded right now.
+ * Returns ONLY load-bearing reasons the user can't infer from their setup
+ * (stale pricing snapshot, models without published pricing). Capability
+ * attribution (which tools report tokens) is intentionally NOT in this list —
+ * partial-capture disclosure belongs on a dedicated data-quality surface,
+ * not stacked under every stat card. Use this in populated states.
  */
-export function costEmptyReason(tu: CostReliabilityInput, toolsReporting: string[]): string | null {
+export function costDegradedReason(tu: CostReliabilityInput): string | null {
   if (tu.pricing_is_stale) {
     return 'Pricing refresh pending — cost estimates paused';
   }
@@ -482,6 +518,20 @@ export function costEmptyReason(tu: CostReliabilityInput, toolsReporting: string
     if (first) return `Awaiting pricing for ${first}`;
     return 'Awaiting pricing for observed models';
   }
+  return null;
+}
+
+/**
+ * Explain the em-dash in an empty state. Picks the most specific reason so
+ * the CoverageNote under the stat tells the user *why* the widget is dark.
+ * Falls through to capability attribution for the no-sessions case so a
+ * fresh user with a non-reporting tool sees a named gap instead of a silent
+ * ghost. Use this in empty states only — populated states should call
+ * `costDegradedReason` to skip the capability fallback.
+ */
+export function costEmptyReason(tu: CostReliabilityInput, toolsReporting: string[]): string | null {
+  const degraded = costDegradedReason(tu);
+  if (degraded) return degraded;
   return capabilityCoverageNote(toolsReporting, 'tokenUsage');
 }
 

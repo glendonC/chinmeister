@@ -17,7 +17,6 @@ import { getToolMeta } from '../../lib/toolMeta.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import type { ToolWorkTypeBreakdown } from '../../lib/apiSchemas.js';
 import { WORK_TYPE_COLORS, WORK_TYPES, type WorkType } from '../../widgets/utils.js';
-import { PREVIEW_TOOL_WORK_TYPE } from './previewData.js';
 import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './StackWorkTypeMatrix.module.css';
 
@@ -49,11 +48,8 @@ function emptyByType(): Record<WorkType, number> {
 }
 
 export default function StackWorkTypeMatrix({ breakdown, onToolClick }: Props) {
-  const liveHasData = (breakdown ?? []).some((b) => b.sessions > 0);
-  const isPreview = !liveHasData;
-
   const rows = useMemo<Row[]>(() => {
-    const source = liveHasData ? (breakdown ?? []) : PREVIEW_TOOL_WORK_TYPE;
+    const source = breakdown ?? [];
     const byTool = new Map<string, Row>();
     for (const entry of source) {
       if (!entry.host_tool || entry.host_tool === 'unknown') continue;
@@ -72,7 +68,7 @@ export default function StackWorkTypeMatrix({ breakdown, onToolClick }: Props) {
     return [...byTool.values()]
       .filter((r) => r.totalSessions > 0)
       .sort((a, b) => b.totalSessions - a.totalSessions);
-  }, [breakdown, liveHasData]);
+  }, [breakdown]);
 
   if (rows.length === 0) {
     return (
@@ -92,12 +88,11 @@ export default function StackWorkTypeMatrix({ breakdown, onToolClick }: Props) {
   return (
     <section className={styles.section}>
       <header className={styles.header}>
-        <Eyebrow label="Stack × work type" showPreview={isPreview} />
+        <Eyebrow label="Stack × work type" />
         <h2 className={styles.title}>Which tool for which job</h2>
         <p className={styles.subtitle}>
-          {isPreview
-            ? 'Example data - this matrix shows what the view looks like with sessions from multiple tools. Your own numbers will replace this once work-type data flows through.'
-            : "How each tool in your stack spreads across kinds of work. Darker = bigger share of that tool's sessions."}
+          How each tool in your stack spreads across kinds of work. Darker = bigger share of that
+          tool&apos;s sessions.
         </p>
       </header>
 

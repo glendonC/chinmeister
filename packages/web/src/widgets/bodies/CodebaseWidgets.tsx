@@ -5,7 +5,15 @@ import styles from './CodebaseWidgets.module.css';
 import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
 import { setQueryParams, useRoute } from '../../lib/router.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { FilePath, GhostBars, GhostRows, GhostStatRow, isSoloTeam } from './shared.js';
+import {
+  capabilityCoverageNote,
+  CoverageNote,
+  FilePath,
+  GhostBars,
+  GhostRows,
+  GhostStatRow,
+  isSoloTeam,
+} from './shared.js';
 
 function openCodebase(tab: string, q: string) {
   return () => setQueryParams({ codebase: tab, q });
@@ -57,7 +65,13 @@ function CommitStatsWidget({ analytics }: WidgetBodyProps) {
   const cs = analytics.commit_stats;
 
   if (cs.total_commits === 0) {
-    return <GhostStatRow labels={['commits', 'cadence', 'sessions']} />;
+    const tools = analytics.data_coverage?.tools_reporting ?? [];
+    return (
+      <>
+        <GhostStatRow labels={['commits', 'cadence', 'sessions']} />
+        <CoverageNote text={capabilityCoverageNote(tools, 'commitTracking')} />
+      </>
+    );
   }
 
   const maxDay = Math.max(...cs.daily_commits.map((d) => d.commits), 1);
@@ -143,7 +157,15 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
     }));
   }, [dirs]);
 
-  if (dirs.length === 0) return <GhostBars count={3} />;
+  if (dirs.length === 0) {
+    const tools = analytics.data_coverage?.tools_reporting ?? [];
+    return (
+      <>
+        <GhostBars count={3} />
+        <CoverageNote text={capabilityCoverageNote(tools, 'hooks')} />
+      </>
+    );
+  }
 
   const visible = dirs.slice(0, DIRECTORIES_VISIBLE);
   const hidden = dirs.length - visible.length;
@@ -251,7 +273,15 @@ const FILES_VISIBLE = 8;
 function FilesWidget({ analytics }: WidgetBodyProps) {
   const files = analytics.file_heatmap;
   const drillable = useIsDrillable();
-  if (files.length === 0) return <GhostRows count={3} />;
+  if (files.length === 0) {
+    const tools = analytics.data_coverage?.tools_reporting ?? [];
+    return (
+      <>
+        <GhostRows count={3} />
+        <CoverageNote text={capabilityCoverageNote(tools, 'hooks')} />
+      </>
+    );
+  }
 
   const visible = files.slice(0, FILES_VISIBLE);
   const hidden = files.length - visible.length;

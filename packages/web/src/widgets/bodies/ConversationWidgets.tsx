@@ -5,7 +5,13 @@ import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import styles from './ConversationWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { FilePath, MoreHidden, StatWidget } from './shared.js';
+import {
+  capabilityCoverageNote,
+  CoverageNote,
+  FilePath,
+  MoreHidden,
+  StatWidget,
+} from './shared.js';
 
 // Conversations category. Three widgets, all using sentiment/topic as
 // INPUTS to coordination questions (never headline) per ANALYTICS_SPEC §10.
@@ -173,6 +179,24 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
 // No drill: the conversations category has no detail view yet.
 function UnansweredQuestionsWidget({ analytics }: WidgetBodyProps) {
   const uq = analytics.unanswered_questions;
+  // When count=0, distinguish "measured zero" from "no tool reporting
+  // conversation logs." capabilityCoverageNote returns null when every
+  // active tool covers conversationLogs, so a fully-instrumented user
+  // sees the genuine zero. Partial-capture renders `--` with the gap
+  // disclosed inline — the only place the user finds out they have a
+  // capture gap until the data-quality surface lands.
+  if (uq.count === 0) {
+    const tools = analytics.data_coverage?.tools_reporting ?? [];
+    const note = capabilityCoverageNote(tools, 'conversationLogs');
+    if (note) {
+      return (
+        <>
+          <StatWidget value="--" />
+          <CoverageNote text={note} />
+        </>
+      );
+    }
+  }
   return <StatWidget value={uq.count.toLocaleString()} />;
 }
 

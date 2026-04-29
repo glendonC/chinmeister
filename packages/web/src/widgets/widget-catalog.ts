@@ -153,24 +153,14 @@ export interface WidgetDef {
   ownsClick?: boolean;
   /**
    * Capability gate that must be reported by at least one active tool for
-   * this widget to populate fully. When the user's reporting tools don't
-   * cover this capability, `WidgetRenderer` paints a CoverageNote footer
-   * naming the capable tools so the em-dash (or partial number) is
-   * explained instead of silently mysterious. The A3 honesty fix from the
-   * 2026-04-28 audit: gating must be visible whenever the widget renders,
-   * not only when it has data. Widgets that paint their own coverage note
-   * inline (cost, one-shot-rate, the tool-call widgets, the team widgets)
-   * opt out via `ownsCoverageNote: true` so two notes don't stack.
+   * this widget to populate fully. Documentation only as of 2026-04-29:
+   * the auto-painted CapabilityFooter that previously consumed this field
+   * was removed in the cockpit-cleanup pass. Bodies now paint their own
+   * disclosure where it's load-bearing (empty states that would be opaque
+   * without it). Partial-capture across the catalog will live on a
+   * dedicated data-quality surface.
    */
   requiredCapability?: keyof DataCapabilities;
-  /**
-   * The widget body wires its own CoverageNote (with widget-specific copy
-   * or multi-reason logic like `costEmptyReason`). When true, the
-   * `WidgetRenderer` skips the auto-footer so two notes don't stack on
-   * top of each other. Pair with `requiredCapability` for documentation;
-   * the body is still responsible for actually painting a note.
-   */
-  ownsCoverageNote?: boolean;
 }
 
 // ── The catalog ──────────────────────────────────
@@ -342,7 +332,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     drillTarget: { view: 'usage', tab: 'cost' },
     ownsClick: true,
     requiredCapability: 'tokenUsage',
-    ownsCoverageNote: true,
   },
   {
     id: 'cost-per-edit',
@@ -360,7 +349,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     drillTarget: { view: 'usage', tab: 'cost-per-edit' },
     ownsClick: true,
     requiredCapability: 'tokenUsage',
-    ownsCoverageNote: true,
   },
   // ── Trends (sparklines) ───────────────
   // `session-trend` and `edit-velocity` were both cut 2026-04-25 after
@@ -433,7 +421,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     drillTarget: { view: 'outcomes', tab: 'retries' },
     ownsClick: true,
     requiredCapability: 'toolCallLogs',
-    ownsCoverageNote: true,
   },
   {
     id: 'stuckness',
@@ -590,7 +577,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     drillTarget: { view: 'tools', tab: 'tools', q: 'one-shot' },
     ownsClick: true,
     requiredCapability: 'toolCallLogs',
-    ownsCoverageNote: true,
   },
   {
     id: 'model-mix',
@@ -659,7 +645,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 2,
     dataKeys: ['scope_complexity'],
     drillTarget: { view: 'outcomes', tab: 'retries', q: 'scope' },
-    ownsCoverageNote: true,
   },
 
   // ── Codebase (extended) ─────────────
@@ -749,7 +734,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     drillTarget: { view: 'tools', tab: 'errors', q: 'top' },
     ownsClick: true,
     requiredCapability: 'toolCallLogs',
-    ownsCoverageNote: true,
   },
   // ── Conversations (revived 2026-04-25) ──
   // Two file-axis widgets that use sentiment/topic as INPUTS to coordination
@@ -968,13 +952,17 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minW: 3,
     minH: 2,
     dataKeys: ['file_overlap'],
-    ownsCoverageNote: true,
     // The codebase Risk panel's collisions question already shows the
     // directional version of this rate (which files multiple agents
     // touched, per agent count). Drilling there reuses an answered
     // question instead of opening a new tab the team detail view does
     // not have.
     drillTarget: { view: 'codebase', tab: 'risk', q: 'collisions' },
+    // The body wires onOpenDetail through StatWidget so the inline ↗
+    // affordance matches Usage/Outcomes stats. Without this gate,
+    // WidgetRenderer would paint its outer container hover on top,
+    // double-stacking the click affordance.
+    ownsClick: true,
   },
 
   {
@@ -1007,7 +995,14 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     minH: 2,
     dataKeys: ['conflict_stats'],
     requiredCapability: 'hooks',
-    ownsCoverageNote: true,
+    // Drill points at the same codebase Risk collisions question that
+    // file-overlap uses, the conceptual area is identical (files where
+    // multiple agents collided / would have collided). One drill
+    // destination, two read angles. ownsClick keeps WidgetRenderer's
+    // outer container hover from double-stacking the inline ↗ that
+    // StatWidget paints.
+    drillTarget: { view: 'codebase', tab: 'risk', q: 'collisions' },
+    ownsClick: true,
   },
 ];
 

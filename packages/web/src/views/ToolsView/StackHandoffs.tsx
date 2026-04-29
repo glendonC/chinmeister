@@ -13,7 +13,6 @@ import clsx from 'clsx';
 import { getToolMeta, normalizeToolId } from '../../lib/toolMeta.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import type { ToolHandoff } from '../../lib/apiSchemas.js';
-import { PREVIEW_TOOL_HANDOFFS } from './previewData.js';
 import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './StackHandoffs.module.css';
 
@@ -32,15 +31,10 @@ function formatGap(mins: number): string | null {
 }
 
 export default function StackHandoffs({ breakdown, onPairClick }: Props) {
-  // Matches every other section on the Tools tab: live data when we have
-  // it, preview otherwise. The Preview badge signals "example data."
-  const liveHasData = (breakdown ?? []).length > 0;
-  const isPreview = !liveHasData;
-
   const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   const { pairs, maxFileCount, totalFiles, peak } = useMemo(() => {
-    const source = liveHasData ? (breakdown ?? []) : PREVIEW_TOOL_HANDOFFS;
+    const source = breakdown ?? [];
     const sorted = [...source].sort((a, b) => b.file_count - a.file_count);
     const visible = sorted.slice(0, MAX_VISIBLE_PAIRS).map((h) => ({
       key: `${normalizeToolId(h.from_tool)}:${normalizeToolId(h.to_tool)}`,
@@ -58,7 +52,7 @@ export default function StackHandoffs({ breakdown, onPairClick }: Props) {
       totalFiles: total,
       peak: topPair,
     };
-  }, [breakdown, liveHasData]);
+  }, [breakdown]);
 
   if (pairs.length === 0) {
     return (
@@ -78,12 +72,11 @@ export default function StackHandoffs({ breakdown, onPairClick }: Props) {
   return (
     <section className={styles.section}>
       <header className={styles.header}>
-        <Eyebrow label="Handoffs · last 30 days" showPreview={isPreview} />
+        <Eyebrow label="Handoffs · last 30 days" />
         <h2 className={styles.title}>Who passes work to whom</h2>
         <p className={styles.subtitle}>
-          {isPreview
-            ? 'Example data - files one tool started and another picked up within 24 hours. Each bar is one directed tool pair; taller bars carry more files.'
-            : 'Files one tool started and another picked up within 24 hours. Each bar is one directed tool pair; taller bars carry more files.'}
+          Files one tool started and another picked up within 24 hours. Each bar is one directed
+          tool pair; taller bars carry more files.
         </p>
       </header>
 
