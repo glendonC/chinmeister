@@ -16,19 +16,13 @@ import {
   type TrueShareEntry,
 } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
+import { completionColor } from '../../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
 import { fmtCount } from '../format.js';
 import styles from '../MemoryDetailView.module.css';
 
 const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
-
-// Completion-rate color cutoffs match the rest of the detail surface.
-function completionColorRate(rate: number): string {
-  if (rate >= 70) return 'var(--success)';
-  if (rate >= 40) return 'var(--warn)';
-  return 'var(--danger)';
-}
 
 function relativeDays(iso: string, nowMs: number): string {
   const days = Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000));
@@ -119,7 +113,7 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
     key: b.bucket,
     label: b.bucket,
     value: b.sessions,
-    color: completionColorRate(b.completion_rate),
+    color: completionColor(b.completion_rate),
     meta: <>{b.completion_rate}% complete</>,
   }));
   const searchedHit = moc.find((b) => /searched.*results/i.test(b.bucket));
@@ -228,7 +222,7 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
             key: entry.id,
             label: <span className={styles.memoryPreview}>{entry.text_preview}</span>,
             fillPct: entry.completion_rate,
-            fillColor: completionColorRate(entry.completion_rate),
+            fillColor: completionColor(entry.completion_rate),
             value: (
               <>
                 {entry.completion_rate}%

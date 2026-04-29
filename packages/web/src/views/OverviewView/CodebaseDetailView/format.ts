@@ -1,6 +1,4 @@
-export function fmtCount(n: number): string {
-  return n.toLocaleString();
-}
+export { fmtCount } from '../../../widgets/utils.js';
 
 export function fileBasename(path: string): string {
   const idx = path.lastIndexOf('/');

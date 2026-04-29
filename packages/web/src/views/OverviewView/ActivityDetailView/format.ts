@@ -1,6 +1,4 @@
-export function fmtCount(n: number): string {
-  return n.toLocaleString();
-}
+export { fmtCount } from '../../../widgets/utils.js';
 
 export function hourGlyph(h: number): string {
   if (h === 0) return '12a';

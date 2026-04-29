@@ -1,3 +1,1 @@
-export function fmtCount(n: number): string {
-  return n.toLocaleString();
-}
+export { fmtCount } from '../../../widgets/utils.js';
