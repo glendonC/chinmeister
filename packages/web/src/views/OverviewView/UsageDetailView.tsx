@@ -70,6 +70,10 @@ interface Props {
   onBack: () => void;
   rangeDays: RangeDays;
   onRangeChange: (next: RangeDays) => void;
+  // Label for the back chevron. "Overview" on the cross-project surface,
+  // "Project" when ProjectView mounts the same detail. Default keeps
+  // existing OverviewView call sites unchanged.
+  backLabel?: string;
 }
 
 // Formatting helpers kept inline for the non-currency paths. USD goes
@@ -88,6 +92,7 @@ export default function UsageDetailView({
   onBack,
   rangeDays,
   onRangeChange,
+  backLabel = 'Overview',
 }: Props) {
   const totals = useMemo(() => {
     const sessions = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
@@ -183,7 +188,7 @@ export default function UsageDetailView({
 
   return (
     <DetailView
-      backLabel="Overview"
+      backLabel={backLabel}
       onBack={onBack}
       title="usage"
       subtitle={scopeSubtitle}

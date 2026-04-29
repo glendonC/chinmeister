@@ -54,6 +54,10 @@ interface Props {
   onBack: () => void;
   rangeDays: RangeDays;
   onRangeChange: (next: RangeDays) => void;
+  // Label for the back chevron. "Overview" on the cross-project surface,
+  // "Project" when ProjectView mounts the same detail. Default keeps
+  // existing OverviewView call sites unchanged.
+  backLabel?: string;
 }
 
 const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
@@ -74,6 +78,7 @@ export default function MemoryDetailView({
   onBack,
   rangeDays,
   onRangeChange,
+  backLabel = 'Overview',
 }: Props) {
   const resolved: MemoryTab = isMemoryTab(initialTab) ? initialTab : 'health';
   const tabControl = useTabs(MEMORY_TABS, resolved);
@@ -141,7 +146,7 @@ export default function MemoryDetailView({
 
   return (
     <DetailView
-      backLabel="Overview"
+      backLabel={backLabel}
       onBack={onBack}
       title="memory"
       subtitle={scopeSubtitle}

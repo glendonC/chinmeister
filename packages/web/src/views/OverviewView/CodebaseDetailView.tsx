@@ -59,6 +59,10 @@ interface Props {
   onBack: () => void;
   rangeDays: RangeDays;
   onRangeChange: (next: RangeDays) => void;
+  // Label for the back chevron. "Overview" on the cross-project surface,
+  // "Project" when ProjectView mounts the same detail. Default keeps
+  // existing OverviewView call sites unchanged.
+  backLabel?: string;
 }
 
 // Severity thresholds for the cold-dirs strip (per spec):
@@ -92,6 +96,7 @@ export default function CodebaseDetailView({
   onBack,
   rangeDays,
   onRangeChange,
+  backLabel = 'Overview',
 }: Props) {
   const resolved: CodebaseTab = isCodebaseTab(initialTab) ? initialTab : 'landscape';
   const tabControl = useTabs(CODEBASE_TABS, resolved);
@@ -155,7 +160,7 @@ export default function CodebaseDetailView({
 
   return (
     <DetailView
-      backLabel="Overview"
+      backLabel={backLabel}
       onBack={onBack}
       title="codebase"
       subtitle={scopeSubtitle}

@@ -56,6 +56,10 @@ interface Props {
   onBack: () => void;
   rangeDays: RangeDays;
   onRangeChange: (next: RangeDays) => void;
+  // Label for the back chevron. "Overview" on the cross-project surface,
+  // "Project" when ProjectView mounts the same detail. Default keeps
+  // existing OverviewView call sites unchanged.
+  backLabel?: string;
 }
 
 const HEATMAP_MIN_POPULATED_CELLS = 3;
@@ -123,6 +127,7 @@ export default function ActivityDetailView({
   onBack,
   rangeDays,
   onRangeChange,
+  backLabel = 'Overview',
 }: Props) {
   const resolved: ActivityTab = isActivityTab(initialTab) ? initialTab : 'rhythm';
   const tabControl = useTabs(ACTIVITY_TABS, resolved);
@@ -201,7 +206,7 @@ export default function ActivityDetailView({
 
   return (
     <DetailView
-      backLabel="Overview"
+      backLabel={backLabel}
       onBack={onBack}
       title="activity"
       subtitle={scopeSubtitle}
