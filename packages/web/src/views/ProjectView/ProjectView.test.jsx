@@ -197,7 +197,9 @@ async function loadProjectView({ pollingState, teamState, search = '' } = {}) {
   vi.doMock('../OverviewView/ToolsDetailView/ToolsDetailView.js', () => ({
     default: stub('tools'),
   }));
-  vi.doMock('../OverviewView/MemoryDetailView.js', () => ({ default: stub('memory') }));
+  vi.doMock('../OverviewView/MemoryDetailView/MemoryDetailView.js', () => ({
+    default: stub('memory'),
+  }));
   vi.doMock('../OverviewView/LiveNowView.js', () => ({
     default: function MockLive({ backLabel, scopeLabel }) {
       return (
