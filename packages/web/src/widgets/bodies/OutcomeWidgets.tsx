@@ -1,23 +1,15 @@
 import { useMemo, type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
-import { setQueryParam, useRoute } from '../../lib/router.js';
+import { setQueryParam } from '../../lib/router.js';
 import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
-import { completionColor, workTypeColor } from '../utils.js';
+import { completionColor } from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
-import shared from '../widget-shared.module.css';
 import styles from './OutcomeWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { InlineDelta, Sparkline, StatWidget, CoverageNote } from './shared.js';
 
-/** Outcomes detail-view drill. Gated to overview scope because the
- * detail view is only mounted there (same gating as UsageWidgets). */
 function openOutcomes(tab: string) {
   return () => setQueryParam('outcomes', tab);
-}
-
-function useIsDrillable(): boolean {
-  const route = useRoute();
-  return route.view === 'overview';
 }
 
 /* ─────────────────────────────────────────────────────
@@ -70,7 +62,6 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
   const prevRate = pc.previous?.completion_rate;
   const currRate = pc.current.completion_rate;
   const completionDelta = prevRate != null && prevRate > 0 ? currRate - prevRate : null;
-  const drillable = useIsDrillable();
 
   if (cs.total_sessions === 0) {
     return <SectionEmpty>No sessions yet</SectionEmpty>;
@@ -166,33 +157,21 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
                   <span className={styles.outcomeTrendBlank}>—</span>
                 )}
               </span>
-              {drillable && <span className={styles.outcomeViewButton}>View</span>}
+              <span className={styles.outcomeViewButton}>View</span>
             </>
           );
-          if (drillable) {
-            return (
-              <button
-                key={s.key}
-                type="button"
-                role="row"
-                className={styles.outcomeDataRow}
-                style={{ '--row-index': i } as CSSProperties}
-                onClick={openOutcomes('sessions')}
-                aria-label={`Open outcomes detail · ${s.label} ${s.count}`}
-              >
-                {content}
-              </button>
-            );
-          }
           return (
-            <div
+            <button
               key={s.key}
+              type="button"
               role="row"
               className={styles.outcomeDataRow}
               style={{ '--row-index': i } as CSSProperties}
+              onClick={openOutcomes('sessions')}
+              aria-label={`Open outcomes detail · ${s.label} ${s.count}`}
             >
               {content}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -299,7 +278,6 @@ function OutcomeRing({
 
 function OneShotRateWidget({ analytics }: WidgetBodyProps) {
   const s = analytics.tool_call_stats;
-  const drillable = useIsDrillable();
   if (s.one_shot_sessions === 0) {
     // capabilityCoverageNote is silent when every reporting tool declares
     // the capability — but today only Claude Code's JSONL parser actually
@@ -317,8 +295,8 @@ function OneShotRateWidget({ analytics }: WidgetBodyProps) {
   return (
     <StatWidget
       value={value}
-      onOpenDetail={drillable ? openOutcomes('retries') : undefined}
-      detailAriaLabel={drillable ? `Open outcomes detail · ${value} one-shot rate` : undefined}
+      onOpenDetail={openOutcomes('retries')}
+      detailAriaLabel={`Open outcomes detail · ${value} one-shot rate`}
     />
   );
 }
@@ -333,7 +311,6 @@ function OneShotRateWidget({ analytics }: WidgetBodyProps) {
 
 function StucknessWidget({ analytics }: WidgetBodyProps) {
   const s = analytics.stuckness;
-  const drillable = useIsDrillable();
   if (s.total_sessions === 0) {
     return <StatWidget value="--" />;
   }
@@ -348,8 +325,8 @@ function StucknessWidget({ analytics }: WidgetBodyProps) {
       value={value}
       delta={stuckDelta}
       deltaInvert
-      onOpenDetail={drillable ? openOutcomes('sessions') : undefined}
-      detailAriaLabel={drillable ? `Open outcomes detail · ${value} stuck rate` : undefined}
+      onOpenDetail={openOutcomes('sessions')}
+      detailAriaLabel={`Open outcomes detail · ${value} stuck rate`}
     />
   );
 }
@@ -425,55 +402,9 @@ function ScopeTerrace({ buckets }: { buckets: UserAnalytics['scope_complexity'] 
   );
 }
 
-// ── Work-type outcomes (6×3) ────────────────────────
-//
-// Horizontal bars keyed on nominal work-type categories (no ordering,
-// so no curve shape). Per-type color from the workTypeColor palette,
-// matching the work-types widget vocabulary.
-
-function WorkTypeOutcomesWidget({ analytics }: WidgetBodyProps) {
-  const wto = analytics.work_type_outcomes;
-  if (wto.length === 0) {
-    return (
-      <>
-        <SectionEmpty>Appears after sessions touch files</SectionEmpty>
-        <CoverageNote text="Only sessions that touched a file are classified" />
-      </>
-    );
-  }
-  return (
-    <div className={shared.metricBars}>
-      {wto.map((w, i) => (
-        <div
-          key={w.work_type}
-          className={shared.metricRow}
-          style={{ '--row-index': i } as CSSProperties}
-          title={`${w.work_type}: ${w.completion_rate}% across ${w.sessions} sessions`}
-        >
-          <span className={shared.metricLabel}>{w.work_type}</span>
-          <div className={shared.metricBarTrack}>
-            <div
-              className={shared.metricBarFill}
-              style={{
-                width: `${w.completion_rate}%`,
-                background: workTypeColor(w.work_type),
-                opacity: 'var(--opacity-bar-fill)',
-              }}
-            />
-          </div>
-          <span className={shared.metricValue}>
-            {w.completion_rate}% · {w.sessions}
-          </span>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 export const outcomeWidgets: WidgetRegistry = {
   outcomes: OutcomesWidget,
   'one-shot-rate': OneShotRateWidget,
   stuckness: StucknessWidget,
   'scope-complexity': ScopeComplexityWidget,
-  'work-type-outcomes': WorkTypeOutcomesWidget,
 };

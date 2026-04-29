@@ -1,17 +1,12 @@
 import type { CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
-import { setQueryParams, useRoute } from '../../lib/router.js';
+import { setQueryParams } from '../../lib/router.js';
 import { completionColor } from '../utils.js';
 import trend from './TrendWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
 function openOutcomesTrend() {
   return () => setQueryParams({ outcomes: 'sessions', q: 'trend' });
-}
-
-function useIsDrillable(): boolean {
-  const route = useRoute();
-  return route.view === 'overview';
 }
 
 function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
@@ -22,7 +17,6 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
   // composites that conflate unrelated metrics into a meaningless word. We
   // render the trending facts (period rate, end-to-end delta, daily tape)
   // and let the reader compose the read.
-  const drillable = useIsDrillable();
   const days = analytics.daily_trends;
   const observed = days.filter((d) => (d.sessions ?? 0) > 0);
   if (observed.length < 2) {
@@ -53,11 +47,9 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
               {formatDelta(delta)}
             </span>{' '}
             vs start
-            {drillable && (
-              <span className={trend.rateDetailArrow} aria-hidden="true">
-                ↗
-              </span>
-            )}
+            <span className={trend.rateDetailArrow} aria-hidden="true">
+              ↗
+            </span>
           </span>
         </div>
       </div>
@@ -101,7 +93,6 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
     </>
   );
 
-  if (!drillable) return <div className={trend.rateFrame}>{content}</div>;
   return (
     <button
       type="button"

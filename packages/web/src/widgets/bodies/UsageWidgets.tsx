@@ -1,4 +1,4 @@
-import { setQueryParam, useRoute } from '../../lib/router.js';
+import { setQueryParam } from '../../lib/router.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import {
@@ -16,18 +16,10 @@ function openUsage(tab: string) {
   return () => setQueryParam('usage', tab);
 }
 
-/**
- * ProjectView doesn't mount UsageDetailView — only OverviewView does. A click
- * from the project-scope cost widget sets `?usage=cost` but nothing renders,
- * which reads as broken. Gating `onOpenDetail` on overview scope suppresses
- * the drill affordance on project view until a scoped detail surface exists.
- * Follow-up: add a project-scoped UsageDetailView rendered by ProjectView so
- * this restriction lifts.
- */
-function useIsDrillable(): boolean {
-  const route = useRoute();
-  return route.view === 'overview';
-}
+// Detail drills mount on both Overview and Project surfaces, so drill
+// links resolve unconditionally. If a future surface cannot host detail
+// panels, gate it at that surface rather than reintroducing a per-widget
+// drill predicate.
 
 // True when no day in the period was observed — distinct from "days were
 // observed but every metric was zero." Widgets render `--` in the first
@@ -38,7 +30,6 @@ function isEmptyPeriod(analytics: UserAnalytics): boolean {
 }
 
 function SessionsWidget({ analytics }: WidgetBodyProps) {
-  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.sessions);
@@ -48,16 +39,13 @@ function SessionsWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={drillable ? openUsage('sessions') : undefined}
-      detailAriaLabel={
-        drillable ? `Open usage detail · ${display} sessions${ariaDelta}` : undefined
-      }
+      onOpenDetail={openUsage('sessions')}
+      detailAriaLabel={`Open usage detail · ${display} sessions${ariaDelta}`}
     />
   );
 }
 
 function EditsWidget({ analytics }: WidgetBodyProps) {
-  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.edits, 0);
   // Delta source is in-period split, not period_comparison.edit_velocity —
@@ -70,8 +58,8 @@ function EditsWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={drillable ? openUsage('edits') : undefined}
-      detailAriaLabel={drillable ? `Open usage detail · ${display} edits${ariaDelta}` : undefined}
+      onOpenDetail={openUsage('edits')}
+      detailAriaLabel={`Open usage detail · ${display} edits${ariaDelta}`}
     />
   );
 }
@@ -82,7 +70,6 @@ function EditsWidget({ analytics }: WidgetBodyProps) {
 // + per-member/per-project splits that `member_daily_lines` and
 // `per_project_lines` exist to power.
 function LinesAddedWidget({ analytics }: WidgetBodyProps) {
-  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.lines_added, 0);
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.lines_added);
@@ -92,16 +79,13 @@ function LinesAddedWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={drillable ? openUsage('lines') : undefined}
-      detailAriaLabel={
-        drillable ? `Open usage detail · ${display} lines added${ariaDelta}` : undefined
-      }
+      onOpenDetail={openUsage('lines')}
+      detailAriaLabel={`Open usage detail · ${display} lines added${ariaDelta}`}
     />
   );
 }
 
 function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
-  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const v = analytics.daily_trends.reduce((s, d) => s + d.lines_removed, 0);
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.lines_removed);
@@ -111,10 +95,8 @@ function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={drillable ? openUsage('lines') : undefined}
-      detailAriaLabel={
-        drillable ? `Open usage detail · ${display} lines removed${ariaDelta}` : undefined
-      }
+      onOpenDetail={openUsage('lines')}
+      detailAriaLabel={`Open usage detail · ${display} lines removed${ariaDelta}`}
     />
   );
 }
@@ -131,7 +113,6 @@ function LinesRemovedWidget({ analytics }: WidgetBodyProps) {
 // `files_touched_half_split` with current/previous distinct counts over
 // each half of the window — null when the window is too short to split.
 function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
-  const drillable = useIsDrillable();
   if (isEmptyPeriod(analytics)) return <StatWidget value="--" />;
   const n = analytics.files_touched_total;
   const display = n.toLocaleString();
@@ -141,17 +122,14 @@ function FilesTouchedWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={display}
       delta={delta}
-      onOpenDetail={drillable ? openUsage('files-touched') : undefined}
-      detailAriaLabel={
-        drillable ? `Open usage detail · ${display} files touched${ariaDelta}` : undefined
-      }
+      onOpenDetail={openUsage('files-touched')}
+      detailAriaLabel={`Open usage detail · ${display} files touched${ariaDelta}`}
     />
   );
 }
 
 function CostWidget({ analytics }: WidgetBodyProps) {
   const t = analytics.token_usage;
-  const drillable = useIsDrillable();
   // Widen beyond the old `sessions > 0` gate: stale pricing and
   // all-models-unpriced are both "can't honestly compute" states where
   // pricing-enrich zeros the total. Rendering $0.00 in those states would
@@ -192,8 +170,8 @@ function CostWidget({ analytics }: WidgetBodyProps) {
         delta={delta}
         deltaInvert
         deltaFormat="usd"
-        onOpenDetail={drillable ? openUsage('cost') : undefined}
-        detailAriaLabel={drillable ? `Open usage detail · ${value} cost${ariaDelta}` : undefined}
+        onOpenDetail={openUsage('cost')}
+        detailAriaLabel={`Open usage detail · ${value} cost${ariaDelta}`}
       />
       <CoverageNote text={degraded} />
     </>
@@ -202,7 +180,6 @@ function CostWidget({ analytics }: WidgetBodyProps) {
 
 function CostPerEditWidget({ analytics }: WidgetBodyProps) {
   const t = analytics.token_usage;
-  const drillable = useIsDrillable();
   // Lock-step with CostWidget: cost-per-edit is the numerator's ratio, so
   // whenever cost itself isn't showable, the ratio isn't either. Prevents
   // the "total says -- but the ratio shows a number" divergence.
@@ -239,8 +216,8 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
         delta={delta}
         deltaInvert
         deltaFormat="usd-fine"
-        onOpenDetail={drillable ? openUsage('cost-per-edit') : undefined}
-        detailAriaLabel={drillable ? `Open usage detail · ${value} per edit` : undefined}
+        onOpenDetail={openUsage('cost-per-edit')}
+        detailAriaLabel={`Open usage detail · ${value} per edit`}
       />
       <CoverageNote text={degraded} />
     </>

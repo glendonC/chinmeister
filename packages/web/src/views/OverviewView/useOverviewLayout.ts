@@ -98,7 +98,12 @@ function resolveAliases(slots: WidgetSlot[]): WidgetSlot[] {
 // colSpan: 12 - full width - even though the curated default has always
 // placed it at half-width next to live-conflicts. Snap that one slot back.
 // Removable once enough time has passed that stale storage has cycled out.
-function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
+//
+// Healers are exported for unit testing. Order matters in the chain
+// (heal-then-clamp), so each healer is verified in isolation plus a final
+// integration test pins the chain composition. Application code goes
+// through `healAll` rather than calling the helpers directly.
+export function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'live-agents' && s.colSpan === 12 ? { ...s, colSpan: 6 } : s));
 }
 
@@ -109,7 +114,7 @@ function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
 // back to the new default so the redesign actually lands. Power users who
 // genuinely want it at 12 can drag-resize back; the cost of one-time reset
 // is lower than leaving the widget visibly broken for existing users.
-function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
+export function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'projects' && s.colSpan === 12 ? { ...s, colSpan: 8 } : s));
 }
 
@@ -119,7 +124,7 @@ function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
 // outcomes slot that's narrower than its new minimum (6 cols) up to the
 // new default (8). session-trend was cut the same day so its paired
 // healer is gone - saved layouts drop the slot via WIDGET_ALIASES.
-function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
+export function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'outcomes' && s.colSpan < 6 ? { ...s, colSpan: 8 } : s));
 }
 
@@ -127,7 +132,7 @@ function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
 // scope-tax composition. The design needs enough horizontal room for the
 // hero + bucket marks to breathe; 6-col saved slots collapse into cramped
 // typography. Heal existing saved layouts to the catalog's 8-col default.
-function healScopeComplexityWidth(slots: WidgetSlot[]): WidgetSlot[] {
+export function healScopeComplexityWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) =>
     s.id === 'scope-complexity' && s.colSpan < 8 ? { ...s, colSpan: 8 } : s,
   );
@@ -140,7 +145,7 @@ function healScopeComplexityWidth(slots: WidgetSlot[]): WidgetSlot[] {
 // the new catalog default (matches every other KPI stat in the cockpit:
 // sessions, edits, cost, one-shot-rate). The widget went through a brief
 // 4×2 phase the same day; that intermediate size is also snapped.
-function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
+export function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) =>
     s.id === 'tool-call-errors' && (s.colSpan > 3 || s.rowSpan > 2)
       ? { ...s, colSpan: 3, rowSpan: 2 }
@@ -153,7 +158,7 @@ function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
 // risk). Saved layouts at the old 4×3 size show ~150px of empty space below
 // the strip. Heal back to the new default; users who genuinely want the
 // extra height can drag-resize.
-function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
+export function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'model-mix' && s.rowSpan > 2 ? { ...s, rowSpan: 2 } : s));
 }
 
@@ -164,7 +169,7 @@ function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
 // stats (cost, edits, sessions, stuckness, one-shot-rate at 3×2). Snap any
 // saved size > 3×2 down to the new catalog default. Power users who want
 // them wider can drag-resize, same trade-off as healLiveAgentsWidth.
-function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
+export function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) =>
     (s.id === 'file-overlap' || s.id === 'conflicts-blocked') && (s.colSpan > 3 || s.rowSpan > 2)
       ? { ...s, colSpan: 3, rowSpan: 2 }
@@ -179,7 +184,7 @@ function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
 // the catalog WidgetDef's maxW/maxH (with the VIZ_MAX_CONSTRAINTS fallback
 // applied via getWidget). Matches the constraint that setSlotSize now
 // enforces on every resize gesture.
-function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
+export function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => {
     const def = getWidget(s.id);
     if (!def) return s;
@@ -198,7 +203,7 @@ function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
 // read and promotes hourly-effectiveness beside work-types. Heal saved
 // layouts so existing users see the curated activity row instead of the
 // old 8×4 heatmap with unused vertical space.
-function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
+export function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
   const hasHourly = slots.some((s) => s.id === 'hourly-effectiveness');
   const out: WidgetSlot[] = [];
   for (const slot of slots) {
@@ -220,6 +225,34 @@ function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
     out.push(slot);
   }
   return out;
+}
+
+// Compose the heal chain in one place. Order matters: every per-widget
+// healer assumes its predecessors have already normalized the slot, and
+// the final clamp catches anything still outside the catalog's min/max.
+// The widget-specific healers run first because some widen colSpan past
+// today's catalog limit (e.g. healOutcomesWidth → 8 cols, valid by viz
+// constraint); running the clamp before them would snap that back to
+// the prior maxW. healActivityLayout runs late because it inserts a new
+// slot, so earlier healers should not see synthetic IDs they never wrote.
+//
+// Tested in the heal-chain unit suite: each healer in isolation, then
+// healAll wired against a degenerate input set that exercises every
+// branch in one pass.
+export function healAll(slots: WidgetSlot[]): WidgetSlot[] {
+  return clampToCatalogConstraints(
+    healActivityLayout(
+      healTeamStatSize(
+        healModelMixSize(
+          healToolCallErrorsSize(
+            healScopeComplexityWidth(
+              healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(slots))),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 function migrateFromLegacyKeys(): DashboardLayout | null {
@@ -263,19 +296,7 @@ function loadDashboard(): DashboardLayout {
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
         const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
-        const healed = clampToCatalogConstraints(
-          healActivityLayout(
-            healTeamStatSize(
-              healModelMixSize(
-                healToolCallErrorsSize(
-                  healScopeComplexityWidth(
-                    healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(expanded))),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
+        const healed = healAll(expanded);
         const stored = parsed.widgets as WidgetSlot[];
         const changed =
           healed.length !== stored.length ||

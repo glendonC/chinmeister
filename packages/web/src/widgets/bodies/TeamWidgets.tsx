@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
-import { navigateToDetail, useRoute } from '../../lib/router.js';
+import { navigateToDetail } from '../../lib/router.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import styles from './TeamWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
@@ -156,18 +156,9 @@ function ProjectsWidget({ summaries, liveAgents, selectTeam }: WidgetBodyProps) 
 // collapse to `<StatWidget value="--" />` + reason; the bare em-dash is
 // the parallel of the populated hero.
 
-// Drill-in is gated to overview scope because CodebaseDetailView is only
-// mounted there; ProjectView would set the URL param without rendering a
-// surface, which reads as broken. Same gate that UsageWidgets uses.
-function useIsDrillable(): boolean {
-  const route = useRoute();
-  return route.view === 'overview';
-}
-
 function ConflictsBlockedWidget({ analytics }: WidgetBodyProps) {
   const cs = analytics.conflict_stats;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
-  const drillable = useIsDrillable();
   const empty = cs.blocked_period === 0 && cs.found_period === 0;
 
   if (empty) {
@@ -198,10 +189,8 @@ function ConflictsBlockedWidget({ analytics }: WidgetBodyProps) {
     <StatWidget
       value={value}
       delta={delta}
-      onOpenDetail={
-        drillable ? () => navigateToDetail('codebase', 'risk', 'collisions') : undefined
-      }
-      detailAriaLabel={drillable ? `Open codebase risk · ${value} collisions blocked` : undefined}
+      onOpenDetail={() => navigateToDetail('codebase', 'risk', 'collisions')}
+      detailAriaLabel={`Open codebase risk · ${value} collisions blocked`}
     />
   );
 }
@@ -225,7 +214,6 @@ function ConflictsBlockedWidget({ analytics }: WidgetBodyProps) {
 function FileOverlapWidget({ analytics }: WidgetBodyProps) {
   const fo = analytics.file_overlap;
   const solo = isSoloTeam(analytics);
-  const drillable = useIsDrillable();
   if (solo) {
     return (
       <>
@@ -247,10 +235,8 @@ function FileOverlapWidget({ analytics }: WidgetBodyProps) {
   return (
     <StatWidget
       value={value}
-      onOpenDetail={
-        drillable ? () => navigateToDetail('codebase', 'risk', 'collisions') : undefined
-      }
-      detailAriaLabel={drillable ? `Open codebase risk · ${value} file overlap` : undefined}
+      onOpenDetail={() => navigateToDetail('codebase', 'risk', 'collisions')}
+      detailAriaLabel={`Open codebase risk · ${value} file overlap`}
     />
   );
 }

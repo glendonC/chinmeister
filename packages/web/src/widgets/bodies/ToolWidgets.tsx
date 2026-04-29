@@ -27,7 +27,7 @@ import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import { aggregateModels, completionColor, formatCost } from '../utils.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
-import { setQueryParams, useRoute } from '../../lib/router.js';
+import { setQueryParams } from '../../lib/router.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import shared from '../widget-shared.module.css';
 import styles from './ToolWidgets.module.css';
@@ -36,11 +36,6 @@ import { GhostRows, CoverageNote, capabilityCoverageNote, StatWidget } from './s
 
 function openTools(tab: string, q: string) {
   return () => setQueryParams({ tools: tab, q });
-}
-
-function useIsDrillable(): boolean {
-  const route = useRoute();
-  return route.view === 'overview';
 }
 
 // ── Shared constants ───────────────────────────────
@@ -197,7 +192,6 @@ interface FitRow {
 function ToolWorkTypeFitWidget({ analytics }: WidgetBodyProps) {
   const breakdown = analytics.tool_work_type;
   const tools = analytics.tool_comparison;
-  const drillable = useIsDrillable();
 
   if (breakdown.length === 0 || tools.length === 0) {
     return (
@@ -271,33 +265,21 @@ function ToolWorkTypeFitWidget({ analytics }: WidgetBodyProps) {
                 {hasBest ? `${rate}%` : '—'}
               </span>
             </span>
-            {drillable && <span className={styles.viewButton}>View</span>}
+            <span className={styles.viewButton}>View</span>
           </>
         );
-        if (drillable) {
-          return (
-            <button
-              key={r.host_tool}
-              type="button"
-              role="row"
-              className={styles.fitDataRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openTools('tools', 'work-type')}
-              aria-label={`Open tools detail · ${meta.label} strongest at ${r.best_work_type ?? 'no work-type yet'}`}
-            >
-              {content}
-            </button>
-          );
-        }
         return (
-          <div
+          <button
             key={r.host_tool}
+            type="button"
             role="row"
             className={styles.fitDataRow}
             style={{ '--row-index': i } as CSSProperties}
+            onClick={openTools('tools', 'work-type')}
+            aria-label={`Open tools detail · ${meta.label} strongest at ${r.best_work_type ?? 'no work-type yet'}`}
           >
             {content}
-          </div>
+          </button>
         );
       })}
     </div>
@@ -317,7 +299,6 @@ function ToolWorkTypeFitWidget({ analytics }: WidgetBodyProps) {
  */
 function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
   const rows = analytics.tool_call_stats.host_one_shot ?? [];
-  const drillable = useIsDrillable();
 
   if (rows.length === 0) {
     const tools = analytics.data_coverage?.tools_reporting ?? [];
@@ -370,33 +351,21 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
                   {enough ? `${rate}%` : '—'}
                 </span>
               </span>
-              {drillable && <span className={styles.viewButton}>View</span>}
+              <span className={styles.viewButton}>View</span>
             </>
           );
-          if (drillable) {
-            return (
-              <button
-                key={r.host_tool}
-                type="button"
-                role="row"
-                className={styles.oneShotRow}
-                style={{ '--row-index': i } as CSSProperties}
-                onClick={openTools('tools', 'one-shot')}
-                aria-label={`Open tools detail · ${meta.label} first-try rate ${enough ? `${rate}%` : 'not enough sessions'}`}
-              >
-                {content}
-              </button>
-            );
-          }
           return (
-            <div
+            <button
               key={r.host_tool}
+              type="button"
               role="row"
               className={styles.oneShotRow}
               style={{ '--row-index': i } as CSSProperties}
+              onClick={openTools('tools', 'one-shot')}
+              aria-label={`Open tools detail · ${meta.label} first-try rate ${enough ? `${rate}%` : 'not enough sessions'}`}
             >
               {content}
-            </div>
+            </button>
           );
         })}
       </div>
@@ -414,7 +383,6 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
  */
 function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
   const stats = analytics.tool_call_stats;
-  const drillable = useIsDrillable();
 
   if (stats.total_calls === 0) {
     const tools = analytics.data_coverage?.tools_reporting ?? [];
@@ -431,8 +399,8 @@ function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
   return (
     <StatWidget
       value={value}
-      onOpenDetail={drillable ? openTools('errors', 'top') : undefined}
-      detailAriaLabel={drillable ? `Open errors detail · ${value} error rate` : undefined}
+      onOpenDetail={openTools('errors', 'top')}
+      detailAriaLabel={`Open errors detail · ${value} error rate`}
     />
   );
 }
