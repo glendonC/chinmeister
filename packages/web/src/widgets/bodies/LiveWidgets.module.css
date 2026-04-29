@@ -142,6 +142,15 @@
   min-height: 0;
 }
 
+/* No-status variant: drops the second column (Status) when no rendered
+ * row carries lock data. Same row chrome, three columns instead of four.
+ * Used on Overview where cross-project lock state is intentionally not
+ * aggregated (every row would render an em-dash); the column degrades
+ * cleanly by going away rather than painting an empty cell on every row. */
+.conflictTableNoStatus {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
 .conflictTableHeader,
 .conflictTableRow {
   grid-column: 1 / -1;

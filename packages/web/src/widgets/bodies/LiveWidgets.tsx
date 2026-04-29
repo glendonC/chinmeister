@@ -128,21 +128,30 @@ interface FileRowProps {
   lock: Lock | undefined;
   index: number;
   onClick: () => void;
+  // When false, the Status column is dropped from the row entirely. The
+  // header row collapses too (managed by the table-level `showStatus`
+  // gate). Callers compute this once from "any rendered file has a
+  // lock"; when no row would carry meaningful Status data the column
+  // adds noise without information. Defaults to true so existing call
+  // sites (the LiveNowView drill-in) keep their full layout.
+  showStatus?: boolean;
 }
 
-// Shared row for live-conflicts and files-in-play. Four-column subgrid:
+// Shared row for live-conflicts and files-in-play. Subgrid columns:
 //   File      — filename (Manrope 500) + immediate parent dir (mono soft).
 //               Parent is always rendered when present.
 //   Status    — `claimed` / `unclaimed` / `mismatch @handle`. State word,
 //               not a person; the handle only appears on mismatch because
 //               that's the one case where the claim holder isn't already
-//               visible in Editors.
+//               visible in Editors. Column hidden when no rendered row
+//               carries lock data (e.g. cross-project Overview where lock
+//               state is intentionally not aggregated).
 //   Duration  — how long the claim has been held; `—` when no claim.
 //               The claim's age (not the conflict's) — stale claims are
 //               the coordination signal.
 //   Editors   — up to 3 tool-colored handles + `+N` overflow. Cell font-
 //               weight scales with editor count for at-a-glance severity.
-function FileRow({ group, lock, index, onClick }: FileRowProps) {
+function FileRow({ group, lock, index, onClick, showStatus = true }: FileRowProps) {
   const editors = sortEditors(group.agents);
   const visibleEditors = editors.slice(0, EDITOR_CAP);
   const extra = editors.length - visibleEditors.length;
@@ -165,17 +174,19 @@ function FileRow({ group, lock, index, onClick }: FileRowProps) {
     >
       <FilePath path={group.file} order="name-first" />
 
-      <span className={styles.conflictStatusCell}>
-        {statusIsNone ? (
-          <span className={styles.conflictStatusNone}>—</span>
-        ) : lock == null ? (
-          <span className={styles.conflictStatusUnclaimed}>unclaimed</span>
-        ) : isMismatch ? (
-          <span className={styles.conflictStatusMismatch}>mismatch</span>
-        ) : (
-          <span className={styles.conflictStatusClaimed}>claimed</span>
-        )}
-      </span>
+      {showStatus && (
+        <span className={styles.conflictStatusCell}>
+          {statusIsNone ? (
+            <span className={styles.conflictStatusNone}>—</span>
+          ) : lock == null ? (
+            <span className={styles.conflictStatusUnclaimed}>unclaimed</span>
+          ) : isMismatch ? (
+            <span className={styles.conflictStatusMismatch}>mismatch</span>
+          ) : (
+            <span className={styles.conflictStatusClaimed}>claimed</span>
+          )}
+        </span>
+      )}
       <span className={styles.conflictDurationCell}>
         {lock && lock.minutes_held != null ? (
           <span className={styles.conflictDurationValue}>{formatDuration(lock.minutes_held)}</span>
@@ -223,6 +234,14 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
     return map;
   }, [locks]);
 
+  // Status column is meaningful only when at least one rendered row has
+  // a corresponding lock. On Overview, cross-project lock state is not
+  // aggregated and `locks` is empty, so every row would print an em-dash
+  // in the Status cell. Drop the column instead. Same widget body, two
+  // scopes: the column appears on Project where lock data exists,
+  // disappears on Overview where it does not.
+  const showStatus = conflicts.some((c) => locksByFile.has(c.file));
+
   if (conflicts.length === 0) {
     return (
       <SectionEmpty>
@@ -232,10 +251,10 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
   }
 
   return (
-    <div className={styles.conflictTable}>
+    <div className={clsx(styles.conflictTable, !showStatus && styles.conflictTableNoStatus)}>
       <div className={styles.conflictTableHeader}>
         <span>File</span>
-        <span>Status</span>
+        {showStatus && <span>Status</span>}
         <span className={styles.conflictDurationHeader}>Duration</span>
         <span>Editors</span>
       </div>
@@ -246,6 +265,7 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
             group={c}
             lock={locksByFile.get(c.file)}
             index={i}
+            showStatus={showStatus}
             onClick={() => setQueryParams({ live: '', 'live-tab': 'conflicts' })}
           />
         ))}
@@ -274,6 +294,12 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
     return map;
   }, [locks]);
 
+  // Same Status-column gate as LiveConflictsWidget. When no rendered
+  // file matches a lock (e.g. cross-project Overview where lock state is
+  // not aggregated), drop the column rather than render an em-dash on
+  // every row. Project, where locks exist, keeps the full layout.
+  const showStatus = visible.some((f) => locksByFile.has(f.file));
+
   if (visible.length === 0) {
     return (
       <SectionEmpty>
@@ -283,10 +309,10 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
   }
 
   return (
-    <div className={styles.conflictTable}>
+    <div className={clsx(styles.conflictTable, !showStatus && styles.conflictTableNoStatus)}>
       <div className={styles.conflictTableHeader}>
         <span>File</span>
-        <span>Status</span>
+        {showStatus && <span>Status</span>}
         <span className={styles.conflictDurationHeader}>Duration</span>
         <span>Editors</span>
       </div>
@@ -297,6 +323,7 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
             group={f}
             lock={locksByFile.get(f.file)}
             index={i}
+            showStatus={showStatus}
             onClick={() => setQueryParams({ live: '', 'live-tab': 'files' })}
           />
         ))}
