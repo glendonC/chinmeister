@@ -153,11 +153,9 @@ export interface WidgetDef {
   ownsClick?: boolean;
   /**
    * Capability gate that must be reported by at least one active tool for
-   * this widget to populate fully. Documentation only as of 2026-04-29:
-   * the auto-painted CapabilityFooter that previously consumed this field
-   * was removed in the cockpit-cleanup pass. Bodies now paint their own
-   * disclosure where it's load-bearing (empty states that would be opaque
-   * without it). Partial-capture across the catalog will live on a
+   * this widget to populate fully. Documentation only: bodies paint their
+   * own disclosure where it's load-bearing (empty states that would be
+   * opaque without it). Partial-capture across the catalog lives on a
    * dedicated data-quality surface.
    */
   requiredCapability?: keyof DataCapabilities;
@@ -350,23 +348,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     ownsClick: true,
     requiredCapability: 'tokenUsage',
   },
-  // ── Trends (sparklines) ───────────────
-  // `session-trend` and `edit-velocity` were both cut 2026-04-25 after
-  // the widget-rubric agent-team pass on the Usage Trends category.
-  // session-trend failed A3 (zero-fill renders fake shape), B2 (subset
-  // of the outcomes widget on the same row), and D1 (session count is
-  // the most generic agent-tool metric going). edit-velocity was the
-  // closer call — Challenger argued keep-catalog under Option B — but
-  // followed when the question "are we actually building a detail
-  // surface for it" came up: the only substrate-honest detail Q
-  // (velocity → completion) is a Simpson's-paradox trap (fast=small
-  // fixes, slow=deep refactors) flagged by ANALYTICS_SPEC §10, and
-  // STRATEGY.md explicitly names raw-volume metrics as getting LESS
-  // valuable as agents become more autonomous. Both alias to [] for
-  // saved-layout migration. The underlying `edit_velocity` and
-  // `daily_trends` fields stay in the schema — UsageDetail's `cadence`
-  // and `peak` questions still consume them as scalars.
-
   // ── Outcomes ──────────────────────────
   {
     id: 'outcomes',
@@ -376,12 +357,11 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     category: 'outcomes',
     scope: 'both',
     viz: 'outcome-bar',
-    // Widened from 4×3 to 8×3 on 2026-04-24 after the viz became a
-    // hero-stat + 5-column table (OUTCOME / COUNT / SHARE bar /
-    // DELTA / TREND sparkline). The old 4-col slot clipped labels
-    // and forced the table into a narrow column. The table needs
-    // the 8-col width to breathe — share bars become legible, per-
-    // outcome trend sparklines fit, drill arrows have room.
+    // 8-col width is required for the hero-stat + 5-column table
+    // (OUTCOME / COUNT / SHARE bar / DELTA / TREND sparkline). Share bars
+    // become legible, per-outcome trend sparklines fit, drill arrows have
+    // room. A narrower slot clips labels and forces the table into a
+    // column.
     w: 8,
     h: 3,
     minW: 6,
@@ -432,9 +412,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     // edits, cost, cost-per-edit — every KPI-shape widget in the system
     // renders at the same typography tier. The ratio + recovered% live in
     // the CoverageNote caption slot so they're visible without stealing
-    // the hero tier. Changed from 'stat-row' on 2026-04-24 when the
-    // 3-block layout read as "random smaller typography" next to the
-    // hero-sized peers above it in the layout.
+    // the hero tier.
     viz: 'stat',
     w: 4,
     h: 2,
@@ -530,11 +508,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Tools & Models ────────────────────
-  // Category redesigned 2026-04-27 after a design-team pass on the
-  // 2026-04-26 layout. Two widgets cut from the prior shape:
-  //   - tool-capability-coverage: static feature spec, not analytics
-  //   - token-attribution: model × tool matrix (B2 with model-mix, D1 weak)
-  // The category now leads with three substrate-unique signals:
+  // The category leads with three substrate-unique signals:
   //   - tool-handoffs: completion-weighted cross-tool flow (default)
   //   - tool-work-type-fit: where each tool wins, by work-type (default)
   //   - tool-call-errors: error rate + top patterns (default)
@@ -542,9 +516,7 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   //   - one-shot-by-tool: per-vendor first-try rate (overlap with the
   //     cockpit one-shot-rate KPI; users add when they want the per-tool slice)
   //   - model-mix: cost hero + share strip with click-to-inspect
-  // Renames: tools→tool-capability-coverage→cut, models→model-mix,
-  //          token-detail→token-attribution→cut. Aliases below preserve
-  //          saved layouts.
+  // Aliases below preserve saved layouts that referenced earlier ids.
   {
     id: 'tool-work-type-fit',
     name: 'tool fit by work type',
@@ -605,10 +577,10 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     category: 'usage',
     scope: 'overview',
     viz: 'project-list',
-    // 8-col default (down from 12 on the 2026-04-22 redesign): the table now
-    // has 6 fixed-track columns + a View pill, so a half-to-two-thirds tile
-    // matches the live-agents/live-conflicts density precedent. Users can
-    // still resize down to 6 or up to 12 from the customize panel.
+    // 8-col default: the table has 6 fixed-track columns + a View pill, so a
+    // half-to-two-thirds tile matches the live-agents/live-conflicts density
+    // precedent. Users can resize down to 6 or up to 12 from the customize
+    // panel.
     w: 8,
     h: 3,
     minW: 6,
@@ -623,15 +595,6 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Outcomes (extended) ─────────────
-  // Note: `first-edit` and `duration-dist` were cut 2026-04-24 per the
-  // Widget-Detail Precedent (WIDGET_RUBRIC.md § Widget ↔ Detail-View
-  // Disposition). Both duplicated data that already lives in Usage
-  // detail's Sessions panel — first-edit as the "first edit lands at
-  // X min" lead-in, duration-dist as the DurationStrip. Detail-only is
-  // the honest home when a metric only earns its seat in context.
-  // duration-dist carried an additional concern: the histogram shape
-  // invited the "optimal session length" read named as a never-build
-  // anti-pattern in ANALYTICS_SPEC § 10.
   {
     id: 'scope-complexity',
     name: 'completion by scope',
@@ -735,13 +698,11 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     ownsClick: true,
     requiredCapability: 'toolCallLogs',
   },
-  // ── Conversations (revived 2026-04-25) ──
-  // Two file-axis widgets that use sentiment/topic as INPUTS to coordination
-  // questions, not as the headline metric — the framing ANALYTICS_SPEC §10
-  // anti-pattern #1 explicitly endorses ("use as input to Failure Analysis,
+  // ── Conversations ──
+  // Two file-axis widgets that use sentiment/topic as inputs to coordination
+  // questions, not as the headline metric ("use as input to Failure Analysis,
   // never alone"). Both gate on conversationLogs capability (Claude Code +
-  // Aider today). See WIDGET_RUBRIC.md change log entry 2026-04-25 for the
-  // generative pass that revived this category from 0 widgets to 2.
+  // Aider today).
   {
     id: 'confused-files',
     name: 'files where the agent struggled',
@@ -775,16 +736,14 @@ export const WIDGET_CATALOG: WidgetDef[] = [
     dataKeys: ['unanswered_questions'],
     requiredCapability: 'conversationLogs',
   },
-  // cross-tool-handoff-questions (added 2026-04-26): substrate-unique, the
-  // category's strongest D1 entry. Surfaces handoff EVENTS (file × tool-from
-  // × tool-to × gap-time) where one tool's session abandoned mid-question
-  // and another tool's session opened on the same file with a question or
-  // confused/frustrated turn. Sentiment/topic are filter inputs only — never
-  // displayed (preserves §10 #1 firewall). Catalog-only because the data
+  // cross-tool-handoff-questions: substrate-unique. Surfaces handoff EVENTS
+  // (file × tool-from × tool-to × gap-time) where one tool's session
+  // abandoned mid-question and another tool's session opened on the same
+  // file with a question or confused/frustrated turn. Sentiment/topic are
+  // filter inputs only, never displayed. Catalog-only because the data
   // requires 2+ tools with conversation capture; the empty state names the
-  // condition. No detail view yet — drill emits URL params matching the
-  // session-list filter spec, becomes a live drill when that route ships
-  // (mirrors the hollow-promise pattern documented on confused-files).
+  // condition. Drill emits URL params matching the session-list filter
+  // spec.
   {
     id: 'cross-tool-handoff-questions',
     name: 'cross-tool question handoffs',
@@ -802,10 +761,9 @@ export const WIDGET_CATALOG: WidgetDef[] = [
   },
 
   // ── Memory (extended) ───────────────
-  // Memory category density additions 2026-04-25. Each anchors a 4-5
-  // question detail view (see body file doc-comments for the English
-  // questions). Catalog-only at default sizes; promote individual widgets
-  // to default after MemoryDetailView pattern lands.
+  // Each anchors a 4-5 question detail view (see body file doc-comments
+  // for the English questions). Catalog-only at default sizes; individual
+  // widgets promote to default once their MemoryDetailView slot is wired.
   {
     id: 'memory-cross-tool-flow',
     name: 'cross-tool memory',
@@ -1091,46 +1049,29 @@ export function defaultSlot(id: string): WidgetSlot | null {
  * Single-entry array = rename. Multi-entry array = split.
  */
 export const WIDGET_ALIASES: Record<string, string[]> = {
-  // 2026-04-21: formation-summary cut. Duplicated memory-safety's
-  // auditor-flagged count in chart form (B2) and failed C1 — the bar chart
-  // rendered a minority subset (actionable flags) as if it were the whole.
-  // The merge/evolve/discard breakdown belongs in the review drill, not
-  // the cockpit.
+  // formation-summary: the merge/evolve/discard breakdown belongs in the
+  // review drill, not the cockpit.
   'formation-summary': [],
-  // 2026-04-24: first-edit + duration-dist cut per the Widget-Detail
-  // Precedent. Both already render in the Usage detail Sessions panel
-  // (first-edit as a lead-in fact, duration-dist as the DurationStrip).
-  // Detail-only is the honest home when a metric only earns its seat
-  // in context. duration-dist additionally invited the "optimal session
-  // length" read flagged as a never-build anti-pattern in
-  // ANALYTICS_SPEC § 10. Empty array = drop the slot from any saved
-  // layout on next load.
+  // first-edit + duration-dist: both already render in Usage detail's
+  // Sessions panel. Detail-only is the honest home when a metric only
+  // earns its seat in context. duration-dist also invited the "optimal
+  // session length" read, a never-build anti-pattern.
   'first-edit': [],
   'duration-dist': [],
-  // 2026-04-24: session-trend cut. Detail view's DailyOutcomeStrip +
-  // the same-row outcomes widget already own the signal with more
-  // context, and the zero-fill spine rendered fake shape for low-
-  // activity users. Saved layouts drop the slot on next load.
+  // session-trend: detail-view's DailyOutcomeStrip + the same-row outcomes
+  // widget already own the signal with more context, and zero-fill
+  // rendered fake shape for low-activity users.
   'session-trend': [],
-  // 2026-04-25: edit-velocity cut. No detail-view future earns the
-  // build cost — only substrate-honest question (velocity → completion)
-  // is a Simpson's-paradox trap, and edits/hr is a generic metric any
-  // tool's own dashboard produces. Schema field `edit_velocity` stays
-  // for UsageDetail's `cadence` scalar consumers.
+  // edit-velocity: no detail-view earns the build cost. The only
+  // substrate-honest question (velocity → completion) is a
+  // Simpson's-paradox trap, and edits/hr is a generic metric any tool's
+  // own dashboard produces. Schema field `edit_velocity` stays for
+  // UsageDetail's `cadence` scalar consumers.
   'edit-velocity': [],
-
-  // 2026-04-25: agent-team audit pass on activity → end of catalog.
-  // 22 widgets cut across activity, codebase, tools, conversations,
-  // memory, and team categories. See WIDGET_RUBRIC.md change log entry
-  // for 2026-04-25 (activity → team sweep). Schema fields stay; some
-  // surfaces re-emerge as Reports inputs or detail-view facets.
 
   // Activity cuts. prompt-efficiency rides the same Simpson's-paradox
   // trap that cut edit-velocity (turns ↔ outcome). work-type-outcomes
-  // is fully absorbed into OutcomesDetailView's WorkTypesPanel as a
-  // facet (Option C detail-only per Widget-Detail Disposition).
-  // hourly-effectiveness was revived 2026-04-25 (post 18-month re-audit)
-  // with the slice-by-volume fix.
+  // is fully absorbed into OutcomesDetailView's WorkTypesPanel.
   'prompt-efficiency': [],
   'work-type-outcomes': [],
 
@@ -1139,31 +1080,25 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
   // invites the "high-on-all = bad" anti-pattern read.
   'file-churn': [],
 
-  // 2026-04-26: Tools & Models category redesign. The list-of-X grid was
-  // reframed around substrate-unique signals — model mix instead of model
-  // ranking, completion-weighted flow instead of bare flow strip.
-  // 2026-04-27: tool-capability-coverage and token-attribution cut after a
-  // design-team pass — the first was static feature spec (not analytics),
-  // the second a redundant matrix that overlapped model-mix on substrate
-  // and generated chrome (header dots, footer prose) we kept polishing
-  // instead of fixing structurally.
+  // Tools & Models. tool-capability-coverage was static feature spec, not
+  // analytics. token-attribution overlapped model-mix on substrate. Both
+  // alias to empty so saved layouts drop the slot on next load.
   tools: [],
   models: ['model-mix'],
   'token-detail': [],
   'tool-capability-coverage': [],
   'token-attribution': [],
 
-  // Tools cuts (7). tool-outcomes B2-redundant with the `tools` factual
-  // grid (which already shows completion%). cache-efficiency is plumbing
-  // observability with no user control surface (B3 zero). tool-daily
-  // rides the same zero-fill A3 failure that cut session-trend. tool-
-  // work-type carries a broken denominator (sessions in multiple work
-  // types double-counted) plus STRATEGY's "per-tool distribution as pie"
-  // anti-pattern. tool-calls has polysemous "calls" semantics across
-  // hook-instrumented vs MCP-only hosts. tool-call-freq is pure
-  // frequency without effectiveness overlay (STRATEGY line 139). data-
-  // coverage is plumbing diagnostic with negative emotional payload —
-  // belongs on a Connect/Settings surface, not the cockpit.
+  // Tools cuts. tool-outcomes is redundant with the `tools` grid (which
+  // already shows completion%). cache-efficiency is plumbing observability
+  // with no user control surface. tool-daily rides the same zero-fill A3
+  // failure that cut session-trend. tool-work-type carries a broken
+  // denominator (sessions in multiple work types double-counted) and the
+  // "per-tool distribution as pie" anti-pattern. tool-calls has polysemous
+  // "calls" semantics across hook-instrumented vs MCP-only hosts.
+  // tool-call-freq is pure frequency without effectiveness overlay.
+  // data-coverage is a plumbing diagnostic with negative emotional payload;
+  // it belongs on a Connect/Settings surface, not the cockpit.
   'tool-outcomes': [],
   'cache-efficiency': [],
   'tool-daily': [],
@@ -1172,61 +1107,45 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
   'tool-call-freq': [],
   'data-coverage': [],
 
-  // Conversations cuts (3 of 3 from the original category). The category
-  // dissolved on 2026-04-25 then revived the same day with two new file-
-  // axis widgets (confused-files, unanswered-questions) that surface FILES
-  // with sentiment/topic as inputs — the framing §10 #1 explicitly
-  // endorses. These three originals stay cut because each independently
-  // violated §10:
-  //   topics — B2 with work-types (different signal, near-identical
-  //     output buckets); D1 weak (every LLM-obs tool ships it).
-  //   prompt-clarity — rename was lipstick; classifier still emits
-  //     sentiment polarity; §10 #1 ("sentiment-to-outcome standalone")
-  //     still applies.
-  //   conversation-depth — Simpson's-paradox trap (longer sessions =
+  // Conversations originals each independently violated the
+  // sentiment-as-headline firewall:
+  //   topics: redundant with work-types; D1 weak (every LLM-obs tool
+  //     ships it).
+  //   prompt-clarity: classifier still emits sentiment polarity, the
+  //     "sentiment-to-outcome standalone" pattern.
+  //   conversation-depth: Simpson's-paradox trap (longer sessions =
   //     harder tasks), same family as the edit-velocity cut.
   topics: [],
   'prompt-clarity': [],
   'conversation-depth': [],
-  // 2026-04-25: chains updated. Both replacement targets (memory-
-  // activity, memory-health, prompt-clarity) are now cut, so the
-  // historical aliases drop their slots entirely.
+  // memory-stats / sentiment-outcomes: replacement targets are themselves
+  // cut, so the historical aliases drop their slots entirely.
   'memory-stats': [],
   'sentiment-outcomes': [],
 
-  // Memory cuts (2 of 5 stay cut after the 2026-04-25 re-audit). memory-
-  // activity rendered search hit rate (ANALYTICS_SPEC §10 #7 anti-pattern,
-  // evergreen). memory-safety stays cut for now — the data is shipped via
-  // memory-supersession-flow + memory-secrets-shield (the supersession +
-  // secrets components of safety surface as their own widgets), and the
-  // remaining auditor-flag piece pre-empts Memory Hygiene Autopilot Report.
-  // memory-health, top-memories were revived; memory-outcomes was promoted
-  // back to default 2026-04-28 once migration 028 landed and the body picked
-  // up a per-bucket min-N floor.
+  // Memory cuts. memory-activity rendered search hit rate, an evergreen
+  // anti-pattern (hit-rate-as-quality). memory-safety stays cut: the data
+  // ships via memory-supersession-flow + memory-secrets-shield, and the
+  // remaining auditor-flag piece is pre-empted by the Memory Hygiene
+  // Autopilot Report.
   'memory-activity': [],
   'memory-safety': [],
 
-  // 2026-04-25: top-memories cut (alone-test fails per consolidated plan).
-  // Opaque previews and no denominator hit ANALYTICS_SPEC §10 #7 (hit-rate-
-  // as-quality). The schema field stays; the data is now consumed inside
-  // MemoryDetailView's Health tab as a focused question, where rank +
-  // last-touch + category + author can co-render without forcing a stat-
-  // shaped seat in the cockpit.
+  // top-memories: opaque previews and no denominator hit the
+  // hit-rate-as-quality anti-pattern. The schema field stays; the data is
+  // consumed inside MemoryDetailView's Health tab where rank + last-touch
+  // + category + author can co-render in context.
   'top-memories': [],
 
-  // Team cuts (4 of 5; only conflicts-blocked survives — substrate-
-  // unique prevention proof). team-members triggers ANALYTICS_SPEC §10
-  // #4 explicit anti-pattern ("agent productivity rankings across team
-  // members — surveillance, not intelligence"); also pre-empts
-  // STRATEGY § Privacy model which is unbuilt. conflict-impact rides
-  // Simpson's paradox (sessions hitting conflicts are also harder
-  // sessions) — the disclaimer line is theater in a stat-row that
-  // reads causally by construction. retry-patterns is B2-redundant
-  // with file-rework (same axis, different aggregation primitive — the
-  // cross-agent + cross-tool columns belong as a footer line on file-
-  // rework). file-overlap was revived 2026-04-25 (post 18-month re-audit)
-  // after the populated branch was gated on team_size > 1 — the original
-  // A3 lie was a renderer bug, not a structural rubric failure.
+  // Team cuts. Only conflicts-blocked survives as substrate-unique
+  // prevention proof. team-members triggers the productivity-ranking
+  // anti-pattern (surveillance, not intelligence) and pre-empts the
+  // unbuilt privacy model. conflict-impact rides Simpson's paradox
+  // (sessions hitting conflicts are also harder sessions); the
+  // disclaimer line is theater in a stat-row that reads causally by
+  // construction. retry-patterns is redundant with file-rework (same
+  // axis, different aggregation primitive); the cross-agent + cross-tool
+  // columns belong as a footer line on file-rework.
   'team-members': [],
   'conflict-impact': [],
   'retry-patterns': [],
@@ -1271,18 +1190,17 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   // KPI strip — 3 × 4. Four stats at their natural 3-col size so the row
   // reads as a tab-selector group candidate (design-language pattern: stat
   // values double as tab triggers, active = full ink, inactive = --soft).
-  // one-shot-rate earned default placement 2026-04-22 after the outcomes
-  // sweep: CodeBurn's killer metric, honest CoverageNote empty state for
-  // non-hook tools, and coverage grows only when the metric is visible.
+  // one-shot-rate gets a default seat alongside the volume KPIs because
+  // it is the single most informative outcome metric, and coverage of the
+  // capability only grows when the metric is visible to users.
   { id: 'edits', colSpan: 3, rowSpan: 2 },
   { id: 'cost', colSpan: 3, rowSpan: 2 },
   { id: 'cost-per-edit', colSpan: 3, rowSpan: 2 },
   { id: 'one-shot-rate', colSpan: 3, rowSpan: 2 },
 
-  // Outcomes — 8×3. Stands alone on its row after `session-trend` was
-  // cut 2026-04-24 (see catalog Trends block). No forced backfill — the
-  // grid is modular, users add other widgets via the picker if they want
-  // the leftover 4 cols filled.
+  // Outcomes — 8×3. Stands alone on its row. No forced backfill: the grid
+  // is modular, users add other widgets via the picker if they want the
+  // leftover 4 cols filled.
   { id: 'outcomes', colSpan: 8, rowSpan: 3 },
 
   // Activity — heatmap gets a full row; mix + effectiveness share the next row.
@@ -1290,53 +1208,41 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'work-types', colSpan: 6, rowSpan: 3 },
   { id: 'hourly-effectiveness', colSpan: 6, rowSpan: 3 },
 
-  // Codebase — directories + files. `directories` returned to default 2026-
-  // 04-25 after the 18-month re-audit. The original demotion was a today-
-  // state argument (renderer wasn't painting completion_rate); rendering it
-  // is a one-day component change and the substrate-unique angle (per-
-  // directory completion rate weighted by agent-session outcomes) is the
-  // strongest D1 in the codebase category. Now renders completion_rate
-  // colored by severity, with MoreHidden tail past top-10 and a hooks-
-  // capability CoverageNote.
+  // Codebase — directories + files. `directories` renders completion_rate
+  // colored by severity, with MoreHidden tail past top-10 and a
+  // hooks-capability CoverageNote. The substrate-unique angle here is
+  // per-directory completion rate weighted by agent-session outcomes.
   { id: 'directories', colSpan: 6, rowSpan: 4 },
   { id: 'files', colSpan: 6, rowSpan: 4 },
 
-  // Codebase deep — promoted 2026-04-21 after rubric pass.
-  // commit-stats earned cross-tool coverage when the Cursor/Windsurf hook
-  // handlers shipped 2026-04-17, so the old Claude-Code-only gating that
-  // justified catalog-only in ANALYTICS_SPEC §5.6 is stale. file-rework
-  // has the highest B3 in the category — drives "open this file, review"
-  // directly. Full-width to match the airy stat-strip pattern used
+  // Codebase deep. file-rework drives "open this file, review" directly.
+  // commit-stats has cross-tool coverage from every host with hook
+  // handlers. Full-width matches the airy stat-strip pattern used
   // elsewhere in the default layout.
-  // NOTE: file-rework's "rework_ratio" label/math mismatch is queued for
-  // pre-UI rework — see audit verdicts (rename or fold into files).
   { id: 'commit-stats', colSpan: 12, rowSpan: 2 },
   { id: 'file-rework', colSpan: 12, rowSpan: 4 },
 
-  // Tools & Models — redesigned 2026-04-27 and tightened 2026-04-28.
-  // tool-work-type-fit owns the richer routing table. tool-handoffs is the
-  // half-width flow read; pair/gap breakdowns live in Tools detail. Error
-  // pattern breakdowns stay behind the compact tool-call-errors entry point.
+  // Tools & Models. tool-work-type-fit owns the richer routing table.
+  // tool-handoffs is the half-width flow read; pair/gap breakdowns live in
+  // Tools detail. Error pattern breakdowns stay behind the compact
+  // tool-call-errors entry point.
   //
-  // one-shot-by-tool was demoted from default to catalog: the cockpit
-  // already carries one-shot-rate as a KPI stat, and the per-tool slice
-  // is a power-user add. Users who want both add it via the picker.
+  // one-shot-by-tool is catalog-only: the cockpit already carries
+  // one-shot-rate as a KPI stat, so the per-tool slice is a power-user
+  // add via the picker.
   { id: 'tool-work-type-fit', colSpan: 6, rowSpan: 4 },
   { id: 'tool-handoffs', colSpan: 6, rowSpan: 3 },
   { id: 'tool-call-errors', colSpan: 3, rowSpan: 2 },
 
-  // Memory — memory-outcomes regraduated 2026-04-28 once migration 028
-  // shipped the per-memory attribution surface (now answered inside
-  // MemoryDetailView.Health) and the body gained a per-bucket min-N floor.
-  // Full-width keeps the bars wide enough to read as data; the per-bucket
-  // floor + min-2-bucket guard kills the lonely-strip case the original
-  // demotion flagged.
+  // Memory — memory-outcomes is full-width to keep the bars wide enough
+  // to read as data; the per-bucket min-N floor + min-2-bucket guard
+  // kills the lonely-strip case.
   { id: 'memory-outcomes', colSpan: 12, rowSpan: 3 },
 
-  // Projects + stuckness — 8 + 4. Projects shrank from 12→8 on 2026-04-22
-  // (the comparator-table redesign doesn't earn full width), opening room
-  // for stuckness as its row partner. Bottom-row pairing keeps the layout
-  // total at 12 per row and avoids leaving empty grid space.
+  // Projects + stuckness — 8 + 4. The comparator-table redesign doesn't
+  // earn full width, so an 8-col projects tile pairs with stuckness on
+  // the same row. Bottom-row pairing keeps the layout at 12 per row and
+  // avoids leaving empty grid space.
   { id: 'projects', colSpan: 8, rowSpan: 3 },
   { id: 'stuckness', colSpan: 4, rowSpan: 2 },
 ];
