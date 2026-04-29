@@ -4,7 +4,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api.js';
 import { authActions } from '../lib/stores/auth.js';
-import { createDemoAnalytics } from '../lib/demoAnalytics.js';
+import { createEmptyAnalytics } from '../lib/demo/empty.js';
 import { getDemoData } from '../lib/demo/index.js';
 import { useDemoScenario } from './useDemoScenario.js';
 import { type UserAnalytics, userAnalyticsSchema, validateResponse } from '../lib/apiSchemas.js';
@@ -22,7 +22,7 @@ export function useTeamExtendedAnalytics(
 ): UseTeamExtendedAnalyticsReturn {
   const demo = useDemoScenario();
   const [analytics, setAnalytics] = useState<UserAnalytics>(() =>
-    demo.active ? getDemoData(demo.scenarioId).analytics : createDemoAnalytics(),
+    demo.active ? getDemoData(demo.scenarioId).analytics : createEmptyAnalytics(),
   );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -57,12 +57,9 @@ export function useTeamExtendedAnalytics(
         );
         if (cancelled) return;
         const parsed = validateResponse(userAnalyticsSchema, raw, 'team-extended-analytics', {
-          fallback: createDemoAnalytics,
+          fallback: createEmptyAnalytics,
         });
-        const hasRealData =
-          parsed.period_comparison.current.total_sessions > 0 ||
-          parsed.daily_trends.some((d) => d.sessions > 0);
-        if (hasRealData) setAnalytics(parsed);
+        setAnalytics(parsed);
       } catch (err) {
         if (cancelled) return;
         if ((err as Error).name !== 'AbortError') {
