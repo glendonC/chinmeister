@@ -9,7 +9,13 @@ export default [
 
   // Global ignores
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/.wrangler/**', '**/coverage/**'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/.wrangler/**',
+      '**/coverage/**',
+      '.claude/**',
+    ],
   },
 
   // Base config for all JS files
