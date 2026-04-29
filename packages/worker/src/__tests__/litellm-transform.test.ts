@@ -158,8 +158,8 @@ describe('isTextTokenModel', () => {
   });
 
   it('KEEPS a free-tier model with input_cost_per_token: 0 (nullish, not falsy)', () => {
-    // This was the CodeBurn bug - using `!entry.input_cost_per_token` drops
-    // legitimate free-tier models. Our check uses nullish comparison.
+    // Using `!entry.input_cost_per_token` drops legitimate free-tier models.
+    // Nullish comparison is required to distinguish "no pricing" from "free".
     expect(
       isTextTokenModel('free-model', {
         mode: 'chat',

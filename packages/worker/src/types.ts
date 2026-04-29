@@ -4,10 +4,7 @@
 // Import with: import type { DOResult, User, ... } from './types.js'
 
 // Forward-reference DO classes for Env typing.
-// import type is erased at compile time, avoiding circular dependency issues.
-// Phase 3 complete: DO classes are .ts with generic DurableObjectNamespace<T>, and
-// lib/env.ts returns fully parameterized DurableObjectStub<T>. Route handlers call
-// DO methods directly without `as any` casts.
+// `import type` is erased at compile time, avoiding circular dependency issues.
 import type { DatabaseDO } from './dos/database/index.js';
 import type { LobbyDO } from './lobby.js';
 import type { TeamDO } from './dos/team/index.js';

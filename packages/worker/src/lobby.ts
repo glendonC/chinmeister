@@ -1,8 +1,8 @@
 // Lobby Durable Object -- tracks global presence (handles + countries) and
 // surfaces aggregate counts for the public /stats endpoint.
 //
-// Originally also assigned chat rooms; the chat feature was removed and the
-// `rooms` table is dropped by migration 003. Name kept to avoid a DO rename.
+// The `rooms` table is dropped by migration 003; the LobbyDO name is retained
+// because renaming a DO class breaks existing namespace bindings.
 // Uses DO RPC for direct method calls.
 
 import { DurableObject } from 'cloudflare:workers';

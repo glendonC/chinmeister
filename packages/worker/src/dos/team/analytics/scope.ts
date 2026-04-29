@@ -1,18 +1,13 @@
 // Analytics scope: the canonical filter object every analytics query accepts.
 //
-// Why this exists. Pre-scope, every query function in this directory was
-// implicitly team-wide - `SELECT ... FROM sessions WHERE ...` returned data
-// for every member of the team, regardless of which user asked. That broke
-// STRATEGY.md's "developer-level data is private by default" direction the
-// moment a second teammate joined: dev A could pull dev B's sentiment
-// distribution, completion rate, edit count, etc.
-//
-// Closing the leak by threading `handle` through every function would have
-// worked but locks the codebase into a one-axis filter. Future filters
-// (host tool, project, date-bucket overrides) would each need another
-// parameter, and every new query function added under analytics/ would
-// have to remember to thread them. That's the recipe for the same bug
-// returning under a different name.
+// Why this exists. Developer-level data is private by default: without a
+// scope object, an unscoped `SELECT ... FROM sessions WHERE ...` returns
+// every member's data and lets dev A pull dev B's sentiment distribution,
+// completion rate, edit count, etc. Threading `handle` through every query
+// would close the leak but locks the codebase into a one-axis filter; any
+// future filter (host tool, project, date-bucket overrides) would need
+// another parameter, and every new query under analytics/ would have to
+// remember to thread them.
 //
 // AnalyticsScope is the additive alternative. Every query takes a scope,
 // builds its WHERE fragment from `buildScopeFilter`, and splices the

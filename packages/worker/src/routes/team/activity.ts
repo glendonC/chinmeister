@@ -302,7 +302,7 @@ export const handleTeamRecordTokens = teamJsonRoute(async ({ body, user, db, age
     return json({ error: 'session_id is required' }, 400);
   }
   // input/output are required for every record_tokens call. Cache fields are
-  // optional to keep old CLI builds working during the Phase 2 rollout.
+  // optional for backward compatibility with older CLIs that lacked them.
   if (typeof input_tokens !== 'number' || input_tokens < 0 || input_tokens > MAX_TOKEN_VALUE) {
     return json({ error: 'input_tokens must be a non-negative number' }, 400);
   }

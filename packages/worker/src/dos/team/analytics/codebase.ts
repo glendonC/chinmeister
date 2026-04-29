@@ -80,8 +80,7 @@ function extractDirectory(filePath: string): string {
  * presence-based), while this query reads the raw `edits` table (uncapped,
  * one row per edit operation). The two widgets measure related but distinct
  * signals - do not unify them without a conscious decision to collapse the
- * distinction. See `file-churn` vs `files` widget verdicts in the codebase
- * rubric pass (2026-04-21).
+ * distinction.
  */
 export function queryFileChurn(
   sql: SqlStorage,

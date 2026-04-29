@@ -93,10 +93,9 @@ async function buildUserAnalytics(
   // Cap days for multi-team aggregation to bound memory usage.
   const effectiveDays = teamsList.length > 1 ? Math.min(days, CROSS_TEAM_MAX_DAYS) : days;
 
-  // Headers shipped with every /me/analytics response (including the empty
-  // path). Locked from Phase 0: 60s max-age + 120s SWR matches the typical
-  // dashboard render cadence without hiding fresh inserts behind a long
-  // cache. `private` because the response is owner-scoped.
+  // 60s max-age + 120s SWR matches the typical dashboard render cadence
+  // without hiding fresh inserts behind a long cache. `private` because the
+  // response is owner-scoped.
   const CACHE_HEADERS = {
     'Cache-Control': 'private, max-age=60, stale-while-revalidate=120',
   };
@@ -115,12 +114,10 @@ async function buildUserAnalytics(
       const team = getTeam(env, teamEntry.team_id);
       try {
         // Privacy-by-default: cross-team analytics are scoped to the caller's
-        // own data. STRATEGY.md is explicit that developer-level data is
-        // private by default; aggregating teammates' sessions, edits, tokens,
-        // sentiment, etc. into one user's dashboard is the leak the analytics
-        // scope refactor closes. Team-tier admin views (when they ship) build
-        // a separate route that explicitly passes empty scope and gates on a
-        // role check.
+        // own data. Aggregating teammates' sessions, edits, tokens, sentiment,
+        // etc. into one user's dashboard would leak developer-level data
+        // across the team boundary. Team-tier admin views build a separate
+        // route that explicitly passes empty scope and gates on a role check.
         const raw = await withTimeout(
           team.getAnalyticsForOwner(user.id, effectiveDays, tzOffsetMinutes, {
             handle: user.handle,

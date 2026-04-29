@@ -40,9 +40,9 @@ export function queryTokenUsage(
   };
 
   try {
-    // Totals - only count sessions that have token data (non-NULL input_tokens
-    // is the presence signal; cache fields may still be NULL on sessions
-    // uploaded before phase 2 even if input/output were captured).
+    // Totals - only count sessions that have token data. Non-NULL input_tokens
+    // is the presence signal; cache fields may still be NULL on legacy sessions
+    // that captured input/output but predate the cache-token columns.
     const { sql: totalsQ, params: totalsP } = withScope(
       `SELECT
            COALESCE(SUM(input_tokens), 0) AS total_input,
