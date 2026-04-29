@@ -9,13 +9,17 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 async function loadModule() {
   vi.resetModules();
-  const [trendsMod, schemasMod] = await Promise.all([
+  const [trendsMod, emptyMod] = await Promise.all([
     import('../TrendWidgets.js'),
-    import('../../../lib/schemas/analytics.js'),
+    import('../../../lib/demo/empty.js'),
   ]);
   return {
     OutcomeTrendWidget: trendsMod.trendWidgets['outcome-trend'],
-    createEmptyUserAnalytics: schemasMod.createEmptyUserAnalytics,
+    // Canonical empty UserAnalytics builder. Used to live in
+    // lib/schemas/analytics.ts (createEmptyUserAnalytics); now consolidated
+    // with createEmptyAnalytics in lib/demo/empty.ts which both the demo
+    // toggle and the live-mode hooks share.
+    createEmptyUserAnalytics: emptyMod.createEmptyAnalytics,
   };
 }
 

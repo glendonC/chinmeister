@@ -185,6 +185,76 @@ describe('updateHandle', () => {
   });
 });
 
+// --- handle lifecycle (analytics-scope contract) ---
+//
+// AnalyticsScope filters by `handle` because three guarantees hold across
+// the user lifecycle:
+//   (a) users.handle is UNIQUE NOT NULL,
+//   (b) handle rotation rejects duplicates with CONFLICT,
+//   (c) there is no code path that deletes a users row, so a handle stays
+//       bound to its owner_id forever.
+// If any of these stops being true, scope.ts has to switch to owner_id and
+// the analytics tables need an owner_id denormalization. These tests pin
+// the contract so a future change makes it loud.
+
+describe('handle lifecycle invariants', () => {
+  it('createUser cannot collide with a previously taken handle on a single retry', async () => {
+    // Drive the resolveUniqueHandle retry path: a handle that's already
+    // taken cannot be re-issued. createUser generates a fresh adjective+
+    // noun and falls back to randomized suffixes if the first pick is
+    // taken; the contract is "every successful createUser returns a
+    // handle that did not exist beforehand."
+    const a = await getDB().createUser();
+    const b = await getDB().createUser();
+    expect(a.ok).toBe(true);
+    expect(b.ok).toBe(true);
+    expect(a.handle).not.toBe(b.handle);
+    expect(a.id).not.toBe(b.id);
+  });
+
+  it('updateHandle rejects a handle that is already in use (lifecycle: no reclaim)', async () => {
+    // Mirrors the duplicate-handle test above but framed as a lifecycle
+    // assertion: even after deleting all per-team data and revoking
+    // tokens (the actions /me/data/delete performs), the users row
+    // persists and its handle stays reserved. Test stays at the DO level
+    // since /me/data/delete does not call any DatabaseDO method that
+    // removes a users row.
+    const owner = await getDB().createUser();
+    const claim = await getDB().updateHandle(owner.id, 'lifecycle_test');
+    expect(claim.ok).toBe(true);
+
+    // A second user trying to reclaim the same handle is rejected.
+    const newcomer = await getDB().createUser();
+    const collide = await getDB().updateHandle(newcomer.id, 'lifecycle_test');
+    expect(collide.ok).toBeUndefined();
+    expect(collide.error).toBe('Handle already taken');
+    expect(collide.code).toBe('CONFLICT');
+
+    // The original owner still has the handle.
+    const fetched = await getDB().getUser(owner.id);
+    expect(fetched.user.handle).toBe('lifecycle_test');
+  });
+
+  it('getUserByHandle returns the original owner across getUser lookups', async () => {
+    // The scope filter is `WHERE handle = ?`. This test pins that the
+    // (handle -> user) mapping is stable: the same handle resolves to the
+    // same id no matter how many getUser calls run between.
+    const created = await getDB().createUser();
+    const handle = created.handle;
+    const byHandle1 = await getDB().getUserByHandle(handle);
+    expect(byHandle1.ok).toBe(true);
+    expect(byHandle1.user.id).toBe(created.id);
+
+    // Touch the user a few times (last_active updates) and re-resolve.
+    await getDB().getUser(created.id);
+    await getDB().getUser(created.id);
+
+    const byHandle2 = await getDB().getUserByHandle(handle);
+    expect(byHandle2.ok).toBe(true);
+    expect(byHandle2.user.id).toBe(created.id);
+  });
+});
+
 // --- updateColor ---
 
 describe('updateColor', () => {

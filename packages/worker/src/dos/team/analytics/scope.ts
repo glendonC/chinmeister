@@ -35,6 +35,31 @@ export interface AnalyticsScope {
    * Pass the *acting user's handle* for personal/dev-scoped views (the
    * /me/analytics route, /me/dashboard summaries). Leave empty for
    * intentional team-wide aggregates.
+   *
+   * Why handle, not owner_id. Three contract guarantees make handle a safe
+   * scope key here:
+   *
+   *   1. members.handle and sessions.handle are denormalized for query
+   *      performance. Joining to users on every analytics call would force a
+   *      cross-DO read (the canonical user row lives in DatabaseDO, not
+   *      TeamDO) and turn every aggregate into a fan-out.
+   *   2. users.handle is `UNIQUE NOT NULL` (DatabaseDO migration 001) and
+   *      updateHandle rejects duplicates with the CONFLICT code. Auth
+   *      additionally re-verifies the looked-up user's handle still matches
+   *      the KV-issued token (routes/user/auth.ts), so handle rotation
+   *      never silently re-points an existing token to a different user.
+   *   3. Account deletion is administrator-mediated and does not reclaim
+   *      the handle. The /me/data/delete path tombstones data per team and
+   *      revokes tokens but leaves the users-row intact, so the handle
+   *      stays bound to its original owner_id for the lifetime of the
+   *      database. There is no path that frees a handle for re-use.
+   *
+   * Together these mean: a scope filter `WHERE handle = 'alice'` cannot
+   * cross-leak sessions between two distinct users, because there is never
+   * more than one user with handle 'alice' in the entire system. If any of
+   * the three guarantees changes (handle reclaim, soft-delete with reuse,
+   * etc.), this scope key MUST switch to owner_id and the relevant tables
+   * need an owner_id column, denormalized at write time.
    */
   handle?: string;
 }

@@ -1892,7 +1892,11 @@ function CostPerEditPanel({ analytics }: { analytics: UserAnalytics }) {
       const inputShare =
         (m.input_tokens + m.cache_read_tokens * 0.1) /
         Math.max(1, t.total_input_tokens + t.total_cache_read_tokens * 0.1);
-      const estCost = t.total_estimated_cost_usd * inputShare;
+      // The hasCostData gate above guarantees total_estimated_cost_usd is a
+      // number, but the contract types it as nullable so the gate is invisible
+      // to TS. The nullish coalescing here is a no-op at runtime past that
+      // gate; it's load-bearing only for the type.
+      const estCost = (t.total_estimated_cost_usd ?? 0) * inputShare;
       const rate = edits > 0 ? estCost / edits : null;
       return { host_tool: m.host_tool, edits, estCost, rate };
     })
