@@ -946,10 +946,14 @@ export const WIDGET_CATALOG: WidgetDef[] = [
       "Share of files this period that more than one agent worked on. The kind of cross-agent visibility no single IDE has. Solo users see a 'requires 2+ agents' empty state. Not a directional metric; high overlap can also mean paired work.",
     category: 'team',
     scope: 'both',
-    viz: 'stat-row',
-    w: 4,
+    // viz: 'stat' (not 'stat-row') so VIZ_MAX_CONSTRAINTS caps maxW at 4 —
+    // matches every other KPI stat in the cockpit (cost, edits, sessions,
+    // stuckness, one-shot-rate). The body renders a single hero StatWidget,
+    // not a parallel row of values, so 'stat' is the honest classification.
+    viz: 'stat',
+    w: 3,
     h: 2,
-    minW: 3,
+    minW: 2,
     minH: 2,
     dataKeys: ['file_overlap'],
     // The codebase Risk panel's collisions question already shows the
@@ -988,10 +992,13 @@ export const WIDGET_CATALOG: WidgetDef[] = [
       'Edits chinmeister stopped this period before two agents could collide on the same file. The coordination layer doing its job.',
     category: 'team',
     scope: 'both',
-    viz: 'stat-row',
-    w: 4,
+    // viz: 'stat' so VIZ_MAX_CONSTRAINTS caps maxW at 4 — same rationale as
+    // file-overlap above. The body is a single-hero StatWidget, classify
+    // honestly so saved layouts can't drag it past KPI-card width.
+    viz: 'stat',
+    w: 3,
     h: 2,
-    minW: 3,
+    minW: 2,
     minH: 2,
     dataKeys: ['conflict_stats'],
     requiredCapability: 'hooks',
