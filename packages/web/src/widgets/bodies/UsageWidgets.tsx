@@ -1,7 +1,15 @@
 import { setQueryParam, useRoute } from '../../lib/router.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { CoverageNote, StatWidget, costEmptyReason, hasCostData } from './shared.js';
+import {
+  CoverageNote,
+  StatWidget,
+  costDegradedReason,
+  costEmptyReason,
+  deltaAriaSuffix,
+  hasCostData,
+  splitPeriodDelta,
+} from './shared.js';
 import { formatCost } from '../utils.js';
 
 function openUsage(tab: string) {
@@ -27,41 +35,6 @@ function useIsDrillable(): boolean {
 // nothing" apart from "I genuinely did no work."
 function isEmptyPeriod(analytics: UserAnalytics): boolean {
   return analytics.daily_trends.length === 0;
-}
-
-/**
- * In-window delta: split daily_trends in half by position and compare sums.
- * Preferred over `period_comparison` for stat deltas because the worker's
- * 30-day session retention (`SESSION_RETENTION_DAYS`) structurally empties
- * the `[days*2, days]`-ago previous window used by `queryPeriodComparison`,
- * so that delta is null for every production user. Splitting the current
- * window sidesteps retention and keeps the delta honest for any period.
- * Returns null with fewer than two observed days. For odd counts the single
- * middle day is dropped so both halves span the same day count.
- */
-function splitPeriodDelta<T>(
-  days: T[],
-  select: (row: T) => number,
-): { current: number; previous: number } | null {
-  if (days.length < 2) return null;
-  const mid = Math.floor(days.length / 2);
-  const currentStart = days.length % 2 === 0 ? mid : mid + 1;
-  const previous = days.slice(0, mid).reduce((s, d) => s + select(d), 0);
-  const current = days.slice(currentStart).reduce((s, d) => s + select(d), 0);
-  return { current, previous };
-}
-
-/**
- * Screen-reader suffix mirroring the visual delta glyph (↑/↓/→). Empty when
- * the visual delta is suppressed (null or previous <= 0).
- */
-function deltaAriaSuffix(delta: { current: number; previous: number } | null): string {
-  if (!delta || delta.previous <= 0) return '';
-  const diff = delta.current - delta.previous;
-  if (diff === 0) return ', no change from the previous half of this period';
-  const magnitude = Math.abs(Math.round(diff * 10) / 10).toLocaleString();
-  const direction = diff > 0 ? 'up' : 'down';
-  return `, ${direction} ${magnitude} from the previous half of this period`;
 }
 
 function SessionsWidget({ analytics }: WidgetBodyProps) {
@@ -207,11 +180,11 @@ function CostWidget({ analytics }: WidgetBodyProps) {
   // matching CostPerEditWidget so the color semantic stays consistent.
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.cost ?? 0);
   const ariaDelta = deltaAriaSuffix(delta);
-  // Partial-capture disclosure: when token data is reliable but only some
-  // tools cover it, surface the attribution. capabilityCoverageNote returns
-  // null on full coverage so the populated path stays clean for users with
-  // universal capture.
-  const partialNote = costEmptyReason(t, tools);
+  // Populated state paints ONLY load-bearing degradation reasons (stale
+  // pricing, unpriced models). Capability attribution was dropped 2026-
+  // 04-29 — cockpit stat cards stay bare; partial-capture lives on a
+  // dedicated data-quality surface.
+  const degraded = costDegradedReason(t);
   return (
     <>
       <StatWidget
@@ -222,7 +195,7 @@ function CostWidget({ analytics }: WidgetBodyProps) {
         onOpenDetail={drillable ? openUsage('cost') : undefined}
         detailAriaLabel={drillable ? `Open usage detail · ${value} cost${ariaDelta}` : undefined}
       />
-      <CoverageNote text={partialNote} />
+      <CoverageNote text={degraded} />
     </>
   );
 }
@@ -258,7 +231,7 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
         previous: pc.previous?.cost_per_edit ?? null,
       }
     : null;
-  const partialNote = costEmptyReason(t, tools);
+  const degraded = costDegradedReason(t);
   return (
     <>
       <StatWidget
@@ -269,7 +242,7 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
         onOpenDetail={drillable ? openUsage('cost-per-edit') : undefined}
         detailAriaLabel={drillable ? `Open usage detail · ${value} per edit` : undefined}
       />
-      <CoverageNote text={partialNote} />
+      <CoverageNote text={degraded} />
     </>
   );
 }

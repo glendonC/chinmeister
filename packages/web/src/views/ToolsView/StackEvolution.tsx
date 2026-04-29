@@ -14,7 +14,6 @@ import clsx from 'clsx';
 import { getToolMeta, normalizeToolId } from '../../lib/toolMeta.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import type { ToolDailyTrend } from '../../lib/apiSchemas.js';
-import { PREVIEW_TOOL_DAILY } from './previewData.js';
 import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './StackEvolution.module.css';
 
@@ -64,13 +63,10 @@ function tickLabel(iso: string): string {
 }
 
 export default function StackEvolution({ daily, rangeDays = 30 }: Props) {
-  const liveHasData = (daily ?? []).length > 0;
-  const isPreview = !liveHasData;
-
   const [hoveredTool, setHoveredTool] = useState<string | null>(null);
 
   const { days, seriesByTool, maxStack, peakDay, peakValue, leader, leaderShare } = useMemo(() => {
-    const source = liveHasData ? (daily ?? []) : PREVIEW_TOOL_DAILY;
+    const source = daily ?? [];
     const dayList = fullDayRange(rangeDays);
     const dayIdx = new Map(dayList.map((d, i) => [d, i]));
 
@@ -133,7 +129,7 @@ export default function StackEvolution({ daily, rangeDays = 30 }: Props) {
       leader: leaderEntry?.toolId ?? null,
       leaderShare: leaderSharePct,
     };
-  }, [daily, liveHasData, rangeDays]);
+  }, [daily, rangeDays]);
 
   if (seriesByTool.length === 0) {
     return (
@@ -187,12 +183,10 @@ export default function StackEvolution({ daily, rangeDays = 30 }: Props) {
   return (
     <section className={styles.section}>
       <header className={styles.header}>
-        <Eyebrow label={`Stack evolution · last ${rangeDays} days`} showPreview={isPreview} />
+        <Eyebrow label={`Stack evolution · last ${rangeDays} days`} />
         <h2 className={styles.title}>Your stack over time</h2>
         <p className={styles.subtitle}>
-          {isPreview
-            ? 'Example data - daily session volume stacked across your tools. Where a tool is quiet, its slice thins. Your own history will replace this once sessions flow through.'
-            : 'Daily session volume, stacked across your tools. Where a tool is quiet, its slice thins.'}
+          Daily session volume, stacked across your tools. Where a tool is quiet, its slice thins.
         </p>
       </header>
 

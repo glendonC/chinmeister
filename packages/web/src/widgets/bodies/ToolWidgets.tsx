@@ -468,7 +468,15 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
 
   const [active, setActive] = useState<string | null>(null);
 
-  if (models.length === 0) return <GhostRows count={2} />;
+  if (models.length === 0) {
+    const tools = analytics.data_coverage?.tools_reporting ?? [];
+    return (
+      <>
+        <GhostRows count={2} />
+        <CoverageNote text={capabilityCoverageNote(tools, 'tokenUsage')} />
+      </>
+    );
+  }
 
   const totalSessions = models.reduce((s, m) => s + m.total, 0) || 1;
   const totalCost = tu.total_estimated_cost_usd;

@@ -1,11 +1,9 @@
 // Pair Detail - the drill-in for a tool-pair handoff.
-// Opened via ?pair=<from>:<to> from StackHandoffMatrix. Renders into the
-// shared detailPanel slot in ToolsView alongside StackToolDetail and
-// SharedFileDetail.
+// Opened via ?pair=<from>:<to> from StackHandoffs. Renders into the
+// shared detailPanel slot in ToolsView alongside StackToolDetail.
 //
 // Shows the list of files that handed off between this specific pair,
 // capped at 20 visible with a progressive-disclosure "Show more" action.
-// Clicking a file navigates to ?file= for the full per-file detail.
 
 import { type CSSProperties, useMemo, useState } from 'react';
 import clsx from 'clsx';
@@ -14,7 +12,6 @@ import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import BackLink from '../../components/BackLink/BackLink.js';
 import SectionTitle from '../../components/SectionTitle/SectionTitle.js';
 import type { ToolHandoff, ToolHandoffRecentFile } from '../../lib/apiSchemas.js';
-import { PREVIEW_TOOL_HANDOFFS } from './previewData.js';
 import Eyebrow from '../../components/Eyebrow/Eyebrow.js';
 import styles from './PairDetail.module.css';
 
@@ -23,7 +20,6 @@ interface Props {
   toToolId: string;
   handoffs: ToolHandoff[] | undefined;
   onBack: () => void;
-  onFileClick: (filePath: string) => void;
 }
 
 const BATCH_SIZE = 20;
@@ -52,21 +48,18 @@ function splitPath(path: string): { name: string; parent: string } {
   return { name, parent };
 }
 
-export default function PairDetail({ fromToolId, toToolId, handoffs, onBack, onFileClick }: Props) {
+export default function PairDetail({ fromToolId, toToolId, handoffs, onBack }: Props) {
   const fromKey = normalizeToolId(fromToolId);
   const toKey = normalizeToolId(toToolId);
   const fromMeta = getToolMeta(fromToolId);
   const toMeta = getToolMeta(toToolId);
 
   const handoff = useMemo<ToolHandoff | null>(() => {
-    const live = (handoffs ?? []).find(
-      (h) => normalizeToolId(h.from_tool) === fromKey && normalizeToolId(h.to_tool) === toKey,
+    return (
+      (handoffs ?? []).find(
+        (h) => normalizeToolId(h.from_tool) === fromKey && normalizeToolId(h.to_tool) === toKey,
+      ) ?? null
     );
-    if (live) return live;
-    const preview = PREVIEW_TOOL_HANDOFFS.find(
-      (h) => normalizeToolId(h.from_tool) === fromKey && normalizeToolId(h.to_tool) === toKey,
-    );
-    return preview ?? null;
   }, [handoffs, fromKey, toKey]);
 
   const [visibleCount, setVisibleCount] = useState(BATCH_SIZE);
@@ -89,16 +82,13 @@ export default function PairDetail({ fromToolId, toToolId, handoffs, onBack, onF
   const gapLabel = formatGap(handoff.avg_gap_minutes);
 
   const completionRate = handoff.handoff_completion_rate;
-  const isPreview = !(handoffs ?? []).some(
-    (h) => normalizeToolId(h.from_tool) === fromKey && normalizeToolId(h.to_tool) === toKey,
-  );
 
   return (
     <div className={styles.detail}>
       <header className={styles.header}>
         <BackLink label="Tools" onClick={onBack} />
         <div className={styles.titleBlock}>
-          <Eyebrow label="Handoff pair" showPreview={isPreview} />
+          <Eyebrow label="Handoff pair" />
           <div className={styles.pairRow}>
             <span className={styles.pairSide}>
               <ToolIcon tool={fromToolId} size={20} />
@@ -142,12 +132,7 @@ export default function PairDetail({ fromToolId, toToolId, handoffs, onBack, onF
           <>
             <ul className={styles.fileList}>
               {shownFiles.map((f, i) => (
-                <FileRow
-                  key={f.file_path}
-                  file={f}
-                  rowIndex={i}
-                  onClick={() => onFileClick(f.file_path)}
-                />
+                <FileRow key={f.file_path} file={f} rowIndex={i} />
               ))}
             </ul>
             {hiddenCount > 0 && (
@@ -167,26 +152,15 @@ export default function PairDetail({ fromToolId, toToolId, handoffs, onBack, onF
   );
 }
 
-function FileRow({
-  file,
-  rowIndex,
-  onClick,
-}: {
-  file: ToolHandoffRecentFile;
-  rowIndex: number;
-  onClick: () => void;
-}) {
+function FileRow({ file, rowIndex }: { file: ToolHandoffRecentFile; rowIndex: number }) {
   const { name, parent } = splitPath(file.file_path);
   return (
     <li className={styles.fileRow} style={{ '--row-index': rowIndex } as CSSProperties}>
-      <button type="button" className={styles.fileButton} onClick={onClick}>
+      <div className={styles.fileButton}>
         <div className={styles.fileHeadline}>
           <span className={styles.fileName}>{name}</span>
           <span className={clsx(styles.fileStatus, file.completed && styles.fileStatusCompleted)}>
             {file.completed ? 'completed' : 'open'}
-          </span>
-          <span className={styles.chevron} aria-hidden="true">
-            ›
           </span>
         </div>
         <div className={styles.fileMeta}>
@@ -202,7 +176,7 @@ function FileRow({
           </span>
           <span>last {formatWhen(file.last_transition_at)}</span>
         </div>
-      </button>
+      </div>
     </li>
   );
 }

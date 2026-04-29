@@ -2,18 +2,14 @@
 // Reads pre-filtered slices from useScoredStackData via the getDrillIn helper.
 
 import { type CSSProperties, useMemo } from 'react';
-import { getToolMeta } from '../../lib/toolMeta.js';
+import { getToolMeta, normalizeToolId } from '../../lib/toolMeta.js';
 import { formatDuration } from '../../lib/utils.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.jsx';
 import BackLink from '../../components/BackLink/BackLink.js';
 import SectionTitle from '../../components/SectionTitle/SectionTitle.js';
 import Sparkline from './Sparkline.js';
-import {
-  InternalUsageSection,
-  SessionShapeSection,
-  ModelPairingsSection,
-  ScopeComplexitySection,
-} from './DrillSections.js';
+import { InternalUsageSection, SessionShapeSection } from './DrillSections.js';
+import { useDemoExtensions } from '../../hooks/useDemoExtensions.js';
 import type { ToolDrillIn } from './useScoredStackData.js';
 import { workTypeColor } from '../../widgets/utils.js';
 import styles from './StackToolDetail.module.css';
@@ -34,11 +30,13 @@ export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
   const meta = getToolMeta(drill.toolId);
   const c = drill.comparison;
 
-  // Internal tool usage, session shape, and model pairings all depend on
-  // the JSONL post-session parser, which currently only covers Claude Code.
-  // For any other tool we hide these sections entirely rather than show an
-  // empty shell - better to say nothing than to imply coverage we don't have.
-  const hasDeepIntegration = meta.id === 'claude';
+  // Internal-usage and session-shape sections render only when demo
+  // extensions populate them — no worker query produces these fields
+  // today. Live mode hides them cleanly. See lib/demo/scaffolds.ts.
+  const demoExtensions = useDemoExtensions();
+  const toolKey = normalizeToolId(drill.toolId);
+  const internalUsage = demoExtensions?.internalUsage[toolKey] ?? null;
+  const sessionShape = demoExtensions?.sessionShapes[toolKey] ?? null;
 
   const sparkData = useMemo(() => {
     // Build a uniform-length sparkline from drill.daily for the period
@@ -164,17 +162,9 @@ export default function StackToolDetail({ drill, rangeDays, onBack }: Props) {
         </section>
       )}
 
-      {/* ── Behavior sections (Claude Code only; other tools don't expose this data) ── */}
-      {hasDeepIntegration && (
-        <>
-          <InternalUsageSection toolId={drill.toolId} />
-          <SessionShapeSection toolId={drill.toolId} />
-          <ModelPairingsSection toolId={drill.toolId} />
-        </>
-      )}
-
-      {/* ── Scope complexity (works for all tools via files_touched) ── */}
-      <ScopeComplexitySection toolId={drill.toolId} />
+      {/* ── Behavior sections (rendered only when demo extensions cover this tool) ── */}
+      {internalUsage && <InternalUsageSection data={internalUsage} />}
+      {sessionShape && <SessionShapeSection events={sessionShape} />}
 
       {/* ── Errors ── */}
       {drill.errors.length > 0 && (
