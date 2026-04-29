@@ -267,8 +267,8 @@ function OutcomeRing({
 
 // ── One-shot rate (3×2) ─────────────────────────────
 //
-// CodeBurn's killer metric. Coverage note appears ONLY in the empty
-// state — populated state is chromeless, matching the edits/cost stat
+// The headline outcome metric. Coverage note appears ONLY in the empty
+// state - populated state is chromeless, matching the edits/cost stat
 // cards next to it in the default KPI strip.
 
 function OneShotRateWidget({ analytics }: WidgetBodyProps) {

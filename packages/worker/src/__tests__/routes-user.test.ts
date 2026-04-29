@@ -692,8 +692,8 @@ describe('GET /me/sessions', () => {
   });
 
   it('returns the caller-scoped sessions even when ?handle= is omitted', async () => {
-    // Sanity check that the default path still works after the handle param
-    // was removed: a user with their own session sees it.
+    // Sanity check the default path with no handle param: a user with
+    // their own session sees it.
     const a = await createAuthUser();
 
     const createRes = await SELF.fetch('http://localhost/teams', {
