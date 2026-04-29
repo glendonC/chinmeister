@@ -9,11 +9,8 @@ import type { TeamResult } from './types.js';
 const rate = (num: number, denom: number) =>
   denom > 0 ? Math.round((num / denom) * 1000) / 10 : 0;
 
-// Audit 2026-04-21: Bucket trimmed to match the pruned MemberAnalytics shape.
-// abandoned/failed/avg_duration_min/total_lines_added/removed/total_commits
-// all dropped - see memberAnalyticsSchema comment for rationale. `completed`
-// stays because cross-team completion_rate = sum(completed) / sum(sessions);
-// averaging per-team rates would be wrong.
+// `completed` is tracked because cross-team completion_rate is computed as
+// sum(completed) / sum(sessions); averaging per-team rates would be wrong.
 interface MemberBucket {
   sessions: number;
   completed: number;

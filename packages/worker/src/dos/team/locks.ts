@@ -140,7 +140,7 @@ export function claimFiles(
   // TTL timestamps are written using SQLite's `datetime(...)` modifier
   // syntax so they round-trip through the same string format as every
   // other datetime in this schema. Mixing JS `.toISOString()` (e.g.
-  // "2026-04-19T21:38:39.123Z") with SQLite's "YYYY-MM-DD HH:MM:SS" is a
+  // "YYYY-MM-DDThh:mm:ss.sssZ") with SQLite's "YYYY-MM-DD HH:MM:SS" is a
   // silent-bug magnet - string comparison in the reaper would always see
   // the ISO strings as greater, so expired locks would never be swept.
   const ttlSeconds = typeof options.ttlSeconds === 'number' ? options.ttlSeconds : null;

@@ -18,10 +18,10 @@ export function updateUserMetrics(
   const durationMin = Number(summary.duration_min) || 0;
   const inputTokens = Number(summary.input_tokens) || 0;
   const outputTokens = Number(summary.output_tokens) || 0;
-  // Cache token fields default to 0 for sessions closed before phase 2
-  // where the columns didn't exist. Anthropic prompt-cached sessions make
-  // these the dominant input-side volume, so omitting the rollup would
-  // permanently undercount heavy-cache users on the lifetime metrics.
+  // Cache token fields default to 0 for legacy sessions that predate the
+  // cache-token columns. Anthropic prompt-cached sessions make these the
+  // dominant input-side volume, so omitting the rollup would permanently
+  // undercount heavy-cache users on the lifetime metrics.
   const cacheReadTokens = Number(summary.cache_read_tokens) || 0;
   const cacheCreationTokens = Number(summary.cache_creation_tokens) || 0;
   const gotStuck = Number(summary.got_stuck) || 0;

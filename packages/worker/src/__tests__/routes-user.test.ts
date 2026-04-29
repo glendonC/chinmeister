@@ -551,9 +551,9 @@ describe('GET /me/analytics', () => {
   });
 
   it('emits Cache-Control: private, max-age=60, stale-while-revalidate=120', async () => {
-    // Phase 0 lock: dashboards poll often; max-age=60 amortizes the
-    // fan-out across the 5s-poll window without hiding fresh inserts.
-    // private because the response is owner-scoped.
+    // Dashboards poll often; max-age=60 amortizes the fan-out across the
+    // 5s-poll window without hiding fresh inserts. Private because the
+    // response is owner-scoped.
     const { headers } = await createAuthUser();
     const res = await SELF.fetch('http://localhost/me/analytics?days=30', { headers });
     expect(res.status).toBe(200);

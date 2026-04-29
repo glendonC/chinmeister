@@ -7,12 +7,11 @@ import {
 } from '../routes/user/analytics/outcomes.js';
 import type { TeamResult } from '../routes/user/analytics/types.js';
 
-// Worked example from Batch 4 / Finding #4. Two teams with mismatched
-// previous- and current-window denominators. The bug this test guards
-// against is the old "weight previous by current total" approximation,
-// which produces the wrong cross-team prev_completion_rate any time
-// previous and current sample sizes diverge across teams (every
-// growing or shrinking user).
+// Worked example: two teams with mismatched previous- and current-window
+// denominators. The bug this test guards against is a "weight previous by
+// current total" approximation, which produces the wrong cross-team
+// prev_completion_rate any time previous and current sample sizes diverge
+// across teams (every growing or shrinking user).
 //
 //   Team A: prev 100 sessions at 60%, current 80 sessions at 75%
 //   Team B: prev 200 sessions at 40%, current 50 sessions at 50%

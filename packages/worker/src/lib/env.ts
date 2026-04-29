@@ -3,8 +3,6 @@ import type { DatabaseDO } from '../dos/database/index.js';
 import type { LobbyDO } from '../lobby.js';
 import type { TeamDO } from '../dos/team/index.js';
 
-// Phase 3 complete: all DO stubs are fully parameterized.
-// Route handlers can call DO methods directly without `as any` casts.
 // The `rpc()` helper strips the `& Disposable` wrapper that Cloudflare's
 // RPC system adds to every result, restoring clean union narrowing.
 

@@ -40,8 +40,7 @@ export function queryMemberAnalytics(
 ): MemberAnalytics[] {
   try {
     // Scope intentionally ignored - this metric is cross-member by design (team cohort view).
-    // Audit 2026-04-21: SQL trimmed to the fields the contract still carries.
-    // See memberAnalyticsSchema for the list of dropped fields and rationale.
+    // SQL projects only the fields the contract carries; see memberAnalyticsSchema.
     const memberRows = sql
       .exec(
         `SELECT

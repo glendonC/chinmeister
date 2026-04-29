@@ -21,14 +21,13 @@ export function queryRetryPatterns(
   days: number,
 ): RetryPattern[] {
   try {
-    // Audit 2026-04-21: Regrouped from (handle, file) to file only so the
-    // top-N cannot be swallowed by a single noisy agent. Adds cross-agent
-    // (COUNT DISTINCT handle) and cross-tool (GROUP_CONCAT DISTINCT host_tool)
-    // aggregates - the cross-tool column is the substrate-unique angle that
-    // elevates D1: only chinmeister sees the same file retried across Claude Code
-    // + Cursor + Windsurf. `latest_outcome` still picks the most recent
-    // session's outcome across all agents so "resolved" means the file's
-    // current state regardless of who last touched it.
+    // Grouped by file so the top-N cannot be swallowed by a single noisy
+    // agent. Cross-agent (COUNT DISTINCT handle) and cross-tool
+    // (GROUP_CONCAT DISTINCT host_tool) aggregates surface the
+    // substrate-unique angle: only chinmeister sees the same file retried
+    // across Claude Code + Cursor + Windsurf. `latest_outcome` picks the most
+    // recent session's outcome across all agents so "resolved" means the
+    // file's current state regardless of who last touched it.
     const { sql: q, params } = withScope(
       `WITH file_sessions AS (
            SELECT s.id, s.handle, COALESCE(s.host_tool, 'unknown') AS host_tool,

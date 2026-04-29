@@ -11,10 +11,10 @@ import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 
 const log = createLogger('routes.user.teams');
 
-// Locked from Phase 0: 15s max-age + 60s SWR. Dashboard summary is the hot
-// path for live polling; a tight max-age keeps the user feeling current
-// while still letting Cloudflare's edge cache absorb burst polling.
-// `private` because every team summary is owner-scoped.
+// 15s max-age + 60s SWR. Dashboard summary is the hot path for live polling;
+// a tight max-age keeps the user feeling current while still letting
+// Cloudflare's edge cache absorb burst polling. `private` because every team
+// summary is owner-scoped.
 const CACHE_HEADERS = {
   'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
 };

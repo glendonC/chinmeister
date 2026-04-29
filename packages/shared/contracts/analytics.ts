@@ -229,14 +229,6 @@ export const concurrentEditEntrySchema = z.object({
 });
 export type ConcurrentEditEntry = z.infer<typeof concurrentEditEntrySchema>;
 
-// Audit 2026-04-21: Pruned to fields actual consumers read. Dropped:
-//   abandoned, failed - not rendered anywhere (completion_rate is the
-//     consumed summary; raw outcome splits were ghosted aggregation work).
-//   avg_duration_min - only shown on ModelOutcome, not member rows.
-//   total_lines_added, total_lines_removed, total_commits - wiring these up
-//     would commit the team-members widget to a GitHub-clone framing. They
-//     can be re-added when a drill view calls for them; the SQL is not a
-//     load-bearing source of truth.
 // `completed` is retained because cross-team completion_rate derivation needs
 // raw numerator + denominator; averaging per-team rates is wrong.
 export const memberAnalyticsSchema = z.object({
@@ -253,14 +245,11 @@ export const memberAnalyticsSchema = z.object({
 });
 export type MemberAnalytics = z.infer<typeof memberAnalyticsSchema>;
 
-// Audit 2026-04-21: Regrouped from (handle, file) to file only. The old shape
-// let one noisy agent dominate the top-N: if handle-A hit Button.tsx 8 times
-// and handle-B twice, the renderer showed two rows for the same file. The
-// new shape is file-centric - attempts are summed across agents, and the
-// agent / tool distinctness counts surface the cross-agent and cross-tool
-// angle that is actually substrate-unique (vs. Claude Code's own session log
-// which is per-tool). `tools` is the list of host_tools that contributed to
-// the retries, deduped; `agents` is the number of distinct handles that
+// File-centric so one noisy agent cannot dominate top-N: attempts are summed
+// across agents, and the agent / tool distinctness counts surface the
+// cross-agent and cross-tool angle that is substrate-unique (Claude Code's own
+// session log is per-tool). `tools` is the list of host_tools that contributed
+// to the retries, deduped; `agents` is the number of distinct handles that
 // retried this file.
 export const retryPatternSchema = z.object({
   file: z.string(),
@@ -595,10 +584,9 @@ export const stucknessStatsSchema = z.object({
 });
 export type StucknessStats = z.infer<typeof stucknessStatsSchema>;
 
-// Audit 2026-04-21: Dropped `overlap_rate`. The percentage was a B1 ambiguity
-// in the renderer ("60%" reads as good paired work or bad collision depending
-// on context). Absolute counts stay - total_files and overlapping_files are
-// concrete; consumers that need a rate recompute it from the counts.
+// Counts only, no rate field: a percentage reads as good paired work or bad
+// collision depending on context. Absolute counts are concrete; consumers
+// that need a rate recompute it from the counts.
 export const fileOverlapStatsSchema = z.object({
   total_files: z.number().default(0),
   overlapping_files: z.number().default(0),
@@ -1011,19 +999,18 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   }),
   work_type_outcomes: z.array(workTypeOutcomeSchema).default([]),
   conversation_edit_correlation: z.array(conversationEditCorrelationSchema).default([]),
-  // Conversation widgets revived 2026-04-25. Both gate on conversationLogs
-  // capability (Claude Code + Aider today). Default to empty/zero for
-  // older producers and tools without conversation capture.
+  // Both gate on conversationLogs capability (Claude Code + Aider today).
+  // Default to empty/zero for older producers and tools without conversation
+  // capture.
   confused_files: z.array(confusedFileEntrySchema).default([]),
   unanswered_questions: unansweredQuestionStatsSchema.default({ count: 0 }),
-  // Cross-tool question handoffs (added 2026-04-26). Substrate-unique to
-  // chinmeister: requires conversation capture across two tools that share
-  // a file. Default empty so older producers and single-tool teams parse
-  // cleanly; the renderer's empty state names the 2+ tool requirement.
+  // Substrate-unique to chinmeister: requires conversation capture across two
+  // tools that share a file. Default empty so older producers and single-tool
+  // teams parse cleanly; the renderer's empty state names the 2+ tool
+  // requirement.
   cross_tool_handoff_questions: z.array(crossToolHandoffEntrySchema).default([]),
-  // Memory + team category density additions 2026-04-25 (post-audit). Each
-  // anchors a multi-question detail view (see schema doc-comments for the
-  // English questions). Defaults so older producers parse cleanly.
+  // Each anchors a multi-question detail view (see schema doc-comments for
+  // the English questions). Defaults so older producers parse cleanly.
   cross_tool_memory_flow: z.array(crossToolMemoryFlowEntrySchema).default([]),
   memory_aging: memoryAgingCompositionSchema.default({
     recent_7d: 0,
@@ -1032,9 +1019,8 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     older: 0,
   }),
   memory_categories: z.array(memoryCategoryEntrySchema).default([]),
-  // Memory + team category re-revivals 2026-04-25 (post 18-month re-audit).
-  // Each anchors a multi-question detail view; the original audit cut/queued
-  // these on today-state arguments that the rubric preamble forbids.
+  // Anchors a multi-question detail view. Defaults so older producers parse
+  // cleanly.
   memory_single_author_directories: z.array(memorySingleAuthorDirectoryEntrySchema).default([]),
   memory_supersession: memorySupersessionStatsSchema.default({
     invalidated_period: 0,

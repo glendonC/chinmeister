@@ -15,10 +15,10 @@ import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
 
 const log = createLogger('routes.user.sessions');
 
-// Locked from Phase 0: 15s max-age + 60s SWR. /me/sessions backs the live
-// activity timeline, which polls aggressively; a short max-age is enough to
-// absorb that burst without lagging behind newly-recorded sessions. Private
-// because every session row is caller-scoped.
+// 15s max-age + 60s SWR. /me/sessions backs the live activity timeline,
+// which polls aggressively; a short max-age is enough to absorb that burst
+// without lagging behind newly-recorded sessions. Private because every
+// session row is caller-scoped.
 const CACHE_HEADERS = {
   'Cache-Control': 'private, max-age=15, stale-while-revalidate=60',
 };

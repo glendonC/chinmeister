@@ -1,9 +1,7 @@
 // Memory analytics queries - covers queryMemoryUsage,
-// queryMemoryOutcomeCorrelation, and queryTopMemories. The widget-level
-// audit on 2026-04-21 split memory-safety's mixed scopes, renamed fields,
-// cut formation-summary, and promoted memory-outcomes to the default
-// layout. These tests lock in the query contract so the SQL can be
-// refactored without regressing widget behavior.
+// queryMemoryOutcomeCorrelation, and queryTopMemories. These tests lock in
+// the query contract so the SQL can be refactored without regressing widget
+// behavior.
 
 import { env } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
@@ -41,9 +39,9 @@ describe('queryMemoryUsage - empty team', () => {
       discard: 0,
     });
 
-    // Regression guard for the 2026-04-21 field cleanup. If any of these
-    // come back, it's either a contract revert or a parallel-WIP merge
-    // artifact - both worth a second look.
+    // Regression guard: these fields are intentionally absent from the
+    // contract. Their reappearance is either a contract revert or a
+    // parallel-WIP merge artifact, both worth a second look.
     expect(m.memories_updated_period).toBeUndefined();
     expect(m.merged_memories).toBeUndefined();
     expect(m.secrets_blocked_period).toBeUndefined();
@@ -107,9 +105,9 @@ describe('queryMemoryOutcomeCorrelation - bucket semantics', () => {
   });
 
   it('uses the "searched, no results" label (not the old "missed search")', async () => {
-    // The 2026-04-21 memory audit renamed this bucket for B1 clarity -
-    // "missed search" read ambiguously ("searched for the wrong thing"
-    // vs "searched and found nothing"). Regression guard.
+    // "missed search" reads ambiguously ("searched for the wrong thing"
+    // vs "searched and found nothing"); the bucket label is "searched, no
+    // results". Regression guard against a relabel.
     const team = getTeam('mq-corr-missed');
     const agentId = 'claude-code:mq-corr-missed';
     const ownerId = 'user-mq-corr-missed';
