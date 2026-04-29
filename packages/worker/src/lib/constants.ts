@@ -111,6 +111,28 @@ export const RATE_LIMIT_EVALUATIONS = 5;
 export const RATE_LIMIT_SUGGESTIONS = 5;
 export const RATE_LIMIT_WS_TICKETS = 100;
 
+// --- Authenticated read-endpoint rate limits (per user per 24h window) ---
+// Read endpoints that fan out across all of a user's teams (or run heavy
+// aggregation per call) need a ceiling so a misbehaving client cannot
+// amplify cost. Values are sized to comfortably cover real polling and
+// reconnect patterns while bounding worst-case spend.
+//
+// Dashboard polls every 5 seconds when a tab is open: 17,280/day for a
+// continuously open tab. 20,000 leaves headroom for reconnects without
+// blocking normal use.
+export const RATE_LIMIT_DASHBOARD_READS = 20000;
+// Analytics fans out to every team and runs heavy projections per call.
+// Normal usage is tens of reads per session; 600/day (about 25/hour)
+// caps abuse without affecting interactive use.
+export const RATE_LIMIT_ANALYTICS_READS = 600;
+// Sessions has the same cross-team fan-out shape as analytics, with a
+// lighter merge step. Same 600/day ceiling applies.
+export const RATE_LIMIT_SESSIONS_READS = 600;
+// Teams listing is a single DatabaseDO read of the user's roster, lighter
+// than analytics but still cross-team scoped. 1200/day comfortably covers
+// every real usage pattern.
+export const RATE_LIMIT_TEAMS_READS = 1200;
+
 // --- Rate limits (per IP per 24h window, public/unauthenticated endpoints) ---
 export const RATE_LIMIT_STATS_PER_IP = 2000;
 export const RATE_LIMIT_CATALOG_PER_IP = 200;

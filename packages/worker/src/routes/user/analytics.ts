@@ -12,7 +12,8 @@ import { json } from '../../lib/http.js';
 import { createLogger } from '../../lib/logger.js';
 import { enrichTokenUsageWithPricing } from '../../lib/pricing-enrich.js';
 import { authedRoute } from '../../lib/middleware.js';
-import { MAX_DASHBOARD_TEAMS } from '../../lib/constants.js';
+import { withRateLimit } from '../../lib/validation.js';
+import { MAX_DASHBOARD_TEAMS, RATE_LIMIT_ANALYTICS_READS } from '../../lib/constants.js';
 import { buildDataCoverage } from '../../lib/data-coverage.js';
 import { userAnalyticsSchema } from '@chinmeister/shared/contracts/analytics.js';
 import { DO_CALL_TIMEOUT_MS, withTimeout } from './helpers.js';
@@ -52,6 +53,22 @@ function parseTzOffset(raw: string | null): number {
 }
 
 export const handleUserAnalytics = authedRoute(async ({ request, user, env }) => {
+  const db = getDB(env);
+  return withRateLimit(
+    db,
+    `uana:${user.id}`,
+    RATE_LIMIT_ANALYTICS_READS,
+    'Analytics read limit reached. Try again later.',
+    () => buildUserAnalytics(request, user, env, db),
+  );
+});
+
+async function buildUserAnalytics(
+  request: Request,
+  user: { id: string; handle: string },
+  env: Parameters<typeof getTeam>[0],
+  db: ReturnType<typeof getDB>,
+): Promise<Response> {
   const url = new URL(request.url);
   const parsed = parseInt(url.searchParams.get('days') || '30', 10);
   const days = Math.max(1, Math.min(isNaN(parsed) ? 30 : parsed, ANALYTICS_MAX_DAYS));
@@ -68,7 +85,6 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
       )
     : null;
 
-  const db = getDB(env);
   const teamsResult = rpc(await db.getUserTeams(user.id));
   const allTeams: Array<{ team_id: string; team_name: string | null }> = teamsResult.teams;
   const teamsList = teamIdsFilter ? allTeams.filter((t) => teamIdsFilter.has(t.team_id)) : allTeams;
@@ -341,4 +357,4 @@ export const handleUserAnalytics = authedRoute(async ({ request, user, env }) =>
     200,
     { schema: userAnalyticsSchema },
   );
-});
+}
