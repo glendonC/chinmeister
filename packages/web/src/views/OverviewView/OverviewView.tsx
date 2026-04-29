@@ -66,7 +66,7 @@ import UsageDetailView from './UsageDetailView/UsageDetailView.js';
 import OutcomesDetailView from './OutcomesDetailView.js';
 import ActivityDetailView from './ActivityDetailView.js';
 import CodebaseDetailView from './CodebaseDetailView.js';
-import ToolsDetailView from './ToolsDetailView.js';
+import ToolsDetailView from './ToolsDetailView/ToolsDetailView.js';
 import MemoryDetailView from './MemoryDetailView.js';
 import { RANGES, type RangeDays, summarizeNames } from './overview-utils.js';
 import { useOverviewLayout } from './useOverviewLayout.js';
