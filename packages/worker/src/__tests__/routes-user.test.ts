@@ -591,6 +591,23 @@ describe('GET /me/analytics', () => {
     expect(body.truncated_teams).toBe(0);
   });
 
+  it('emits an empty failure_labels object on the success path', async () => {
+    // failure_labels is always present in the response (default {}); when
+    // every team responded cleanly it stays empty. Dashboards read the
+    // map size, so contract-level presence matters even when no failures
+    // happened.
+    const { headers } = await createAuthUser();
+    await SELF.fetch('http://localhost/teams', { method: 'POST', headers });
+    const res = await SELF.fetch('http://localhost/me/analytics?days=7', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      failure_labels?: Record<string, number>;
+      degraded?: boolean;
+    };
+    expect(body.failure_labels).toEqual({});
+    expect(body.degraded).toBe(false);
+  });
+
   it('clamps period_days to CROSS_TEAM_MAX_DAYS for multi-team requests', async () => {
     // CROSS_TEAM_MAX_DAYS = 30. A user with 2+ teams asking for 90 days
     // gets back period_days=30; the UI banner reads that field to render
@@ -711,6 +728,60 @@ describe('GET /me/sessions', () => {
   it('requires auth', async () => {
     const res = await SELF.fetch('http://localhost/me/sessions');
     expect(res.status).toBe(401);
+  });
+
+  it('rejects a malformed `from` date with 400', async () => {
+    // ISO 8601 YYYY-MM-DD is the only accepted shape. A string that the
+    // SQL bind would silently accept as a literal-no-row-matches must
+    // surface at the boundary so client bugs are loud.
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/sessions?from=tomorrow&to=2026-04-01', {
+      headers,
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/from/i);
+  });
+
+  it('rejects a malformed `to` date with 400', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/sessions?from=2026-04-01&to=04-01-2026', {
+      headers,
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/to/i);
+  });
+
+  it('rejects a regex-shaped but impossible day like Feb 30 with 400', async () => {
+    // Strict regex catches most garbage; the round-trip check inside
+    // isValidIsoDate is what catches the "month-day overflow" case
+    // where the Date constructor silently rolls 02-30 to 03-02.
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/sessions?from=2026-02-30', { headers });
+    expect(res.status).toBe(400);
+  });
+
+  it('echoes the resolved date range when the caller passes from/to', async () => {
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/sessions?from=2026-04-01&to=2026-04-07', {
+      headers,
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { range?: { from: string; to: string } };
+    expect(body.range).toEqual({ from: '2026-04-01', to: '2026-04-07' });
+  });
+
+  it('echoes a today/today range when the caller omits from/to', async () => {
+    // Default-to-today is silent without this echo: a caller that forgot
+    // to pass dates would otherwise see a successful response covering
+    // only today with no signal that the narrowing happened.
+    const { headers } = await createAuthUser();
+    const res = await SELF.fetch('http://localhost/me/sessions', { headers });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { range?: { from: string; to: string } };
+    expect(body.range?.from).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(body.range?.from).toBe(body.range?.to);
   });
 
   it('emits Cache-Control: private, max-age=15, stale-while-revalidate=60', async () => {

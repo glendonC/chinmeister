@@ -19,6 +19,7 @@ export function createEmptyAnalytics(periodDays = DEFAULT_PERIOD_DAYS): UserAnal
     teams_included: 0,
     degraded: false,
     truncated_teams: 0,
+    failure_labels: {},
     file_heatmap: [],
     files_touched_total: 0,
     files_touched_half_split: null,

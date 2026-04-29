@@ -41,6 +41,23 @@ function todayStr(): string {
 // passes from/to only.
 const HOST_TOOL_RE = /^[A-Za-z0-9_-]{1,64}$/;
 
+// ISO 8601 date format: YYYY-MM-DD. Parameterized SQL prevents injection,
+// but a malformed string ("foo", "tomorrow") binds as a literal that no
+// row can match, returning empty silently. 400 instead so client bugs
+// surface loud at the boundary. Runs after a strict regex match so the
+// Date constructor only sees pre-validated strings.
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+function isValidIsoDate(value: string): boolean {
+  if (!ISO_DATE_RE.test(value)) return false;
+  const d = new Date(`${value}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return false;
+  // Round-trip check: catches inputs like a 30th of February which the
+  // Date constructor silently rolls forward instead of rejecting. Compare
+  // the round-trip basis so the equality holds for every valid
+  // YYYY-MM-DD across timezones.
+  return d.toISOString().slice(0, 10) === value;
+}
+
 export const handleUserSessions = authedRoute(async ({ request, user, env }) => {
   const db = getDB(env);
   return withRateLimit(
@@ -50,8 +67,27 @@ export const handleUserSessions = authedRoute(async ({ request, user, env }) => 
     'Sessions read limit reached. Try again later.',
     async () => {
       const url = new URL(request.url);
-      const from = url.searchParams.get('from') || todayStr();
-      const to = url.searchParams.get('to') || todayStr();
+      const fromParam = url.searchParams.get('from');
+      const toParam = url.searchParams.get('to');
+
+      // Validate ISO date format up front. Default-to-today is preserved
+      // for callers that omit the param (the existing useSessionTimeline
+      // call passes from/to explicitly, so the default rarely fires); a
+      // present-but-malformed param 400s so bugs surface loud rather than
+      // returning an empty list silently.
+      if (fromParam !== null && !isValidIsoDate(fromParam)) {
+        return json({ error: 'invalid `from` date, expected YYYY-MM-DD' }, 400);
+      }
+      if (toParam !== null && !isValidIsoDate(toParam)) {
+        return json({ error: 'invalid `to` date, expected YYYY-MM-DD' }, 400);
+      }
+
+      const from = fromParam ?? todayStr();
+      const to = toParam ?? todayStr();
+      // Echo the resolved range back. Useful when from/to defaulted to
+      // todayStr() so consumers know the implicit narrowing happened
+      // rather than silently treating "no filter" as "lifetime".
+      const range = { from, to };
 
       const hostToolParam = url.searchParams.get('host_tool');
       // Always scope to the caller's own handle. The DO method accepts an
@@ -69,6 +105,7 @@ export const handleUserSessions = authedRoute(async ({ request, user, env }) => 
             ok: true,
             sessions: [],
             totals: { sessions: 0, edits: 0, lines_added: 0, lines_removed: 0, tools: [] },
+            range,
           },
           200,
           { headers: CACHE_HEADERS },
@@ -122,7 +159,9 @@ export const handleUserSessions = authedRoute(async ({ request, user, env }) => 
         tools: [...new Set(allSessions.map((s) => s.host_tool as string).filter(Boolean))],
       };
 
-      return json({ ok: true, sessions: allSessions, totals }, 200, { headers: CACHE_HEADERS });
+      return json({ ok: true, sessions: allSessions, totals, range }, 200, {
+        headers: CACHE_HEADERS,
+      });
     },
   );
 });

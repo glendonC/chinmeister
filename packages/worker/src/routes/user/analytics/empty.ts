@@ -169,6 +169,7 @@ export function buildEmptyAnalyticsResponse(days: number): UserAnalytics {
     teams_included: 0,
     degraded: false,
     truncated_teams: 0,
+    failure_labels: {},
     per_project_velocity: [],
   };
 }
