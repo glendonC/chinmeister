@@ -18,7 +18,7 @@ import {
 
 import { forceRefresh } from '../../lib/stores/polling.js';
 import { teamActions } from '../../lib/stores/teams.js';
-import { navigate } from '../../lib/router.js';
+import { navigate, useQueryParam } from '../../lib/router.js';
 import type { TeamSummaryLive } from '../../lib/apiSchemas.js';
 import StatusState from '../../components/StatusState/StatusState.jsx';
 import ViewHeader from '../../components/ViewHeader/ViewHeader.jsx';
@@ -40,6 +40,14 @@ import { useProjectTabLayout } from './useProjectTabLayout.js';
 import { ACTIVITY_DEFAULT_LAYOUT, TRENDS_DEFAULT_LAYOUT } from './projectTabDefaults.js';
 import ProjectMemoryTab from './ProjectMemoryTab.jsx';
 import SpawnForm from '../../components/SpawnAgentModal/SpawnAgentModal.jsx';
+import { useDetailDrills } from '../../hooks/useDetailDrills.js';
+import LiveNowView from '../OverviewView/LiveNowView.js';
+import UsageDetailView from '../OverviewView/UsageDetailView.js';
+import OutcomesDetailView from '../OverviewView/OutcomesDetailView.js';
+import ActivityDetailView from '../OverviewView/ActivityDetailView.js';
+import CodebaseDetailView from '../OverviewView/CodebaseDetailView.js';
+import ToolsDetailView from '../OverviewView/ToolsDetailView.js';
+import MemoryDetailView from '../OverviewView/MemoryDetailView.js';
 
 import { WidgetGrid } from '../../components/WidgetGrid/WidgetGrid.js';
 import { WidgetRenderer } from '../../widgets/WidgetRenderer.js';
@@ -110,11 +118,25 @@ export default function ProjectView(_props: Props) {
   const isMobile = useMediaQuery(MOBILE_QUERY);
   const isAnalytical = activeTab === 'activity' || activeTab === 'trends';
 
-  // Analytics fetched only when an analytical tab is active
-  const { analytics } = useTeamExtendedAnalytics(activeTeamId, rangeDays, isAnalytical);
+  // Detail-drill chain shared with OverviewView. Project mounts the same
+  // seven detail components from views/OverviewView, scoped via the
+  // useTeamExtendedAnalytics fetch (single team_id) instead of the cross-
+  // project useUserAnalytics. The shared hook owns the Escape close.
+  const { drills, anyOpen, closeAll } = useDetailDrills();
+  const { live, usage, outcomes, activity, codebase, tools, memory } = drills;
+  const liveTabParam = useQueryParam('live-tab');
+  const focusAgentId = live.param && live.param.length > 0 ? live.param : null;
+
+  // Analytics fetch gate. Originally gated solely on `isAnalytical`
+  // (activity/trends tabs). Detail views consume the same UserAnalytics
+  // payload, so opening any drill from any tab needs the fetch active or
+  // the panel paints the empty fixture. Widen with `anyOpen` so e.g. the
+  // memory tab plus a Usage drill still gets data.
+  const analyticsActive = isAnalytical || anyOpen;
+  const { analytics } = useTeamExtendedAnalytics(activeTeamId, rangeDays, analyticsActive);
   const { data: conversationData } = useConversationAnalytics(
     rangeDays,
-    isAnalytical,
+    analyticsActive,
     activeTeamId ? [activeTeamId] : undefined,
   );
 
@@ -190,9 +212,10 @@ export default function ProjectView(_props: Props) {
   // `c` opens the customize menu on analytical tabs (where the
   // Customize button itself renders). Per-widget resize/remove lives on
   // the hover kebab, so there is no global rearrange mode and no `r`
-  // binding here.
+  // binding here. Suppress while a detail drill is open so the binding
+  // does not steal `c` from the drill surface.
   useEffect(() => {
-    if (isMobile || !isAnalytical) return;
+    if (isMobile || !isAnalytical || anyOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
@@ -208,7 +231,7 @@ export default function ProjectView(_props: Props) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [isMobile, isAnalytical]);
+  }, [isMobile, isAnalytical, anyOpen]);
 
   const handleDeleteMemory = useCallback(
     async (id: string) => {
@@ -343,6 +366,108 @@ export default function ProjectView(_props: Props) {
   }
 
   const activeSlots = currentLayout.slots.filter((s) => getWidget(s.id));
+
+  // Detail-drill render. ProjectView mounts the same seven detail
+  // components OverviewView mounts, scoped to this project's analytics.
+  // Back button reads "Project" so the breadcrumb says "you came from
+  // here" not "you came from the cross-project surface". LiveNowView
+  // takes liveAgents + locks (built by useProjectData) and a project-
+  // scoped scope label for its empty state.
+  if (anyOpen) {
+    if (live.shifted) {
+      return (
+        <LiveNowView
+          liveAgents={liveAgents}
+          locks={locks}
+          focusAgentId={focusAgentId}
+          initialTab={liveTabParam}
+          onBack={closeAll}
+          backLabel="Project"
+          scopeLabel="in this project"
+          onOpenProject={(teamId) => {
+            closeAll();
+            selectTeam(teamId);
+          }}
+          onOpenTools={() => {
+            closeAll();
+            navigate('tools');
+          }}
+        />
+      );
+    }
+    if (usage.shifted) {
+      return (
+        <UsageDetailView
+          analytics={analytics}
+          initialTab={usage.param}
+          onBack={usage.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+    if (outcomes.shifted) {
+      return (
+        <OutcomesDetailView
+          analytics={analytics}
+          initialTab={outcomes.param}
+          onBack={outcomes.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+    if (activity.shifted) {
+      return (
+        <ActivityDetailView
+          analytics={analytics}
+          initialTab={activity.param}
+          onBack={activity.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+    if (codebase.shifted) {
+      return (
+        <CodebaseDetailView
+          analytics={analytics}
+          initialTab={codebase.param}
+          onBack={codebase.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+    if (tools.shifted) {
+      return (
+        <ToolsDetailView
+          analytics={analytics}
+          initialTab={tools.param}
+          onBack={tools.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+    if (memory.shifted) {
+      return (
+        <MemoryDetailView
+          analytics={analytics}
+          initialTab={memory.param}
+          onBack={memory.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+  }
 
   return (
     <DndContext

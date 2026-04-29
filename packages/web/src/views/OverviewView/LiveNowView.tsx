@@ -28,6 +28,13 @@ interface Props {
   onBack: () => void;
   onOpenProject: (teamId: string) => void;
   onOpenTools: () => void;
+  // Label for the back chevron. "Overview" by default; ProjectView passes
+  // "Project" when mounting this detail in a single-project context.
+  backLabel?: string;
+  // Scope phrasing used in the empty-state subtitle. Default reads
+  // "across your projects" (cross-project surface). ProjectView passes
+  // "in this project" so the empty state matches its scope.
+  scopeLabel?: string;
 }
 
 export default function LiveNowView({
@@ -37,6 +44,8 @@ export default function LiveNowView({
   initialTab,
   onBack,
   onOpenProject,
+  backLabel = 'Overview',
+  scopeLabel = 'across your projects',
 }: Props) {
   const focusRowRef = useRef<HTMLButtonElement>(null);
 
@@ -100,10 +109,10 @@ export default function LiveNowView({
   if (totalAgents === 0) {
     return (
       <DetailView
-        backLabel="Overview"
+        backLabel={backLabel}
         onBack={onBack}
         title="live"
-        subtitle="No one working right now across your projects."
+        subtitle={`No one working right now ${scopeLabel}.`}
         tabs={[]}
         tabControl={tabControl}
         idPrefix="live"
@@ -146,7 +155,7 @@ export default function LiveNowView({
 
   return (
     <DetailView
-      backLabel="Overview"
+      backLabel={backLabel}
       onBack={onBack}
       title="live"
       subtitle={liveSubtitle}

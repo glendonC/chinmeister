@@ -41,12 +41,12 @@ import { usePollingStore, forceRefresh } from '../../lib/stores/polling.js';
 import { useAuthStore } from '../../lib/stores/auth.js';
 import { useTeamStore } from '../../lib/stores/teams.js';
 import { getColorHex } from '../../lib/utils.js';
-import { navigate, setQueryParam, useQueryParam } from '../../lib/router.js';
+import { navigate, useQueryParam } from '../../lib/router.js';
 import { projectGradient } from '../../lib/projectGradient.js';
 import { useUserAnalytics } from '../../hooks/useUserAnalytics.js';
 import { useConversationAnalytics } from '../../hooks/useConversationAnalytics.js';
 import { useDismissible } from '../../hooks/useDismissible.js';
-import { useDetailDrill } from '../../hooks/useDetailDrill.js';
+import { useDetailDrills } from '../../hooks/useDetailDrills.js';
 import EmptyState from '../../components/EmptyState/EmptyState.jsx';
 import InlineHint from '../../components/InlineHint/InlineHint.jsx';
 import StatusState from '../../components/StatusState/StatusState.jsx';
@@ -260,74 +260,29 @@ export default function OverviewView() {
   const { liveAgents, sortedSummaries } = useOverviewData(summaries);
 
   // Live Now full-page view. Query-param driven so the URL deep-links and
-  // the back/forward buttons work. The value, when present, doubles as a
-  // focus hint - clicking a specific agent row in the widget passes that
-  // agent_id so LiveNowView can auto-scroll to their row inside the full
-  // picture. An empty string opens the view without focus. The auxiliary
-  // `live-tab` param carries the initial tab when a row deep-links to a
-  // specific section (conflicts/files); closing live clears both.
-  const live = useDetailDrill('live');
+  // the back/forward buttons work. The `live` value, when present, doubles
+  // as a focus hint - clicking a specific agent row in the widget passes
+  // that agent_id so LiveNowView can auto-scroll to their row inside the
+  // full picture. An empty string opens the view without focus. The
+  // auxiliary `live-tab` param carries the initial tab when a row deep-
+  // links to a specific section (conflicts/files); closeAll clears both.
+  //
+  // The drill chain (one useDetailDrill per category, plus the Escape
+  // close handler) lives in the shared `useDetailDrills` hook so
+  // ProjectView mounts the same detail surfaces by consuming the same
+  // helper. Adding a new category is one entry in DETAIL_DRILL_KEYS and
+  // one mount call here, not three coordinated edits.
+  const { drills, anyOpen, closeAll } = useDetailDrills();
+  const { live, usage, outcomes, activity, codebase, tools, memory } = drills;
   const liveTabParam = useQueryParam('live-tab');
   const liveShifted = live.shifted;
-  const focusAgentId = live.param && live.param.length > 0 ? live.param : null;
-  const closeLive = useCallback(() => {
-    setQueryParam('live-tab', null);
-    live.close();
-  }, [live]);
-
-  // Usage Detail - same query-param pattern as Live Now, scoped to the
-  // usage category. The value is the initial tab (sessions/edits/cost/etc).
-  const usage = useDetailDrill('usage');
   const usageShifted = usage.shifted;
-
-  // Outcomes Detail - same pattern. Tabs: sessions / retries / types.
-  const outcomes = useDetailDrill('outcomes');
   const outcomesShifted = outcomes.shifted;
-
-  // Activity Detail - same pattern. Tabs: rhythm / mix / effective-hours.
-  const activity = useDetailDrill('activity');
   const activityShifted = activity.shifted;
-
-  // Codebase Detail - same pattern. Tabs: landscape / directories / risk / commits.
-  const codebase = useDetailDrill('codebase');
   const codebaseShifted = codebase.shifted;
-
-  // Tools Detail - same pattern. Tabs: tools / flow / errors.
-  const tools = useDetailDrill('tools');
   const toolsShifted = tools.shifted;
-
-  // Memory Detail. Tabs: health / freshness / cross-tool / authorship /
-  // hygiene. Memory mixes three time scopes on one surface (live +
-  // period + all-time).
-  const memory = useDetailDrill('memory');
   const memoryShifted = memory.shifted;
-
-  // Escape closes whichever detail view is open. Collapsing to a single
-  // active close handler keeps one listener regardless of how many
-  // drill-ins exist; adding a new category extends the chain by one line.
-  const activeClose = liveShifted
-    ? closeLive
-    : usageShifted
-      ? usage.close
-      : outcomesShifted
-        ? outcomes.close
-        : activityShifted
-          ? activity.close
-          : codebaseShifted
-            ? codebase.close
-            : toolsShifted
-              ? tools.close
-              : memoryShifted
-                ? memory.close
-                : null;
-  useEffect(() => {
-    if (!activeClose) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') activeClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [activeClose]);
+  const focusAgentId = live.param && live.param.length > 0 ? live.param : null;
 
   const projectFilter = useProjectFilter(teams);
   const { analytics } = useUserAnalytics(rangeDays, true, projectFilter.selectedIds);
@@ -536,18 +491,9 @@ export default function OverviewView() {
   // `c` opens the customize menu when the dashboard is the focus surface.
   // Per-widget resize/remove lives on the hover kebab, so there is no
   // global rearrange mode and no `r` / `Escape` handling for it here.
+  // Gated on `anyOpen` so any detail drill suppresses the binding.
   useEffect(() => {
-    if (
-      isMobile ||
-      liveShifted ||
-      usageShifted ||
-      outcomesShifted ||
-      activityShifted ||
-      codebaseShifted ||
-      toolsShifted ||
-      memoryShifted
-    )
-      return;
+    if (isMobile || anyOpen) return;
     const handler = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
       const target = e.target as HTMLElement | null;
@@ -563,16 +509,7 @@ export default function OverviewView() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [
-    isMobile,
-    liveShifted,
-    usageShifted,
-    outcomesShifted,
-    activityShifted,
-    codebaseShifted,
-    toolsShifted,
-    memoryShifted,
-  ]);
+  }, [isMobile, anyOpen]);
 
   // ── Guards ──────────────────────────────────────
   const isLoading = !dashboardData && (dashboardStatus === 'idle' || dashboardStatus === 'loading');
@@ -666,14 +603,14 @@ export default function OverviewView() {
             locks={demoLocks}
             focusAgentId={focusAgentId}
             initialTab={liveTabParam}
-            onBack={closeLive}
+            onBack={closeAll}
             onOpenProject={(teamId) => {
-              closeLive();
+              closeAll();
               selectTeam(teamId);
               navigate('project', teamId);
             }}
             onOpenTools={() => {
-              closeLive();
+              closeAll();
               navigate('tools');
             }}
           />

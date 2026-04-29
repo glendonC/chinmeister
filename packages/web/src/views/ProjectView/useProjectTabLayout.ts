@@ -1,6 +1,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import {
   defaultSlot,
+  getWidget,
+  resolveWidgetAlias,
   type WidgetSlot,
   type WidgetColSpan,
   type WidgetRowSpan,
@@ -11,6 +13,11 @@ import {
 // customize each tab independently. v3 shape: ordered WidgetSlots with
 // colSpan/rowSpan only. v1/v2 migrate by sorting stored widgets by (y,x)
 // and dropping positions.
+//
+// Alias resolution + clamp run on every load. Mirrors useOverviewLayout so
+// deprecated widget IDs (e.g. `models` → `model-mix`) heal automatically in
+// both saved-layout storage AND the projectTabDefaults arrays themselves.
+// Project tabs deserve the same resilience as Overview across catalog churn.
 
 const STORAGE_VERSION = 3;
 const UNDO_STACK_LIMIT = 25;
@@ -25,7 +32,10 @@ function storageKey(tabId: string): string {
 }
 
 function buildDefaultLayout(defaults: WidgetSlot[]): DashboardLayout {
-  return { version: STORAGE_VERSION, widgets: defaults.map((s) => ({ ...s })) };
+  // Run defaults through alias resolution so a default-layout array that
+  // still references a deprecated id (e.g. `models`) seeds the right
+  // replacement (`model-mix`) instead of dropping the slot at first paint.
+  return { version: STORAGE_VERSION, widgets: resolveAliases(defaults.map((s) => ({ ...s }))) };
 }
 
 function mapColSpan(w: number): WidgetColSpan {
@@ -53,8 +63,67 @@ interface LegacyWidget {
 function migrateLegacyWidgets(widgets: LegacyWidget[]): WidgetSlot[] {
   return [...widgets]
     .sort((a, b) => a.y - b.y || a.x - b.x)
-    .map((w) => ({ id: w.id, colSpan: mapColSpan(w.w), rowSpan: mapRowSpan(w.h) }))
-    .filter((s) => defaultSlot(s.id));
+    .map((w) => ({ id: w.id, colSpan: mapColSpan(w.w), rowSpan: mapRowSpan(w.h) }));
+}
+
+// Expand deprecated widget ids (rename/split) into their replacements. An
+// unaliased id is preserved at the user's stored size. Replacements drop
+// back to catalog defaults since the old slot size may not fit the new
+// widgets. De-duplicates so a user who already has a replacement visible
+// does not end up with two copies after the expansion runs. Mirrors the
+// helper in useOverviewLayout so both views stay in lockstep on alias
+// handling.
+function resolveAliases(slots: WidgetSlot[]): WidgetSlot[] {
+  const seen = new Set<string>();
+  const out: WidgetSlot[] = [];
+  for (const slot of slots) {
+    const ids = resolveWidgetAlias(slot.id);
+    if (ids.length === 1 && ids[0] === slot.id) {
+      if (!seen.has(slot.id) && defaultSlot(slot.id)) {
+        seen.add(slot.id);
+        out.push(slot);
+      }
+      continue;
+    }
+    for (const rid of ids) {
+      if (seen.has(rid)) continue;
+      const def = defaultSlot(rid);
+      if (def) {
+        seen.add(rid);
+        out.push(def);
+      }
+    }
+  }
+  return out;
+}
+
+// Generic clamp against catalog min/max. Saved slots whose sizes now
+// exceed the catalog's viz constraints get normalized to the nearest
+// valid size. Source of truth is the catalog WidgetDef's min/maxW + H,
+// matching the constraint `setSlotSize` enforces on every resize gesture.
+// Same helper as useOverviewLayout's clampToCatalogConstraints.
+function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => {
+    const def = getWidget(s.id);
+    if (!def) return s;
+    const maxCol = (def.maxW ?? 12) as WidgetColSpan;
+    const maxRow = (def.maxH ?? 4) as WidgetRowSpan;
+    const minCol = (def.minW ?? 3) as WidgetColSpan;
+    const minRow = (def.minH ?? 2) as WidgetRowSpan;
+    const colSpan = Math.max(minCol, Math.min(maxCol, s.colSpan)) as WidgetColSpan;
+    const rowSpan = Math.max(minRow, Math.min(maxRow, s.rowSpan)) as WidgetRowSpan;
+    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
+    return { ...s, colSpan, rowSpan };
+  });
+}
+
+// Heal pipeline. Same shape as useOverviewLayout's, minus the Overview-
+// specific healers (live-agents, projects, scope-complexity) that do not
+// apply to project tabs. The clamp at the end catches any saved size
+// outside the catalog's current min/max for a widget no specific healer
+// covered.
+function healLayout(slots: WidgetSlot[]): WidgetSlot[] {
+  return clampToCatalogConstraints(slots);
 }
 
 function loadDashboard(tabId: string, defaults: WidgetSlot[]): DashboardLayout {
@@ -63,16 +132,29 @@ function loadDashboard(tabId: string, defaults: WidgetSlot[]): DashboardLayout {
     if (raw) {
       const parsed = JSON.parse(raw);
       if ((parsed?.version === 1 || parsed?.version === 2) && Array.isArray(parsed.widgets)) {
-        const migrated: DashboardLayout = {
-          version: STORAGE_VERSION,
-          widgets: migrateLegacyWidgets(parsed.widgets as LegacyWidget[]),
-        };
+        const slots = healLayout(
+          resolveAliases(migrateLegacyWidgets(parsed.widgets as LegacyWidget[])),
+        );
+        const migrated: DashboardLayout = { version: STORAGE_VERSION, widgets: slots };
         saveDashboard(tabId, migrated);
         return migrated;
       }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
-        const valid = (parsed.widgets as WidgetSlot[]).filter((s) => defaultSlot(s.id));
-        return { version: STORAGE_VERSION, widgets: valid };
+        const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
+        const healed = healLayout(expanded);
+        const stored = parsed.widgets as WidgetSlot[];
+        const changed =
+          healed.length !== stored.length ||
+          healed.some(
+            (s, i) =>
+              s.id !== stored[i]?.id ||
+              s.colSpan !== stored[i]?.colSpan ||
+              s.rowSpan !== stored[i]?.rowSpan,
+          );
+        if (changed) {
+          saveDashboard(tabId, { version: STORAGE_VERSION, widgets: healed });
+        }
+        return { version: STORAGE_VERSION, widgets: healed };
       }
     }
   } catch {
@@ -188,17 +270,23 @@ export function useProjectTabLayout(tabId: string, defaults: WidgetSlot[]) {
 
   const setSlotSize = useCallback(
     (id: string, size: { colSpan?: WidgetColSpan; rowSpan?: WidgetRowSpan }) => {
+      const def = getWidget(id);
       setAndSave((prev) => ({
         ...prev,
-        widgets: prev.widgets.map((s) =>
-          s.id === id
-            ? {
-                ...s,
-                colSpan: size.colSpan ?? s.colSpan,
-                rowSpan: size.rowSpan ?? s.rowSpan,
-              }
-            : s,
-        ),
+        widgets: prev.widgets.map((s) => {
+          if (s.id !== id) return s;
+          const requestedCol = size.colSpan ?? s.colSpan;
+          const requestedRow = size.rowSpan ?? s.rowSpan;
+          const maxCol = (def?.maxW ?? 12) as WidgetColSpan;
+          const maxRow = (def?.maxH ?? 4) as WidgetRowSpan;
+          const minCol = (def?.minW ?? 3) as WidgetColSpan;
+          const minRow = (def?.minH ?? 2) as WidgetRowSpan;
+          return {
+            ...s,
+            colSpan: Math.max(minCol, Math.min(maxCol, requestedCol)) as WidgetColSpan,
+            rowSpan: Math.max(minRow, Math.min(maxRow, requestedRow)) as WidgetRowSpan,
+          };
+        }),
       }));
     },
     [setAndSave],

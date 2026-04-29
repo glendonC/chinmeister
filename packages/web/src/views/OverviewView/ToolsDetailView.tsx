@@ -59,6 +59,10 @@ interface Props {
   onBack: () => void;
   rangeDays: RangeDays;
   onRangeChange: (next: RangeDays) => void;
+  // Label for the back chevron. "Overview" on the cross-project surface,
+  // "Project" when ProjectView mounts the same detail. Default keeps
+  // existing OverviewView call sites unchanged.
+  backLabel?: string;
 }
 
 function fmtCount(n: number): string {
@@ -78,6 +82,7 @@ export default function ToolsDetailView({
   onBack,
   rangeDays,
   onRangeChange,
+  backLabel = 'Overview',
 }: Props) {
   const resolved: ToolsTab = isToolsTab(initialTab) ? initialTab : 'tools';
   const tabControl = useTabs(TOOLS_TABS, resolved);
@@ -128,7 +133,7 @@ export default function ToolsDetailView({
 
   return (
     <DetailView
-      backLabel="Overview"
+      backLabel={backLabel}
       onBack={onBack}
       title="tools"
       subtitle={scopeSubtitle}
