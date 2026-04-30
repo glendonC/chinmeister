@@ -79,11 +79,15 @@ export default function MemoryDetailView({
     return set.size;
   }, [flow]);
 
+  // Tabs whose value is a scalar quantity over the period MUST set a real delta
+  // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
+  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<MemoryTab>> = [
     {
       id: 'health',
       label: 'Health',
       value: m.total_memories > 0 ? fmtCount(m.total_memories) : '--',
+      // TODO: wire once memory_writes_per_day ships.
       delta: { ...MISSING_DELTA },
     },
     {
@@ -93,24 +97,28 @@ export default function MemoryDetailView({
         aging.recent_7d + aging.recent_30d + aging.recent_90d + aging.older > 0
           ? `${freshShareUnder30d(aging)}%`
           : '--',
+      // rationale: ratio of age buckets at snapshot, not period-comparable without prior snapshot.
       delta: { ...MISSING_DELTA },
     },
     {
       id: 'cross-tool',
       label: 'Cross-tool',
       value: distinctPairs > 0 ? fmtCount(distinctPairs) : '--',
+      // rationale: count of distinct cross-tool pairs, not period-additive.
       delta: { ...MISSING_DELTA },
     },
     {
       id: 'authorship',
       label: 'Authorship',
       value: dirs.length > 0 ? fmtCount(dirs.length) : '--',
+      // rationale: count of distinct dirs, not period-additive.
       delta: { ...MISSING_DELTA },
     },
     {
       id: 'hygiene',
       label: 'Hygiene',
       value: sup.pending_proposals > 0 ? fmtCount(sup.pending_proposals) : '--',
+      // TODO: wire once supersession events carry timestamps.
       delta: { ...MISSING_DELTA },
     },
   ];

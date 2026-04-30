@@ -23,6 +23,82 @@
   letter-spacing: var(--tracking-stat);
 }
 
+/* Tool filter chrome. Renders at the panel head when `?tool=` is set so
+ * every per-tool question on the panel collapses to that tool. Mirrors
+ * the EditsPanel landscape clear-button pattern: chromeless mono label,
+ * brand dot for the focused tool, small uppercase clear control. */
+
+.filterBar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.filterDot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-circle);
+  flex-shrink: 0;
+}
+
+.filterLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+.filterClear {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 2px 6px;
+  cursor: pointer;
+  color: var(--soft);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  transition: color var(--motion-fast) ease;
+}
+
+.filterClear:hover,
+.filterClear:focus-visible {
+  color: var(--ink);
+  outline: none;
+}
+
+/* Inline trigger inside BreakdownList row labels. Renders the tool name
+ * as a focusable button styled to look like the original label so the
+ * row visual stays unchanged; clicking selects that tool as the panel
+ * filter via setQueryParam('tool', host_tool). */
+
+.toolFilterTrigger {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: inherit;
+  color: inherit;
+  text-align: left;
+  border-radius: var(--radius-2xs);
+  transition: color var(--motion-fast) ease;
+}
+
+.toolFilterTrigger:hover,
+.toolFilterTrigger:focus-visible {
+  color: var(--accent, var(--ink));
+  outline: none;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-underline-offset: 2px;
+}
+
 /* ── Workload row meta ──────────────────────────────
  * The workload question's BreakdownList carries sessions/edits as the
  * primary value plus a muted contextual stat for completion. The

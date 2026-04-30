@@ -7,6 +7,9 @@ export type { DivergingSeries } from './DivergingColumns.js';
 export { default as DivergingRows } from './DivergingRows.js';
 export type { DivergingRowEntry } from './DivergingRows.js';
 
+export { default as RateBars } from './RateBars.js';
+export type { RateBarRow, RateBarsProps } from './RateBars.js';
+
 export { default as TrueShareBars } from './TrueShareBars.js';
 export type { TrueShareEntry } from './TrueShareBars.js';
 

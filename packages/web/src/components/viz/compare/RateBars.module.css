@@ -1,0 +1,89 @@
+/* RateBars — horizontal rate bars with label / track / fill / value rhythm.
+ *
+ * Bar fill width is the literal rate (0–100), NOT max-normalized. Two
+ * detail panels share the same shape: WorkTypes (color per work-type) and
+ * commit-vs-completion buckets (color per completion threshold). Tokens
+ * only; the global @keyframes rowReveal lives in app.css.
+ */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: var(--label-col, 130px) 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 40ms);
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  height: 16px;
+  background: var(--ghost);
+  border-radius: var(--radius-2xs);
+  overflow: hidden;
+}
+
+.fill {
+  display: block;
+  height: 100%;
+  width: var(--rate);
+  min-width: 2px;
+  background: var(--fill);
+  border-radius: var(--radius-2xs);
+  opacity: var(--opacity-bar-fill);
+  transition: width 0.4s var(--motion);
+}
+
+.value {
+  font-family: var(--mono);
+  font-size: var(--text-sm);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.sublabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  font-variant-numeric: tabular-nums;
+  margin-left: 6px;
+}
+
+.footer {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  margin: var(--space-md) 0 0 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    animation: none !important;
+  }
+  .fill {
+    transition: none !important;
+  }
+}
+
+@media (max-width: 720px) {
+  .row {
+    grid-template-columns: 110px 1fr auto;
+  }
+}

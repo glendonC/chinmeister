@@ -45,6 +45,7 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
   const moc = analytics.memory_outcome_correlation;
   const ss = analytics.memory_secrets_shield;
   const tm = analytics.top_memories;
+  const cats = analytics.memory_categories;
 
   // Stale share for the DotMatrix reference next to the steady-state hero.
   const stalePct = m.total_memories > 0 ? (m.stale_memories / m.total_memories) * 100 : 0;
@@ -179,6 +180,103 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
         </span>
       ),
       relatedLinks: getCrossLinks('memory', 'health', 'outcomes'),
+    });
+  }
+
+  // Recent memories: top_memories carries no created_at, so sort by
+  // access_count desc as a recency proxy. The list answers "what's the
+  // team's working set right now?" and the empty state names the user
+  // action that fills it.
+  if (tm.length > 0) {
+    const recent = [...tm].sort((a, b) => b.access_count - a.access_count).slice(0, 10);
+    const newest = recent[0];
+    const newestStamp = newest.last_accessed_at
+      ? relativeDays(newest.last_accessed_at, nowMs)
+      : null;
+    questions.push({
+      id: 'recent',
+      question: 'What memories are top of mind?',
+      answer: newestStamp ? (
+        <>
+          The most-read memory was last touched <Metric>{newestStamp}</Metric>.
+        </>
+      ) : (
+        <>
+          <Metric>{fmtCount(recent.length)}</Metric> memories surfaced this period.
+        </>
+      ),
+      children: (
+        <BreakdownList
+          items={recent.map((entry) => ({
+            key: entry.id,
+            label: <span className={styles.memoryPreview}>{entry.text_preview}</span>,
+            fillPct: 0,
+            value: (
+              <>
+                {fmtCount(entry.access_count)} hits
+                {entry.last_accessed_at && (
+                  <BreakdownMeta>
+                    {' · '}
+                    {relativeDays(entry.last_accessed_at, nowMs)}
+                  </BreakdownMeta>
+                )}
+              </>
+            ),
+          }))}
+        />
+      ),
+    });
+  } else {
+    questions.push({
+      id: 'recent',
+      question: 'What memories are top of mind?',
+      answer: <>No memories saved yet.</>,
+      children: (
+        <span className={styles.empty}>
+          No memories saved yet. Run a session and save context with `chinmeister_save_memory`.
+        </span>
+      ),
+    });
+  }
+
+  // Top tags: memory_categories is a (category, count) ranking, so a
+  // BreakdownList with proportional bars reads cleaner than RateBars
+  // (which is reserved for 0-100 ratios). Tags render bare to match the
+  // existing MemoryCategoriesWidget ladder, which uses no `#` prefix.
+  if (cats.length > 0) {
+    const topTags = [...cats].sort((a, b) => b.count - a.count).slice(0, 10);
+    const maxCount = Math.max(...topTags.map((c) => c.count), 1);
+    const leader = topTags[0];
+    questions.push({
+      id: 'top-tags',
+      question: 'Which tags carry the most memory?',
+      answer: (
+        <>
+          <Metric>{leader.category}</Metric> leads with <Metric>{fmtCount(leader.count)}</Metric>{' '}
+          {leader.count === 1 ? 'memory' : 'memories'}.
+        </>
+      ),
+      children: (
+        <BreakdownList
+          items={topTags.map((entry) => ({
+            key: entry.category,
+            label: entry.category,
+            fillPct: (entry.count / maxCount) * 100,
+            value: <>{fmtCount(entry.count)}</>,
+          }))}
+        />
+      ),
+    });
+  } else {
+    questions.push({
+      id: 'top-tags',
+      question: 'Which tags carry the most memory?',
+      answer: <>No tags in memory yet.</>,
+      children: (
+        <span className={styles.empty}>
+          No tags in memory yet. Tagging happens via `chinmeister_save_memory`.
+        </span>
+      ),
     });
   }
 

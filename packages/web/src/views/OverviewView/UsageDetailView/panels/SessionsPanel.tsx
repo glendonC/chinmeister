@@ -9,18 +9,22 @@ import {
 } from '../../../../components/DetailView/index.js';
 import {
   DotMatrix,
+  DurationStrip,
   HeroStatRow,
+  HourHeatmap,
   LegendDot,
   LegendHatch,
   type HeroStatDef,
+  type HourCell,
 } from '../../../../components/viz/index.js';
 import ToolIcon from '../../../../components/ToolIcon/ToolIcon.js';
 import { arcPath, computeArcSlices } from '../../../../lib/svgArcs.js';
 import { getToolMeta } from '../../../../lib/toolMeta.js';
 import { navigate, setQueryParam, useQueryParam } from '../../../../lib/router.js';
+import { DAY_LABELS } from '../../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
-import { fmtCount, formatStripDate } from '../format.js';
+import { fmtCount, formatStripDate, hourGlyph } from '../format.js';
 import styles from '../UsageDetailView.module.css';
 
 export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
@@ -168,6 +172,38 @@ export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
     );
   })();
 
+  // Hour x day-of-week cells from hourly_distribution. Same shape the
+  // RhythmPanel feeds HourHeatmap, scoped here to sessions only so the
+  // Usage Sessions hero "when did sessions peak in the day?" question
+  // can render without crossing into Activity territory.
+  const hourCells: HourCell[] = (() => {
+    const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    for (const h of analytics.hourly_distribution) {
+      grid[h.dow][h.hour] = (grid[h.dow][h.hour] || 0) + h.sessions;
+    }
+    const out: HourCell[] = [];
+    for (let dow = 0; dow < 7; dow++) {
+      for (let hour = 0; hour < 24; hour++) {
+        const v = grid[dow][hour];
+        if (v > 0) out.push({ dow, hour, value: v });
+      }
+    }
+    return out;
+  })();
+
+  const peakHourCell = hourCells.reduce<{ dow: number; hour: number; value: number } | null>(
+    (best, c) => (best === null || c.value > best.value ? c : best),
+    null,
+  );
+
+  const peakHourAnswer = peakHourCell ? (
+    <>
+      Peaks <Metric>{DAY_LABELS[peakHourCell.dow]}</Metric> at{' '}
+      <Metric>{hourGlyph(peakHourCell.hour)}</Metric> with{' '}
+      <Metric>{fmtCount(peakHourCell.value)} sessions</Metric>.
+    </>
+  ) : null;
+
   const durationAnswer = (() => {
     if (durationDist.length === 0) return null;
     const total = durationDist.reduce((s, b) => s + b.count, 0);
@@ -239,6 +275,14 @@ export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
           </div>
         </>
       ),
+    });
+  }
+  if (peakHourCell && peakHourAnswer) {
+    questions.push({
+      id: 'peak-hour',
+      question: 'When in the day did sessions peak?',
+      answer: peakHourAnswer,
+      children: <HourHeatmap data={hourCells} cellSize={16} />,
     });
   }
   if (durationDist.length > 0 && durationAnswer) {
@@ -407,56 +451,6 @@ function ToolRing({
           </span>
         </button>
       </div>
-    </div>
-  );
-}
-
-// Horizontal stacked strip, labels on top, continuous bar in the middle,
-// counts beneath each segment. Segments share a baseline so label/bar/count
-// stay in columns that flex to the bucket's share. Palette-wide ink-alpha
-// spread so adjacent buckets read as distinctly different steps, not a
-// single murky gray.
-function DurationStrip({ buckets }: { buckets: UserAnalytics['duration_distribution'] }) {
-  const total = Math.max(
-    1,
-    buckets.reduce((s, b) => s + b.count, 0),
-  );
-  const n = Math.max(1, buckets.length);
-  // Spread from 20% → 100% ink so even 3 buckets read as three distinct
-  // steps. Reference point: the FACIAL THIRDS pattern uses three visibly
-  // different grays; linear alpha interpolation gives the same feel.
-  const tintPct = (i: number): number => Math.round(20 + (i / Math.max(1, n - 1)) * 80);
-  return (
-    <div className={styles.durationCols}>
-      {buckets.map((b, i) => {
-        const pct = tintPct(i);
-        const share = Math.round((b.count / total) * 100);
-        return (
-          <div
-            key={b.bucket}
-            className={styles.durationCol}
-            style={
-              {
-                flex: Math.max(1, b.count),
-                '--row-index': i,
-              } as CSSProperties
-            }
-            title={`${b.bucket} · ${b.count} sessions`}
-          >
-            <span className={styles.durationColLabel}>{b.bucket}</span>
-            <div
-              className={styles.durationColSeg}
-              style={{
-                background: `color-mix(in srgb, var(--ink) ${pct}%, transparent)`,
-              }}
-            />
-            <span className={styles.durationColValue}>
-              {fmtCount(b.count)}
-              <span className={styles.durationColMeta}> · {share}%</span>
-            </span>
-          </div>
-        );
-      })}
     </div>
   );
 }

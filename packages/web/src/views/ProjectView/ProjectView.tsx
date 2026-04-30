@@ -47,6 +47,7 @@ import OutcomesDetailView from '../OverviewView/OutcomesDetailView/OutcomesDetai
 import ActivityDetailView from '../OverviewView/ActivityDetailView/ActivityDetailView.js';
 import CodebaseDetailView from '../OverviewView/CodebaseDetailView/CodebaseDetailView.js';
 import ToolsDetailView from '../OverviewView/ToolsDetailView/ToolsDetailView.js';
+import ConversationsDetailView from '../OverviewView/ConversationsDetailView/ConversationsDetailView.js';
 import MemoryDetailView from '../OverviewView/MemoryDetailView/MemoryDetailView.js';
 
 import { WidgetGrid } from '../../components/WidgetGrid/WidgetGrid.js';
@@ -448,6 +449,18 @@ export default function ProjectView(_props: Props) {
           analytics={analytics}
           initialTab={tools.param}
           onBack={tools.close}
+          rangeDays={rangeDays}
+          onRangeChange={setRangeDays}
+          backLabel="Project"
+        />
+      );
+    }
+    if (drills.conversations.shifted) {
+      return (
+        <ConversationsDetailView
+          analytics={analytics}
+          initialTab={drills.conversations.param}
+          onBack={drills.conversations.close}
           rangeDays={rangeDays}
           onRangeChange={setRangeDays}
           backLabel="Project"

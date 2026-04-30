@@ -39,7 +39,7 @@ export const OUTCOMES_WIDGETS: WidgetDef[] = [
     minH: 2,
     dataKeys: ['daily_trends'],
     fitContent: true,
-    drillTarget: { view: 'outcomes', tab: 'sessions' },
+    drillTarget: { view: 'outcomes', tab: 'sessions', q: 'trend' },
   },
   {
     id: 'one-shot-rate',
@@ -74,7 +74,7 @@ export const OUTCOMES_WIDGETS: WidgetDef[] = [
     minW: 3,
     minH: 2,
     dataKeys: ['stuckness'],
-    drillTarget: { view: 'outcomes', tab: 'sessions' },
+    drillTarget: { view: 'outcomes', tab: 'sessions', q: 'stall' },
     ownsClick: true,
   },
   {

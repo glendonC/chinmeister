@@ -1,12 +1,18 @@
 import { useMemo, type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
-import { setQueryParam } from '../../lib/router.js';
+import { navigateToDetail, setQueryParam } from '../../lib/router.js';
 import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
 import { completionColor } from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import styles from './OutcomeWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { InlineDelta, Sparkline, StatWidget, CoverageNote } from './shared.js';
+import {
+  capabilityCoverageNote,
+  CoverageNote,
+  InlineDelta,
+  Sparkline,
+  StatWidget,
+} from './shared.js';
 
 function openOutcomes(tab: string) {
   return () => setQueryParam('outcomes', tab);
@@ -275,7 +281,7 @@ function OneShotRateWidget({ analytics }: WidgetBodyProps) {
   const s = analytics.tool_call_stats;
   if (s.one_shot_sessions === 0) {
     // capabilityCoverageNote is silent when every reporting tool declares
-    // the capability — but today only Claude Code's JSONL parser actually
+    // the capability, but today only Claude Code's JSONL parser actually
     // populates tool_calls end-to-end. A Cursor-only user would get `--`
     // with no note under the generic helper, which is the D3a lie the
     // rubric exists to prevent. Name the source instead of the capability.
@@ -287,12 +293,16 @@ function OneShotRateWidget({ analytics }: WidgetBodyProps) {
     );
   }
   const value = `${s.one_shot_rate}%`;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
   return (
-    <StatWidget
-      value={value}
-      onOpenDetail={openOutcomes('retries')}
-      detailAriaLabel={`Open outcomes detail · ${value} one-shot rate`}
-    />
+    <>
+      <StatWidget
+        value={value}
+        onOpenDetail={openOutcomes('retries')}
+        detailAriaLabel={`Open outcomes detail · ${value} one-shot rate`}
+      />
+      <CoverageNote text={capabilityCoverageNote(tools, 'toolCallLogs')} />
+    </>
   );
 }
 
@@ -320,7 +330,7 @@ function StucknessWidget({ analytics }: WidgetBodyProps) {
       value={value}
       delta={stuckDelta}
       deltaInvert
-      onOpenDetail={openOutcomes('sessions')}
+      onOpenDetail={() => navigateToDetail('outcomes', 'sessions', 'stall')}
       detailAriaLabel={`Open outcomes detail · ${value} stuck rate`}
     />
   );

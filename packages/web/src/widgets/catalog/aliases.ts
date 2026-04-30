@@ -120,3 +120,16 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
 export function resolveWidgetAlias(id: string): string[] {
   return WIDGET_ALIASES[id] ?? [id];
 }
+
+/**
+ * Tab-value aliases for the Usage detail view. When a saved or shared URL
+ * carries a tab value that no longer exists, the detail view consults this
+ * map to land the user on the right (tab, q) pair instead of bouncing them
+ * back to the default tab. Each entry preserves the original deep-link
+ * intent so existing bookmarks keep working after a tab is folded into a
+ * sibling.
+ */
+export const USAGE_TAB_ALIASES: Record<string, { tab: string; q?: string }> = {
+  // cost-per-edit folded into the Cost tab as a sibling question.
+  'cost-per-edit': { tab: 'cost', q: 'per-edit' },
+};

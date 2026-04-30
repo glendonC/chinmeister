@@ -87,13 +87,10 @@ export function CrossToolPanel({ analytics }: { analytics: UserAnalytics }) {
     {
       id: 'categories',
       question: 'Which categories cross tools?',
-      answer: (
-        <>Cross-tool category breakdown ships once the worker emits category arrays on flow rows.</>
-      ),
+      answer: <>Category mix is tracked on the Health tab today; cross-tool flow is tool-level.</>,
       children: (
         <span className={styles.empty}>
-          Needs a `cross_tool × category` cut on `cross_tool_memory_flow`. See the categories
-          question on the Hygiene tab for the live category mix.
+          Open Memory Health to see which tags carry the most live memory.
         </span>
       ),
     },

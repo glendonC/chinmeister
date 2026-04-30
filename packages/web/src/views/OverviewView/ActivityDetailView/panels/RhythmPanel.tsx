@@ -101,29 +101,12 @@ export function RhythmPanel({
   }
 
   // Q1 peak-hour
-  const peakRate = (() => {
-    if (!peakCell) return null;
-    // Look up completion rate for this DOW from daily_trends grouped by
-    // weekday; this is a coarse approximation since daily_trends carry
-    // per-day rates not per-hour rates. For the cell-level prose we
-    // skip the second sentence when n < 5 per the spec.
-    if (peakCell.sessions < 5) return null;
-    const rate = analytics.completion_summary.completion_rate;
-    return Number.isFinite(rate) ? Math.round(rate) : null;
-  })();
-
   const peakAnswer = peakCell ? (
     <>
       <Metric>
         {DAY_LABELS[peakCell.dow]} {hourGlyph(peakCell.hour)}
       </Metric>{' '}
       is your busiest cell with <Metric>{fmtCount(peakCell.sessions)}</Metric> sessions.
-      {peakRate != null && (
-        <>
-          {' '}
-          <Metric tone="positive">{peakRate}%</Metric> of those completed.
-        </>
-      )}
     </>
   ) : null;
 

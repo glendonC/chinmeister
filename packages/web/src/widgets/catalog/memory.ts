@@ -59,7 +59,7 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
     // height and shrinks the cell — capped at h:4 so a populated list
     // still gets the full slot.
     fitContent: true,
-    drillTarget: { view: 'memory', tab: 'cross-tool', q: 'categories' },
+    drillTarget: { view: 'memory', tab: 'health', q: 'top-tags' },
   },
   {
     id: 'memory-health',

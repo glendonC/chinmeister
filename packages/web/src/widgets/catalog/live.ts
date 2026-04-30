@@ -18,6 +18,8 @@ export const LIVE_WIDGETS: WidgetDef[] = [
     dataKeys: ['dashboard'],
     timeScope: 'live',
     fitContent: true,
+    drillTarget: { view: 'live', tab: 'agents', q: 'active-agents' },
+    ownsClick: true,
   },
   {
     id: 'live-conflicts',
@@ -34,6 +36,8 @@ export const LIVE_WIDGETS: WidgetDef[] = [
     dataKeys: ['dashboard'],
     timeScope: 'live',
     fitContent: true,
+    drillTarget: { view: 'live', tab: 'conflicts', q: 'conflicts' },
+    ownsClick: true,
   },
   {
     id: 'files-in-play',
@@ -50,6 +54,8 @@ export const LIVE_WIDGETS: WidgetDef[] = [
     dataKeys: ['dashboard'],
     timeScope: 'live',
     fitContent: true,
+    drillTarget: { view: 'live', tab: 'files', q: 'files-in-play' },
+    ownsClick: true,
   },
   {
     id: 'claimed-files',
@@ -68,7 +74,10 @@ export const LIVE_WIDGETS: WidgetDef[] = [
     fitContent: true,
     // Drill opens the LiveNow Files tab where claims show up alongside
     // unclaimed files-in-play, so a single surface answers "what is
-    // anyone holding right now and how long has it been held."
-    drillTarget: { view: 'live', tab: 'files' },
+    // anyone holding right now and how long has it been held." The
+    // `q=by-claim-age` question carries the widget's sort intent
+    // (locks sorted by minutes_held desc) into the Files tab so the
+    // user lands on the same reading order they were already in.
+    drillTarget: { view: 'live', tab: 'files', q: 'by-claim-age' },
   },
 ];

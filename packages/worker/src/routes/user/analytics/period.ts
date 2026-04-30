@@ -22,6 +22,13 @@ interface PeriodAcc {
   // a partial-coverage team can't contaminate the aggregate with zero.
   cost_sum: number | null;
   edits_sum: number;
+  // Weighted by total_sessions, summed null-stickily across teams. Both
+  // metrics stay null when no team reported a value, so the renderer's
+  // null-gate fires the same way as the per-team query did.
+  one_shot_sum: number | null;
+  one_shot_weight: number;
+  qualified_hour_median_sum: number | null;
+  qualified_hour_median_weight: number;
 }
 
 export interface PeriodComparisonAcc {
@@ -40,6 +47,10 @@ function emptyPeriodAcc(): PeriodAcc {
     count: 0,
     cost_sum: null,
     edits_sum: 0,
+    one_shot_sum: null,
+    one_shot_weight: 0,
+    qualified_hour_median_sum: null,
+    qualified_hour_median_weight: 0,
   };
 }
 
@@ -64,6 +75,15 @@ export function merge(acc: PeriodComparisonAcc, team: TeamResult): void {
       acc.current.cost_sum = (acc.current.cost_sum ?? 0) + cur.total_estimated_cost_usd;
     }
     acc.current.edits_sum += cur.total_edits_in_token_sessions ?? 0;
+    if (cur.one_shot_rate != null) {
+      acc.current.one_shot_sum = (acc.current.one_shot_sum ?? 0) + cur.one_shot_rate * ts;
+      acc.current.one_shot_weight += ts;
+    }
+    if (cur.qualified_hour_completion_median != null) {
+      acc.current.qualified_hour_median_sum =
+        (acc.current.qualified_hour_median_sum ?? 0) + cur.qualified_hour_completion_median * ts;
+      acc.current.qualified_hour_median_weight += ts;
+    }
   }
   const prev = pc.previous;
   if (prev) {
@@ -79,6 +99,15 @@ export function merge(acc: PeriodComparisonAcc, team: TeamResult): void {
       acc.previous.cost_sum = (acc.previous.cost_sum ?? 0) + prev.total_estimated_cost_usd;
     }
     acc.previous.edits_sum += prev.total_edits_in_token_sessions ?? 0;
+    if (prev.one_shot_rate != null) {
+      acc.previous.one_shot_sum = (acc.previous.one_shot_sum ?? 0) + prev.one_shot_rate * ts;
+      acc.previous.one_shot_weight += ts;
+    }
+    if (prev.qualified_hour_completion_median != null) {
+      acc.previous.qualified_hour_median_sum =
+        (acc.previous.qualified_hour_median_sum ?? 0) + prev.qualified_hour_completion_median * ts;
+      acc.previous.qualified_hour_median_weight += ts;
+    }
   }
 }
 
@@ -97,6 +126,22 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
     prevCost != null && acc.previous.edits_sum > 0
       ? Math.round((prevCost / acc.previous.edits_sum) * 10000) / 10000
       : null;
+  const curOneShot =
+    acc.current.one_shot_sum != null && acc.current.one_shot_weight > 0
+      ? round1(acc.current.one_shot_sum / acc.current.one_shot_weight)
+      : null;
+  const curQualifiedMedian =
+    acc.current.qualified_hour_median_sum != null && acc.current.qualified_hour_median_weight > 0
+      ? round1(acc.current.qualified_hour_median_sum / acc.current.qualified_hour_median_weight)
+      : null;
+  const prevOneShot =
+    acc.previous.one_shot_sum != null && acc.previous.one_shot_weight > 0
+      ? round1(acc.previous.one_shot_sum / acc.previous.one_shot_weight)
+      : null;
+  const prevQualifiedMedian =
+    acc.previous.qualified_hour_median_sum != null && acc.previous.qualified_hour_median_weight > 0
+      ? round1(acc.previous.qualified_hour_median_sum / acc.previous.qualified_hour_median_weight)
+      : null;
   return {
     current: {
       completion_rate: cs > 0 ? round1(acc.current.completion_sum / cs) : 0,
@@ -111,6 +156,8 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
       total_estimated_cost_usd: curCost,
       total_edits_in_token_sessions: acc.current.edits_sum,
       cost_per_edit: curCostPerEdit,
+      one_shot_rate: curOneShot,
+      qualified_hour_completion_median: curQualifiedMedian,
     },
     previous:
       acc.previous.count > 0
@@ -124,6 +171,8 @@ export function project(acc: PeriodComparisonAcc): PeriodComparison {
             total_estimated_cost_usd: prevCost,
             total_edits_in_token_sessions: acc.previous.edits_sum,
             cost_per_edit: prevCostPerEdit,
+            one_shot_rate: prevOneShot,
+            qualified_hour_completion_median: prevQualifiedMedian,
           }
         : null,
   };

@@ -6,28 +6,30 @@ import {
   getCrossLinks,
   type FocusedQuestion,
 } from '../../../../components/DetailView/index.js';
+import { RateVolumeColumns } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
-import { getToolMeta } from '../../../../lib/toolMeta.js';
 import { arcPath, computeArcSlices } from '../../../../lib/svgArcs.js';
-import { completionColor } from '../../../../widgets/utils.js';
+import { getToolMeta } from '../../../../lib/toolMeta.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
+import { capabilityCoverageNote, CoverageNote } from '../../../../widgets/bodies/shared.js';
+import shared from '../../../../widgets/widget-shared.module.css';
 
 import { fmtCount, formatMinutes } from '../format.js';
 import styles from '../OutcomesDetailView.module.css';
 
+const STUCK_LIST_CAP = 10;
+
 export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
   const cs = analytics.completion_summary;
   const stuck = analytics.stuckness;
-  const fe = analytics.first_edit_stats;
-  const dd = analytics.duration_distribution;
+  const unanswered = analytics.unanswered_questions;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const conversationNote = capabilityCoverageNote(tools, 'conversationLogs');
   const outcomesSessionsActiveId = useQueryParam('q');
 
   if (cs.total_sessions === 0) {
     return <span className={styles.empty}>No sessions yet. Run one and drill back in.</span>;
   }
-
-  const byTool = fe.by_tool.filter((t) => t.avg_minutes > 0).slice(0, 6);
-  const durTotal = dd.reduce((s, b) => s + b.count, 0);
 
   // Tones: completion rate -> positive, stuck rate -> warning, time/count
   // neutral. Same vocabulary as UsageDetailView so the system reads as
@@ -59,33 +61,6 @@ export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
       </>
     );
 
-  const firstEditAnswer = (() => {
-    if (fe.median_minutes_to_first_edit <= 0 && fe.avg_minutes_to_first_edit <= 0) return null;
-    const median = formatMinutes(fe.median_minutes_to_first_edit);
-    if (byTool.length > 1) {
-      const minTool = formatMinutes(Math.min(...byTool.map((t) => t.avg_minutes)));
-      const maxTool = formatMinutes(Math.max(...byTool.map((t) => t.avg_minutes)));
-      return (
-        <>
-          Median time to first edit is <Metric>{median} min</Metric>, ranging{' '}
-          <Metric>{minTool}</Metric>-<Metric>{maxTool} min</Metric> across{' '}
-          <Metric>{byTool.length} tools</Metric>.
-        </>
-      );
-    }
-    return (
-      <>
-        Median time to first edit is <Metric>{median} min</Metric>.
-      </>
-    );
-  })();
-
-  const durationAnswer = (
-    <>
-      Distributed across <Metric>{fmtCount(durTotal)}</Metric> sessions with an outcome recorded.
-    </>
-  );
-
   const questions: FocusedQuestion[] = [
     {
       id: 'completion',
@@ -104,30 +79,83 @@ export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
     });
   }
   questions.push({
+    id: 'unanswered-questions',
+    question: 'Which questions were left behind?',
+    answer:
+      unanswered.count > 0 ? (
+        <>
+          <Metric tone="warning">{fmtCount(unanswered.count)}</Metric> user questions were inside
+          sessions that ended abandoned.
+        </>
+      ) : (
+        <>No abandoned sessions contained user questions in this window.</>
+      ),
+    children: (
+      <>
+        {unanswered.recent.length > 0 ? (
+          <div className={shared.dataList}>
+            {unanswered.recent.map((entry, i) => {
+              const meta = entry.host_tool ? getToolMeta(entry.host_tool) : null;
+              return (
+                <div
+                  key={entry.event_id}
+                  className={shared.dataRow}
+                  style={{ '--row-index': i } as CSSProperties}
+                >
+                  <span className={styles.questionPreview}>{entry.question_preview}</span>
+                  <div className={shared.dataMeta}>
+                    {meta && (
+                      <span className={shared.dataStat}>
+                        <span
+                          className={styles.questionToolDot}
+                          style={{ background: meta.color }}
+                          aria-hidden="true"
+                        />
+                        {meta.label}
+                      </span>
+                    )}
+                    <span className={shared.dataStat}>{entry.created_at.slice(5, 10)}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : unanswered.count > 0 ? (
+          <div className={styles.stuckRow}>
+            <span className={styles.stuckHero}>
+              <span className={styles.stuckValue}>{fmtCount(unanswered.count)}</span>
+            </span>
+            <div className={styles.stuckFacts}>
+              <span className={styles.stuckFact}>
+                <span className={styles.stuckFactValue}>abandoned-question turns</span>
+              </span>
+              <span className={styles.stuckFact}>
+                Review these as follow-up intent, memory candidates, or a retry queue.
+              </span>
+            </div>
+          </div>
+        ) : (
+          <span className={styles.empty}>
+            Questions appear here when a session ends abandoned after the user asked for help.
+          </span>
+        )}
+        <CoverageNote text={conversationNote} />
+      </>
+    ),
+  });
+  questions.push({
     id: 'stall',
     question: 'How often did agents stall?',
     answer: stuckAnswer,
-    children: <StuckBlock stuck={stuck} />,
+    children: (
+      <>
+        <StuckBlock stuck={stuck} />
+        {stuck.stuck_sessions_list.length > 0 && (
+          <StuckSessionList list={stuck.stuck_sessions_list} />
+        )}
+      </>
+    ),
   });
-  if (
-    (fe.median_minutes_to_first_edit > 0 || fe.avg_minutes_to_first_edit > 0) &&
-    firstEditAnswer
-  ) {
-    questions.push({
-      id: 'first-edit',
-      question: 'How fast did agents start editing?',
-      answer: firstEditAnswer,
-      children: <FirstEditBlock fe={fe} byTool={byTool} />,
-    });
-  }
-  if (durTotal > 0) {
-    questions.push({
-      id: 'duration',
-      question: 'How long did sessions run?',
-      answer: durationAnswer,
-      children: <DurationStrip buckets={dd} total={durTotal} />,
-    });
-  }
 
   return (
     <FocusedDetailView
@@ -278,132 +306,88 @@ function StuckBlock({ stuck }: { stuck: UserAnalytics['stuckness'] }) {
   );
 }
 
-function FirstEditBlock({
-  fe,
-  byTool,
-}: {
-  fe: UserAnalytics['first_edit_stats'];
-  byTool: Array<{ host_tool: string; avg_minutes: number; sessions: number }>;
-}) {
+function StuckSessionList({ list }: { list: UserAnalytics['stuckness']['stuck_sessions_list'] }) {
+  const visible = list.slice(0, STUCK_LIST_CAP);
+  const overflow = Math.max(0, list.length - visible.length);
   return (
-    <div className={styles.firstEditBlock}>
-      <span className={styles.feHero}>
-        <span className={styles.feValue}>{formatMinutes(fe.median_minutes_to_first_edit)}</span>
-        <span className={styles.feUnit}>min</span>
-      </span>
-      <div className={styles.feChips}>
-        {fe.avg_minutes_to_first_edit > 0 &&
-          fe.avg_minutes_to_first_edit !== fe.median_minutes_to_first_edit && (
-            <span className={styles.feChip}>
-              <span className={styles.feChipDot} style={{ background: 'var(--soft)' }} />
-              <span className={styles.feChipLabel}>avg</span>
-              <span className={styles.feChipValue}>
-                {formatMinutes(fe.avg_minutes_to_first_edit)}m
-              </span>
-            </span>
-          )}
-        {byTool.map((t) => {
-          const meta = getToolMeta(t.host_tool);
-          return (
-            <span key={t.host_tool} className={styles.feChip}>
-              <span className={styles.feChipDot} style={{ background: meta.color }} />
-              <span className={styles.feChipLabel}>{meta.label}</span>
-              <span className={styles.feChipValue}>{formatMinutes(t.avg_minutes)}m</span>
-            </span>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function DurationStrip({
-  buckets,
-  total,
-}: {
-  buckets: UserAnalytics['duration_distribution'];
-  total: number;
-}) {
-  return (
-    <div className={styles.durationFrame}>
-      <div className={styles.durationBar}>
-        {buckets.map((b, i) => {
-          if (b.count === 0) return null;
-          const share = b.count / total;
-          const pos = buckets.length > 1 ? i / (buckets.length - 1) : 0;
-          const color = pos <= 0.33 ? 'var(--success)' : pos >= 0.66 ? 'var(--warn)' : 'var(--ink)';
+    <div className={styles.stuckListWrap}>
+      <div className={shared.dataList}>
+        {visible.map((entry, i) => {
+          const meta = entry.host_tool ? getToolMeta(entry.host_tool) : null;
+          const shortId = entry.session_id.slice(0, 8);
+          const fileLabel = entry.file_path ? lastPathSegment(entry.file_path) : null;
           return (
             <div
-              key={b.bucket}
-              className={styles.durationSegment}
-              style={{
-                flex: `${share} 1 0`,
-                background: color,
-                opacity: 0.65,
-              }}
-              title={`${b.bucket}: ${b.count} (${Math.round(share * 100)}%)`}
-            />
-          );
-        })}
-      </div>
-      <div className={styles.durationLegend}>
-        {buckets.map((b) => {
-          const share = total > 0 ? Math.round((b.count / total) * 100) : 0;
-          return (
-            <div key={b.bucket} className={styles.durationCell}>
-              <span className={styles.durationBucket}>{b.bucket}</span>
-              <span>
-                <span className={styles.durationCount}>{fmtCount(b.count)}</span>
-                <span className={styles.durationShare}>· {share}%</span>
+              key={entry.session_id}
+              className={shared.dataRow}
+              style={{ '--row-index': i } as CSSProperties}
+            >
+              <span className={styles.stuckListAgent}>
+                {meta && (
+                  <span
+                    className={styles.stuckListAgentDot}
+                    style={{ background: meta.color }}
+                    aria-hidden="true"
+                  />
+                )}
+                <span className={styles.stuckListAgentLabel}>
+                  {meta ? meta.label : entry.agent_id}
+                </span>
               </span>
+              <span className={styles.stuckListId} title={entry.session_id}>
+                {shortId}
+              </span>
+              {fileLabel && (
+                <span className={styles.stuckListFile} title={entry.file_path ?? undefined}>
+                  {fileLabel}
+                </span>
+              )}
+              <span className={styles.stuckListDuration}>
+                {formatMinutes(entry.duration_minutes)}m
+              </span>
+              <Metric tone={entry.recovered ? 'positive' : 'warning'}>
+                {entry.recovered ? 'recovered' : 'active'}
+              </Metric>
             </div>
           );
         })}
       </div>
+      {overflow > 0 && <div className={shared.moreHidden}>+{overflow} more</div>}
     </div>
   );
+}
+
+function lastPathSegment(path: string): string {
+  const trimmed = path.replace(/\/+$/, '');
+  const idx = trimmed.lastIndexOf('/');
+  return idx >= 0 ? trimmed.slice(idx + 1) : trimmed;
 }
 
 function CompletionTrendDetail({ trends }: { trends: UserAnalytics['daily_trends'] }) {
   const observed = trends.filter((d) => (d.sessions ?? 0) > 0);
   const maxSessions = Math.max(...observed.map((d) => d.sessions ?? 0), 1);
   return (
-    <div className={styles.dailyTrendDetail}>
-      <div className={styles.dailyTrendBars}>
-        {trends.map((d, i) => {
-          const sessions = d.sessions ?? 0;
-          const rate = sessions > 0 ? Math.round(((d.completed ?? 0) / sessions) * 100) : null;
-          const color = rate == null ? 'var(--ghost)' : completionColor(rate);
-          const height = rate == null ? 10 : Math.max(10, rate);
-          const opacity = sessions > 0 ? Math.max(0.45, sessions / maxSessions) : 0.16;
-          return (
-            <span key={d.day} className={styles.dailyTrendColumn}>
-              <span
-                className={styles.dailyTrendBar}
-                style={
-                  {
-                    '--row-index': i,
-                    '--trend-height': `${height}%`,
-                    background: color,
-                    opacity,
-                  } as CSSProperties
-                }
-                title={
-                  rate == null
-                    ? `${d.day}: no sessions`
-                    : `${d.day}: ${rate}% completed, ${d.completed ?? 0} of ${sessions} sessions`
-                }
-              />
-              <span className={styles.dailyTrendRate}>{rate == null ? '—' : `${rate}%`}</span>
-            </span>
-          );
-        })}
-      </div>
-      <div className={styles.dailyTrendLegend}>
-        <span>daily completion rate</span>
-        <span>opacity shows session volume</span>
-      </div>
-    </div>
+    <RateVolumeColumns
+      minFrameHeightPx={180}
+      staggerMs={25}
+      legend={{ left: 'daily completion rate', right: 'opacity shows session volume' }}
+      columns={trends.map((d) => {
+        const sessions = d.sessions ?? 0;
+        const rate = sessions > 0 ? Math.round(((d.completed ?? 0) / sessions) * 100) : null;
+        return {
+          key: d.day,
+          label: d.day.slice(5),
+          rateLabel: rate == null ? '-' : `${rate}%`,
+          volume: sessions,
+          rate,
+          opacity: sessions > 0 ? Math.max(0.45, sessions / maxSessions) : 0.16,
+          title:
+            rate == null
+              ? `${d.day}: no sessions`
+              : `${d.day}: ${rate}% completed, ${d.completed ?? 0} of ${sessions} sessions`,
+        };
+      })}
+    />
   );
 }
 

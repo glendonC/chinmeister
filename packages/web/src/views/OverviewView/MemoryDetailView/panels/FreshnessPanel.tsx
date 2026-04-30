@@ -5,6 +5,8 @@ import {
   Metric,
   type FocusedQuestion,
 } from '../../../../components/DetailView/index.js';
+import { RateVolumeColumns } from '../../../../components/viz/index.js';
+import { BodyLead } from '../../../../widgets/bodies/atoms/BodyLead.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
@@ -24,7 +26,9 @@ const AGE_COLORS: Record<string, string> = {
 export function FreshnessPanel({ analytics }: { analytics: UserAnalytics }) {
   const activeId = useQueryParam('q');
   const a = analytics.memory_aging;
+  const writesPerDay = analytics.memory_writes_per_day ?? [];
   const total = a.recent_7d + a.recent_30d + a.recent_90d + a.older;
+  const periodWrites = writesPerDay.reduce((sum, d) => sum + d.writes, 0);
 
   if (total === 0) {
     return (
@@ -153,6 +157,47 @@ export function FreshnessPanel({ analytics }: { analytics: UserAnalytics }) {
           })}
         </div>
       ),
+    },
+    {
+      id: 'growth',
+      question: 'How is memory growing?',
+      answer:
+        periodWrites > 0 ? (
+          <>
+            <Metric>{fmtCount(periodWrites)}</Metric> {periodWrites === 1 ? 'memory' : 'memories'}{' '}
+            saved across <Metric>{fmtCount(writesPerDay.length)}</Metric>{' '}
+            {writesPerDay.length === 1 ? 'day' : 'days'} this period.
+          </>
+        ) : (
+          <>No memories saved this period.</>
+        ),
+      children:
+        periodWrites > 0 ? (
+          <div className={styles.growthFrame}>
+            <BodyLead
+              label="growth"
+              value={`${fmtCount(periodWrites)} ${periodWrites === 1 ? 'memory' : 'memories'}`}
+              sublabel="this period"
+            />
+            <RateVolumeColumns
+              minFrameHeightPx={140}
+              staggerMs={25}
+              legend={{ left: 'memories saved per day', right: 'height shows volume' }}
+              columns={writesPerDay.map((d) => ({
+                key: d.day,
+                label: d.day.slice(5),
+                volume: d.writes,
+                rate: null,
+                title:
+                  d.writes === 0
+                    ? `${d.day}: no memories saved`
+                    : `${d.day}: ${d.writes} ${d.writes === 1 ? 'memory' : 'memories'} saved`,
+              }))}
+            />
+          </div>
+        ) : (
+          <span className={styles.empty}>No memories saved this period.</span>
+        ),
     },
   ];
 

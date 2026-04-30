@@ -37,6 +37,12 @@ export const dailyTrendSchema = z.object({
   completed: z.number().default(0),
   abandoned: z.number().default(0),
   failed: z.number().default(0),
+  // Per-day count of tool_calls rows where is_error = 1. Powers the Tools
+  // errors trend tab so users can see whether errors are concentrated on
+  // specific days vs spread evenly. Default 0 so older payloads parse
+  // cleanly. Null is not used: a day with no tool calls is structurally
+  // a zero-error day, not unknown-error.
+  errors: z.number().int().nonnegative().default(0),
   // Per-day cost and cost-per-edit, populated post-query by
   // enrichDailyTrendsWithPricing. Null on any day where cost is
   // structurally unshowable - no token-capturing sessions that day,
@@ -422,12 +428,22 @@ export const confusedFileEntrySchema = z.object({
 });
 export type ConfusedFileEntry = z.infer<typeof confusedFileEntrySchema>;
 
-// Scalar count of user messages classified topic='question' inside sessions
-// that ended abandoned. The signal is "intent the agent couldn't fulfill,"
-// surfaced as a navigation aid (same shape as live-conflicts: number drives
-// drill into the underlying sessions).
+// Recent user questions inside abandoned sessions. The count is the headline
+// scalar; `recent` is a capped recency list so the detail view can answer
+// "which questions were left behind" without exposing full conversation logs.
+export const unansweredQuestionEntrySchema = z.object({
+  event_id: z.string(),
+  session_id: z.string(),
+  created_at: z.string(),
+  host_tool: z.string().nullable().default(null),
+  sequence: z.number().default(0),
+  question_preview: z.string(),
+});
+export type UnansweredQuestionEntry = z.infer<typeof unansweredQuestionEntrySchema>;
+
 export const unansweredQuestionStatsSchema = z.object({
   count: z.number().default(0),
+  recent: z.array(unansweredQuestionEntrySchema).default([]),
 });
 export type UnansweredQuestionStats = z.infer<typeof unansweredQuestionStatsSchema>;
 
@@ -531,6 +547,34 @@ export const memorySupersessionStatsSchema = z.object({
 });
 export type MemorySupersessionStats = z.infer<typeof memorySupersessionStatsSchema>;
 
+// Per-event timeline for the supersession queue. Drives the Memory hygiene
+// tab's "when did each event happen" view, which the live counters above
+// can't answer because they collapse to scalars. Sourced from
+// consolidation_proposals.proposed_at and consolidation_proposals.resolved_at
+// joined with the kind column (merge | invalidate). Capped on the worker
+// side so the payload stays bounded; ordered most-recent-first so a fresh
+// queue surfaces immediately. decided_at is null for proposals still in the
+// 'pending' state; status is the proposal's lifecycle state at the time of
+// the read.
+export const memorySupersessionEventSchema = z.object({
+  id: z.string(),
+  proposed_at: z.string(),
+  decided_at: z.string().nullable().default(null),
+  kind: z.string(),
+  status: z.string(),
+});
+export type MemorySupersessionEvent = z.infer<typeof memorySupersessionEventSchema>;
+
+// Per-day count of memory rows created. Powers the MemoryDetailView health
+// tab's write-history sparkline: a flat or rising trend reads differently
+// from a hard cliff after a single bulk import. Mirrors the dailyCommitSchema
+// shape for visual consistency in the renderer's spine helpers.
+export const memoryWritesPerDaySchema = z.object({
+  day: z.string(),
+  writes: z.number().int().nonnegative().default(0),
+});
+export type MemoryWritesPerDay = z.infer<typeof memoryWritesPerDaySchema>;
+
 // Secrets shield stats: blocked_period rolls up daily_metrics.secrets_blocked
 // over the picker window, blocked_24h is the live last-24h counter. Detail
 // questions: how many leaks attempted, which tools tried, trend, patterns
@@ -575,12 +619,37 @@ export const filesNewVsRevisitedSchema = z.object({
 });
 export type FilesNewVsRevisited = z.infer<typeof filesNewVsRevisitedSchema>;
 
+// Per-session entry feeding the Sessions stuck-list widget. The scalar
+// stucknessStatsSchema collapses every stuck session into one rate; this
+// list is the navigation aid that lets a user open the actual sessions
+// behind the rate. Capped on the worker side (top 20) so the payload stays
+// bounded - the cap orders by `last_activity_at` desc so the freshest
+// stuck sessions surface first. `recovered` is true when got_stuck=1 and
+// outcome='completed', matching stuck_completion_rate's numerator. file_path
+// is a representative pick from files_touched (first entry) and may be null
+// for sessions that never recorded a file touch.
+export const stuckSessionEntrySchema = z.object({
+  session_id: z.string(),
+  agent_id: z.string(),
+  host_tool: z.string().nullable().default(null),
+  last_activity_at: z.string().nullable().default(null),
+  duration_minutes: z.number().default(0),
+  recovered: z.boolean().default(false),
+  file_path: z.string().nullable().default(null),
+});
+export type StuckSessionEntry = z.infer<typeof stuckSessionEntrySchema>;
+
 export const stucknessStatsSchema = z.object({
   total_sessions: z.number().default(0),
   stuck_sessions: z.number().default(0),
   stuckness_rate: z.number().default(0),
   stuck_completion_rate: z.number().default(0),
   normal_completion_rate: z.number().default(0),
+  /** Capped, recency-ordered list of stuck sessions. Empty when the team
+   *  has zero got_stuck=1 rows in the window. The renderer gates on length
+   *  so older payloads (no list field) parse to [] and the widget falls
+   *  back to scalar-only mode. */
+  stuck_sessions_list: z.array(stuckSessionEntrySchema).default([]),
 });
 export type StucknessStats = z.infer<typeof stucknessStatsSchema>;
 
@@ -838,6 +907,18 @@ export const periodMetricsSchema = z.object({
    *  retroactive-pricing semantic. Null under the same conditions as
    *  total_estimated_cost_usd OR when total_edits_in_token_sessions is 0. */
   cost_per_edit: z.number().nullable().default(null),
+  /** % of sessions with edits where edits worked without an Edit→Bash→Edit
+   *  retry cycle (0-100). Mirrors tool_call_stats.one_shot_rate but scoped
+   *  to this period window so the Tools panel can render a delta against
+   *  the previous window. Null when the window had zero sessions with
+   *  edits (no denominator); consumers gate display on null. */
+  one_shot_rate: z.number().nullable().default(null),
+  /** Median completion rate across qualified hours (hourly_effectiveness
+   *  rows with sessions > 0) in this period window. Powers the Activity
+   *  effective-hours tab's previous-window delta. Null when fewer than
+   *  the qualifying-hours threshold landed in the window so the median
+   *  would be unstable. */
+  qualified_hour_completion_median: z.number().nullable().default(null),
 });
 export type PeriodMetrics = z.infer<typeof periodMetricsSchema>;
 
@@ -852,6 +933,8 @@ export const periodComparisonSchema = z.object({
     total_estimated_cost_usd: null,
     total_edits_in_token_sessions: 0,
     cost_per_edit: null,
+    one_shot_rate: null,
+    qualified_hour_completion_median: null,
   }),
   previous: periodMetricsSchema.nullable().default(null),
 });
@@ -1003,7 +1086,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
   // Default to empty/zero for older producers and tools without conversation
   // capture.
   confused_files: z.array(confusedFileEntrySchema).default([]),
-  unanswered_questions: unansweredQuestionStatsSchema.default({ count: 0 }),
+  unanswered_questions: unansweredQuestionStatsSchema.default({ count: 0, recent: [] }),
   // Substrate-unique to chinmeister: requires conversation capture across two
   // tools that share a file. Default empty so older producers and single-tool
   // teams parse cleanly; the renderer's empty state names the 2+ tool
@@ -1027,6 +1110,13 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     merged_period: 0,
     pending_proposals: 0,
   }),
+  // Per-event timeline behind the supersession scalars. Default empty so
+  // older producers (and TeamDOs that haven't run migration 029 yet) parse
+  // cleanly; the renderer's empty state names the gate.
+  memory_supersession_events: z.array(memorySupersessionEventSchema).default([]),
+  // Per-day memory creation count over the picker window. Default empty so
+  // older producers parse cleanly.
+  memory_writes_per_day: z.array(memoryWritesPerDaySchema).default([]),
   memory_secrets_shield: memorySecretsShieldStatsSchema.default({
     blocked_period: 0,
     blocked_24h: 0,
@@ -1043,6 +1133,7 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
     stuckness_rate: 0,
     stuck_completion_rate: 0,
     normal_completion_rate: 0,
+    stuck_sessions_list: [],
   }),
   file_overlap: fileOverlapStatsSchema.default({ total_files: 0, overlapping_files: 0 }),
   audit_staleness: z.array(auditStalenessEntrySchema).default([]),
@@ -1070,6 +1161,8 @@ export const userAnalyticsSchema = teamAnalyticsSchema.extend({
       total_estimated_cost_usd: null,
       total_edits_in_token_sessions: 0,
       cost_per_edit: null,
+      one_shot_rate: null,
+      qualified_hour_completion_median: null,
     },
     previous: null,
   }),

@@ -21,11 +21,9 @@ import {
 // outcome stripe for files; tool-icon route for handoffs) so the widgets
 // earn distinct identity without forking the table primitive.
 //
-// No drill affordances. The conversations category has no detail view yet,
-// and the session-list filter route these widgets would need does not
-// exist. Until either ships, the widgets render as read-only summaries —
-// no buttons, no onClick, no false promises. The signals will fold into
-// the existing detail views (Codebase/Tools/Outcomes) as a follow-up.
+// Drill targets fold conversation-derived signals into their owning axes:
+// file struggle lives in Codebase risk, tool-switch questions in Tools flow,
+// and abandoned intent in Outcomes sessions.
 
 const CONFUSED_FILES_VISIBLE = 8;
 const CROSS_TOOL_HANDOFFS_VISIBLE = 8;
@@ -42,12 +40,17 @@ const CONFUSED_DOTS_MAX = 12;
 // staleness so two file-axis widgets don't read as visual duplicates.
 function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
   const cf = analytics.confused_files;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
   if (cf.length === 0) {
     return (
-      <SectionEmpty>
-        Files where the agent struggled appear after 2+ sessions show confused or frustrated
-        messages.
-      </SectionEmpty>
+      <>
+        <SectionEmpty>
+          Files where the agent struggled appear after 2+ sessions show confused or frustrated
+          messages.
+        </SectionEmpty>
+        <CoverageNote text={note} />
+      </>
     );
   }
   const visible = cf.slice(0, CONFUSED_FILES_VISIBLE);
@@ -82,6 +85,7 @@ function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
         </div>
       </div>
       <MoreHidden count={hidden} />
+      <CoverageNote text={note} />
     </>
   );
 }
@@ -117,12 +121,17 @@ function ConfusedSessionsStripe({ total, abandoned }: { total: number; abandoned
 // is the substrate signal no single-tool surface can show.
 function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
   const events = analytics.cross_tool_handoff_questions;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
   if (events.length === 0) {
     return (
-      <SectionEmpty>
-        Handoffs appear when one tool ends a session abandoned mid-question and a different tool
-        picks up the same file within 24 hours.
-      </SectionEmpty>
+      <>
+        <SectionEmpty>
+          Handoffs appear when one tool ends a session abandoned mid-question and a different tool
+          picks up the same file within 24 hours.
+        </SectionEmpty>
+        <CoverageNote text={note} />
+      </>
     );
   }
   const visible = events.slice(0, CROSS_TOOL_HANDOFFS_VISIBLE);
@@ -168,6 +177,7 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
         </div>
       </div>
       <MoreHidden count={hidden} />
+      <CoverageNote text={note} />
     </>
   );
 }
@@ -176,28 +186,28 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
 //
 // Bare hero stat. The widget title carries the metric name; the body
 // is just the number. Same primitive as Stuckness, OneShotRate, Sessions.
-// No drill: the conversations category has no detail view yet.
 function UnansweredQuestionsWidget({ analytics }: WidgetBodyProps) {
   const uq = analytics.unanswered_questions;
-  // When count=0, distinguish "measured zero" from "no tool reporting
-  // conversation logs." capabilityCoverageNote returns null when every
-  // active tool covers conversationLogs, so a fully-instrumented user
-  // sees the genuine zero. Partial-capture renders `--` with the gap
-  // disclosed inline — the only place the user finds out they have a
-  // capture gap until the data-quality surface lands.
-  if (uq.count === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
-    const note = capabilityCoverageNote(tools, 'conversationLogs');
-    if (note) {
-      return (
-        <>
-          <StatWidget value="--" />
-          <CoverageNote text={note} />
-        </>
-      );
-    }
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'conversationLogs');
+  // When count=0 with partial conversation-log coverage, render `--` instead
+  // of `0` so the user can tell "system measured zero" apart from "the only
+  // tool that would have measured this isn't reporting." Full coverage with
+  // count=0 falls through to the genuine `0`.
+  if (uq.count === 0 && note) {
+    return (
+      <>
+        <StatWidget value="--" />
+        <CoverageNote text={note} />
+      </>
+    );
   }
-  return <StatWidget value={uq.count.toLocaleString()} />;
+  return (
+    <>
+      <StatWidget value={uq.count.toLocaleString()} />
+      <CoverageNote text={note} />
+    </>
+  );
 }
 
 // ── helpers ─────────────────────────────────────────

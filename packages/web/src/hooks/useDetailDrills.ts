@@ -40,11 +40,12 @@ export function useDetailDrills(): DetailDrills {
   const activity = useDetailDrill('activity');
   const codebase = useDetailDrill('codebase');
   const tools = useDetailDrill('tools');
+  const conversations = useDetailDrill('conversations');
   const memory = useDetailDrill('memory');
 
   const drills = useMemo<Record<DetailViewKey, DetailDrill>>(
-    () => ({ live, usage, outcomes, activity, codebase, tools, memory }),
-    [live, usage, outcomes, activity, codebase, tools, memory],
+    () => ({ live, usage, outcomes, activity, codebase, tools, conversations, memory }),
+    [live, usage, outcomes, activity, codebase, tools, conversations, memory],
   );
 
   const anyOpen =
@@ -54,21 +55,26 @@ export function useDetailDrills(): DetailDrills {
     activity.shifted ||
     codebase.shifted ||
     tools.shifted ||
+    conversations.shifted ||
     memory.shifted;
 
   const closeAll = useCallback(() => {
     // Clear the live-tab aux param (only meaningful while live is open)
-    // and the active drill. Other drills are already null in practice;
-    // calling close() on them is a no-op.
+    // and the shared `q` question param (carries sort/section intent
+    // into the active detail view, so it would otherwise leak when the
+    // next drill opens). Then close the active drill. Other drills are
+    // already null in practice; calling close() on them is a no-op.
     setQueryParam('live-tab', null);
+    setQueryParam('q', null);
     if (live.shifted) live.close();
     if (usage.shifted) usage.close();
     if (outcomes.shifted) outcomes.close();
     if (activity.shifted) activity.close();
     if (codebase.shifted) codebase.close();
     if (tools.shifted) tools.close();
+    if (conversations.shifted) conversations.close();
     if (memory.shifted) memory.close();
-  }, [live, usage, outcomes, activity, codebase, tools, memory]);
+  }, [live, usage, outcomes, activity, codebase, tools, conversations, memory]);
 
   // Escape closes whichever detail view is open. One listener regardless
   // of how many drill-ins exist; adding a category is a one-line change

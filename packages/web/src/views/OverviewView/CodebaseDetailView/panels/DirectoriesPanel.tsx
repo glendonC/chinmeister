@@ -5,7 +5,11 @@ import {
   Metric,
   type FocusedQuestion,
 } from '../../../../components/DetailView/index.js';
-import { DirectoryColumns, DirectoryConstellation } from '../../../../components/viz/index.js';
+import {
+  DirectoryColumns,
+  DirectoryConstellation,
+  RateBars,
+} from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
 import { capabilityCoverageNote, CoverageNote } from '../../../../widgets/bodies/shared.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
@@ -112,8 +116,26 @@ export function DirectoriesPanel({ analytics }: { analytics: UserAnalytics }) {
   if (topDirsAnswer && dirs.length > 0) {
     questions.push({
       id: 'top-dirs',
-      question: 'Which directories carry the work?',
+      question: 'Where does the work concentrate?',
       answer: topDirsAnswer,
+      children: (
+        <RateBars
+          rows={dirs.map((d) => ({
+            key: d.directory,
+            label: d.directory,
+            rate: d.completion_rate,
+            value: fmtCount(d.touch_count),
+            sublabel: `${d.completion_rate}% completed`,
+          }))}
+          tone="completion"
+          labelWidth={200}
+        />
+      ),
+    });
+    questions.push({
+      id: 'files-in-dirs',
+      question: 'Which files inside busy directories?',
+      answer: <>File-level distribution within the busy directories, grouped by work type.</>,
       children: (
         <DirectoryColumns
           files={analytics.file_heatmap.map((f) => ({
@@ -128,10 +150,20 @@ export function DirectoriesPanel({ analytics }: { analytics: UserAnalytics }) {
   } else {
     questions.push({
       id: 'top-dirs',
-      question: 'Which directories carry the work?',
+      question: 'Where does the work concentrate?',
       answer: <>Activity rolls up by directory once files are touched.</>,
       children: (
         <span className={styles.empty}>Activity rolls up by directory once files are touched.</span>
+      ),
+    });
+    questions.push({
+      id: 'files-in-dirs',
+      question: 'Which files inside busy directories?',
+      answer: <>File-level distribution appears once directories have touches.</>,
+      children: (
+        <span className={styles.empty}>
+          File-level distribution appears once directories have touches.
+        </span>
       ),
     });
   }

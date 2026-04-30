@@ -16,6 +16,8 @@ interface DailyTrendBucket {
   completed: number;
   abandoned: number;
   failed: number;
+  // Errors is a per-day count, summable across teams.
+  errors: number;
   // Cost is summable across teams; cost_per_edit is rederived from the
   // merged cost / merged edits so the cross-team ratio stays honest (a
   // simple average of per-team ratios would mis-weight small teams).
@@ -43,6 +45,7 @@ export function merge(acc: DailyTrendsAcc, team: TeamResult): void {
       completed: 0,
       abandoned: 0,
       failed: 0,
+      errors: 0,
       cost_sum: null as number | null,
     };
     existing.sessions += t.sessions;
@@ -54,6 +57,7 @@ export function merge(acc: DailyTrendsAcc, team: TeamResult): void {
     existing.completed += t.completed ?? 0;
     existing.abandoned += t.abandoned ?? 0;
     existing.failed += t.failed ?? 0;
+    existing.errors += t.errors ?? 0;
     if (t.cost != null) {
       existing.cost_sum = (existing.cost_sum ?? 0) + t.cost;
     }
@@ -79,6 +83,7 @@ export function project(acc: DailyTrendsAcc): DailyTrend[] {
         completed: v.completed,
         abandoned: v.abandoned,
         failed: v.failed,
+        errors: v.errors,
         cost,
         cost_per_edit: costPerEdit,
       };

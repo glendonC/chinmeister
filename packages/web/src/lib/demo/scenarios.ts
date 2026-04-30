@@ -600,6 +600,13 @@ function negativeDelta(): DemoData {
             curr.cost_per_edit != null
               ? Math.round(curr.cost_per_edit * 0.72 * 10_000) / 10_000
               : null,
+          // Previous window was healthier across the board, so one-shot and
+          // qualified-hour completion both sit above the current values.
+          one_shot_rate: curr.one_shot_rate != null ? Math.min(1, curr.one_shot_rate + 0.09) : 0.78,
+          qualified_hour_completion_median:
+            curr.qualified_hour_completion_median != null
+              ? Math.min(1, curr.qualified_hour_completion_median + 0.07)
+              : 0.81,
         },
       },
       completion_summary: {
@@ -817,6 +824,56 @@ function stuckHeavy(): DemoData {
         stuckness_rate: Math.round((stuckSessions / totalSessions) * 100),
         stuck_completion_rate: Math.round((stuckCompleted / Math.max(1, stuckSessions)) * 100),
         normal_completion_rate: Math.round((normalCompleted / Math.max(1, normalSessions)) * 100),
+        // Heavier stuck-list to match the elevated stuckness rate. Mix of
+        // recovered + still-stuck so the renderer's recovered indicator has
+        // both states to show.
+        stuck_sessions_list: [
+          {
+            session_id: 'sess-stuck-h1',
+            agent_id: 'agent-glendon-cc-7',
+            host_tool: 'claude-code',
+            last_activity_at: new Date(Date.now() - 22 * 60_000).toISOString(),
+            duration_minutes: 78,
+            recovered: false,
+            file_path: 'packages/worker/src/dos/team/context.ts',
+          },
+          {
+            session_id: 'sess-stuck-h2',
+            agent_id: 'agent-sora-cursor-4',
+            host_tool: 'cursor',
+            last_activity_at: new Date(Date.now() - 75 * 60_000).toISOString(),
+            duration_minutes: 52,
+            recovered: true,
+            file_path: 'packages/web/src/views/OverviewView/OverviewView.tsx',
+          },
+          {
+            session_id: 'sess-stuck-h3',
+            agent_id: 'agent-jae-aider-2',
+            host_tool: 'aider',
+            last_activity_at: new Date(Date.now() - 3 * 3600_000).toISOString(),
+            duration_minutes: 46,
+            recovered: false,
+            file_path: 'packages/mcp/lib/extraction/engine.ts',
+          },
+          {
+            session_id: 'sess-stuck-h4',
+            agent_id: 'agent-pax-cline-1',
+            host_tool: 'cline',
+            last_activity_at: new Date(Date.now() - 5 * 3600_000).toISOString(),
+            duration_minutes: 38,
+            recovered: true,
+            file_path: 'packages/cli/lib/dashboard/App.tsx',
+          },
+          {
+            session_id: 'sess-stuck-h5',
+            agent_id: 'agent-mika-windsurf-1',
+            host_tool: 'windsurf',
+            last_activity_at: new Date(Date.now() - 9 * 3600_000).toISOString(),
+            duration_minutes: 31,
+            recovered: false,
+            file_path: 'packages/shared/tool-registry.ts',
+          },
+        ],
       },
       retry_patterns: [
         ...base.retry_patterns,

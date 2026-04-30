@@ -18,14 +18,12 @@ import { WorkTypesPanel } from './panels/WorkTypesPanel.js';
  * Mirrors the UsageDetailView structure (DetailView shell, DetailSection
  * blocks, tab-driven panels) but answers a different question family:
  *
- *   sessions - completion health, stuckness, first edit, duration shape
- *   retries  - one-shot rate, scope completion scale
- *   types    - work-type completion bars
+ *   sessions   - completion health and stall behavior
+ *   retries    - difficulty: one-shot rate and scope completion scale
+ *   types      - work-type completion bars
  *
- * Deliberate duplication: DurationStrip lives here as well as in
- * UsageDetailView (the Sessions panel uses it there). Extracting it to
- * a shared primitive is the right next step once a third caller lands;
- * duplicating for v1 avoids premature refactor. */
+ * First-edit latency and duration shape live in UsageDetailView; they are
+ * about cadence and pacing, not about whether work landed. */
 
 const OUTCOMES_TABS = ['sessions', 'retries', 'types'] as const;
 type OutcomesTab = (typeof OUTCOMES_TABS)[number];
@@ -62,6 +60,9 @@ export default function OutcomesDetailView({
   const oneShot = analytics.tool_call_stats;
   const pc = analytics.period_comparison;
 
+  // Tabs whose value is a scalar quantity over the period MUST set a real delta
+  // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
+  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<OutcomesTab>> = [
     {
       id: 'sessions',
@@ -71,14 +72,15 @@ export default function OutcomesDetailView({
     },
     {
       id: 'retries',
-      label: 'One-shot',
+      label: 'Difficulty',
       value: oneShot.one_shot_sessions > 0 ? `${oneShot.one_shot_rate}%` : '--',
-      delta: MISSING_DELTA,
+      delta: formatRateDelta(oneShot.one_shot_rate, pc.previous?.one_shot_rate ?? null),
     },
     {
       id: 'types',
       label: 'By work type',
       value: fmtCount(analytics.work_type_outcomes.length),
+      // rationale: tab value is count of distinct work-type categories, not period-additive.
       delta: MISSING_DELTA,
     },
   ];

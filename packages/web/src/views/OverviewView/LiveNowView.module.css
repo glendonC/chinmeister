@@ -20,9 +20,10 @@
 }
 
 /*
- * Data columns pack left at natural widths; the 1fr before View absorbs
- * any remaining row width so the View pill anchors to the right edge.
- * No filler column in the middle, no dead space between Member and Tool.
+ * Data columns pack left at natural widths; the Summary column absorbs
+ * any remaining row width with min-width 0 so it ellipsis-truncates rather
+ * than overflowing. The View pill stays anchored to the right edge.
+ * Order: Member, Tool, Project, Files, Session, Summary, View.
  */
 .agentsHeader,
 .agentsRow {
@@ -33,7 +34,7 @@
     minmax(160px, 220px)
     72px
     96px
-    1fr
+    minmax(0, 1fr)
     auto;
   gap: var(--space-md);
   align-items: center;
@@ -118,6 +119,32 @@
   color: var(--soft);
 }
 
+/* One-line agent intent summary. Mirrors the muted treatment of
+ * other secondary columns and ellipsis-truncates so a long summary
+ * never breaks the row grid. Em-dash placeholder when absent so the
+ * column reads consistently. */
+.agentCellSummary {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agentCellSummaryNone {
+  color: var(--soft);
+}
+
+/* Stale heartbeat fade: matches LiveWidgets' editor-handle stale
+ * treatment so a cooling agent reads the same on the surface widget
+ * and on the drill-in detail row. The active-member heartbeat window
+ * is 60s; halfway through it the row dims to half opacity to signal
+ * "still present, but cooling off". */
+.agentsRowStale {
+  opacity: 0.5;
+}
+
 /* View pill: affordance signalling the agent row is a link into the
  * project dashboard. Matches LiveWidgets.liveViewButton and
  * ToolsView.viewButton exactly so the three rows read as one pattern. */
@@ -156,11 +183,13 @@
     gap: 16px;
   }
 
-  /* Hide Project column on narrow viewports (3rd cell in DOM order:
-   * Member, Tool, Project, Files, Session, View). display: none removes
-   * it from the grid, leaving 5 children for the 5-column template. */
+  /* Hide Project and Summary columns on narrow viewports. DOM order is:
+   * Member, Tool, Project, Files, Session, Summary, View. Hiding the
+   * 3rd and 6th cells leaves 5 children for the 5-column template. */
   .agentsHeader > :nth-child(3),
-  .agentsRow > :nth-child(3) {
+  .agentsRow > :nth-child(3),
+  .agentsHeader > :nth-child(6),
+  .agentsRow > :nth-child(6) {
     display: none;
   }
 }

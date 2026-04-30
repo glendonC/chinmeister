@@ -83,7 +83,7 @@ describe('WidgetRenderer', () => {
     act(() => {
       (button as HTMLElement).click();
     });
-    expect(navigateToDetail).toHaveBeenCalledWith('outcomes', 'sessions', undefined);
+    expect(navigateToDetail).toHaveBeenCalledWith('outcomes', 'sessions', 'trend');
     r.unmount();
   });
 

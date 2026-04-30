@@ -1,13 +1,12 @@
-import { type CSSProperties } from 'react';
-
 import {
   FocusedDetailView,
   Metric,
   getCrossLinks,
   type FocusedQuestion,
 } from '../../../../components/DetailView/index.js';
+import { RateVolumeColumns } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
-import { completionColor, DAY_LABELS } from '../../../../widgets/utils.js';
+import { DAY_LABELS } from '../../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
 import { fmtCount, hourGlyph } from '../format.js';
@@ -60,14 +59,13 @@ export function EffectiveHoursPanel({
   // color = completionColor(rate). The rate label sits above each bar
   // so the user can read the quality without a legend.
   const byClock = [...qualifiedHours].sort((a, b) => a.hour - b.hour);
-  const maxSessions = Math.max(1, ...byClock.map((h) => h.sessions));
 
   const questions: FocusedQuestion[] = [
     {
       id: 'peak-completion',
       question: 'Which hours land your work?',
       answer: peakAnswer,
-      children: <PeakCompletionViz hours={byClock} maxSessions={maxSessions} />,
+      children: <PeakCompletionViz hours={byClock} />,
       relatedLinks: getCrossLinks('activity', 'effective-hours', 'peak-completion'),
     },
   ];
@@ -98,46 +96,20 @@ export function EffectiveHoursPanel({
   );
 }
 
-function PeakCompletionViz({
-  hours,
-  maxSessions,
-}: {
-  hours: UserAnalytics['hourly_effectiveness'];
-  maxSessions: number;
-}) {
+function PeakCompletionViz({ hours }: { hours: UserAnalytics['hourly_effectiveness'] }) {
   return (
-    <div className={styles.peakFrame}>
-      <div className={styles.peakBars}>
-        {hours.map((h, i) => {
-          const heightPct = Math.max(8, Math.round((h.sessions / maxSessions) * 100));
-          const color = completionColor(h.completion_rate);
-          return (
-            <div
-              key={h.hour}
-              className={styles.peakColumn}
-              style={{ '--row-index': i } as CSSProperties}
-            >
-              <span className={styles.peakRate}>{Math.round(h.completion_rate)}%</span>
-              <span
-                className={styles.peakBar}
-                style={
-                  {
-                    '--peak-height': `${heightPct}%`,
-                    background: color,
-                  } as CSSProperties
-                }
-                title={`${hourGlyph(h.hour)}: ${h.sessions} sessions, ${Math.round(h.completion_rate)}% completed`}
-              />
-              <span className={styles.peakHourLabel}>{hourGlyph(h.hour)}</span>
-            </div>
-          );
-        })}
-      </div>
-      <div className={styles.peakLegend}>
-        <span>height shows session volume</span>
-        <span>color shows completion rate</span>
-      </div>
-    </div>
+    <RateVolumeColumns
+      minFrameHeightPx={180}
+      legend={{ left: 'height shows session volume', right: 'color shows completion rate' }}
+      columns={hours.map((h) => ({
+        key: h.hour,
+        label: hourGlyph(h.hour),
+        rateLabel: `${Math.round(h.completion_rate)}%`,
+        volume: h.sessions,
+        rate: h.completion_rate,
+        title: `${hourGlyph(h.hour)}: ${h.sessions} sessions, ${Math.round(h.completion_rate)}% completed`,
+      }))}
+    />
   );
 }
 
@@ -191,42 +163,24 @@ function computeDowDip(
 function DowDipViz({ rows }: { rows: DowDipRow[] }) {
   // Align to all 7 DOWs even when only 5+ have data, keeps the visual
   // pattern legible when a couple of days are missing. Empty days
-  // render as ghost columns (opacity floor).
+  // render as ghost columns via `rate: null` and `volume: 0`.
   const byDow = new Map(rows.map((r) => [r.dow, r]));
-  const maxSessions = Math.max(1, ...rows.map((r) => r.sessions));
   return (
-    <div className={styles.dowFrame}>
-      <div className={styles.dowBars}>
-        {[0, 1, 2, 3, 4, 5, 6].map((dow, i) => {
-          const r = byDow.get(dow);
-          const heightPct = r ? Math.max(8, Math.round((r.sessions / maxSessions) * 100)) : 6;
-          const color = r ? completionColor(r.rate) : 'var(--ghost)';
-          return (
-            <div
-              key={dow}
-              className={styles.dowColumn}
-              style={{ '--row-index': i } as CSSProperties}
-            >
-              <span className={styles.dowRate}>{r ? `${r.rate}%` : '—'}</span>
-              <span
-                className={styles.dowBar}
-                style={
-                  {
-                    '--dow-height': `${heightPct}%`,
-                    background: color,
-                  } as CSSProperties
-                }
-                title={
-                  r
-                    ? `${DAY_LABELS[dow]}: ${r.sessions} sessions, ${r.rate}% completed`
-                    : `${DAY_LABELS[dow]}: no sessions`
-                }
-              />
-              <span className={styles.dowLabel}>{DAY_LABELS[dow]}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <RateVolumeColumns
+      legend={null}
+      columns={[0, 1, 2, 3, 4, 5, 6].map((dow) => {
+        const r = byDow.get(dow);
+        return {
+          key: dow,
+          label: DAY_LABELS[dow],
+          rateLabel: r ? `${r.rate}%` : '-',
+          volume: r ? r.sessions : 0,
+          rate: r ? r.rate : null,
+          title: r
+            ? `${DAY_LABELS[dow]}: ${r.sessions} sessions, ${r.rate}% completed`
+            : `${DAY_LABELS[dow]}: no sessions`,
+        };
+      })}
+    />
   );
 }

@@ -10,10 +10,17 @@
 // shorter delta window.
 
 import { createLogger } from '../../../lib/logger.js';
+import { EDIT_TOOLS } from '@chinmeister/shared/tool-call-categories.js';
 import type { PeriodComparison, PeriodMetrics } from '@chinmeister/shared/contracts/analytics.js';
 import { type AnalyticsScope, withScope } from './scope.js';
 
 const log = createLogger('TeamDO.analytics');
+
+// Hourly completion-rate median needs at least this many qualified hours
+// (sessions > 0) before we publish the metric. Mirrors the renderer's
+// EFFECTIVE_HOURS_MIN_QUALIFIED gate so a thin window can't produce a
+// noisy median that the UI would then suppress.
+const QUALIFIED_HOUR_MIN = 4;
 
 export function queryPeriodComparison(
   sql: SqlStorage,
@@ -82,6 +89,30 @@ export function queryPeriodComparison(
         // telemetry is best-effort
       }
 
+      // One-shot rate for this window. Mirrors the per-period semantic of
+      // tool_call_stats.one_shot_rate (sessions where edits worked without an
+      // Edit→Bash→Edit retry cycle) but scoped to the window bounds. Same
+      // EDIT_TOOLS / Bash detection as tool-calls.ts; computed inline here so
+      // the previous-window read doesn't have to round-trip through that
+      // module's scalar entry point. Best-effort: a missing tool_calls table
+      // (older TeamDO upgrade) leaves the field null instead of failing the
+      // whole period query.
+      const oneShotRate = queryWindowOneShotRate(sql, scope, offsetStart, offsetEnd);
+
+      // Hourly-completion median across qualified hours. Reuses the same
+      // hourly-bucket computation that hourly_effectiveness exposes for the
+      // current window; the previous window has no other source for this
+      // value. Local-TZ bucketing is intentionally skipped here - the
+      // window-vs-window delta is structural, not display-tz, and dragging
+      // tzOffsetMinutes into period_comparison would add a parameter that
+      // the rest of this query does not respect.
+      const qualifiedHourMedian = queryWindowQualifiedHourMedian(
+        sql,
+        scope,
+        offsetStart,
+        offsetEnd,
+      );
+
       return {
         completion_rate: Math.round((completed / total) * 1000) / 10,
         avg_duration_min: (r.avg_duration_min as number) || 0,
@@ -97,6 +128,8 @@ export function queryPeriodComparison(
         total_estimated_cost_usd: null,
         total_edits_in_token_sessions: 0,
         cost_per_edit: null,
+        one_shot_rate: oneShotRate,
+        qualified_hour_completion_median: qualifiedHourMedian,
       };
     } catch (err) {
       log.warn(`periodMetrics query failed: ${err}`);
@@ -119,7 +152,112 @@ export function queryPeriodComparison(
       total_estimated_cost_usd: null,
       total_edits_in_token_sessions: 0,
       cost_per_edit: null,
+      one_shot_rate: null,
+      qualified_hour_completion_median: null,
     },
     previous,
   };
+}
+
+// One-shot rate for an arbitrary window. Same retry detection logic as
+// tool-calls.ts:queryToolCallStats - retry = Edit followed by Bash followed
+// by Edit. Returns null when the window has no sessions with edits or when
+// the tool_calls table itself is missing.
+function queryWindowOneShotRate(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  offsetStart: number,
+  offsetEnd: number,
+): number | null {
+  try {
+    const { sql: q, params } = withScope(
+      `SELECT session_id, tool FROM tool_calls
+         WHERE called_at > datetime('now', '-' || ? || ' days')
+           AND called_at <= datetime('now', '-' || ? || ' days')`,
+      [offsetStart, offsetEnd],
+      scope,
+    );
+    const sessionCalls = sql.exec(`${q} ORDER BY session_id, called_at ASC`, ...params).toArray();
+
+    const bySession = new Map<string, string[]>();
+    for (const raw of sessionCalls) {
+      const r = raw as Record<string, unknown>;
+      const sid = (r.session_id as string) || '';
+      const tool = (r.tool as string) || '';
+      if (!sid) continue;
+      const list = bySession.get(sid) ?? [];
+      list.push(tool);
+      bySession.set(sid, list);
+    }
+
+    let oneShot = 0;
+    let withEdits = 0;
+    for (const tools of bySession.values()) {
+      const hasEdit = tools.some((t) => EDIT_TOOLS.includes(t));
+      if (!hasEdit) continue;
+      withEdits++;
+      let sawEditBeforeBash = false;
+      let sawBashAfterEdit = false;
+      let retries = 0;
+      for (const t of tools) {
+        if (EDIT_TOOLS.includes(t)) {
+          if (sawBashAfterEdit) retries++;
+          sawEditBeforeBash = true;
+          sawBashAfterEdit = false;
+        }
+        if (t === 'Bash' && sawEditBeforeBash) {
+          sawBashAfterEdit = true;
+        }
+      }
+      if (retries === 0) oneShot++;
+    }
+
+    if (withEdits === 0) return null;
+    return Math.round((oneShot / withEdits) * 100);
+  } catch (err) {
+    log.warn(`windowOneShotRate query failed: ${err}`);
+    return null;
+  }
+}
+
+// Median completion rate across qualified hours (sessions > 0) for an
+// arbitrary window. Returns null when fewer than QUALIFIED_HOUR_MIN hours
+// landed in the window so a thin denominator can't produce a noisy median.
+function queryWindowQualifiedHourMedian(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  offsetStart: number,
+  offsetEnd: number,
+): number | null {
+  try {
+    const { sql: q, params } = withScope(
+      `SELECT
+           CAST(strftime('%H', started_at) AS INTEGER) AS hour,
+           COUNT(*) AS sessions,
+           ROUND(CAST(SUM(CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END) AS REAL)
+             / NULLIF(COUNT(*), 0) * 100, 1) AS completion_rate
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+           AND started_at <= datetime('now', '-' || ? || ' days')`,
+      [offsetStart, offsetEnd],
+      scope,
+    );
+    const rows = sql.exec(`${q} GROUP BY hour HAVING sessions > 0`, ...params).toArray();
+    if (rows.length < QUALIFIED_HOUR_MIN) return null;
+    const rates = rows
+      .map((raw) => {
+        const r = raw as Record<string, unknown>;
+        const v = r.completion_rate;
+        return typeof v === 'number' ? v : 0;
+      })
+      .sort((a, b) => a - b);
+    const mid = Math.floor(rates.length / 2);
+    const lo = rates[mid - 1] ?? 0;
+    const hi = rates[mid] ?? 0;
+    const median = rates.length % 2 === 0 ? (lo + hi) / 2 : hi;
+    return Math.round(median * 10) / 10;
+  } catch (err) {
+    log.warn(`windowQualifiedHourMedian query failed: ${err}`);
+    return null;
+  }
 }

@@ -1,0 +1,95 @@
+/* RateVolumeColumns: vertical column primitive where bar height encodes
+ * volume and bar color encodes a rate. Used by peak-hour, day-of-week
+ * dip, and daily completion-trend reads. Caller passes `minFrameHeightPx`
+ * to choose the slot size; everything else flows from tokens. */
+
+.frame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.bars {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(10px, 1fr);
+  align-items: end;
+  gap: 6px;
+  min-height: var(--rvc-frame-height, 120px);
+}
+
+.column {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  align-items: end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.rateLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.bar {
+  display: block;
+  width: 100%;
+  height: var(--rvc-bar-height);
+  min-height: 6px;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
+  background: var(--rvc-bar-color, var(--ink));
+  opacity: var(--rvc-bar-opacity, var(--opacity-bar-fill));
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * var(--rvc-stagger-ms, 30) * 1ms);
+  transition:
+    opacity var(--motion-fast) ease,
+    transform var(--motion-fast) var(--motion);
+}
+
+.bar:hover {
+  opacity: 1;
+  transform: translateY(-2px);
+}
+
+.barHighlight {
+  opacity: 1;
+  outline: 1px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.axisLabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.legend {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-md);
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none !important;
+    transition: none !important;
+  }
+  .bar:hover {
+    transform: none;
+  }
+}

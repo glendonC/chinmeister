@@ -1,11 +1,14 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { DetailView, type DetailTabDef } from '../../../components/DetailView/index.js';
 import RangePills from '../../../components/RangePills/RangePills.jsx';
 import { useTabs } from '../../../hooks/useTabs.js';
-import type { UserAnalytics } from '../../../lib/apiSchemas.js';
+import type { TeamSummaryLive, UserAnalytics } from '../../../lib/apiSchemas.js';
+import type { LiveAgent } from '../../../widgets/types.js';
 import { formatCost } from '../../../widgets/utils.js';
 import { hasCostData } from '../../../widgets/bodies/shared.js';
+import { setQueryParams } from '../../../lib/router.js';
+import { USAGE_TAB_ALIASES } from '../../../widgets/catalog/aliases.js';
 
 import { RANGES, formatScope, type RangeDays } from '../overview-utils.js';
 import { MISSING_DELTA, formatCountDelta, formatUsdDelta, splitDelta } from '../detailDelta.js';
@@ -15,17 +18,11 @@ import { SessionsPanel } from './panels/SessionsPanel.js';
 import { EditsPanel } from './panels/EditsPanel.js';
 import { LinesPanel } from './panels/LinesPanel.js';
 import { CostPanel } from './panels/CostPanel.js';
-import { CostPerEditPanel } from './panels/CostPerEditPanel.js';
 import { FilesTouchedPanel } from './panels/FilesTouchedPanel.js';
+import { ProjectsPanel } from './panels/ProjectsPanel.js';
 
-const USAGE_TABS = [
-  'sessions',
-  'edits',
-  'lines',
-  'cost',
-  'cost-per-edit',
-  'files-touched',
-] as const;
+const BASE_USAGE_TABS = ['sessions', 'edits', 'lines', 'cost', 'files-touched'] as const;
+const USAGE_TABS = [...BASE_USAGE_TABS, 'projects'] as const;
 type UsageTab = (typeof USAGE_TABS)[number];
 
 function isUsageTab(value: string | null | undefined): value is UsageTab {
@@ -42,6 +39,9 @@ interface Props {
   // "Project" when ProjectView mounts the same detail. Default keeps
   // existing OverviewView call sites unchanged.
   backLabel?: string;
+  projectSummaries?: TeamSummaryLive[];
+  liveAgents?: LiveAgent[];
+  onOpenProject?: (teamId: string) => void;
 }
 
 export default function UsageDetailView({
@@ -51,7 +51,11 @@ export default function UsageDetailView({
   rangeDays,
   onRangeChange,
   backLabel = 'Overview',
+  projectSummaries,
+  liveAgents = [],
+  onOpenProject,
 }: Props) {
+  const hasProjectTab = projectSummaries != null && onOpenProject != null;
   const totals = useMemo(() => {
     const sessions = analytics.daily_trends.reduce((s, d) => s + d.sessions, 0);
     const edits = analytics.daily_trends.reduce((s, d) => s + d.edits, 0);
@@ -59,14 +63,30 @@ export default function UsageDetailView({
     const linesRemoved = analytics.daily_trends.reduce((s, d) => s + d.lines_removed, 0);
     const linesNet = linesAdded - linesRemoved;
     const cost = analytics.token_usage.total_estimated_cost_usd;
-    const cpe = analytics.token_usage.cost_per_edit;
     const filesTouched = analytics.files_touched_total;
-    return { sessions, edits, linesAdded, linesRemoved, linesNet, cost, cpe, filesTouched };
+    return { sessions, edits, linesAdded, linesRemoved, linesNet, cost, filesTouched };
   }, [analytics]);
 
-  const resolvedInitialTab: UsageTab = isUsageTab(initialTab) ? initialTab : 'sessions';
-  const tabControl = useTabs(USAGE_TABS, resolvedInitialTab);
+  // Resolve legacy tab values through USAGE_TAB_ALIASES so deep links from
+  // before a tab merger still land on the right (tab, q) pair. Live URL
+  // rewrite below keeps the param honest after first paint.
+  const aliasTarget = typeof initialTab === 'string' ? USAGE_TAB_ALIASES[initialTab] : undefined;
+  const initialTabResolved = aliasTarget?.tab ?? initialTab;
+  const resolvedInitialTab: UsageTab = isUsageTab(initialTabResolved)
+    ? initialTabResolved === 'projects' && !hasProjectTab
+      ? 'sessions'
+      : initialTabResolved
+    : 'sessions';
+  const tabIds = hasProjectTab ? USAGE_TABS : BASE_USAGE_TABS;
+  const tabControl = useTabs(tabIds as readonly UsageTab[], resolvedInitialTab);
   const { activeTab } = tabControl;
+
+  // Rewrite the URL when an alias was hit so the address bar matches the
+  // live tab and any q-hint the alias carries is preserved.
+  useEffect(() => {
+    if (!aliasTarget) return;
+    setQueryParams({ usage: aliasTarget.tab, q: aliasTarget.q ?? null });
+  }, [aliasTarget]);
 
   // Tab value for lines is the net signed delta, "+647" or "−120" reads
   // "did the codebase grow or shrink in this window". Total churn
@@ -85,12 +105,12 @@ export default function UsageDetailView({
   //     emptying period_comparison.previous in production)
   //   - Cost: in-window split on daily_trends.cost (the per-day cost is
   //     already pricing-enriched server-side)
-  //   - Cost / edit: period_comparison.cost_per_edit + invert (matches the
-  //     CostPerEditWidget exactly; null at 30-day windows by design)
-  //   - Files: no per-day breakdown exists yet; placeholder em-dash
+  //   - Files: distinct-file count is not period-additive, edits proxy.
   const trends = analytics.daily_trends;
-  const pc = analytics.period_comparison;
 
+  // Tabs whose value is a scalar quantity over the period MUST set a real delta
+  // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
+  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<UsageTab>> = [
     {
       id: 'sessions',
@@ -120,19 +140,22 @@ export default function UsageDetailView({
       })(),
     },
     {
-      id: 'cost-per-edit',
-      label: 'Cost / edit',
-      value:
-        hasCostData(analytics.token_usage) && totals.cpe != null ? formatCost(totals.cpe, 3) : '--',
-      delta: formatUsdDelta(pc.current.cost_per_edit, pc.previous?.cost_per_edit ?? null, 3, true),
-    },
-    {
       id: 'files-touched',
       label: 'Files',
       value: fmtCount(totals.filesTouched),
-      delta: MISSING_DELTA,
+      // rationale: distinct-file count is not period-additive; daily_trends.edits is the closest proxy.
+      delta: formatCountDelta(splitDelta(trends, (d) => d.edits)),
     },
   ];
+  if (hasProjectTab) {
+    tabs.push({
+      id: 'projects',
+      label: 'Projects',
+      value: fmtCount(projectSummaries.length),
+      // rationale: project count is a scope selector, not period-additive.
+      delta: MISSING_DELTA,
+    });
+  }
 
   const scopeSubtitle = useMemo(() => {
     const activeTools = analytics.tool_comparison.filter((t) => t.sessions > 0).length;
@@ -160,8 +183,14 @@ export default function UsageDetailView({
       {activeTab === 'edits' && <EditsPanel analytics={analytics} />}
       {activeTab === 'lines' && <LinesPanel analytics={analytics} />}
       {activeTab === 'cost' && <CostPanel analytics={analytics} />}
-      {activeTab === 'cost-per-edit' && <CostPerEditPanel analytics={analytics} />}
       {activeTab === 'files-touched' && <FilesTouchedPanel analytics={analytics} />}
+      {activeTab === 'projects' && hasProjectTab && (
+        <ProjectsPanel
+          summaries={projectSummaries}
+          liveAgents={liveAgents}
+          onOpenProject={onOpenProject}
+        />
+      )}
     </DetailView>
   );
 }

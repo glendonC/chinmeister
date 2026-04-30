@@ -4,9 +4,11 @@ import { DetailView, type DetailTabDef } from '../../../components/DetailView/in
 import RangePills from '../../../components/RangePills/RangePills.jsx';
 import { useTabs } from '../../../hooks/useTabs.js';
 import type { UserAnalytics } from '../../../lib/apiSchemas.js';
+import { useQueryParam } from '../../../lib/router.js';
+import { getToolMeta } from '../../../lib/toolMeta.js';
 
 import { RANGES, formatScope, type RangeDays } from '../overview-utils.js';
-import { MISSING_DELTA } from '../detailDelta.js';
+import { MISSING_DELTA, formatCountDelta, splitDelta } from '../detailDelta.js';
 
 import { fmtCount } from './format.js';
 import { ToolsPanel } from './panels/ToolsPanel.js';
@@ -64,33 +66,45 @@ export default function ToolsDetailView({
   const handoffs = analytics.tool_handoffs;
   const errs = analytics.tool_call_stats.error_patterns;
   const callStats = analytics.tool_call_stats;
+  const dailyTrends = analytics.daily_trends;
+
+  // Panel-scope tool filter, lives in the URL via `?tool=<host_tool>`.
+  // Read at the parent so the tools-tab value can reflect the focused tool.
+  const toolFilter = useQueryParam('tool');
+  const focusedTool = toolFilter ? (tools.find((t) => t.host_tool === toolFilter) ?? null) : null;
 
   const activeTools = useMemo(() => tools.filter((t) => t.sessions > 0), [tools]);
   const totalEdges = handoffs.length;
   const totalErrors = errs.reduce((s, e) => s + e.count, 0);
 
-  // Errors tab value: total tool-call errors across all patterns.
-  // Spec calls for an `error_rate%` chip when `tool_call_stats` carries
-  // a period delta. Today the schema has no previous-period error_rate
-  // so we render em-dash per the MISSING_DELTA convention.
+  // Tabs whose value is a scalar quantity over the period MUST set a real delta
+  // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
+  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<ToolsTab>> = [
     {
       id: 'tools',
       label: 'Tools',
-      value: activeTools.length > 0 ? fmtCount(activeTools.length) : '--',
+      value: focusedTool
+        ? getToolMeta(focusedTool.host_tool).label
+        : activeTools.length > 0
+          ? fmtCount(activeTools.length)
+          : '--',
+      // rationale: tab value is either a count of distinct categories (tools) or a
+      // single focused tool's name; neither is period-additive.
       delta: MISSING_DELTA,
     },
     {
       id: 'flow',
       label: 'Flow',
       value: totalEdges > 0 ? fmtCount(totalEdges) : '--',
+      // rationale: tab value is count of distinct categories (handoff edges), not period-additive.
       delta: MISSING_DELTA,
     },
     {
       id: 'errors',
       label: 'Errors',
       value: totalErrors > 0 ? fmtCount(totalErrors) : '--',
-      delta: MISSING_DELTA,
+      delta: formatCountDelta(splitDelta(dailyTrends, (d) => d.errors)),
     },
   ];
 

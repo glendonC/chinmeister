@@ -77,6 +77,8 @@ import {
   queryMemoryCategories,
   queryMemorySingleAuthorDirectories,
   queryMemorySupersession,
+  queryMemorySupersessionEvents,
+  queryMemoryWritesPerDay,
   queryMemorySecretsShield,
 } from './memory.js';
 import {
@@ -167,6 +169,8 @@ export function getExtendedAnalytics(
     memory_categories: queryMemoryCategories(sql, scope),
     memory_single_author_directories: queryMemorySingleAuthorDirectories(sql, scope),
     memory_supersession: queryMemorySupersession(sql, scope, days),
+    memory_supersession_events: queryMemorySupersessionEvents(sql, days),
+    memory_writes_per_day: queryMemoryWritesPerDay(sql, scope, days),
     memory_secrets_shield: queryMemorySecretsShield(sql, days),
 
     // ── Conversations ──────────────────────────────────────────────────

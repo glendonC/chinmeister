@@ -287,7 +287,7 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
             index={i}
             showStatus={showStatus}
             teamLabel={showTeam ? c.teamName : null}
-            onClick={() => setQueryParams({ live: '', 'live-tab': 'conflicts' })}
+            onClick={() => setQueryParams({ live: '', 'live-tab': 'conflicts', q: null })}
           />
         ))}
       </div>
@@ -353,7 +353,7 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
             index={i}
             showStatus={showStatus}
             teamLabel={showTeam ? f.teamName : null}
-            onClick={() => setQueryParams({ live: '', 'live-tab': 'files' })}
+            onClick={() => setQueryParams({ live: '', 'live-tab': 'files', q: null })}
           />
         ))}
       </div>
@@ -362,7 +362,7 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
           <SectionOverflow
             count={overflow}
             label={overflow === 1 ? 'file' : 'files'}
-            onClick={() => setQueryParams({ live: '', 'live-tab': 'files' })}
+            onClick={() => setQueryParams({ live: '', 'live-tab': 'files', q: null })}
           />
         </div>
       )}

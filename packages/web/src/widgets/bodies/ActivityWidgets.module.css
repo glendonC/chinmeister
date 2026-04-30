@@ -6,7 +6,7 @@
  * ActivityDetailView.
  *
  * This module is widget-grade (compact); the detail view's full
- * peakFrame styling lives in ActivityDetailView.module.css.
+ * peak-hour bar layout lives in the RateVolumeColumns primitive.
  */
 
 .heatmapFrame {
@@ -16,31 +16,6 @@
   width: 100%;
   height: 100%;
   min-height: 0;
-}
-
-.heatmapLead {
-  display: flex;
-  align-items: baseline;
-  gap: var(--space-sm);
-  min-width: 0;
-}
-
-.heatmapLeadLabel,
-.heatmapLeadMeta {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  letter-spacing: var(--tracking-stat);
-  color: var(--soft);
-  text-transform: uppercase;
-}
-
-.heatmapLeadValue {
-  font-family: var(--display);
-  font-size: var(--text-xl);
-  font-weight: 300;
-  letter-spacing: -0.04em;
-  color: var(--ink);
-  white-space: nowrap;
 }
 
 /* ── Work mix: weft (dominant read + one horizontal strip, width = share) ─ */
@@ -71,48 +46,7 @@
   opacity: 0.92;
 }
 
-/* One tight line under the strip: number + type + unit — no instructional copy */
-.mixSummary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.35em 0.5em;
-  min-width: 0;
-}
-
-.mixPct {
-  font-family: var(--display);
-  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
-  font-weight: 200;
-  letter-spacing: -0.05em;
-  color: var(--ink);
-}
-
-.mixIn {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  letter-spacing: var(--tracking-stat);
-  color: var(--soft);
-  text-transform: lowercase;
-}
-
-.mixName {
-  font-family: var(--display);
-  font-size: clamp(1.35rem, 2.2vw, 1.85rem);
-  font-weight: 300;
-  letter-spacing: -0.05em;
-}
-
-.mixEditsUnit {
-  margin-left: 0.15em;
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  letter-spacing: var(--tracking-stat);
-  color: var(--muted);
-  text-transform: lowercase;
-}
-
-/* ── Completion by hour: “diel” (24 filaments, height = done %, weight = volume) ─ */
+/* ── Completion by hour: "diel" (24 filaments, height = done %, weight = volume) ─ */
 
 .diel {
   display: flex;
@@ -121,33 +55,6 @@
   min-height: 0;
   width: 100%;
   gap: 8px;
-}
-
-.dielLead {
-  flex: 0 0 auto;
-  align-self: flex-start;
-  text-align: left;
-  max-width: 100%;
-  padding-right: 0.5rem;
-}
-
-.dielLeadNum {
-  font-family: var(--display);
-  font-size: clamp(1.35rem, 2.4vw, 2rem);
-  font-weight: 200;
-  letter-spacing: -0.05em;
-  line-height: 1.05;
-  color: var(--ink);
-}
-
-.dielLeadSub {
-  margin-top: 4px;
-  font-family: var(--mono);
-  font-size: clamp(0.68rem, calc(0.75vw + 0.4rem), 0.8rem);
-  letter-spacing: var(--tracking-stat);
-  line-height: 1.3;
-  color: var(--soft);
-  max-width: 32ch;
 }
 
 .dielPillarStage {
