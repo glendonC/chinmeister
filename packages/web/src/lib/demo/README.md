@@ -5,8 +5,15 @@ state, widget data, and Reports content all flow from here.
 
 ## How it works
 
-1. The `?demo` URL flag (or any dev build) shows the bottom-right scenario
-   switcher (`components/DemoSwitcher`).
+1. The `?demo` URL flag (or any dev build) shows two surfaces:
+   - **Popover**: the bottom-right scenario switcher (`components/DemoSwitcher`).
+     Scope-aware: by default it shows only scenarios that affect the current
+     view, with a "Show all" toggle. Grouped by category. Plain-English
+     summaries.
+   - **Browse page**: `/dashboard/demo` (`views/DemoView`). The full table
+     of every scenario with category / dimensions / affects-views columns
+     and chip filters. Use this to find the scenario for a case you don't
+     yet know how to name.
 2. Picking a scenario writes the id to the URL and dispatches a
    `chinmeister:demo-scenario-changed` event.
 3. React hooks subscribe to that event and short-circuit their API
@@ -84,25 +91,57 @@ rule: **no read path outside `lib/demo/` should fire when `isDemoActive()`
 returns true.** The same goes for writes: they should no-op silently
 (throwing on write would break optimistic UI).
 
-## The 12 scenarios
+## The 16 scenarios
 
 Each scenario is a single-question fixture: pick one widget question, build
 the minimum override that exercises it. Don't clone the baseline.
 
-| ID                       | What it asserts                                                                                                                                                           |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `healthy`                | Full team, full coverage, positive delta. The baseline.                                                                                                                   |
-| `empty`                  | Zero sessions, no live agents, no Reports runs. Every empty state at once.                                                                                                |
-| `solo-cc`                | One handle on Claude Code only. No team coordination data. Reports still populated (CC has the data).                                                                     |
-| `solo-no-hooks`          | One handle on a non-hook MCP tool (JetBrains). No tokens, no conversation, no tool calls. Every coverage note fires. Reports empty (foundational reports need that data). |
-| `stale-pricing`          | LiteLLM snapshot >7 days old. Cost fields render `--` with the "pricing refresh pending" coverage note.                                                                   |
-| `models-without-pricing` | Some observed models missing from LiteLLM. Coverage note names them.                                                                                                      |
-| `first-period`           | No previous window. Every delta pill suppresses.                                                                                                                          |
-| `team-conflicts`         | Active collisions, retries, overlap. Drives the coordination story.                                                                                                       |
-| `negative-delta`         | Period got worse. Red downward arrows in stat cards.                                                                                                                      |
-| `no-live-agents`         | Analytics intact, zero active agents. Live widgets show their empty state.                                                                                                |
-| `memory-stale`           | Aging skewed >90d, stale count high. Freshness warn.                                                                                                                      |
-| `memory-concentrated`    | Single-author directories dominate. Concentration warn.                                                                                                                   |
+Each entry in the registry carries metadata that drives the UI:
+
+- `category` (one of `baseline`, `coverage`, `outcomes`, `coordination`,
+  `pricing`, `deltas`, `memory`, `empty-states`): top-level grouping in
+  the popover and table.
+- `dimensions` (zero or more of `team-size`, `capture-depth`, `pricing`,
+  `deltas`, `coordination`, `memory`, `live-presence`, `outcomes`): what
+  this scenario varies vs the healthy baseline. Drives the dimension
+  filter on the browse page.
+- `views` (subset of `overview`, `reports`, `tools`, `project`, `global`):
+  which routes' UI meaningfully changes. Drives the popover's scope
+  filter.
+- `summary`: one-line plain English, replaces the old widget-jargon
+  description.
+- `whatToCheck`: one sentence on what a dev should look for when the
+  scenario is active.
+
+| ID                       | Category     | What it asserts                                                                                                         |
+| ------------------------ | ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| `healthy`                | baseline     | Full team, full coverage, positive delta. The reference dataset.                                                        |
+| `empty`                  | empty-states | Zero sessions, no live agents, no Reports runs. Every empty state at once.                                              |
+| `solo-cc`                | coverage     | One handle on Claude Code. No team coordination data; deep capture intact.                                              |
+| `solo-no-hooks`          | coverage     | One handle on JetBrains. No tokens, no conversation, no tool calls. Every coverage note fires.                          |
+| `mixed-capture`          | coverage     | Realistic team where some tools have hooks and some don't. Partial data-coverage tile and per-widget coverage notes.    |
+| `stale-pricing`          | pricing      | LiteLLM snapshot >7 days old. Cost fields render `--` with the "pricing refresh pending" coverage note.                 |
+| `models-without-pricing` | pricing      | Some observed models missing from LiteLLM. Coverage note names them.                                                    |
+| `first-period`           | deltas       | No previous window. Every delta pill suppresses.                                                                        |
+| `negative-delta`         | deltas       | Period got worse. Red downward arrows in stat cards.                                                                    |
+| `no-live-agents`         | empty-states | Analytics intact, zero active agents. Live widgets show their empty state.                                              |
+| `team-conflicts`         | coordination | Active collisions, retries, overlap. Drives the coordination story.                                                     |
+| `failure-heavy`          | outcomes     | Outcome mix tilts hard toward abandoned/failed. Drives the Failures report story.                                       |
+| `stuck-heavy`            | outcomes     | ~32% of sessions hit the 15-min stuck threshold. Lights up stuckness + retry-pattern widgets without changing outcomes. |
+| `high-cost`              | outcomes     | Cost up, expensive model dominates. Cost stat delta turns red; by-model bar leans toward Opus.                          |
+| `memory-stale`           | memory       | Aging skewed >90d, stale count high. Freshness warn.                                                                    |
+| `memory-concentrated`    | memory       | Single-author directories dominate. Concentration warn.                                                                 |
+
+### Known coverage gaps
+
+The `views` array on each scenario is honest about which routes change.
+Some scenarios that conceptually _should_ light up Reports (e.g.
+`team-conflicts` for the Collisions report, `failure-heavy` for the
+Failures report, `memory-stale` for the Memory Cleanup report) currently
+default to `createBaselineReports()`. Fixing this means populating the
+`reports` slice in those scenario builders so the Reports UI tells the
+matching story. Not blocking on this refactor; flagged here so it doesn't
+get lost.
 
 ## Adding a scenario (reusing existing fixture domains)
 
@@ -115,8 +154,20 @@ the minimum override that exercises it. Don't clone the baseline.
    scenario meaningfully diverges (e.g. a no-hooks scenario should also
    return `createEmptyReports()` because the foundational reports need
    capture data the scenario claims doesn't exist).
-5. Register the scenario in `DEMO_SCENARIOS`. The switcher picks it up
-   automatically.
+5. Register the scenario in `DEMO_SCENARIOS` with the metadata the picker
+   and browse page consume:
+   - `category`: pick the most natural top-level bucket; if it's a tie,
+     pick the one a dev would search first.
+   - `dimensions`: the variables this scenario varies vs baseline. Empty
+     for `healthy`. Multi-dimension scenarios (e.g. `empty`) should list
+     every dimension that meaningfully changes.
+   - `views`: every route whose UI you'd expect to look different from
+     `healthy` under this scenario. Be honest. If you list `reports` but
+     don't override the `reports` slice, you'll mislead the picker.
+   - `summary`: one line, plain English, no widget jargon, no internal
+     coverage-note phrases.
+   - `whatToCheck`: one sentence on the visual change to look for.
+6. The switcher and `/dashboard/demo` browse page pick it up automatically.
 
 If the scenario needs a fixture domain that does not exist yet (e.g. a
 brand-new product surface), follow the next section first, then come
