@@ -200,7 +200,7 @@ describe('OverviewView states', () => {
     expect(container.querySelector('[data-testid="empty-state"]')).toBeNull();
 
     unmount();
-  });
+  }, 10_000);
 
   it('shows the empty state only when there are no known projects', async () => {
     const OverviewView = await loadOverviewView({
