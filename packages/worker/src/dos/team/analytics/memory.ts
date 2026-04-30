@@ -13,6 +13,8 @@ import type {
   MemoryCategoryEntry,
   MemorySingleAuthorDirectoryEntry,
   MemorySupersessionStats,
+  MemorySupersessionEvent,
+  MemoryWritesPerDay,
   MemorySecretsShieldStats,
 } from '@chinmeister/shared/contracts/analytics.js';
 import { type AnalyticsScope, buildScopeFilter, withScope } from './scope.js';
@@ -639,6 +641,78 @@ export function queryMemorySupersession(
   } catch (err) {
     log.warn(`memorySupersession query failed: ${err}`);
     return { invalidated_period: 0, merged_period: 0, pending_proposals: 0 };
+  }
+}
+
+// Per-event timeline behind the supersession scalars. The
+// memorySupersession query collapses everything to scalar counts; this
+// list lets the renderer surface "when did each event happen." Data is
+// pulled from consolidation_proposals, capped, and ordered most-recent
+// first so a fresh queue surfaces immediately. Scope is intentionally
+// not applied: the consolidation queue is team-scoped, not handle-scoped,
+// so a /me/-scope read returns the same queue as the team view.
+const SUPERSESSION_EVENTS_LIMIT = 50;
+
+export function queryMemorySupersessionEvents(
+  sql: SqlStorage,
+  days: number,
+): MemorySupersessionEvent[] {
+  try {
+    const resultRows = sql
+      .exec(
+        `SELECT id, kind, status, proposed_at, resolved_at AS decided_at
+         FROM consolidation_proposals
+         WHERE proposed_at > datetime('now', '-' || ? || ' days')
+            OR (resolved_at IS NOT NULL AND resolved_at > datetime('now', '-' || ? || ' days'))
+         ORDER BY COALESCE(resolved_at, proposed_at) DESC
+         LIMIT ?`,
+        days,
+        days,
+        SUPERSESSION_EVENTS_LIMIT,
+      )
+      .toArray();
+    return rows(resultRows, (r) => ({
+      id: r.string('id'),
+      proposed_at: r.string('proposed_at'),
+      decided_at: r.nullableString('decided_at'),
+      kind: r.string('kind') || 'merge',
+      status: r.string('status') || 'pending',
+    }));
+  } catch (err) {
+    log.warn(`memorySupersessionEvents query failed: ${err}`);
+    return [];
+  }
+}
+
+// Per-day memory creation count. Powers the MemoryDetailView health tab's
+// write-history sparkline. Excludes soft-merged rows so the trend reflects
+// what's actually live in search; a row that was merged on day N still
+// counts under the day it was originally created (created_at), matching
+// the bookkeeping the renderer expects.
+export function queryMemoryWritesPerDay(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  days: number,
+): MemoryWritesPerDay[] {
+  try {
+    const { sql: q, params } = withScope(
+      `SELECT date(created_at) AS day, COUNT(*) AS writes
+         FROM memories
+         WHERE created_at > datetime('now', '-' || ? || ' days')
+           AND merged_into IS NULL`,
+      [days],
+      scope,
+    );
+    const resultRows = sql
+      .exec(`${q} GROUP BY date(created_at) ORDER BY day ASC`, ...params)
+      .toArray();
+    return rows(resultRows, (r) => ({
+      day: r.string('day'),
+      writes: r.number('writes'),
+    }));
+  } catch (err) {
+    log.warn(`memoryWritesPerDay query failed: ${err}`);
+    return [];
   }
 }
 

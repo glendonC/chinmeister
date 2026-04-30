@@ -1,14 +1,15 @@
-/* CodebaseDetailView — file/directory axis on cross-tool agent activity.
+/* CodebaseDetailView, file/directory axis on cross-tool agent activity.
  *
  * Mirrors OutcomesDetailView/ActivityDetailView's compact tab pattern.
  * Four tabs: landscape / directories / risk / commits. This module owns
  * only the chrome that sits between the shared FocusedDetailView shell
- * and the reusable viz primitives — empty-state copy, the cold-dirs
- * inline list (per spec, not a new primitive), the risk friction-list
- * wrapper, and the commits-vs-completion bucket bars. Treemap, file
- * constellations, churn scatter, directory columns/constellation, the
- * daily-churn stack, and the file-friction primitive are all consumed
- * from `components/DetailView/viz/`.
+ * and the reusable viz primitives: empty-state copy, the cold-dirs
+ * inline list (per spec, not a new primitive), and the risk friction-list
+ * wrapper. Treemap, file constellations, churn scatter, directory
+ * columns/constellation, the daily-churn stack, and the file-friction
+ * primitive are all consumed from `components/DetailView/viz/`. The
+ * commits-vs-completion bucket bars now ride on the shared RateBars
+ * primitive (`components/viz/compare/RateBars`).
  */
 
 .panel {
@@ -122,78 +123,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ── Commits-vs-completion bucket bars ───────────────
- * Two-row horizontal bars. Uses the same wtBarTrack/wtBarFill semantics
- * as OutcomesDetailView's WorkTypesPanel so the visual rhythm is shared
- * across detail views without reaching into a sibling's CSS module. */
-
-.bucketList {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-md);
-}
-
-.bucketRow {
-  display: grid;
-  grid-template-columns: 160px 1fr auto;
-  align-items: center;
-  gap: var(--space-md);
-  animation: rowReveal 0.3s var(--motion) both;
-  animation-delay: calc(var(--row-index, 0) * 50ms);
-}
-
-.bucketLabel {
-  font-family: var(--mono);
-  font-size: var(--text-sm);
-  color: var(--muted);
-  letter-spacing: var(--tracking-stat);
-  text-transform: lowercase;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.bucketTrack {
-  height: 16px;
-  background: var(--ghost);
-  border-radius: var(--radius-2xs);
-  overflow: hidden;
-}
-
-.bucketFill {
-  height: 100%;
-  opacity: var(--opacity-bar-fill);
-  transition: width 0.4s var(--motion);
-  border-radius: var(--radius-2xs);
-}
-
-.bucketValue {
-  font-family: var(--mono);
-  font-size: var(--text-sm);
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
-
-.bucketValueSoft {
-  color: var(--soft);
-  margin-left: 8px;
-}
-
-.bucketFooter {
-  font-family: var(--mono);
-  font-size: var(--text-xs);
-  color: var(--soft);
-  letter-spacing: var(--tracking-stat);
-  margin: 4px 0 0 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .dataRow,
-  .bucketRow {
+  .dataRow {
     animation: none !important;
   }
-  .daysStrip::after,
-  .bucketFill {
+  .daysStrip::after {
     transition: none !important;
   }
 }
@@ -212,8 +146,5 @@
   }
   .dataMeta {
     grid-column: 2 / 3;
-  }
-  .bucketRow {
-    grid-template-columns: 110px 1fr auto;
   }
 }

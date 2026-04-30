@@ -337,6 +337,10 @@ export function createBaselineAnalytics(): UserAnalytics {
     const sessions = dailySessionShape[i];
     const edits = dailyEdits[i];
     const cost = dailyCost[i];
+    // Per-day tool-call error counts. Small integers tied to session volume
+    // so the trend reads as "more sessions, slightly more errors" without
+    // overwhelming the completion / edit story.
+    const errors = sessions > 0 ? Math.max(0, Math.round(sessions * 0.08 + hash(i + 720) * 2)) : 0;
     return {
       day,
       sessions,
@@ -347,6 +351,7 @@ export function createBaselineAnalytics(): UserAnalytics {
       completed: dailyCompleted[i],
       abandoned: dailyAbandoned[i],
       failed: dailyFailed[i],
+      errors,
       cost,
       cost_per_edit:
         cost != null && edits > 0 ? Math.round((cost / edits) * 10_000) / 10_000 : null,
@@ -685,7 +690,35 @@ export function createBaselineAnalytics(): UserAnalytics {
     { file: FILES[2].path, confused_sessions: 2, retried_sessions: 0 }, // OverviewView.tsx
   ];
 
-  const unanswered_questions = { count: 7 };
+  const unanswered_questions = {
+    count: 7,
+    recent: [
+      {
+        event_id: 'demo-unanswered-1',
+        session_id: 'demo-session-abandoned-1',
+        created_at: nowMinusDays(1),
+        host_tool: 'claude-code',
+        sequence: 12,
+        question_preview: 'Can you finish wiring the session list before switching to the chart?',
+      },
+      {
+        event_id: 'demo-unanswered-2',
+        session_id: 'demo-session-abandoned-2',
+        created_at: nowMinusDays(2),
+        host_tool: 'cursor',
+        sequence: 8,
+        question_preview: 'Why does the memory panel show no categories after the import?',
+      },
+      {
+        event_id: 'demo-unanswered-3',
+        session_id: 'demo-session-abandoned-3',
+        created_at: nowMinusDays(4),
+        host_tool: 'aider',
+        sequence: 6,
+        question_preview: 'Can you trace which worker query feeds the stuck sessions count?',
+      },
+    ],
+  };
 
   // Cross-tool handoff fixtures. Each row is a (S1.host_tool → S2.host_tool)
   // event keyed by file overlap, with realistic gap times under the 24h
@@ -1091,6 +1124,39 @@ export function createBaselineAnalytics(): UserAnalytics {
   const stuck_completed = Math.round(stuckSessions * 0.34);
   const normal_sessions = totalSessions - stuckSessions;
   const normal_completed = totalCompleted - stuck_completed;
+  // Per-session navigation list behind the stuckness scalar. Three entries
+  // span the readable range: a recovered session (got_stuck=1, completed),
+  // a still-stuck long-runner, and a mid-duration handoff candidate. Ordered
+  // most-recent-first to match the worker's ORDER BY last_activity_at DESC.
+  const stuck_sessions_list = [
+    {
+      session_id: 'sess-stuck-001',
+      agent_id: 'agent-glendon-cc-3',
+      host_tool: 'claude-code',
+      last_activity_at: new Date(Date.now() - 35 * 60_000).toISOString(),
+      duration_minutes: 64,
+      recovered: true,
+      file_path: 'packages/worker/src/dos/team/sessions.ts',
+    },
+    {
+      session_id: 'sess-stuck-002',
+      agent_id: 'agent-sora-cursor-2',
+      host_tool: 'cursor',
+      last_activity_at: new Date(Date.now() - 2 * 3600_000).toISOString(),
+      duration_minutes: 41,
+      recovered: false,
+      file_path: 'packages/web/src/views/OverviewView/OverviewView.tsx',
+    },
+    {
+      session_id: 'sess-stuck-003',
+      agent_id: 'agent-jae-aider-1',
+      host_tool: 'aider',
+      last_activity_at: new Date(Date.now() - 8 * 3600_000).toISOString(),
+      duration_minutes: 28,
+      recovered: false,
+      file_path: 'packages/mcp/lib/tools/conflicts.ts',
+    },
+  ];
   const stuckness = {
     total_sessions: totalSessions,
     stuck_sessions: stuckSessions,
@@ -1099,6 +1165,7 @@ export function createBaselineAnalytics(): UserAnalytics {
       stuckSessions > 0 ? Math.round((stuck_completed / stuckSessions) * 100) : 0,
     normal_completion_rate:
       normal_sessions > 0 ? Math.round((normal_completed / normal_sessions) * 100) : 0,
+    stuck_sessions_list,
   };
 
   // 35. file_overlap (team-scoped coordination stat)
@@ -1505,6 +1572,8 @@ export function createBaselineAnalytics(): UserAnalytics {
         editsInTokenSessions > 0
           ? Math.round((totalCost / editsInTokenSessions) * 10_000) / 10_000
           : null,
+      one_shot_rate: 0.71,
+      qualified_hour_completion_median: 0.74,
     },
     previous: {
       completion_rate: Math.max(0, Math.round((currCompletionRate - 6.2) * 10) / 10),
@@ -1521,6 +1590,8 @@ export function createBaselineAnalytics(): UserAnalytics {
       total_estimated_cost_usd: prev_cost,
       total_edits_in_token_sessions: prev_edits,
       cost_per_edit: prev_edits > 0 ? Math.round((prev_cost / prev_edits) * 10_000) / 10_000 : null,
+      one_shot_rate: 0.62,
+      qualified_hour_completion_median: 0.68,
     },
   };
 
@@ -1707,6 +1778,69 @@ export function createBaselineAnalytics(): UserAnalytics {
       { directory: 'packages/shared/contracts', single_author_count: 2, total_count: 3 },
     ],
     memory_supersession: { invalidated_period: 2, merged_period: 4, pending_proposals: 1 },
+    // Per-event timeline matching the scalars above: 2 invalidated, 4 merged
+    // (all decided), 1 still pending. Most-recent-first to match the worker's
+    // ORDER BY proposed_at DESC.
+    memory_supersession_events: [
+      {
+        id: 'prop-007',
+        proposed_at: new Date(Date.now() - 4 * 3600_000).toISOString(),
+        decided_at: null,
+        kind: 'merge',
+        status: 'pending',
+      },
+      {
+        id: 'prop-006',
+        proposed_at: new Date(Date.now() - 18 * 3600_000).toISOString(),
+        decided_at: new Date(Date.now() - 12 * 3600_000).toISOString(),
+        kind: 'merge',
+        status: 'accepted',
+      },
+      {
+        id: 'prop-005',
+        proposed_at: new Date(Date.now() - 2 * 86400_000).toISOString(),
+        decided_at: new Date(Date.now() - 2 * 86400_000 + 4 * 3600_000).toISOString(),
+        kind: 'invalidate',
+        status: 'accepted',
+      },
+      {
+        id: 'prop-004',
+        proposed_at: new Date(Date.now() - 4 * 86400_000).toISOString(),
+        decided_at: new Date(Date.now() - 3 * 86400_000).toISOString(),
+        kind: 'merge',
+        status: 'accepted',
+      },
+      {
+        id: 'prop-003',
+        proposed_at: new Date(Date.now() - 7 * 86400_000).toISOString(),
+        decided_at: new Date(Date.now() - 6 * 86400_000).toISOString(),
+        kind: 'invalidate',
+        status: 'accepted',
+      },
+      {
+        id: 'prop-002',
+        proposed_at: new Date(Date.now() - 11 * 86400_000).toISOString(),
+        decided_at: new Date(Date.now() - 10 * 86400_000).toISOString(),
+        kind: 'merge',
+        status: 'accepted',
+      },
+      {
+        id: 'prop-001',
+        proposed_at: new Date(Date.now() - 16 * 86400_000).toISOString(),
+        decided_at: new Date(Date.now() - 15 * 86400_000).toISOString(),
+        kind: 'merge',
+        status: 'accepted',
+      },
+    ],
+    // Per-day memory creation count over the window. Healthy team writes a
+    // small handful most weekdays with a couple of zero-write weekend days.
+    // Sum sits in the same magnitude as memory_usage.memories_created_period.
+    memory_writes_per_day: days.map((day, i) => {
+      const dow = new Date(day).getUTCDay();
+      const weekday = dow >= 1 && dow <= 5 ? 1 : 0.3;
+      const base = Math.round(weekday * (1.5 + hash(i + 910) * 1.8));
+      return { day, writes: base };
+    }),
     memory_secrets_shield: { blocked_period: 0, blocked_24h: 0 },
     file_rework,
     directory_heatmap,

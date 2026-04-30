@@ -1,0 +1,52 @@
+/*
+ * BodyLead: stacked callout shared by activity widget bodies.
+ * Eyebrow label, hero value, soft sublabel. Stacked, left-aligned,
+ * sized for the cockpit (widget-grade) row. Detail views render their
+ * own larger leads.
+ */
+
+.bodyLead {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: 0;
+  max-width: 100%;
+  gap: var(--space-xs);
+}
+
+.label {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-eyebrow);
+  color: var(--soft);
+  text-transform: uppercase;
+}
+
+.value {
+  font-family: var(--display);
+  font-size: var(--text-xl);
+  font-weight: 300;
+  letter-spacing: -0.04em;
+  line-height: 1.05;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.tone-positive {
+  color: var(--success);
+}
+
+.tone-warning {
+  color: var(--warn);
+}
+
+.sublabel {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-stat);
+  line-height: 1.3;
+  color: var(--soft);
+  text-transform: uppercase;
+  max-width: 32ch;
+}

@@ -38,6 +38,28 @@ export function CostPanel({ analytics }: { analytics: UserAnalytics }) {
   const maxToolTokens = Math.max(1, ...byTool.map((m) => m.input_tokens + m.cache_read_tokens));
   const totalCost = t.total_estimated_cost_usd ?? 0;
 
+  // Cost-per-edit per tool. Same shape and proportional input-token
+  // estimate as the standalone CostPerEdit treatment used to carry; lives
+  // here as a sibling question so the dollar story stays in one panel.
+  const toolEdits = new Map(analytics.tool_comparison.map((x) => [x.host_tool, x.total_edits]));
+  const cpe = t.cost_per_edit;
+  const perToolCpe = t.by_tool
+    .map((m) => {
+      const edits = toolEdits.get(m.host_tool) ?? 0;
+      // Rough per-tool cost estimate: proportional input-token share of total
+      // cost. Accurate breakdown would need model-joined math; this stays
+      // coarse and honest.
+      const inputShare =
+        (m.input_tokens + m.cache_read_tokens * 0.1) /
+        Math.max(1, t.total_input_tokens + t.total_cache_read_tokens * 0.1);
+      const estCost = totalCost * inputShare;
+      const rate = edits > 0 ? estCost / edits : null;
+      return { host_tool: m.host_tool, edits, estCost, rate };
+    })
+    .filter((x) => x.rate != null && x.edits > 0)
+    .sort((a, b) => (a.rate ?? Infinity) - (b.rate ?? Infinity));
+  const maxCpeRate = Math.max(0.001, ...perToolCpe.map((x) => x.rate ?? 0));
+
   // Tones: cache hit rate is positive (higher cache share = lower cost),
   // cost totals stay neutral (dollars in chinmeister's voice are context,
   // not a verdict, we don't tell users their spend is "bad").
@@ -61,6 +83,31 @@ export function CostPanel({ analytics }: { analytics: UserAnalytics }) {
       <>
         <Metric>{getToolMeta(top.host_tool).label}</Metric> sends the most at{' '}
         <Metric>{fmtCount(Math.round(topTokens / 1000))}k tokens</Metric>.
+      </>
+    );
+  })();
+
+  // Cheapest tool → positive tone (the answer to the question). Most
+  // expensive gets warning when it's notably above the cheapest.
+  const perEditAnswer = (() => {
+    if (perToolCpe.length === 0 || cpe == null) return null;
+    const cheapest = perToolCpe[0];
+    const priciest = perToolCpe[perToolCpe.length - 1];
+    return (
+      <>
+        <Metric>{getToolMeta(cheapest.host_tool).label}</Metric> edits cheapest at{' '}
+        <Metric tone="positive">{formatCost(cheapest.rate, 3)}</Metric> each
+        {perToolCpe.length > 1 &&
+        priciest.rate &&
+        cheapest.rate &&
+        priciest.rate > cheapest.rate * 1.2 ? (
+          <>
+            , vs <Metric>{getToolMeta(priciest.host_tool).label}</Metric> at{' '}
+            <Metric tone="warning">{formatCost(priciest.rate, 3)}</Metric>.
+          </>
+        ) : (
+          '.'
+        )}
       </>
     );
   })();
@@ -128,6 +175,43 @@ export function CostPanel({ analytics }: { analytics: UserAnalytics }) {
         />
       ),
       relatedLinks: getCrossLinks('usage', 'cost', 'by-tool'),
+    });
+  }
+  if (perToolCpe.length > 0 && cpe != null && perEditAnswer) {
+    questions.push({
+      id: 'per-edit',
+      question: 'Which tool gives the best dollar per edit?',
+      answer: perEditAnswer,
+      children: (
+        <>
+          <BreakdownList
+            items={perToolCpe.map((x) => {
+              const meta = getToolMeta(x.host_tool);
+              return {
+                key: x.host_tool,
+                label: (
+                  <>
+                    <ToolIcon tool={x.host_tool} size={14} />
+                    {meta.label}
+                  </>
+                ),
+                fillPct: ((x.rate ?? 0) / maxCpeRate) * 100,
+                fillColor: meta.color,
+                value: (
+                  <>
+                    {formatCost(x.rate, 3)}
+                    <BreakdownMeta> / {fmtCount(x.edits)} edits</BreakdownMeta>
+                  </>
+                ),
+              };
+            })}
+          />
+          <p className={styles.cpeCaveat}>
+            Per-tool rates are proportional estimates from input-token share, not model-joined exact
+            costs.
+          </p>
+        </>
+      ),
     });
   }
   if (t.cache_hit_rate != null && cacheAnswer) {

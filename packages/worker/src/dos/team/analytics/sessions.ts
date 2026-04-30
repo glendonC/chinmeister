@@ -7,6 +7,7 @@ import type {
   ConflictCorrelation,
   ConflictStats,
   StucknessStats,
+  StuckSessionEntry,
   FileOverlapStats,
   FirstEditStats,
   ScopeComplexityBucket,
@@ -174,11 +175,25 @@ export function queryConflictStats(
   }
 }
 
+// Capped at 20 - the list is a navigation aid, not the metric itself.
+// The scalar stuck_sessions count tells the user how many there are; the
+// list is for "show me the recent ones." Recency-ordered so a fresh stuck
+// session surfaces immediately.
+const STUCK_SESSIONS_LIST_LIMIT = 20;
+
 export function queryStuckness(
   sql: SqlStorage,
   scope: AnalyticsScope,
   days: number,
 ): StucknessStats {
+  const empty: StucknessStats = {
+    total_sessions: 0,
+    stuck_sessions: 0,
+    stuckness_rate: 0,
+    stuck_completion_rate: 0,
+    normal_completion_rate: 0,
+    stuck_sessions_list: [],
+  };
   try {
     const { sql: q, params } = withScope(
       `SELECT
@@ -195,34 +210,78 @@ export function queryStuckness(
       [days],
       scope,
     );
-    const rows = sql.exec(q, ...params).toArray();
+    const summaryRows = sql.exec(q, ...params).toArray();
 
-    if (rows.length === 0)
-      return {
-        total_sessions: 0,
-        stuck_sessions: 0,
-        stuckness_rate: 0,
-        stuck_completion_rate: 0,
-        normal_completion_rate: 0,
-      };
+    if (summaryRows.length === 0) return empty;
 
-    const r = row(rows[0]);
+    const r = row(summaryRows[0]);
+    const stuck_sessions_list = queryStuckSessionsList(sql, scope, days);
     return {
       total_sessions: r.number('total_sessions'),
       stuck_sessions: r.number('stuck_sessions'),
       stuckness_rate: r.number('stuckness_rate'),
       stuck_completion_rate: r.number('stuck_completion_rate'),
       normal_completion_rate: r.number('normal_completion_rate'),
+      stuck_sessions_list,
     };
   } catch (err) {
     log.warn(`stuckness query failed: ${err}`);
-    return {
-      total_sessions: 0,
-      stuck_sessions: 0,
-      stuckness_rate: 0,
-      stuck_completion_rate: 0,
-      normal_completion_rate: 0,
-    };
+    return empty;
+  }
+}
+
+// Per-session detail behind stuck_sessions. Capped + recency-ordered.
+// duration_minutes mirrors the avg_duration_min computation elsewhere -
+// julianday delta on (ended_at, started_at) with a fallback to 'now' for
+// in-flight sessions. file_path is a representative pick from
+// files_touched (the JSON array's first entry); null when files_touched
+// is the default '[]' or the JSON is unparseable. last_activity_at uses
+// last_active_at when populated (migration 026), falling back to ended_at
+// then started_at.
+function queryStuckSessionsList(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  days: number,
+): StuckSessionEntry[] {
+  try {
+    const { sql: q, params } = withScope(
+      `SELECT
+           id AS session_id,
+           agent_id,
+           host_tool,
+           COALESCE(last_active_at, ended_at, started_at) AS last_activity_at,
+           ROUND((julianday(COALESCE(ended_at, datetime('now'))) - julianday(started_at)) * 24 * 60, 1)
+             AS duration_minutes,
+           CASE WHEN outcome = 'completed' THEN 1 ELSE 0 END AS recovered,
+           CASE WHEN files_touched != '[]'
+             THEN json_extract(files_touched, '$[0]')
+             ELSE NULL
+           END AS file_path
+         FROM sessions
+         WHERE started_at > datetime('now', '-' || ? || ' days')
+           AND got_stuck = 1`,
+      [days],
+      scope,
+    );
+    const listRows = sql
+      .exec(
+        `${q} ORDER BY COALESCE(last_active_at, started_at) DESC LIMIT ?`,
+        ...params,
+        STUCK_SESSIONS_LIST_LIMIT,
+      )
+      .toArray();
+    return mapRows(listRows, (r) => ({
+      session_id: r.string('session_id'),
+      agent_id: r.string('agent_id'),
+      host_tool: r.nullableString('host_tool'),
+      last_activity_at: r.nullableString('last_activity_at'),
+      duration_minutes: r.number('duration_minutes'),
+      recovered: r.bool('recovered'),
+      file_path: r.nullableString('file_path'),
+    }));
+  } catch (err) {
+    log.warn(`stuckSessionsList query failed: ${err}`);
+    return [];
   }
 }
 
@@ -233,7 +292,7 @@ export function queryFileOverlap(
 ): FileOverlapStats {
   try {
     const { sql: inner, params } = withScope(
-      `           SELECT file_path, COUNT(DISTINCT handle) AS agents
+      `           SELECT file_path, COUNT(DISTINCT agent_id) AS agents
            FROM edits
            WHERE created_at > datetime('now', '-' || ? || ' days')`,
       [days],

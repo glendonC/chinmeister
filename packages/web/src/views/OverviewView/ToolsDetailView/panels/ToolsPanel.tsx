@@ -29,9 +29,16 @@ import styles from '../ToolsDetailView.module.css';
 
 export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
   const activeId = useQueryParam('q');
+  // Panel-scope tool filter via the `?tool=<host_tool>` query param. When set,
+  // every per-tool question on this panel collapses to that single tool so a
+  // user can drill from "Cursor has 70% completion" into "on what work types,
+  // at what cost, in which directories." Aggregate (no filter) is the default.
+  const toolFilter = useQueryParam('tool');
   const tools = analytics.tool_comparison;
   const reporting = analytics.data_coverage?.tools_reporting ?? [];
   const tokenNote = capabilityCoverageNote(reporting, 'tokenUsage');
+  const hooksNote = capabilityCoverageNote(reporting, 'hooks');
+  const toolCallNote = capabilityCoverageNote(reporting, 'toolCallLogs');
 
   // Q1 coverage: tools x capabilities affordance grid.
   // Capabilities sourced from the shared registry's DataCapabilities so
@@ -60,8 +67,13 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
   );
 
   const modelRows = useMemo(
-    () => aggregateModels(analytics.model_outcomes),
-    [analytics.model_outcomes],
+    () =>
+      aggregateModels(
+        toolFilter
+          ? analytics.model_outcomes.filter((m) => m.host_tool === toolFilter)
+          : analytics.model_outcomes,
+      ),
+    [analytics.model_outcomes, toolFilter],
   );
 
   const modelToolCount = useMemo(() => {
@@ -72,7 +84,13 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
     return set.size;
   }, [modelRows]);
 
-  const workTypeRows = analytics.tool_work_type;
+  const workTypeRows = useMemo(
+    () =>
+      toolFilter
+        ? analytics.tool_work_type.filter((r) => r.host_tool === toolFilter)
+        : analytics.tool_work_type,
+    [analytics.tool_work_type, toolFilter],
+  );
   const workTypeByType = useMemo(() => {
     const map = new Map<string, typeof workTypeRows>();
     for (const row of workTypeRows) {
@@ -104,8 +122,12 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
 
   const oneShot = analytics.tool_call_stats.host_one_shot;
   const sortedOneShot = useMemo(
-    () => [...oneShot].filter((r) => r.sessions > 0).sort((a, b) => b.sessions - a.sessions),
-    [oneShot],
+    () =>
+      [...oneShot]
+        .filter((r) => r.sessions > 0)
+        .filter((r) => (toolFilter ? r.host_tool === toolFilter : true))
+        .sort((a, b) => b.sessions - a.sessions),
+    [oneShot, toolFilter],
   );
 
   if (tools.length === 0) {
@@ -118,12 +140,19 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
     );
   }
 
-  const deepCount = coverageEntries.filter((e) => e.capabilities.hooks === true).length;
-  const mcpOnly = coverageEntries.length - deepCount;
+  // Capability matrix: when filtered, render a single row for the focused
+  // tool so the question's eye-shape stays consistent (one row per "tool"
+  // entity). Aggregate counts in the answer prose continue to describe
+  // the focused tool only.
+  const visibleCoverage = toolFilter
+    ? coverageEntries.filter((e) => e.id === toolFilter)
+    : coverageEntries;
+  const deepCount = visibleCoverage.filter((e) => e.capabilities.hooks === true).length;
+  const mcpOnly = visibleCoverage.length - deepCount;
 
   const coverageAnswer = (
     <>
-      <Metric>{fmtCount(coverageEntries.length)}</Metric> tools reported activity.{' '}
+      <Metric>{fmtCount(visibleCoverage.length)}</Metric> tools reported activity.{' '}
       {deepCount > 0 && (
         <>
           <Metric tone="positive">{fmtCount(deepCount)}</Metric> sent hooks
@@ -142,8 +171,11 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
   // Q2 workload: per-tool sessions+edits with completion as a muted
   // contextual stat, not a sortable rank. Spec guardrail: lead with
   // sessions, color the bar with the brand, surface completion as dim text.
+  // Share denominators stay anchored to ALL tools so the focused row's share
+  // stays meaningful relative to the cross-tool total when filtered.
   const totalSessions = tools.reduce((s, t) => s + t.sessions, 0);
-  const sortedByEdits = [...tools].sort((a, b) => b.total_edits - a.total_edits);
+  const visibleTools = toolFilter ? tools.filter((t) => t.host_tool === toolFilter) : tools;
+  const sortedByEdits = [...visibleTools].sort((a, b) => b.total_edits - a.total_edits);
   const topTool = sortedByEdits[0];
   const topShare =
     topTool && totalSessions > 0 ? Math.round((topTool.sessions / totalSessions) * 100) : 0;
@@ -216,42 +248,61 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
       id: 'capability',
       question: 'Which tools are reporting, and how deeply?',
       answer: coverageAnswer,
-      children: <ToolCoverageMatrix tools={coverageEntries} />,
+      children: <ToolCoverageMatrix tools={visibleCoverage} />,
     },
     {
       id: 'workload',
       question: 'Where is the work landing?',
       answer: workloadAnswer ?? <>No tools have recorded sessions in this window.</>,
       children: workloadAnswer ? (
-        <BreakdownList
-          items={sortedByEdits.map((t) => {
-            const meta = getToolMeta(t.host_tool);
-            const sessionShare =
-              totalSessions > 0 ? Math.round((t.sessions / totalSessions) * 100) : 0;
-            return {
-              key: t.host_tool,
-              label: meta.label,
-              fillPct: (t.total_edits / maxEdits) * 100,
-              fillColor: meta.color,
-              value: (
-                <>
-                  {fmtCount(t.sessions)} sessions
-                  <BreakdownMeta>
-                    {' · '}
-                    {fmtCount(t.total_edits)} edits · {sessionShare}% share
-                    {t.completion_rate > 0 && (
-                      <span className={styles.workloadValueSoft}>
-                        {t.completion_rate}% complete
-                      </span>
-                    )}
-                  </BreakdownMeta>
-                </>
-              ),
-            };
-          })}
-        />
+        <>
+          <BreakdownList
+            items={sortedByEdits.map((t) => {
+              const meta = getToolMeta(t.host_tool);
+              const sessionShare =
+                totalSessions > 0 ? Math.round((t.sessions / totalSessions) * 100) : 0;
+              return {
+                key: t.host_tool,
+                label: toolFilter ? (
+                  meta.label
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.toolFilterTrigger}
+                    onClick={() => setQueryParam('tool', t.host_tool)}
+                    aria-label={`Filter Tools view to ${meta.label}`}
+                  >
+                    {meta.label}
+                  </button>
+                ),
+                fillPct: (t.total_edits / maxEdits) * 100,
+                fillColor: meta.color,
+                value: (
+                  <>
+                    {fmtCount(t.sessions)} sessions
+                    <BreakdownMeta>
+                      {' · '}
+                      {fmtCount(t.total_edits)} edits · {sessionShare}% share
+                      {t.completion_rate > 0 && (
+                        <span className={styles.workloadValueSoft}>
+                          {t.completion_rate}% complete
+                        </span>
+                      )}
+                    </BreakdownMeta>
+                  </>
+                ),
+              };
+            })}
+          />
+          <CoverageNote text={hooksNote} />
+        </>
       ) : (
-        <span className={styles.empty}>Per-tool workload appears once tools record sessions.</span>
+        <>
+          <span className={styles.empty}>
+            Per-tool workload appears once tools record sessions.
+          </span>
+          <CoverageNote text={hooksNote} />
+        </>
       ),
       relatedLinks: getCrossLinks('tools', 'tools', 'workload'),
     },
@@ -339,27 +390,41 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
         </>
       ),
       children: (
-        <BreakdownList
-          items={sortedOneShot.map((r) => {
-            const meta = getToolMeta(r.host_tool);
-            const enough = r.sessions >= MIN_TOOL_SAMPLE;
-            return {
-              key: r.host_tool,
-              label: meta.label,
-              fillPct: enough ? r.one_shot_rate : (r.sessions / maxOneShotSessions) * 100,
-              fillColor: meta.color,
-              value: (
-                <>
-                  {enough ? `${r.one_shot_rate}% first try` : '—'}
-                  <BreakdownMeta>
-                    {' · '}
-                    {fmtCount(r.sessions)} sessions
-                  </BreakdownMeta>
-                </>
-              ),
-            };
-          })}
-        />
+        <>
+          <BreakdownList
+            items={sortedOneShot.map((r) => {
+              const meta = getToolMeta(r.host_tool);
+              const enough = r.sessions >= MIN_TOOL_SAMPLE;
+              return {
+                key: r.host_tool,
+                label: toolFilter ? (
+                  meta.label
+                ) : (
+                  <button
+                    type="button"
+                    className={styles.toolFilterTrigger}
+                    onClick={() => setQueryParam('tool', r.host_tool)}
+                    aria-label={`Filter Tools view to ${meta.label}`}
+                  >
+                    {meta.label}
+                  </button>
+                ),
+                fillPct: enough ? r.one_shot_rate : (r.sessions / maxOneShotSessions) * 100,
+                fillColor: meta.color,
+                value: (
+                  <>
+                    {enough ? `${r.one_shot_rate}% first try` : '—'}
+                    <BreakdownMeta>
+                      {' · '}
+                      {fmtCount(r.sessions)} sessions
+                    </BreakdownMeta>
+                  </>
+                ),
+              };
+            })}
+          />
+          <CoverageNote text={toolCallNote} />
+        </>
       ),
       relatedLinks: getCrossLinks('tools', 'tools', 'one-shot'),
     });
@@ -368,7 +433,12 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
       id: 'one-shot',
       question: 'Which tool lands edits without a retry loop?',
       answer: <>First-try rate appears once tools log Edit and Bash tool calls.</>,
-      children: <GhostRows count={3} />,
+      children: (
+        <>
+          <GhostRows count={3} />
+          <CoverageNote text={toolCallNote} />
+        </>
+      ),
     });
   }
 
@@ -397,6 +467,23 @@ export function ToolsPanel({ analytics }: { analytics: UserAnalytics }) {
 
   return (
     <div className={styles.panel}>
+      {toolFilter && (
+        <div className={styles.filterBar}>
+          <span
+            className={styles.filterDot}
+            style={{ background: getToolMeta(toolFilter).color }}
+          />
+          <span className={styles.filterLabel}>filtered to {getToolMeta(toolFilter).label}</span>
+          <button
+            type="button"
+            className={styles.filterClear}
+            onClick={() => setQueryParam('tool', null)}
+            aria-label="Clear tool filter"
+          >
+            × clear
+          </button>
+        </div>
+      )}
       <FocusedDetailView
         questions={questions}
         activeId={activeId}
@@ -427,11 +514,6 @@ function ModelsBlock({ rows }: { rows: ReturnType<typeof aggregateModels> }) {
               {m.avgMin > 0 && (
                 <span className={styles.modelStat}>
                   <span className={styles.modelStatValue}>{m.avgMin.toFixed(1)}m</span> avg
-                </span>
-              )}
-              {m.rate > 0 && (
-                <span className={styles.modelStat}>
-                  <span className={styles.modelStatValue}>{m.rate}%</span>
                 </span>
               )}
             </div>

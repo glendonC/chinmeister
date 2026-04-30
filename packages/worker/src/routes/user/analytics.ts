@@ -212,6 +212,9 @@ async function buildUserAnalytics(
   const periodComparisonAcc = period.createAcc();
 
   const convEditAcc = conversations.createConvEditAcc();
+  const confusedFilesAcc = conversations.createConfusedFilesAcc();
+  const crossToolHandoffsAcc = conversations.createCrossToolHandoffsAcc();
+  const unansweredQuestionsAcc = conversations.createUnansweredQuestionsAcc();
   const memOutcomeAcc = conversations.createMemOutcomeAcc();
   const perMemoryAcc = conversations.createPerMemoryAcc();
   const topMemoriesAcc = conversations.createTopMemoriesAcc();
@@ -317,6 +320,9 @@ async function buildUserAnalytics(
     period.merge(periodComparisonAcc, team);
 
     conversations.mergeConvEdit(convEditAcc, team);
+    conversations.mergeConfusedFiles(confusedFilesAcc, team);
+    conversations.mergeCrossToolHandoffs(crossToolHandoffsAcc, team);
+    conversations.mergeUnansweredQuestions(unansweredQuestionsAcc, team);
     conversations.mergeMemOutcome(memOutcomeAcc, team);
     conversations.mergePerMemory(perMemoryAcc, team);
     conversations.mergeTopMemories(topMemoriesAcc, team);
@@ -384,6 +390,9 @@ async function buildUserAnalytics(
       memory_usage: conversations.projectMemoryUsage(memoryUsageAcc),
       work_type_outcomes: outcomes.projectWorkTypeOutcomes(workTypeOutcomesAcc),
       conversation_edit_correlation: conversations.projectConvEdit(convEditAcc),
+      confused_files: conversations.projectConfusedFiles(confusedFilesAcc),
+      cross_tool_handoff_questions: conversations.projectCrossToolHandoffs(crossToolHandoffsAcc),
+      unanswered_questions: conversations.projectUnansweredQuestions(unansweredQuestionsAcc),
       file_rework: codebase.projectFileRework(fileReworkAcc),
       directory_heatmap: codebase.projectDirHeatmap(dirHeatmapAcc),
       files_by_work_type: codebase.projectFilesByWorkType(filesByWorkTypeAcc),

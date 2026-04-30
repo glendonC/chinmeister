@@ -12,7 +12,6 @@ import { SessionsPanel as UsageSessions } from '../UsageDetailView/panels/Sessio
 import { EditsPanel } from '../UsageDetailView/panels/EditsPanel.js';
 import { LinesPanel } from '../UsageDetailView/panels/LinesPanel.js';
 import { CostPanel } from '../UsageDetailView/panels/CostPanel.js';
-import { CostPerEditPanel } from '../UsageDetailView/panels/CostPerEditPanel.js';
 import { FilesTouchedPanel } from '../UsageDetailView/panels/FilesTouchedPanel.js';
 
 import { SessionsPanel as OutcomesSessions } from '../OutcomesDetailView/panels/SessionsPanel.js';
@@ -31,6 +30,8 @@ import { CommitsPanel } from '../CodebaseDetailView/panels/CommitsPanel.js';
 import { ToolsPanel } from '../ToolsDetailView/panels/ToolsPanel.js';
 import { FlowPanel } from '../ToolsDetailView/panels/FlowPanel.js';
 import { ErrorsPanel } from '../ToolsDetailView/panels/ErrorsPanel.js';
+
+import { SignalsPanel } from '../ConversationsDetailView/panels/SignalsPanel.js';
 
 import { HealthPanel } from '../MemoryDetailView/panels/HealthPanel.js';
 import { FreshnessPanel } from '../MemoryDetailView/panels/FreshnessPanel.js';
@@ -99,7 +100,6 @@ const cases: PanelCase[] = [
   ['Edits', () => <EditsPanel analytics={analytics} />],
   ['Lines', () => <LinesPanel analytics={analytics} />],
   ['Cost', () => <CostPanel analytics={analytics} />],
-  ['CostPerEdit', () => <CostPerEditPanel analytics={analytics} />],
   ['FilesTouched', () => <FilesTouchedPanel analytics={analytics} />],
 
   // Outcomes
@@ -125,6 +125,9 @@ const cases: PanelCase[] = [
   ['Tools', () => <ToolsPanel analytics={analytics} />],
   ['Flow', () => <FlowPanel analytics={analytics} />],
   ['Errors', () => <ErrorsPanel analytics={analytics} callStats={analytics.tool_call_stats} />],
+
+  // Conversations
+  ['ConversationSignals', () => <SignalsPanel analytics={analytics} />],
 
   // Memory
   ['Health', () => <HealthPanel analytics={analytics} />],

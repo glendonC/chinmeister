@@ -6,11 +6,15 @@
 // top_memories, memory_usage.
 
 import type {
+  ConfusedFileEntry,
   ConversationEditCorrelation,
+  CrossToolHandoffEntry,
   MemoryAccessEntry,
   MemoryOutcomeCorrelation,
   MemoryPerEntryOutcome,
   MemoryUsageStats,
+  UnansweredQuestionEntry,
+  UnansweredQuestionStats,
 } from '@chinmeister/shared/contracts/analytics.js';
 import type { TeamResult } from './types.js';
 
@@ -59,6 +63,99 @@ export function projectConvEdit(acc: ConvEditAcc): ConversationEditCorrelation[]
       avg_lines: v.sessions > 0 ? Math.round(v.total_lines / v.sessions) : 0,
       completion_rate: rate(v.completed, v.sessions),
     }));
+}
+
+// ── conversation signals ──────────────────────────
+
+interface ConfusedFileBucket {
+  confused_sessions: number;
+  retried_sessions: number;
+}
+
+export type ConfusedFilesAcc = Map<string, ConfusedFileBucket>;
+
+export function createConfusedFilesAcc(): ConfusedFilesAcc {
+  return new Map();
+}
+
+export function mergeConfusedFiles(acc: ConfusedFilesAcc, team: TeamResult): void {
+  for (const file of team.confused_files ?? []) {
+    const existing = acc.get(file.file) ?? { confused_sessions: 0, retried_sessions: 0 };
+    existing.confused_sessions += file.confused_sessions;
+    existing.retried_sessions += file.retried_sessions;
+    acc.set(file.file, existing);
+  }
+}
+
+export function projectConfusedFiles(acc: ConfusedFilesAcc): ConfusedFileEntry[] {
+  return [...acc.entries()]
+    .sort(([, a], [, b]) => {
+      if (b.confused_sessions !== a.confused_sessions) {
+        return b.confused_sessions - a.confused_sessions;
+      }
+      return b.retried_sessions - a.retried_sessions;
+    })
+    .slice(0, 10)
+    .map(([file, v]) => ({
+      file,
+      confused_sessions: v.confused_sessions,
+      retried_sessions: v.retried_sessions,
+    }));
+}
+
+export type CrossToolHandoffsAcc = Map<string, CrossToolHandoffEntry>;
+
+export function createCrossToolHandoffsAcc(): CrossToolHandoffsAcc {
+  return new Map();
+}
+
+export function mergeCrossToolHandoffs(acc: CrossToolHandoffsAcc, team: TeamResult): void {
+  for (const handoff of team.cross_tool_handoff_questions ?? []) {
+    const key = [
+      handoff.handoff_at,
+      handoff.file,
+      handoff.tool_from,
+      handoff.tool_to,
+      handoff.handle_from,
+      handoff.handle_to,
+    ].join('\u0000');
+    acc.set(key, handoff);
+  }
+}
+
+export function projectCrossToolHandoffs(acc: CrossToolHandoffsAcc): CrossToolHandoffEntry[] {
+  return [...acc.values()].sort((a, b) => b.handoff_at.localeCompare(a.handoff_at)).slice(0, 20);
+}
+
+export interface UnansweredQuestionsAcc {
+  count: number;
+  recent: Map<string, UnansweredQuestionEntry>;
+}
+
+export function createUnansweredQuestionsAcc(): UnansweredQuestionsAcc {
+  return { count: 0, recent: new Map() };
+}
+
+export function mergeUnansweredQuestions(acc: UnansweredQuestionsAcc, team: TeamResult): void {
+  const unanswered = team.unanswered_questions;
+  if (!unanswered) return;
+  acc.count += unanswered.count ?? 0;
+  for (const entry of unanswered.recent ?? []) {
+    acc.recent.set(entry.event_id, entry);
+  }
+}
+
+export function projectUnansweredQuestions(acc: UnansweredQuestionsAcc): UnansweredQuestionStats {
+  return {
+    count: acc.count,
+    recent: [...acc.recent.values()]
+      .sort((a, b) => {
+        const byTime = b.created_at.localeCompare(a.created_at);
+        if (byTime !== 0) return byTime;
+        return b.sequence - a.sequence;
+      })
+      .slice(0, 20),
+  };
 }
 
 // ── memory_outcome_correlation ───────────────────

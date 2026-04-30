@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo } from 'react';
 
 import {
   FocusedDetailView,
@@ -11,6 +11,7 @@ import {
   BreakdownMeta,
   HeroStatRow,
   InteractiveDailyChurn,
+  RateBars,
   type HeroStatDef,
   type InteractiveDailyChurnEntry,
 } from '../../../../components/viz/index.js';
@@ -219,11 +220,15 @@ export function CommitsPanel({ analytics }: { analytics: UserAnalytics }) {
       question: 'Do committing sessions actually finish?',
       answer: correlationAnswer,
       children: (
-        <CompletionBucketBars
-          buckets={oc.map((b) => ({
+        <RateBars
+          tone="completion"
+          labelWidth={160}
+          rows={oc.map((b) => ({
+            key: b.bucket,
             label: b.bucket,
             rate: b.completion_rate,
-            sessions: b.sessions,
+            value: `${b.completion_rate}%`,
+            sublabel: `${fmtCount(b.sessions)} sessions`,
           }))}
         />
       ),
@@ -235,12 +240,16 @@ export function CommitsPanel({ analytics }: { analytics: UserAnalytics }) {
       question: 'Do committing sessions actually finish?',
       answer: correlationAnswer,
       children: (
-        <CompletionBucketBars
-          buckets={[
+        <RateBars
+          tone="completion"
+          labelWidth={160}
+          rows={[
             {
+              key: only.bucket,
               label: only.bucket,
               rate: only.completion_rate,
-              sessions: only.sessions,
+              value: `${only.completion_rate}%`,
+              sublabel: `${fmtCount(only.sessions)} sessions`,
             },
           ]}
           footer={`No comparison, all sessions in this window ${
@@ -259,48 +268,6 @@ export function CommitsPanel({ analytics }: { analytics: UserAnalytics }) {
         activeId={activeId}
         onSelect={(id) => setQueryParam('q', id)}
       />
-    </div>
-  );
-}
-
-// Inline viz: completion bucket bars. Two-row horizontal bars for the
-// commits-vs-completion question. Reuses the wtBarTrack/wtBarFill semantics
-// from OutcomesDetailView's WorkTypesPanel, same chrome, scoped here so
-// codebase doesn't reach into outcomes' private CSS module.
-
-interface BucketBar {
-  label: string;
-  rate: number;
-  sessions: number;
-}
-
-function CompletionBucketBars({ buckets, footer }: { buckets: BucketBar[]; footer?: string }) {
-  const maxRate = Math.max(...buckets.map((b) => b.rate), 1);
-  return (
-    <div className={styles.bucketList}>
-      {buckets.map((b, i) => (
-        <div
-          key={b.label}
-          className={styles.bucketRow}
-          style={{ '--row-index': i } as CSSProperties}
-        >
-          <span className={styles.bucketLabel}>{b.label}</span>
-          <div className={styles.bucketTrack}>
-            <div
-              className={styles.bucketFill}
-              style={{
-                width: `${(b.rate / maxRate) * 100}%`,
-                background:
-                  b.rate >= 70 ? 'var(--success)' : b.rate >= 40 ? 'var(--warn)' : 'var(--danger)',
-              }}
-            />
-          </div>
-          <span className={styles.bucketValue}>
-            {b.rate}%<span className={styles.bucketValueSoft}>{fmtCount(b.sessions)} sessions</span>
-          </span>
-        </div>
-      ))}
-      {footer && <p className={styles.bucketFooter}>{footer}</p>}
     </div>
   );
 }

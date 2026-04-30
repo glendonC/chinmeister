@@ -20,12 +20,13 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
     minH: 2,
     dataKeys: ['confused_files'],
     requiredCapability: 'conversationLogs',
+    drillTarget: { view: 'conversations', tab: 'signals', q: 'confused-files' },
   },
   {
     id: 'unanswered-questions',
     name: 'questions in abandoned sessions',
     description:
-      "Questions you asked in sessions that got abandoned, things the agent couldn't follow through on. Click in for the filtered session list. Captured for tools with conversation logs.",
+      "Questions you asked in sessions that got abandoned, things the agent couldn't follow through on. Captured for tools with conversation logs.",
     category: 'conversations',
     scope: 'both',
     viz: 'stat',
@@ -38,6 +39,7 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
     minH: 2,
     dataKeys: ['unanswered_questions'],
     requiredCapability: 'conversationLogs',
+    drillTarget: { view: 'conversations', tab: 'signals', q: 'unanswered-questions' },
   },
   // cross-tool-handoff-questions: substrate-unique. Surfaces handoff EVENTS
   // (file × tool-from × tool-to × gap-time) where one tool's session
@@ -45,8 +47,8 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
   // file with a question or confused/frustrated turn. Sentiment/topic are
   // filter inputs only, never displayed. Catalog-only because the data
   // requires 2+ tools with conversation capture; the empty state names the
-  // condition. Drill emits URL params matching the session-list filter
-  // spec.
+  // condition. Drill lands in the conversation signals detail view where
+  // this sits beside the file-risk and abandoned-intent questions.
   {
     id: 'cross-tool-handoff-questions',
     name: 'cross-tool question handoffs',
@@ -61,5 +63,6 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
     minH: 2,
     dataKeys: ['cross_tool_handoff_questions'],
     requiredCapability: 'conversationLogs',
+    drillTarget: { view: 'conversations', tab: 'signals', q: 'question-handoffs' },
   },
 ];

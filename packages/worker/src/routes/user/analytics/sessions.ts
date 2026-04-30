@@ -132,7 +132,13 @@ export interface StucknessAcc {
   stuck_total: number;
   normal_completed: number;
   normal_total: number;
+  // Cross-team stuck-list aggregation. Caps at the same per-team limit
+  // (20) so the cross-team payload doesn't explode when a user sits on
+  // many projects. Recency-ordered after merge.
+  stuck_sessions_list: StucknessStats['stuck_sessions_list'];
 }
+
+const STUCK_LIST_CROSS_TEAM_CAP = 20;
 
 export function createStucknessAcc(): StucknessAcc {
   return {
@@ -142,6 +148,7 @@ export function createStucknessAcc(): StucknessAcc {
     stuck_total: 0,
     normal_completed: 0,
     normal_total: 0,
+    stuck_sessions_list: [],
   };
 }
 
@@ -156,15 +163,26 @@ export function mergeStuckness(acc: StucknessAcc, team: TeamResult): void {
   acc.stuck_total += stuckTotal;
   acc.normal_completed += Math.round((st.normal_completion_rate / 100) * normalTotal);
   acc.normal_total += normalTotal;
+  if (Array.isArray(st.stuck_sessions_list)) {
+    acc.stuck_sessions_list.push(...st.stuck_sessions_list);
+  }
 }
 
 export function projectStuckness(acc: StucknessAcc): StucknessStats {
+  const sortedList = [...acc.stuck_sessions_list]
+    .sort((a, b) => {
+      const aTs = a.last_activity_at ?? '';
+      const bTs = b.last_activity_at ?? '';
+      return bTs.localeCompare(aTs);
+    })
+    .slice(0, STUCK_LIST_CROSS_TEAM_CAP);
   return {
     total_sessions: acc.total_sessions,
     stuck_sessions: acc.stuck_sessions,
     stuckness_rate: rate(acc.stuck_sessions, acc.total_sessions),
     stuck_completion_rate: rate(acc.stuck_completed, acc.stuck_total),
     normal_completion_rate: rate(acc.normal_completed, acc.normal_total),
+    stuck_sessions_list: sortedList,
   };
 }
 

@@ -46,6 +46,7 @@ const MAP: Record<string, CrossLink[]> = {
   ],
   'outcomes:types:finish': [
     { label: 'Work-type mix in Activity', view: 'activity', tab: 'mix', q: 'share' },
+    { label: 'Completion by work type in Activity', view: 'activity', tab: 'mix', q: 'completion' },
   ],
 
   // ── Activity ↔ siblings ──────────────────────────
@@ -54,6 +55,9 @@ const MAP: Record<string, CrossLink[]> = {
   ],
   'activity:mix:share': [
     { label: 'Completion by work type', view: 'outcomes', tab: 'types', q: 'finish' },
+  ],
+  'activity:mix:completion': [
+    { label: 'Outcomes by work type', view: 'outcomes', tab: 'types', q: 'finish' },
   ],
   'activity:effective-hours:peak-completion': [
     { label: 'Session completion detail', view: 'outcomes', tab: 'sessions', q: 'completion' },
@@ -88,7 +92,7 @@ const MAP: Record<string, CrossLink[]> = {
     { label: 'File-level collisions', view: 'codebase', tab: 'risk', q: 'collisions' },
   ],
   'tools:errors:top': [
-    { label: 'One-shot rate context', view: 'outcomes', tab: 'retries', q: 'one-shot' },
+    { label: 'How edits land', view: 'outcomes', tab: 'retries', q: 'one-shot' },
   ],
   'tools:errors:tokens': [{ label: 'Cost in Usage', view: 'usage', tab: 'cost' }],
 

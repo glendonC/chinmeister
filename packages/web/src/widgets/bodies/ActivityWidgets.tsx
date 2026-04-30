@@ -4,6 +4,7 @@ import HourHeatmap, { type HourCell } from '../../components/viz/time/HourHeatma
 import { qualifyByVolume } from '../../lib/qualifyByVolume.js';
 import { completionColor, workTypeColor } from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
+import { BodyLead } from './atoms/BodyLead.js';
 import styles from './ActivityWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
@@ -49,15 +50,11 @@ function Heatmap({ hourly }: { hourly: UserAnalytics['hourly_distribution'] }) {
   return (
     <div className={styles.heatmapFrame}>
       {peak ? (
-        <div className={styles.heatmapLead}>
-          <span className={styles.heatmapLeadLabel}>peak</span>
-          <span className={styles.heatmapLeadValue}>
-            {peak.value} {peak.value === 1 ? 'session' : 'sessions'}
-          </span>
-          <span className={styles.heatmapLeadMeta}>
-            {hourGlyph(peak.hour)} {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][peak.dow]}
-          </span>
-        </div>
+        <BodyLead
+          label="peak"
+          value={`${peak.value} ${peak.value === 1 ? 'session' : 'sessions'}`}
+          sublabel={`${hourGlyph(peak.hour)} ${['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][peak.dow]}`}
+        />
       ) : null}
       <HourHeatmap data={cells} cellSize={16} />
     </div>
@@ -131,14 +128,15 @@ function WorkTypesWidget({ analytics }: WidgetBodyProps) {
           );
         })}
       </div>
-      <div className={styles.mixSummary}>
-        <span className={styles.mixPct}>{primaryPct}%</span>
-        <span className={styles.mixIn}>in</span>
-        <span className={styles.mixName} style={{ color: workTypeColor(primary.work_type) }}>
-          {primaryLabel}
-        </span>
-        <span className={styles.mixEditsUnit}>edits</span>
-      </div>
+      <BodyLead
+        label="top"
+        value={<>{primaryPct}% of edits</>}
+        sublabel={
+          <>
+            in <span style={{ color: workTypeColor(primary.work_type) }}>{primaryLabel}</span>
+          </>
+        }
+      />
     </div>
   );
 }
@@ -236,12 +234,12 @@ function HourlyEffectivenessWidget({ analytics }: WidgetBodyProps) {
   return (
     <div className={styles.diel} role="group" aria-label={ariaDiel}>
       {bestWindow.sessions > 0 ? (
-        <div className={styles.dielLead}>
-          <div className={styles.dielLeadNum}>{bestWindow.rate}%</div>
-          <div className={styles.dielLeadSub}>
-            Best {EFFECTIVE_WINDOW_HOURS}h window, {bestRangeLabel}
-          </div>
-        </div>
+        <BodyLead
+          label="best window"
+          value={`${bestWindow.rate}%`}
+          sublabel={`${EFFECTIVE_WINDOW_HOURS}h, ${bestRangeLabel}`}
+          tone="positive"
+        />
       ) : null}
       <div className={styles.dielPillarStage}>
         <div className={styles.dielPillars}>

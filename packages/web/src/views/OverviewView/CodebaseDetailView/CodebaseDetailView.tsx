@@ -78,6 +78,9 @@ export default function CodebaseDetailView({
     [cs.daily_commits],
   );
 
+  // Tabs whose value is a scalar quantity over the period MUST set a real delta
+  // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
+  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<CodebaseTab>> = [
     {
       id: 'landscape',
@@ -89,12 +92,14 @@ export default function CodebaseDetailView({
       id: 'directories',
       label: 'Directories',
       value: dirCount > 0 ? `${fmtCount(dirCount)} dirs` : '--',
+      // rationale: tab value is count of distinct directories, not period-additive.
       delta: MISSING_DELTA,
     },
     {
       id: 'risk',
       label: 'Risk',
       value: reworkCount > 0 ? `${fmtCount(reworkCount)} files` : '--',
+      // rationale: tab value is count of distinct categories (files at risk), not period-additive.
       delta: MISSING_DELTA,
     },
     {

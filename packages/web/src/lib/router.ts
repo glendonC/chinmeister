@@ -141,6 +141,7 @@ export const DETAIL_DRILL_KEYS = [
   'activity',
   'codebase',
   'tools',
+  'conversations',
   'memory',
 ] as const;
 

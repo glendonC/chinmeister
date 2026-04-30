@@ -172,6 +172,8 @@ export function queryConfusedFiles(
 const CROSS_TOOL_HANDOFF_WINDOW_HOURS = 24;
 const CROSS_TOOL_HANDOFF_LIMIT = 20;
 const CROSS_TOOL_HANDOFF_FOLLOWUP_SENTIMENTS = ['confused', 'frustrated'];
+const UNANSWERED_QUESTION_LIMIT = 20;
+const UNANSWERED_QUESTION_PREVIEW_CHARS = 240;
 
 export function queryCrossToolHandoffs(
   sql: SqlStorage,
@@ -260,18 +262,16 @@ export function queryCrossToolHandoffs(
   }
 }
 
-// Count of user messages classified topic='question' in sessions that ended
-// abandoned. Single scalar - the signal is "intent the agent couldn't
-// fulfill, walk this back into memory or a follow-up session." Frame is
-// navigation aid, not metric (same shape as live-conflicts: number drives
-// drill into the underlying sessions).
+// User questions inside abandoned sessions. Count stays the headline; recent
+// rows make the detail view concrete enough to answer "which questions were
+// left behind" without returning full conversation transcripts.
 export function queryUnansweredQuestions(
   sql: SqlStorage,
   scope: AnalyticsScope,
   days: number,
 ): UnansweredQuestionStats {
   try {
-    const { sql: q, params } = withScope(
+    const { sql: countQuery, params: countParams } = withScope(
       `SELECT COUNT(*) AS count
          FROM conversation_events ce
          JOIN sessions s ON s.id = ce.session_id
@@ -281,11 +281,52 @@ export function queryUnansweredQuestions(
            AND s.outcome = 'abandoned'`,
       [days],
       scope,
+      { handleColumn: 'ce.handle' },
     );
-    const row = sql.exec(q, ...params).one() as Record<string, unknown>;
-    return { count: (row.count as number) || 0 };
+    const countRow = sql.exec(countQuery, ...countParams).one() as Record<string, unknown>;
+    const { sql: recentQuery, params: recentParams } = withScope(
+      `SELECT
+         ce.id AS event_id,
+         ce.session_id AS session_id,
+         ce.created_at AS created_at,
+         ce.host_tool AS host_tool,
+         ce.sequence AS sequence,
+         SUBSTR(REPLACE(REPLACE(TRIM(ce.content), char(10), ' '), char(13), ' '), 1, ?) AS question_preview
+       FROM conversation_events ce
+       JOIN sessions s ON s.id = ce.session_id
+       WHERE ce.created_at > datetime('now', '-' || ? || ' days')
+         AND ce.role = 'user'
+         AND ce.topic = 'question'
+         AND s.outcome = 'abandoned'`,
+      [UNANSWERED_QUESTION_PREVIEW_CHARS, days],
+      scope,
+      { handleColumn: 'ce.handle' },
+    );
+    const rows = sql
+      .exec(
+        `${recentQuery}
+         ORDER BY ce.created_at DESC, ce.sequence DESC
+         LIMIT ?`,
+        ...recentParams,
+        UNANSWERED_QUESTION_LIMIT,
+      )
+      .toArray();
+    return {
+      count: (countRow.count as number) || 0,
+      recent: rows.map((r) => {
+        const row = r as Record<string, unknown>;
+        return {
+          event_id: row.event_id as string,
+          session_id: row.session_id as string,
+          created_at: row.created_at as string,
+          host_tool: (row.host_tool as string | null) ?? null,
+          sequence: (row.sequence as number) || 0,
+          question_preview: row.question_preview as string,
+        };
+      }),
+    };
   } catch (err) {
     log.warn(`unansweredQuestions query failed: ${err}`);
-    return { count: 0 };
+    return { count: 0, recent: [] };
   }
 }

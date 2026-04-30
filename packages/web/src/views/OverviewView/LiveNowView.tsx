@@ -2,9 +2,16 @@ import { useEffect, useMemo, useRef, type CSSProperties } from 'react';
 import clsx from 'clsx';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { formatDuration } from '../../lib/utils.js';
-import { DetailView, type DetailTabDef } from '../../components/DetailView/index.js';
+import {
+  DetailView,
+  FocusedDetailView,
+  Metric,
+  type DetailTabDef,
+  type FocusedQuestion,
+} from '../../components/DetailView/index.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import { useTabs } from '../../hooks/useTabs.js';
+import { useQueryParam, setQueryParam } from '../../lib/router.js';
 import type { LiveAgent } from '../../widgets/types.js';
 import { groupFilesByTeam } from '../../widgets/live-data.js';
 import type { Lock } from '../../lib/apiSchemas.js';
@@ -12,6 +19,12 @@ import { FileRow } from '../../widgets/bodies/LiveWidgets.js';
 import widgetStyles from '../../widgets/bodies/LiveWidgets.module.css';
 import { formatScope } from './overview-utils.js';
 import styles from './LiveNowView.module.css';
+
+// Mirrors the LiveWidgets editor-handle stale window: an agent whose
+// heartbeat is older than this fades to signal "cooling off". Keeping
+// the value identical to widgets/bodies/LiveWidgets.tsx STALE_AFTER_SECONDS
+// so the surface and drill-in agree on which agents read as stale.
+const STALE_AFTER_SECONDS = 30;
 
 const LIVE_TABS = ['agents', 'conflicts', 'files'] as const;
 type LiveTab = (typeof LIVE_TABS)[number];
@@ -68,14 +81,27 @@ export default function LiveNowView({
     [fileGroups],
   );
 
-  const filesInPlay = useMemo(
-    () =>
-      [...fileGroups].sort((a, b) => {
-        if (b.agents.length !== a.agents.length) return b.agents.length - a.agents.length;
+  // The `claimed-files` widget body sets `q=by-claim-age` when it drills
+  // into the Files tab so the user lands on the same sort order they were
+  // reading from. Default sort (collisions desc) applies when the param
+  // is absent. The lookup runs through locksByFile because the underlying
+  // FileGroup record carries no claim age; minutes_held lives on Lock.
+  const questionParam = useQueryParam('q');
+  const filesInPlay = useMemo(() => {
+    const groups = [...fileGroups];
+    if (questionParam === 'by-claim-age') {
+      return groups.sort((a, b) => {
+        const am = locksByFile.get(a.file)?.minutes_held ?? 0;
+        const bm = locksByFile.get(b.file)?.minutes_held ?? 0;
+        if (bm !== am) return bm - am;
         return a.file.localeCompare(b.file);
-      }),
-    [fileGroups],
-  );
+      });
+    }
+    return groups.sort((a, b) => {
+      if (b.agents.length !== a.agents.length) return b.agents.length - a.agents.length;
+      return a.file.localeCompare(b.file);
+    });
+  }, [fileGroups, locksByFile, questionParam]);
 
   const totalAgents = liveAgents.length;
   const totalConflicts = conflicts.length;
@@ -153,6 +179,169 @@ export default function LiveNowView({
     },
   ];
 
+  const focusedAgent = focusAgentId
+    ? liveAgents.find((agent) => agent.agent_id === focusAgentId)
+    : null;
+  const activeTools = new Set(liveAgents.map((agent) => agent.host_tool)).size;
+  const claimedFilesInPlay = filesInPlay.filter((group) => locksByFile.has(group.file));
+
+  const agentsTable = (
+    <div className={styles.agentsTable}>
+      <div className={styles.agentsHeader}>
+        <span>Member</span>
+        <span>Tool</span>
+        <span>Project</span>
+        <span className={styles.numHeader}>Files</span>
+        <span className={styles.numHeader}>Session</span>
+        <span>Summary</span>
+        <span aria-hidden="true" />
+      </div>
+      {liveAgents.map((a, i) => {
+        const meta = getToolMeta(a.host_tool);
+        const sessionLabel =
+          a.session_minutes != null && a.session_minutes > 0
+            ? formatDuration(a.session_minutes)
+            : '-';
+        const isFocused = a.agent_id === focusAgentId;
+        const isStale = (a.seconds_since_update ?? 0) > STALE_AFTER_SECONDS;
+        const summary = a.summary && a.summary.trim().length > 0 ? a.summary : null;
+        return (
+          <button
+            ref={isFocused ? focusRowRef : undefined}
+            key={a.agent_id}
+            type="button"
+            className={clsx(styles.agentsRow, isStale && styles.agentsRowStale)}
+            style={{ '--row-index': i } as CSSProperties}
+            onClick={() => setQueryParam('live', a.agent_id)}
+          >
+            <span className={styles.agentName} style={{ color: meta.color }}>
+              {a.handle}
+            </span>
+            <span className={clsx(styles.agentCell, styles.agentCellTool)}>
+              <ToolIcon tool={a.host_tool} size={16} />
+              <span>{meta.label}</span>
+            </span>
+            <span className={styles.agentCell} title={a.teamName}>
+              {a.teamName || '-'}
+            </span>
+            <span
+              className={clsx(styles.agentCellNum, a.files.length === 0 && styles.agentCellMuted)}
+            >
+              {a.files.length}
+            </span>
+            <span
+              className={clsx(styles.agentCellNum, sessionLabel === '-' && styles.agentCellMuted)}
+            >
+              {sessionLabel}
+            </span>
+            <span
+              className={clsx(
+                styles.agentCellSummary,
+                summary == null && styles.agentCellSummaryNone,
+              )}
+              title={summary ?? undefined}
+            >
+              {summary ?? '-'}
+            </span>
+            <span className={styles.agentViewButton}>Focus</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const renderFileTable = (groups: typeof filesInPlay, empty: string) =>
+    groups.length === 0 ? (
+      <span className={styles.empty}>{empty}</span>
+    ) : (
+      <div className={widgetStyles.conflictTable}>
+        <div className={widgetStyles.conflictTableHeader}>
+          <span>File</span>
+          <span>Status</span>
+          <span className={widgetStyles.conflictDurationHeader}>Duration</span>
+          <span>Editors</span>
+        </div>
+        <div className={widgetStyles.conflictTableBody}>
+          {groups.map((group, i) => (
+            <FileRow
+              key={`${group.teamId}\u0000${group.file}`}
+              group={group}
+              lock={locksByFile.get(group.file)}
+              index={i}
+              onClick={() => onOpenProject(group.teamId)}
+            />
+          ))}
+        </div>
+      </div>
+    );
+
+  const activeQuestions: FocusedQuestion[] =
+    activeTab === 'agents'
+      ? [
+          {
+            id: 'active-agents',
+            question: 'Who is working right now?',
+            answer: focusedAgent ? (
+              <>
+                <Metric>{focusedAgent.handle}</Metric> is focused in a live set of{' '}
+                <Metric>{totalAgents}</Metric> agents across <Metric>{activeTools}</Metric> tools.
+              </>
+            ) : (
+              <>
+                <Metric>{totalAgents}</Metric> agents are active across{' '}
+                <Metric>{activeTools}</Metric> tools.
+              </>
+            ),
+            children: agentsTable,
+          },
+        ]
+      : activeTab === 'conflicts'
+        ? [
+            {
+              id: 'conflicts',
+              question: 'Where are agents colliding right now?',
+              answer:
+                conflicts.length > 0 ? (
+                  <>
+                    <Metric>{conflicts[0].file}</Metric> has{' '}
+                    <Metric tone="warning">{conflicts[0].agents.length}</Metric> active editors.
+                  </>
+                ) : (
+                  <>No collisions right now.</>
+                ),
+              children: renderFileTable(conflicts, 'No collisions right now.'),
+            },
+          ]
+        : [
+            {
+              id: 'files-in-play',
+              question: 'Which files are in play?',
+              answer:
+                filesInPlay.length > 0 ? (
+                  <>
+                    <Metric>{totalFilesInPlay}</Metric> files are currently open across{' '}
+                    <Metric>{totalAgents}</Metric> live agents.
+                  </>
+                ) : (
+                  <>No active files right now.</>
+                ),
+              children: renderFileTable(filesInPlay, 'No active files right now.'),
+            },
+            {
+              id: 'by-claim-age',
+              question: 'Which claims have been held longest?',
+              answer:
+                claimedFilesInPlay.length > 0 ? (
+                  <>
+                    <Metric>{claimedFilesInPlay[0].file}</Metric> is the oldest visible claim.
+                  </>
+                ) : (
+                  <>No claimed active files right now.</>
+                ),
+              children: renderFileTable(claimedFilesInPlay, 'No claimed active files right now.'),
+            },
+          ];
+
   return (
     <DetailView
       backLabel={backLabel}
@@ -165,124 +354,11 @@ export default function LiveNowView({
       tablistLabel="Live sections"
       panelCompact
     >
-      <>
-        {activeTab === 'agents' && (
-          <div className={styles.agentsTable}>
-            <div className={styles.agentsHeader}>
-              <span>Member</span>
-              <span>Tool</span>
-              <span>Project</span>
-              <span className={styles.numHeader}>Files</span>
-              <span className={styles.numHeader}>Session</span>
-              <span aria-hidden="true" />
-              <span aria-hidden="true" />
-            </div>
-            {liveAgents.map((a, i) => {
-              const meta = getToolMeta(a.host_tool);
-              const sessionLabel =
-                a.session_minutes != null && a.session_minutes > 0
-                  ? formatDuration(a.session_minutes)
-                  : '-';
-              const isFocused = a.agent_id === focusAgentId;
-              return (
-                <button
-                  ref={isFocused ? focusRowRef : undefined}
-                  key={a.agent_id}
-                  type="button"
-                  className={styles.agentsRow}
-                  style={{ '--row-index': i } as CSSProperties}
-                  onClick={() => onOpenProject(a.teamId)}
-                >
-                  <span className={styles.agentName} style={{ color: meta.color }}>
-                    {a.handle}
-                  </span>
-                  <span className={clsx(styles.agentCell, styles.agentCellTool)}>
-                    <ToolIcon tool={a.host_tool} size={16} />
-                    <span>{meta.label}</span>
-                  </span>
-                  <span className={styles.agentCell} title={a.teamName}>
-                    {a.teamName || '-'}
-                  </span>
-                  <span
-                    className={clsx(
-                      styles.agentCellNum,
-                      a.files.length === 0 && styles.agentCellMuted,
-                    )}
-                  >
-                    {a.files.length}
-                  </span>
-                  <span
-                    className={clsx(
-                      styles.agentCellNum,
-                      sessionLabel === '-' && styles.agentCellMuted,
-                    )}
-                  >
-                    {sessionLabel}
-                  </span>
-                  <span aria-hidden="true" />
-                  <span className={styles.agentViewButton}>View</span>
-                </button>
-              );
-            })}
-          </div>
-        )}
-
-        {activeTab === 'conflicts' && (
-          <>
-            {conflicts.length === 0 ? (
-              <span className={styles.empty}>No collisions right now.</span>
-            ) : (
-              <div className={widgetStyles.conflictTable}>
-                <div className={widgetStyles.conflictTableHeader}>
-                  <span>File</span>
-                  <span>Status</span>
-                  <span className={widgetStyles.conflictDurationHeader}>Duration</span>
-                  <span>Editors</span>
-                </div>
-                <div className={widgetStyles.conflictTableBody}>
-                  {conflicts.map((c, i) => (
-                    <FileRow
-                      key={`${c.teamId}\u0000${c.file}`}
-                      group={c}
-                      lock={locksByFile.get(c.file)}
-                      index={i}
-                      onClick={() => onOpenProject(c.teamId)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-
-        {activeTab === 'files' && (
-          <>
-            {filesInPlay.length === 0 ? (
-              <span className={styles.empty}>No active files right now.</span>
-            ) : (
-              <div className={widgetStyles.conflictTable}>
-                <div className={widgetStyles.conflictTableHeader}>
-                  <span>File</span>
-                  <span>Status</span>
-                  <span className={widgetStyles.conflictDurationHeader}>Duration</span>
-                  <span>Editors</span>
-                </div>
-                <div className={widgetStyles.conflictTableBody}>
-                  {filesInPlay.map((f, i) => (
-                    <FileRow
-                      key={`${f.teamId}\u0000${f.file}`}
-                      group={f}
-                      lock={locksByFile.get(f.file)}
-                      index={i}
-                      onClick={() => onOpenProject(f.teamId)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </>
+      <FocusedDetailView
+        questions={activeQuestions}
+        activeId={questionParam}
+        onSelect={(id) => setQueryParam('q', id)}
+      />
     </DetailView>
   );
 }

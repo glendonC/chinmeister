@@ -114,7 +114,7 @@ export const USAGE_WIDGETS: WidgetDef[] = [
     minW: 2,
     minH: 2,
     dataKeys: ['token_usage'],
-    drillTarget: { view: 'usage', tab: 'cost-per-edit' },
+    drillTarget: { view: 'usage', tab: 'cost', q: 'per-edit' },
     ownsClick: true,
     requiredCapability: 'tokenUsage',
   },
@@ -141,5 +141,7 @@ export const USAGE_WIDGETS: WidgetDef[] = [
     // many-project user gets the full 3 rows + scroll inside the body.
     fitContent: true,
     dataKeys: ['dashboard'],
+    drillTarget: { view: 'usage', tab: 'projects', q: 'overview' },
+    ownsClick: true,
   },
 ];

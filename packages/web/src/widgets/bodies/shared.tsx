@@ -17,25 +17,17 @@ export type StatDeltaFormat = 'count' | 'usd' | 'usd-fine';
 
 /**
  * In-window delta: split a daily series in half by position and compare
- * sums. Preferred over `period_comparison` for stat deltas because the
- * worker's 30-day session retention structurally empties the
- * `[days*2, days]`-ago previous window used by `queryPeriodComparison`,
- * so that delta is null for every production user. Splitting the current
- * window sidesteps retention and keeps the delta honest for any period.
- * Returns null with fewer than two observed days. For odd counts the
- * single middle day is dropped so both halves span the same day count.
+ * sums. Re-exported from the canonical `detailDelta.ts` so widgets and
+ * detail views share one definition. Preferred over `period_comparison`
+ * for stat deltas because the worker's 30-day session retention
+ * structurally empties the `[days*2, days]`-ago previous window used by
+ * `queryPeriodComparison`, so that delta is null for every production
+ * user. Splitting the current window sidesteps retention and keeps the
+ * delta honest for any period. Returns null with fewer than two observed
+ * days. For odd counts the single middle day is dropped so both halves
+ * span the same day count.
  */
-export function splitPeriodDelta<T>(
-  days: T[],
-  select: (row: T) => number,
-): { current: number; previous: number } | null {
-  if (days.length < 2) return null;
-  const mid = Math.floor(days.length / 2);
-  const currentStart = days.length % 2 === 0 ? mid : mid + 1;
-  const previous = days.slice(0, mid).reduce((s, d) => s + select(d), 0);
-  const current = days.slice(currentStart).reduce((s, d) => s + select(d), 0);
-  return { current, previous };
-}
+export { splitDelta as splitPeriodDelta } from '../../views/OverviewView/detailDelta.js';
 
 /**
  * Screen-reader suffix mirroring the visual delta glyph (↑/↓/→). Empty
@@ -339,24 +331,10 @@ export function CoverageNote({ text }: { text: string | null }) {
   return <div className={styles.coverageNote}>{text}</div>;
 }
 
-/**
- * Auto-painted coverage footer for catalog-gated widgets. WidgetRenderer
- * mounts this when a widget declares `requiredCapability` without setting
- * `ownsCoverageNote`. Centralizes the partial-capture / gating disclosure
- * so silent widgets (commit-stats, top-files, model-mix, the conversation
- * widgets) can't ship without one. Returns nothing when coverage is full
- * or the user has no active tools — `capabilityCoverageNote` does that
- * decision; this is just the rendering shell.
- */
-export function CapabilityFooter({
-  capability,
-  toolsReporting,
-}: {
-  capability: keyof DataCapabilities;
-  toolsReporting: string[];
-}) {
-  return <CoverageNote text={capabilityCoverageNote(toolsReporting, capability)} />;
-}
+// Bodies own coverage notes manually and render
+// `<CoverageNote text={capabilityCoverageNote(toolsReporting, capability)} />`
+// in every branch; the helper returns null on full coverage so the call is a
+// safe no-op when no disclosure is needed.
 
 /**
  * True when the user is effectively solo for coordination purposes — zero or

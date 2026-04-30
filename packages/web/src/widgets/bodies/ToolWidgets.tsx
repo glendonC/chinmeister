@@ -299,10 +299,10 @@ function ToolWorkTypeFitWidget({ analytics }: WidgetBodyProps) {
  */
 function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
   const rows = analytics.tool_call_stats.host_one_shot ?? [];
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'toolCallLogs');
 
   if (rows.length === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
-    const note = capabilityCoverageNote(tools, 'toolCallLogs');
     return (
       <>
         <GhostRows count={3} />
@@ -312,64 +312,67 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
   }
 
   return (
-    <div className={styles.oneShotWrap}>
-      <div className={styles.oneShotTable} role="table">
-        <div className={styles.oneShotHeadRow} role="row">
-          <span role="columnheader">tool</span>
-          <span role="columnheader" className={styles.oneShotHeadNum}>
-            sessions
-          </span>
-          <span role="columnheader">first-try rate</span>
-          <span aria-hidden="true" />
+    <>
+      <div className={styles.oneShotWrap}>
+        <div className={styles.oneShotTable} role="table">
+          <div className={styles.oneShotHeadRow} role="row">
+            <span role="columnheader">tool</span>
+            <span role="columnheader" className={styles.oneShotHeadNum}>
+              sessions
+            </span>
+            <span role="columnheader">first-try rate</span>
+            <span aria-hidden="true" />
+          </div>
+          {rows.map((r, i) => {
+            const meta = getToolMeta(r.host_tool);
+            const enough = r.sessions >= MIN_TOOL_SAMPLE;
+            const rate = r.one_shot_rate;
+            const rateColor = enough ? completionColor(rate) : 'var(--soft)';
+            const content = (
+              <>
+                <span className={styles.oneShotName}>
+                  <ToolIcon tool={r.host_tool} size={16} />
+                  <span className={styles.oneShotLabel}>{meta.label}</span>
+                </span>
+                <span className={styles.oneShotSessions}>{r.sessions.toLocaleString()}</span>
+                <span className={styles.oneShotCompletion}>
+                  <span className={styles.oneShotTrack}>
+                    {enough && (
+                      <span
+                        className={styles.oneShotFill}
+                        style={{
+                          width: `${Math.max(2, rate)}%`,
+                          background: rateColor,
+                          opacity: 'var(--opacity-bar-fill)',
+                        }}
+                      />
+                    )}
+                  </span>
+                  <span className={styles.oneShotValue} style={{ color: rateColor }}>
+                    {enough ? `${rate}%` : '—'}
+                  </span>
+                </span>
+                <span className={styles.viewButton}>View</span>
+              </>
+            );
+            return (
+              <button
+                key={r.host_tool}
+                type="button"
+                role="row"
+                className={styles.oneShotRow}
+                style={{ '--row-index': i } as CSSProperties}
+                onClick={openTools('tools', 'one-shot')}
+                aria-label={`Open tools detail · ${meta.label} first-try rate ${enough ? `${rate}%` : 'not enough sessions'}`}
+              >
+                {content}
+              </button>
+            );
+          })}
         </div>
-        {rows.map((r, i) => {
-          const meta = getToolMeta(r.host_tool);
-          const enough = r.sessions >= MIN_TOOL_SAMPLE;
-          const rate = r.one_shot_rate;
-          const rateColor = enough ? completionColor(rate) : 'var(--soft)';
-          const content = (
-            <>
-              <span className={styles.oneShotName}>
-                <ToolIcon tool={r.host_tool} size={16} />
-                <span className={styles.oneShotLabel}>{meta.label}</span>
-              </span>
-              <span className={styles.oneShotSessions}>{r.sessions.toLocaleString()}</span>
-              <span className={styles.oneShotCompletion}>
-                <span className={styles.oneShotTrack}>
-                  {enough && (
-                    <span
-                      className={styles.oneShotFill}
-                      style={{
-                        width: `${Math.max(2, rate)}%`,
-                        background: rateColor,
-                        opacity: 'var(--opacity-bar-fill)',
-                      }}
-                    />
-                  )}
-                </span>
-                <span className={styles.oneShotValue} style={{ color: rateColor }}>
-                  {enough ? `${rate}%` : '—'}
-                </span>
-              </span>
-              <span className={styles.viewButton}>View</span>
-            </>
-          );
-          return (
-            <button
-              key={r.host_tool}
-              type="button"
-              role="row"
-              className={styles.oneShotRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openTools('tools', 'one-shot')}
-              aria-label={`Open tools detail · ${meta.label} first-try rate ${enough ? `${rate}%` : 'not enough sessions'}`}
-            >
-              {content}
-            </button>
-          );
-        })}
       </div>
-    </div>
+      <CoverageNote text={note} />
+    </>
   );
 }
 
@@ -383,10 +386,10 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
  */
 function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
   const stats = analytics.tool_call_stats;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'toolCallLogs');
 
   if (stats.total_calls === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
-    const note = capabilityCoverageNote(tools, 'toolCallLogs');
     return (
       <>
         <StatWidget value="--" />
@@ -397,11 +400,14 @@ function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
 
   const value = `${stats.error_rate}%`;
   return (
-    <StatWidget
-      value={value}
-      onOpenDetail={openTools('errors', 'top')}
-      detailAriaLabel={`Open errors detail · ${value} error rate`}
-    />
+    <>
+      <StatWidget
+        value={value}
+        onOpenDetail={openTools('errors', 'top')}
+        detailAriaLabel={`Open errors detail · ${value} error rate`}
+      />
+      <CoverageNote text={note} />
+    </>
   );
 }
 
@@ -436,12 +442,14 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
 
   const [active, setActive] = useState<string | null>(null);
 
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'tokenUsage');
+
   if (models.length === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
     return (
       <>
         <GhostRows count={2} />
-        <CoverageNote text={capabilityCoverageNote(tools, 'tokenUsage')} />
+        <CoverageNote text={note} />
       </>
     );
   }
@@ -469,59 +477,62 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
       : String(models.length);
 
   return (
-    <div className={styles.mixWrap}>
-      <div className={styles.mixHead}>
-        <span className={shared.heroStatValue}>{heroValue}</span>
-        {activeModel && (
-          <span className={styles.mixHeadCaption}>
-            <span className={styles.mixHeadName}>{activeModel.model}</span>
-            <span className={styles.mixHeadSep}>·</span>
-            <span className={styles.mixHeadValue}>{activeModel.total.toLocaleString()}</span>{' '}
-            {activeModel.total === 1 ? 'session' : 'sessions'}
-            {activeTokens && activeTokens.tokens > 0 && (
-              <>
-                <span className={styles.mixHeadSep}>·</span>
-                <span className={styles.mixHeadValue}>
-                  {formatTokenCount(activeTokens.tokens)}
-                </span>{' '}
-                tokens
-              </>
-            )}
-          </span>
-        )}
-      </div>
-      <div className={styles.mixStrip} role="group" aria-label="Model session share">
-        {visible.map((m) => {
-          const share = m.total / totalSessions;
-          const isActive = active === m.model;
-          const dim = active != null && !isActive;
-          return (
-            <button
-              key={m.model}
-              type="button"
-              className={styles.mixSegment}
-              style={{
-                width: `${share * 100}%`,
-                background: hashModelColor(m.model),
-                opacity: dim ? 0.2 : 1,
-              }}
-              onClick={() => setActive(isActive ? null : m.model)}
-              aria-pressed={isActive}
-              aria-label={`${m.model}: ${Math.round(share * 100)}%`}
-              title={`${m.model} · ${m.total} ${m.total === 1 ? 'session' : 'sessions'}`}
+    <>
+      <div className={styles.mixWrap}>
+        <div className={styles.mixHead}>
+          <span className={shared.heroStatValue}>{heroValue}</span>
+          {activeModel && (
+            <span className={styles.mixHeadCaption}>
+              <span className={styles.mixHeadName}>{activeModel.model}</span>
+              <span className={styles.mixHeadSep}>·</span>
+              <span className={styles.mixHeadValue}>{activeModel.total.toLocaleString()}</span>{' '}
+              {activeModel.total === 1 ? 'session' : 'sessions'}
+              {activeTokens && activeTokens.tokens > 0 && (
+                <>
+                  <span className={styles.mixHeadSep}>·</span>
+                  <span className={styles.mixHeadValue}>
+                    {formatTokenCount(activeTokens.tokens)}
+                  </span>{' '}
+                  tokens
+                </>
+              )}
+            </span>
+          )}
+        </div>
+        <div className={styles.mixStrip} role="group" aria-label="Model session share">
+          {visible.map((m) => {
+            const share = m.total / totalSessions;
+            const isActive = active === m.model;
+            const dim = active != null && !isActive;
+            return (
+              <button
+                key={m.model}
+                type="button"
+                className={styles.mixSegment}
+                style={{
+                  width: `${share * 100}%`,
+                  background: hashModelColor(m.model),
+                  opacity: dim ? 0.2 : 1,
+                }}
+                onClick={() => setActive(isActive ? null : m.model)}
+                aria-pressed={isActive}
+                aria-label={`${m.model}: ${Math.round(share * 100)}%`}
+                title={`${m.model} · ${m.total} ${m.total === 1 ? 'session' : 'sessions'}`}
+              />
+            );
+          })}
+          {tailLabel && (
+            <span
+              className={styles.mixTail}
+              style={{ width: `${(tailTotal / totalSessions) * 100}%` }}
+              aria-label={`${tail.length} more models`}
+              title={tail.map((m) => `${m.model} · ${m.total}`).join(', ')}
             />
-          );
-        })}
-        {tailLabel && (
-          <span
-            className={styles.mixTail}
-            style={{ width: `${(tailTotal / totalSessions) * 100}%` }}
-            aria-label={`${tail.length} more models`}
-            title={tail.map((m) => `${m.model} · ${m.total}`).join(', ')}
-          />
-        )}
+          )}
+        </div>
       </div>
-    </div>
+      <CoverageNote text={note} />
+    </>
   );
 }
 

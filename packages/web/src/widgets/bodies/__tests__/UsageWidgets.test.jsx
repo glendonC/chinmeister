@@ -9,8 +9,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 async function loadProjectsWidget() {
   vi.resetModules();
-  const mod = await import('../TeamWidgets.js');
-  return mod.teamWidgets.projects;
+  const mod = await import('../UsageWidgets.js');
+  return mod.usageWidgets.projects;
 }
 
 function makeProps({ summaries = [], liveAgents = [] } = {}) {

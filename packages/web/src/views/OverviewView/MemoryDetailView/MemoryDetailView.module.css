@@ -229,6 +229,93 @@
   text-transform: lowercase;
 }
 
+/* ── Growth frame (Q3 freshness) ──────────────────────
+ * BodyLead callout above a RateVolumeColumns strip that plots
+ * memory_writes_per_day. Shares the panel's vertical rhythm so the
+ * lead and the columns read as one block. */
+
+.growthFrame {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+/* ── Hygiene events timeline (Q2 hygiene) ─────────────
+ * Vertical list ordered most-recent-first. Each row carries a status
+ * badge, a kind label, and a relative-time chip drawn from
+ * memory_supersession_events. Mirrors the ToolsDetailView errors
+ * timeline cadence so the supersession queue reads with the same
+ * altitude across detail views. */
+
+.hygieneTimeline {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.hygieneRow {
+  display: grid;
+  grid-template-columns: auto auto 1fr auto;
+  align-items: center;
+  gap: var(--space-md);
+  padding: 8px 12px;
+  border-radius: var(--radius-xs);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 35ms);
+}
+
+.hygieneRow:hover {
+  background: var(--hover-bg);
+}
+
+.hygieneStatus {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+  color: var(--soft);
+  padding: 2px 8px;
+  border-radius: var(--radius-2xs);
+  background: var(--ghost);
+}
+
+.hygieneStatusApplied {
+  color: var(--success);
+}
+
+.hygieneStatusRejected {
+  color: var(--warn);
+}
+
+.hygieneKind {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--ink);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+}
+
+.hygieneSpacer {
+  min-width: 0;
+}
+
+.hygieneWhen {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  letter-spacing: var(--tracking-stat);
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hygieneRow {
+    animation: none !important;
+  }
+}
+
 /* ── Flow list (Q1 cross-tool) ────────────────────────
  * Stacks FlowRow primitives with a stable gap so the panel has one
  * predictable rhythm regardless of how many pairs land. The primitive

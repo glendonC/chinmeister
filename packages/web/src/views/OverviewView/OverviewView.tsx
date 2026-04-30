@@ -67,6 +67,7 @@ import OutcomesDetailView from './OutcomesDetailView/OutcomesDetailView.js';
 import ActivityDetailView from './ActivityDetailView/ActivityDetailView.js';
 import CodebaseDetailView from './CodebaseDetailView/CodebaseDetailView.js';
 import ToolsDetailView from './ToolsDetailView/ToolsDetailView.js';
+import ConversationsDetailView from './ConversationsDetailView/ConversationsDetailView.js';
 import MemoryDetailView from './MemoryDetailView/MemoryDetailView.js';
 import { RANGES, type RangeDays, summarizeNames } from './overview-utils.js';
 import { useOverviewLayout } from './useOverviewLayout.js';
@@ -273,7 +274,7 @@ export default function OverviewView() {
   // helper. Adding a new category is one entry in DETAIL_DRILL_KEYS and
   // one mount call here, not three coordinated edits.
   const { drills, anyOpen, closeAll } = useDetailDrills();
-  const { live, usage, outcomes, activity, codebase, tools, memory } = drills;
+  const { live, usage, outcomes, activity, codebase, tools, conversations, memory } = drills;
   const liveTabParam = useQueryParam('live-tab');
   const liveShifted = live.shifted;
   const usageShifted = usage.shifted;
@@ -281,6 +282,7 @@ export default function OverviewView() {
   const activityShifted = activity.shifted;
   const codebaseShifted = codebase.shifted;
   const toolsShifted = tools.shifted;
+  const conversationsShifted = conversations.shifted;
   const memoryShifted = memory.shifted;
   const focusAgentId = live.param && live.param.length > 0 ? live.param : null;
 
@@ -619,6 +621,13 @@ export default function OverviewView() {
             onBack={usage.close}
             rangeDays={rangeDays}
             onRangeChange={setRangeDays}
+            projectSummaries={sortedSummaries}
+            liveAgents={liveAgents}
+            onOpenProject={(teamId) => {
+              usage.close();
+              selectTeam(teamId);
+              navigate('project', teamId);
+            }}
           />
         ) : outcomesShifted ? (
           <OutcomesDetailView
@@ -649,6 +658,14 @@ export default function OverviewView() {
             analytics={analytics}
             initialTab={tools.param}
             onBack={tools.close}
+            rangeDays={rangeDays}
+            onRangeChange={setRangeDays}
+          />
+        ) : conversationsShifted ? (
+          <ConversationsDetailView
+            analytics={analytics}
+            initialTab={conversations.param}
+            onBack={conversations.close}
             rangeDays={rangeDays}
             onRangeChange={setRangeDays}
           />

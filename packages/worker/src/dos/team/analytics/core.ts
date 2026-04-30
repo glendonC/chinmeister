@@ -193,27 +193,71 @@ export function queryDailyTrends(
       )
       .toArray();
 
-    return rows<DailyTrend>(rawRows, (r) => ({
-      day: r.string('day'),
-      sessions: r.number('sessions'),
-      edits: r.number('edits'),
-      lines_added: r.number('lines_added'),
-      lines_removed: r.number('lines_removed'),
-      avg_duration_min: r.number('avg_duration_min'),
-      completed: r.number('completed'),
-      abandoned: r.number('abandoned'),
-      failed: r.number('failed'),
-      // Cost fields are populated downstream by enrichDailyTrendsWithPricing.
-      // Initialize to null so the structural shape matches the contract before
-      // the enrichment layer runs; null is also the steady-state value when
-      // pricing is unavailable for a given day, so this is a safe baseline.
-      cost: null,
-      cost_per_edit: null,
-    }));
+    // Per-day error count from tool_calls. Run as a separate query against
+    // tool_calls (different table from sessions, no clean join key for the
+    // spine), then merged into the spine rows by day. Best-effort: a missing
+    // tool_calls table or scope mismatch leaves errors at the default zero.
+    const errorsByDay = queryDailyToolCallErrors(sql, scope, days, tzOffsetMinutes);
+
+    return rows<DailyTrend>(rawRows, (r) => {
+      const day = r.string('day');
+      return {
+        day,
+        sessions: r.number('sessions'),
+        edits: r.number('edits'),
+        lines_added: r.number('lines_added'),
+        lines_removed: r.number('lines_removed'),
+        avg_duration_min: r.number('avg_duration_min'),
+        completed: r.number('completed'),
+        abandoned: r.number('abandoned'),
+        failed: r.number('failed'),
+        errors: errorsByDay.get(day) ?? 0,
+        // Cost fields are populated downstream by enrichDailyTrendsWithPricing.
+        // Initialize to null so the structural shape matches the contract before
+        // the enrichment layer runs; null is also the steady-state value when
+        // pricing is unavailable for a given day, so this is a safe baseline.
+        cost: null,
+        cost_per_edit: null,
+      };
+    });
   } catch (err) {
     log.warn(`dailyTrends query failed: ${err}`);
     return [];
   }
+}
+
+// Per-day count of tool_calls rows with is_error = 1, bucketed in the
+// caller's local TZ to match the daily_trends spine. Returns a Map keyed
+// by day-string so the merge in queryDailyTrends is O(1) per row. Best-
+// effort: missing tool_calls table returns an empty Map.
+function queryDailyToolCallErrors(
+  sql: SqlStorage,
+  scope: AnalyticsScope,
+  days: number,
+  tzOffsetMinutes: number,
+): Map<string, number> {
+  const out = new Map<string, number>();
+  try {
+    const { sql: q, params } = withScope(
+      `SELECT date(datetime(called_at, ? || ' minutes')) AS day,
+              COUNT(*) AS errors
+         FROM tool_calls
+         WHERE called_at > datetime('now', '-' || ? || ' days')
+           AND is_error = 1`,
+      [tzOffsetMinutes, days],
+      scope,
+    );
+    const errRows = sql.exec(`${q} GROUP BY day`, ...params).toArray();
+    for (const raw of errRows) {
+      const r = raw as Record<string, unknown>;
+      const day = (r.day as string) || '';
+      const errors = (r.errors as number) || 0;
+      if (day) out.set(day, errors);
+    }
+  } catch (err) {
+    log.warn(`dailyToolCallErrors query failed: ${err}`);
+  }
+  return out;
 }
 
 export function queryToolDistribution(

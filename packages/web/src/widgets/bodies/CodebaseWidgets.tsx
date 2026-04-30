@@ -58,13 +58,14 @@ const DIR_RING_PALETTE = [
 // One secondary line: median time to first commit + sessions that committed.
 function CommitStatsWidget({ analytics }: WidgetBodyProps) {
   const cs = analytics.commit_stats;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'commitTracking');
 
   if (cs.total_commits === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
     return (
       <>
         <GhostStatRow labels={['commits', 'cadence', 'sessions']} />
-        <CoverageNote text={capabilityCoverageNote(tools, 'commitTracking')} />
+        <CoverageNote text={note} />
       </>
     );
   }
@@ -72,48 +73,51 @@ function CommitStatsWidget({ analytics }: WidgetBodyProps) {
   const maxDay = Math.max(...cs.daily_commits.map((d) => d.commits), 1);
 
   return (
-    <div className={styles.commitFrame}>
-      <div className={styles.commitHero}>
-        <span className={styles.commitHeroValue}>{cs.total_commits.toLocaleString()}</span>
-      </div>
-      <div className={styles.commitTrend}>
-        <div
-          className={styles.commitSkyline}
-          role="img"
-          aria-label={`Commits over ${cs.daily_commits.length} days`}
-        >
-          {cs.daily_commits.map((d, i) => (
-            <span
-              key={d.day}
-              className={styles.commitSkylineBar}
-              style={
-                {
-                  height: `${(d.commits / maxDay) * 100}%`,
-                  background: commitIntensityColor(d.commits, maxDay),
-                  '--cell-index': i,
-                } as CSSProperties
-              }
-              title={`${d.day}: ${d.commits} commits`}
-            />
-          ))}
+    <>
+      <div className={styles.commitFrame}>
+        <div className={styles.commitHero}>
+          <span className={styles.commitHeroValue}>{cs.total_commits.toLocaleString()}</span>
         </div>
-        <div className={styles.commitSecondary}>
-          {cs.avg_time_to_first_commit_min != null && (
-            <>
-              <span className={styles.commitSecondaryValue}>
-                {cs.avg_time_to_first_commit_min.toFixed(1)}m
-              </span>{' '}
-              to first commit
-              <span className={styles.commitSecondarySep}>·</span>
-            </>
-          )}
-          <span className={styles.commitSecondaryValue}>
-            {cs.sessions_with_commits.toLocaleString()}
-          </span>{' '}
-          sessions committed
+        <div className={styles.commitTrend}>
+          <div
+            className={styles.commitSkyline}
+            role="img"
+            aria-label={`Commits over ${cs.daily_commits.length} days`}
+          >
+            {cs.daily_commits.map((d, i) => (
+              <span
+                key={d.day}
+                className={styles.commitSkylineBar}
+                style={
+                  {
+                    height: `${(d.commits / maxDay) * 100}%`,
+                    background: commitIntensityColor(d.commits, maxDay),
+                    '--cell-index': i,
+                  } as CSSProperties
+                }
+                title={`${d.day}: ${d.commits} commits`}
+              />
+            ))}
+          </div>
+          <div className={styles.commitSecondary}>
+            {cs.avg_time_to_first_commit_min != null && (
+              <>
+                <span className={styles.commitSecondaryValue}>
+                  {cs.avg_time_to_first_commit_min.toFixed(1)}m
+                </span>{' '}
+                to first commit
+                <span className={styles.commitSecondarySep}>·</span>
+              </>
+            )}
+            <span className={styles.commitSecondaryValue}>
+              {cs.sessions_with_commits.toLocaleString()}
+            </span>{' '}
+            sessions committed
+          </div>
         </div>
       </div>
-    </div>
+      <CoverageNote text={note} />
+    </>
   );
 }
 
@@ -137,6 +141,8 @@ interface DirArc {
 
 function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   const dirs = analytics.directory_heatmap;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'hooks');
 
   const arcs = useMemo<DirArc[]>(() => {
     const top = dirs.slice(0, DIR_RING_SLICES);
@@ -152,11 +158,10 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   }, [dirs]);
 
   if (dirs.length === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
     return (
       <>
         <GhostBars count={3} />
-        <CoverageNote text={capabilityCoverageNote(tools, 'hooks')} />
+        <CoverageNote text={note} />
       </>
     );
   }
@@ -165,83 +170,86 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   const hidden = dirs.length - visible.length;
 
   return (
-    <div className={styles.dirFrame}>
-      <div className={styles.dirRingBlock}>
-        <svg
-          viewBox={`0 0 ${DIR_RING_VIEW} ${DIR_RING_VIEW}`}
-          className={styles.dirRingSvg}
-          role="img"
-          aria-label={`Top ${arcs.length} directories by touches`}
-        >
-          <circle
-            cx={DIR_RING_CX}
-            cy={DIR_RING_CY}
-            r={DIR_RING_R}
-            className={styles.dirRingTrack}
-          />
-          {arcs
-            .filter((a) => a.sweepDeg > 0.2)
-            .map((a, i) => (
-              <path
-                key={i}
-                d={arcPath(DIR_RING_CX, DIR_RING_CY, DIR_RING_R, a.startDeg, a.sweepDeg)}
-                className={styles.dirRingArc}
-                style={{ stroke: a.color }}
-              />
-            ))}
-        </svg>
-      </div>
-      <div className={styles.dirTable} role="table">
-        <div className={styles.dirHeadRow} role="row">
-          <span role="columnheader">directory</span>
-          <span role="columnheader" className={styles.dirHeadNum}>
-            touches
-          </span>
-          <span role="columnheader">completion</span>
-          <span aria-hidden="true" />
+    <>
+      <div className={styles.dirFrame}>
+        <div className={styles.dirRingBlock}>
+          <svg
+            viewBox={`0 0 ${DIR_RING_VIEW} ${DIR_RING_VIEW}`}
+            className={styles.dirRingSvg}
+            role="img"
+            aria-label={`Top ${arcs.length} directories by touches`}
+          >
+            <circle
+              cx={DIR_RING_CX}
+              cy={DIR_RING_CY}
+              r={DIR_RING_R}
+              className={styles.dirRingTrack}
+            />
+            {arcs
+              .filter((a) => a.sweepDeg > 0.2)
+              .map((a, i) => (
+                <path
+                  key={i}
+                  d={arcPath(DIR_RING_CX, DIR_RING_CY, DIR_RING_R, a.startDeg, a.sweepDeg)}
+                  className={styles.dirRingArc}
+                  style={{ stroke: a.color }}
+                />
+              ))}
+          </svg>
         </div>
-        {visible.map((d, i) => {
-          const completionColor = outcomeRateColor(d.completion_rate);
-          const completionPct = Math.round(d.completion_rate);
-          const content = (
-            <>
-              <FilePath path={d.directory} parentSegments={1} />
-              <span className={styles.dirTouches}>{d.touch_count.toLocaleString()}</span>
-              <span className={styles.dirCompletion}>
-                <span className={styles.dirCompletionTrack}>
-                  <span
-                    className={styles.dirCompletionFill}
-                    style={{
-                      width: `${Math.max(2, completionPct)}%`,
-                      background: completionColor,
-                      opacity: 'var(--opacity-bar-fill)',
-                    }}
-                  />
+        <div className={styles.dirTable} role="table">
+          <div className={styles.dirHeadRow} role="row">
+            <span role="columnheader">directory</span>
+            <span role="columnheader" className={styles.dirHeadNum}>
+              touches
+            </span>
+            <span role="columnheader">completion</span>
+            <span aria-hidden="true" />
+          </div>
+          {visible.map((d, i) => {
+            const completionColor = outcomeRateColor(d.completion_rate);
+            const completionPct = Math.round(d.completion_rate);
+            const content = (
+              <>
+                <FilePath path={d.directory} parentSegments={1} />
+                <span className={styles.dirTouches}>{d.touch_count.toLocaleString()}</span>
+                <span className={styles.dirCompletion}>
+                  <span className={styles.dirCompletionTrack}>
+                    <span
+                      className={styles.dirCompletionFill}
+                      style={{
+                        width: `${Math.max(2, completionPct)}%`,
+                        background: completionColor,
+                        opacity: 'var(--opacity-bar-fill)',
+                      }}
+                    />
+                  </span>
+                  <span className={styles.dirCompletionValue} style={{ color: completionColor }}>
+                    {completionPct}%
+                  </span>
                 </span>
-                <span className={styles.dirCompletionValue} style={{ color: completionColor }}>
-                  {completionPct}%
-                </span>
-              </span>
-              <span className={styles.viewButton}>View</span>
-            </>
-          );
-          return (
-            <button
-              key={d.directory}
-              type="button"
-              role="row"
-              className={styles.dirDataRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openCodebase('directories', 'top-dirs')}
-              aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
-            >
-              {content}
-            </button>
-          );
-        })}
-        {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more directories</div>}
+                <span className={styles.viewButton}>View</span>
+              </>
+            );
+            return (
+              <button
+                key={d.directory}
+                type="button"
+                role="row"
+                className={styles.dirDataRow}
+                style={{ '--row-index': i } as CSSProperties}
+                onClick={openCodebase('directories', 'top-dirs')}
+                aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
+              >
+                {content}
+              </button>
+            );
+          })}
+          {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more directories</div>}
+        </div>
       </div>
-    </div>
+      <CoverageNote text={note} />
+    </>
   );
 }
 
@@ -254,12 +262,13 @@ const FILES_VISIBLE = 8;
 
 function FilesWidget({ analytics }: WidgetBodyProps) {
   const files = analytics.file_heatmap;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const note = capabilityCoverageNote(tools, 'hooks');
   if (files.length === 0) {
-    const tools = analytics.data_coverage?.tools_reporting ?? [];
     return (
       <>
         <GhostRows count={3} />
-        <CoverageNote text={capabilityCoverageNote(tools, 'hooks')} />
+        <CoverageNote text={note} />
       </>
     );
   }
@@ -269,75 +278,78 @@ function FilesWidget({ analytics }: WidgetBodyProps) {
   const maxTouches = Math.max(...visible.map((f) => f.touch_count), 1);
 
   return (
-    <div className={styles.beamTable} role="table">
-      <div className={styles.beamHeadRow} role="row">
-        <span role="columnheader">file</span>
-        <span role="columnheader">touches · outcome</span>
-        <span role="columnheader" className={styles.beamHeadNum}>
-          churn
-        </span>
-        <span aria-hidden="true" />
-      </div>
-      {visible.map((f, i) => {
-        const linesAdded = f.total_lines_added ?? 0;
-        const linesRemoved = f.total_lines_removed ?? 0;
-        const hasLines = linesAdded > 0 || linesRemoved > 0;
-        const hasOutcome = f.outcome_rate != null && f.outcome_rate > 0;
-        const beamColor = hasOutcome ? outcomeRateColor(f.outcome_rate as number) : 'var(--soft)';
-        const beamWidth = (f.touch_count / maxTouches) * 100;
-        const content = (
-          <>
-            <FilePath path={f.file} />
+    <>
+      <div className={styles.beamTable} role="table">
+        <div className={styles.beamHeadRow} role="row">
+          <span role="columnheader">file</span>
+          <span role="columnheader">touches · outcome</span>
+          <span role="columnheader" className={styles.beamHeadNum}>
+            churn
+          </span>
+          <span aria-hidden="true" />
+        </div>
+        {visible.map((f, i) => {
+          const linesAdded = f.total_lines_added ?? 0;
+          const linesRemoved = f.total_lines_removed ?? 0;
+          const hasLines = linesAdded > 0 || linesRemoved > 0;
+          const hasOutcome = f.outcome_rate != null && f.outcome_rate > 0;
+          const beamColor = hasOutcome ? outcomeRateColor(f.outcome_rate as number) : 'var(--soft)';
+          const beamWidth = (f.touch_count / maxTouches) * 100;
+          const content = (
+            <>
+              <FilePath path={f.file} />
 
-            <span className={styles.beamCell}>
-              <span className={styles.beamTrack}>
-                <span
-                  className={styles.beamFill}
-                  style={{
-                    width: `${Math.max(3, beamWidth)}%`,
-                    background: beamColor,
-                  }}
-                />
+              <span className={styles.beamCell}>
+                <span className={styles.beamTrack}>
+                  <span
+                    className={styles.beamFill}
+                    style={{
+                      width: `${Math.max(3, beamWidth)}%`,
+                      background: beamColor,
+                    }}
+                  />
+                </span>
+                <span className={styles.beamMeta}>
+                  <span className={styles.beamTouches}>{f.touch_count.toLocaleString()}</span>
+                  {hasOutcome && (
+                    <span className={styles.beamOutcome} style={{ color: beamColor }}>
+                      {f.outcome_rate}%
+                    </span>
+                  )}
+                </span>
               </span>
-              <span className={styles.beamMeta}>
-                <span className={styles.beamTouches}>{f.touch_count.toLocaleString()}</span>
-                {hasOutcome && (
-                  <span className={styles.beamOutcome} style={{ color: beamColor }}>
-                    {f.outcome_rate}%
-                  </span>
+              <span className={styles.beamChurn}>
+                {hasLines ? (
+                  <>
+                    <span className={styles.beamChurnAdd}>+{linesAdded}</span>
+                    <span className={styles.beamChurnSep}>/</span>
+                    <span className={styles.beamChurnRem}>-{linesRemoved}</span>
+                  </>
+                ) : (
+                  <span className={styles.beamChurnNone}>—</span>
                 )}
               </span>
-            </span>
-            <span className={styles.beamChurn}>
-              {hasLines ? (
-                <>
-                  <span className={styles.beamChurnAdd}>+{linesAdded}</span>
-                  <span className={styles.beamChurnSep}>/</span>
-                  <span className={styles.beamChurnRem}>-{linesRemoved}</span>
-                </>
-              ) : (
-                <span className={styles.beamChurnNone}>—</span>
-              )}
-            </span>
-            <span className={styles.viewButton}>View</span>
-          </>
-        );
-        return (
-          <button
-            key={f.file}
-            type="button"
-            role="row"
-            className={styles.beamRow}
-            style={{ '--row-index': i } as CSSProperties}
-            onClick={openCodebase('landscape', 'landscape')}
-            aria-label={`Open file landscape detail · ${f.file} ${f.touch_count} touches`}
-          >
-            {content}
-          </button>
-        );
-      })}
-      {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
-    </div>
+              <span className={styles.viewButton}>View</span>
+            </>
+          );
+          return (
+            <button
+              key={f.file}
+              type="button"
+              role="row"
+              className={styles.beamRow}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={openCodebase('landscape', 'landscape')}
+              aria-label={`Open file landscape detail · ${f.file} ${f.touch_count} touches`}
+            >
+              {content}
+            </button>
+          );
+        })}
+        {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
+      </div>
+      <CoverageNote text={note} />
+    </>
   );
 }
 

@@ -8,7 +8,7 @@ import { DAY_LABELS } from '../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../lib/apiSchemas.js';
 
 import { RANGES, formatScope, type RangeDays } from '../overview-utils.js';
-import { MISSING_DELTA } from '../detailDelta.js';
+import { MISSING_DELTA, formatRateDelta } from '../detailDelta.js';
 
 import { hourGlyph } from './format.js';
 import { RhythmPanel } from './panels/RhythmPanel.js';
@@ -115,24 +115,35 @@ export default function ActivityDetailView({
     return rates.length % 2 === 0 ? Math.round((rates[mid - 1] + rates[mid]) / 2) : rates[mid];
   }, [qualifiedHours]);
 
+  // Tabs whose value is a scalar quantity over the period MUST set a real delta
+  // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
+  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<ActivityTab>> = [
     {
       id: 'rhythm',
       label: 'When',
       value: peakCell ? `${DAY_LABELS[peakCell.dow]} ${hourGlyph(peakCell.hour)}` : '--',
+      // rationale: tab value is a categorical label (peak cell), not period-comparable.
       delta: MISSING_DELTA,
     },
     {
       id: 'mix',
       label: 'Work mix',
       value: topWorkType ? `${topWorkType.work_type} ${Math.round(topWorkType.share)}%` : '--',
+      // rationale: tab value is a categorical label (top work type), not period-comparable.
       delta: MISSING_DELTA,
     },
     {
       id: 'effective-hours',
       label: 'Effective hours',
       value: medianCompletion != null ? `${medianCompletion}%` : '--',
-      delta: MISSING_DELTA,
+      delta:
+        medianCompletion != null
+          ? formatRateDelta(
+              medianCompletion,
+              analytics.period_comparison.previous?.qualified_hour_completion_median ?? null,
+            )
+          : MISSING_DELTA,
     },
   ];
 

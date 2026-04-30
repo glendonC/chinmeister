@@ -1,12 +1,17 @@
 import type { CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
-import { setQueryParams } from '../../lib/router.js';
+import { navigateToDetail } from '../../lib/router.js';
+import { getWidget } from '../widget-catalog.js';
 import { completionColor } from '../utils.js';
 import trend from './TrendWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
 function openOutcomesTrend() {
-  return () => setQueryParams({ outcomes: 'sessions', q: 'trend' });
+  return () => {
+    const drill = getWidget('outcome-trend')?.drillTarget;
+    if (!drill) return;
+    navigateToDetail(drill.view, drill.tab, drill.q);
+  };
 }
 
 function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {

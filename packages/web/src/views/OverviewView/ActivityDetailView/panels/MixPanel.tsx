@@ -1,5 +1,3 @@
-import { type CSSProperties } from 'react';
-
 import {
   FocusedDetailView,
   Metric,
@@ -10,11 +8,13 @@ import {
   BreakdownList,
   BreakdownMeta,
   DivergingColumns,
+  RateBars,
+  TrueShareBars,
+  type TrueShareEntry,
 } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
 import { workTypeColor } from '../../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
-import shared from '../../../../widgets/widget-shared.module.css';
 
 import { fmtCount } from '../format.js';
 import styles from '../ActivityDetailView.module.css';
@@ -39,22 +39,32 @@ export function MixPanel({ analytics }: { analytics: UserAnalytics }) {
   const top = sorted[0];
   const second = sorted[1];
 
-  // Q1 share
+  // share
   const shareAnswer = (
     <>
-      <Metric>{top.work_type}</Metric> takes{' '}
-      <Metric>{Math.round((top.edits / totalEdits) * 100)}%</Metric> of edits
+      <Metric>{Math.round((top.edits / totalEdits) * 100)}%</Metric> of edits land in{' '}
+      <Metric>{top.work_type}</Metric>
       {second ? (
         <>
-          , <Metric>{second.work_type}</Metric>{' '}
-          <Metric>{Math.round((second.edits / totalEdits) * 100)}%</Metric>
+          , <Metric>{Math.round((second.edits / totalEdits) * 100)}%</Metric> in{' '}
+          <Metric>{second.work_type}</Metric>
         </>
       ) : null}
       . <Metric>{sorted.length}</Metric> work types touched in this window.
     </>
   );
 
-  // Q2 lines-by-type
+  const shareEntries: TrueShareEntry[] = sorted
+    .filter((w) => w.edits > 0)
+    .map((w) => ({
+      key: w.work_type,
+      label: w.work_type,
+      value: w.edits,
+      color: workTypeColor(w.work_type),
+      meta: `${fmtCount(w.files)} files`,
+    }));
+
+  // lines-by-type
   const churnRows = sorted
     .filter((w) => w.lines_added + w.lines_removed > 0)
     .map((w) => ({
@@ -76,7 +86,7 @@ export function MixPanel({ analytics }: { analytics: UserAnalytics }) {
       </>
     ) : null;
 
-  // Q3 files-per-type
+  // files-per-type
   const filesRows = sorted.filter((w) => w.files > 0);
   const editsPerFileMedian = (() => {
     if (filesRows.length === 0) return 0;
@@ -96,15 +106,56 @@ export function MixPanel({ analytics }: { analytics: UserAnalytics }) {
       </>
     ) : null;
 
+  // completion-by-work-type. Mirrors OutcomesDetailView WorkTypesPanel so
+  // the Mix tab carries both the volume share and the completion lens, with
+  // a cross-link back to the canonical outcomes view.
+  const wto = analytics.work_type_outcomes;
+  const completionRows = wto.map((w) => ({
+    key: w.work_type,
+    label: w.work_type,
+    rate: w.completion_rate,
+    value: `${w.completion_rate}%`,
+    sublabel: `${fmtCount(w.sessions)} sessions`,
+    fillColor: workTypeColor(w.work_type),
+  }));
+  const bestCompletion =
+    wto.length > 0 ? [...wto].sort((a, b) => b.completion_rate - a.completion_rate)[0] : null;
+  const worstCompletion =
+    wto.length > 0 ? [...wto].sort((a, b) => a.completion_rate - b.completion_rate)[0] : null;
+  const completionAnswer =
+    bestCompletion && worstCompletion ? (
+      <>
+        <Metric>{bestCompletion.work_type}</Metric> finishes at{' '}
+        <Metric tone="positive">{bestCompletion.completion_rate}%</Metric>;{' '}
+        <Metric>{worstCompletion.work_type}</Metric> trails at{' '}
+        <Metric tone={worstCompletion.completion_rate < 40 ? 'negative' : 'warning'}>
+          {worstCompletion.completion_rate}%
+        </Metric>
+        .
+      </>
+    ) : null;
+
   const questions: FocusedQuestion[] = [
     {
       id: 'share',
       question: 'What kind of work fills your week?',
       answer: shareAnswer,
-      children: <MixShareViz workTypes={sorted} totalEdits={totalEdits} />,
+      children: (
+        <TrueShareBars entries={shareEntries} formatValue={(n) => `${fmtCount(n)} edits`} />
+      ),
       relatedLinks: getCrossLinks('activity', 'mix', 'share'),
     },
   ];
+
+  if (completionAnswer && completionRows.length > 0) {
+    questions.push({
+      id: 'completion',
+      question: 'Which work types complete?',
+      answer: completionAnswer,
+      children: <RateBars labelWidth={120} rows={completionRows} />,
+      relatedLinks: getCrossLinks('activity', 'mix', 'completion'),
+    });
+  }
 
   if (linesAnswer && churnRows.length > 0) {
     questions.push({
@@ -175,52 +226,5 @@ export function MixPanel({ analytics }: { analytics: UserAnalytics }) {
       activeId={activeId}
       onSelect={(id) => setQueryParam('q', id)}
     />
-  );
-}
-
-function MixShareViz({
-  workTypes,
-  totalEdits,
-}: {
-  workTypes: UserAnalytics['work_type_distribution'];
-  totalEdits: number;
-}) {
-  const visible = workTypes
-    .map((w) => ({ w, pct: (w.edits / totalEdits) * 100 }))
-    .filter(({ pct }) => pct >= 1);
-  return (
-    <>
-      <div className={`${shared.workBar} ${styles.mixBar}`}>
-        {visible.map(({ w, pct }) => (
-          <div
-            key={w.work_type}
-            className={shared.workSegment}
-            style={{
-              width: `${pct}%`,
-              background: workTypeColor(w.work_type),
-            }}
-            title={`${w.work_type}: ${Math.round(pct)}% of edits`}
-          />
-        ))}
-      </div>
-      <div className={styles.mixLegend}>
-        {visible.map(({ w, pct }, i) => (
-          <div
-            key={w.work_type}
-            className={styles.mixRow}
-            style={{ '--row-index': i } as CSSProperties}
-          >
-            <span className={styles.mixLabel}>
-              <span className={styles.mixDot} style={{ background: workTypeColor(w.work_type) }} />
-              {w.work_type}
-            </span>
-            <span className={styles.mixShare}>{Math.round(pct)}%</span>
-            <span className={styles.mixMeta}>
-              {fmtCount(w.edits)} edits · {fmtCount(w.files)} files
-            </span>
-          </div>
-        ))}
-      </div>
-    </>
   );
 }

@@ -15,6 +15,7 @@ import {
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
 import { getToolMeta } from '../../../../lib/toolMeta.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
+import { capabilityCoverageNote, CoverageNote } from '../../../../widgets/bodies/shared.js';
 
 import { fmtCount, completionTone } from '../format.js';
 import styles from '../ToolsDetailView.module.css';
@@ -22,6 +23,9 @@ import styles from '../ToolsDetailView.module.css';
 export function FlowPanel({ analytics }: { analytics: UserAnalytics }) {
   const activeId = useQueryParam('q');
   const handoffs = analytics.tool_handoffs;
+  const questionHandoffs = analytics.cross_tool_handoff_questions;
+  const tools = analytics.data_coverage?.tools_reporting ?? [];
+  const conversationNote = capabilityCoverageNote(tools, 'conversationLogs');
 
   // All hooks must run before any early return.
   const sortedByCount = useMemo(
@@ -54,7 +58,7 @@ export function FlowPanel({ analytics }: { analytics: UserAnalytics }) {
     [sortedByCount],
   );
 
-  if (handoffs.length === 0) {
+  if (handoffs.length === 0 && questionHandoffs.length === 0) {
     const toolCount = analytics.tool_comparison.length;
     const message =
       toolCount <= 1
@@ -63,6 +67,7 @@ export function FlowPanel({ analytics }: { analytics: UserAnalytics }) {
     return (
       <div className={styles.panel}>
         <span className={styles.empty}>{message}</span>
+        <CoverageNote text={conversationNote} />
       </div>
     );
   }
@@ -229,8 +234,77 @@ export function FlowPanel({ analytics }: { analytics: UserAnalytics }) {
     });
   }
 
+  if (questionHandoffs.length > 0) {
+    const topQuestionHandoff = questionHandoffs[0];
+    const fromMeta = getToolMeta(topQuestionHandoff.tool_from);
+    const toMeta = getToolMeta(topQuestionHandoff.tool_to);
+    const maxGap = Math.max(...questionHandoffs.map((h) => h.gap_minutes), 1);
+    questions.push({
+      id: 'question-handoffs',
+      question: 'Which abandoned questions crossed tools?',
+      answer: (
+        <>
+          <Metric>
+            {fromMeta.label} → {toMeta.label}
+          </Metric>{' '}
+          picked up <Metric>{topQuestionHandoff.file}</Metric> after{' '}
+          <Metric>{formatGap(topQuestionHandoff.gap_minutes)}</Metric>.
+        </>
+      ),
+      children: (
+        <>
+          <BreakdownList
+            items={questionHandoffs.slice(0, 12).map((h) => {
+              const source = getToolMeta(h.tool_from);
+              const target = getToolMeta(h.tool_to);
+              return {
+                key: `${h.handoff_at}-${h.file}-${h.tool_from}-${h.tool_to}`,
+                label: (
+                  <span className={styles.pairLabel}>
+                    <span className={styles.pairDot} style={{ background: source.color }} />
+                    <span className={styles.pairText}>{source.label}</span>
+                    <span className={styles.pairArrow}>→</span>
+                    <span className={styles.pairDot} style={{ background: target.color }} />
+                    <span className={styles.pairText}>{target.label}</span>
+                  </span>
+                ),
+                fillPct: Math.max(8, (h.gap_minutes / maxGap) * 100),
+                fillColor: source.color,
+                value: (
+                  <>
+                    {formatGap(h.gap_minutes)}
+                    <BreakdownMeta>
+                      {' · '}
+                      {h.file}
+                    </BreakdownMeta>
+                  </>
+                ),
+              };
+            })}
+          />
+          <CoverageNote text={conversationNote} />
+        </>
+      ),
+    });
+  } else {
+    questions.push({
+      id: 'question-handoffs',
+      question: 'Which abandoned questions crossed tools?',
+      answer: <>No abandoned-question handoffs crossed tools in this window.</>,
+      children: (
+        <>
+          <span className={styles.empty}>
+            These appear when a different tool picks up the same file after an abandoned question.
+          </span>
+          <CoverageNote text={conversationNote} />
+        </>
+      ),
+    });
+  }
+
   return (
     <div className={styles.panel}>
+      <CoverageNote text={conversationNote} />
       <FocusedDetailView
         questions={questions}
         activeId={activeId}
@@ -238,4 +312,12 @@ export function FlowPanel({ analytics }: { analytics: UserAnalytics }) {
       />
     </div>
   );
+}
+
+function formatGap(minutes: number): string {
+  if (!Number.isFinite(minutes) || minutes < 0) return '';
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rem = minutes % 60;
+  return rem === 0 ? `${hours}h` : `${hours}h ${rem}m`;
 }

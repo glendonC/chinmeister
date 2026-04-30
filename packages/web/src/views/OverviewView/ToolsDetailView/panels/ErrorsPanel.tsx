@@ -28,7 +28,14 @@ export function ErrorsPanel({
   callStats: UserAnalytics['tool_call_stats'];
 }) {
   const activeId = useQueryParam('q');
-  const errs = callStats.error_patterns;
+  // Errors panel honors the same `?tool=` panel-scope filter as the Tools
+  // panel: when set, every error-related question collapses to that tool's
+  // errors (top, recent, by-tool token rows). The model-level token rows
+  // can't be host-attributed in the current schema, so by_model stays
+  // unfiltered and keeps its global cost ranking.
+  const toolFilter = useQueryParam('tool');
+  const allErrs = callStats.error_patterns;
+  const errs = toolFilter ? allErrs.filter((e) => e.tool === toolFilter) : allErrs;
   const reporting = analytics.data_coverage?.tools_reporting ?? [];
   const toolCallNote = capabilityCoverageNote(reporting, 'toolCallLogs');
   const tokenNote = capabilityCoverageNote(reporting, 'tokenUsage');
@@ -234,7 +241,7 @@ export function ErrorsPanel({
       id: 'tokens',
       question: 'What is each model+tool combo costing?',
       answer: tokenAnswer,
-      children: <TokenDetailBlock analytics={analytics} note={tokenNote} />,
+      children: <TokenDetailBlock analytics={analytics} note={tokenNote} toolFilter={toolFilter} />,
       relatedLinks: getCrossLinks('tools', 'errors', 'tokens'),
     });
   } else {
@@ -254,6 +261,23 @@ export function ErrorsPanel({
 
   return (
     <div className={styles.panel}>
+      {toolFilter && (
+        <div className={styles.filterBar}>
+          <span
+            className={styles.filterDot}
+            style={{ background: getToolMeta(toolFilter).color }}
+          />
+          <span className={styles.filterLabel}>filtered to {getToolMeta(toolFilter).label}</span>
+          <button
+            type="button"
+            className={styles.filterClear}
+            onClick={() => setQueryParam('tool', null)}
+            aria-label="Clear tool filter"
+          >
+            × clear
+          </button>
+        </div>
+      )}
       <FocusedDetailView
         questions={questions}
         activeId={activeId}
@@ -266,9 +290,22 @@ export function ErrorsPanel({
 // Token detail block. Lifted from TokenDetailWidget body. By-model rows
 // on top, by-tool rows below with section header, then PricingAttribution
 // footer. The widget itself stays as-is for the catalog; this is the
-// detail view's deep-dive surface.
-function TokenDetailBlock({ analytics, note }: { analytics: UserAnalytics; note: string | null }) {
+// detail view's deep-dive surface. by_tool collapses to the focused tool
+// when the panel-scope filter is set; by_model stays cross-tool because
+// host attribution isn't available on those rows in the current schema.
+function TokenDetailBlock({
+  analytics,
+  note,
+  toolFilter,
+}: {
+  analytics: UserAnalytics;
+  note: string | null;
+  toolFilter: string | null;
+}) {
   const tu = analytics.token_usage;
+  const visibleByTool = toolFilter
+    ? tu.by_tool.filter((t) => t.host_tool === toolFilter)
+    : tu.by_tool;
   const refreshed = formatRelativeTime(tu.pricing_refreshed_at);
 
   return (
@@ -302,10 +339,10 @@ function TokenDetailBlock({ analytics, note }: { analytics: UserAnalytics; note:
           </div>
         </div>
       ))}
-      {tu.by_tool.length > 1 && (
+      {visibleByTool.length > 1 && (
         <>
           <div className={styles.tokenSectionHead}>By tool</div>
-          {tu.by_tool.map((t, i) => (
+          {visibleByTool.map((t, i) => (
             <div
               key={t.host_tool}
               className={styles.tokenRow}

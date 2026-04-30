@@ -27,16 +27,19 @@ export function RiskPanel({ analytics }: { analytics: UserAnalytics }) {
   const fr = analytics.file_rework;
   const ce = analytics.concurrent_edits;
   const fh = analytics.file_heatmap;
+  const confusedFiles = analytics.confused_files;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
   const hooksNote = capabilityCoverageNote(tools, 'hooks');
+  const conversationNote = capabilityCoverageNote(tools, 'conversationLogs');
 
-  if (fr.length === 0 && ce.length === 0) {
+  if (fr.length === 0 && ce.length === 0 && confusedFiles.length === 0) {
     return (
       <div className={styles.panel}>
         <CoverageNote text={hooksNote} />
+        <CoverageNote text={conversationNote} />
         <span className={styles.empty}>
           No risk signal yet. Files appear here once sessions touching them end abandoned/failed, or
-          once 14+-day cold directories accumulate.
+          once conversation capture shows repeated struggle on the same file.
         </span>
       </div>
     );
@@ -214,9 +217,73 @@ export function RiskPanel({ analytics }: { analytics: UserAnalytics }) {
     });
   }
 
+  if (confusedFiles.length > 0) {
+    const topConfused = confusedFiles[0];
+    questions.push({
+      id: 'confused-files',
+      question: 'Which files are agents struggling to explain?',
+      answer: (
+        <>
+          <Metric>{fileBasename(topConfused.file)}</Metric> had{' '}
+          <Metric tone="warning">{fmtCount(topConfused.confused_sessions)}</Metric> confused or
+          frustrated sessions
+          {topConfused.retried_sessions > 0 && (
+            <>
+              , including <Metric tone="negative">{fmtCount(topConfused.retried_sessions)}</Metric>{' '}
+              that ended abandoned or failed
+            </>
+          )}
+          .
+        </>
+      ),
+      children: (
+        <>
+          <FileList
+            items={confusedFiles.slice(0, 10).map((f) => ({
+              key: f.file,
+              name: fileBasename(f.file),
+              title: f.file,
+              meta: (
+                <>
+                  <span className={styles.fileListStat}>{fmtCount(f.confused_sessions)}</span>{' '}
+                  confused sessions
+                  {f.retried_sessions > 0 && (
+                    <>
+                      {' · '}
+                      <span className={styles.fileListStat}>
+                        {fmtCount(f.retried_sessions)}
+                      </span>{' '}
+                      abandoned or failed
+                    </>
+                  )}
+                </>
+              ),
+            }))}
+          />
+          <CoverageNote text={conversationNote} />
+        </>
+      ),
+    });
+  } else {
+    questions.push({
+      id: 'confused-files',
+      question: 'Which files are agents struggling to explain?',
+      answer: <>No files crossed the repeated-struggle threshold in this window.</>,
+      children: (
+        <>
+          <span className={styles.empty}>
+            Files appear here after 2+ confused or frustrated sessions touch the same path.
+          </span>
+          <CoverageNote text={conversationNote} />
+        </>
+      ),
+    });
+  }
+
   return (
     <div className={styles.panel}>
       <CoverageNote text={hooksNote} />
+      <CoverageNote text={conversationNote} />
       <FocusedDetailView
         questions={questions}
         activeId={activeId}
