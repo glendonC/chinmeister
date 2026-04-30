@@ -81,7 +81,7 @@ describe('ProjectsWidget — team name binding', () => {
   });
 });
 
-describe('ProjectsWidget — column headers + view button', () => {
+describe('ProjectsWidget — column headers + detail button', () => {
   it('renders mono-uppercase column headers above the rows', async () => {
     // Column headers match the LiveAgents/LiveConflicts pattern: mono,
     // uppercase, tracking-table letter spacing. Locks against a regression
@@ -102,7 +102,7 @@ describe('ProjectsWidget — column headers + view button', () => {
     r.unmount();
   });
 
-  it('renders a "View" CTA button on each row', async () => {
+  it('renders a "Detail" CTA button on each row', async () => {
     // Mirrors live-agents' liveViewButton — explicit click target on the
     // right edge that inverts to accent on row hover. Replaces the earlier
     // ↗ arrow which read as decoration rather than action.
@@ -113,7 +113,7 @@ describe('ProjectsWidget — column headers + view button', () => {
         summaries: [{ team_id: 't1', team_name: 'chinmeister' }],
       }),
     );
-    expect(r.container.textContent).toContain('View');
+    expect(r.container.textContent).toContain('Detail');
     r.unmount();
   });
 });
