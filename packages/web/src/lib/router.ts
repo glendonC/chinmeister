@@ -9,11 +9,12 @@
 //   /global         → global stats + percentile view
 //   /reports        → report catalog
 //   /settings       → settings view
+//   /demo           → demo scenario catalog (dev / ?demo only)
 
 import { useEffect, useSyncExternalStore } from 'react';
 
 export interface Route {
-  view: 'overview' | 'project' | 'tools' | 'global' | 'reports' | 'settings';
+  view: 'overview' | 'project' | 'tools' | 'global' | 'reports' | 'settings' | 'demo';
   teamId: string | null;
 }
 
@@ -44,6 +45,7 @@ export function parseLocation(): Route {
   if (segments[0] === 'global') return { view: 'global', teamId: null };
   if (segments[0] === 'reports') return { view: 'reports', teamId: null };
   if (segments[0] === 'settings') return { view: 'settings', teamId: null };
+  if (segments[0] === 'demo') return { view: 'demo', teamId: null };
   return { view: 'overview', teamId: null };
 }
 
@@ -69,6 +71,7 @@ export function navigate(view: Route['view'], teamId?: string | null) {
   else if (view === 'global') path = '/dashboard/global';
   else if (view === 'reports') path = '/dashboard/reports';
   else if (view === 'settings') path = '/dashboard/settings';
+  else if (view === 'demo') path = '/dashboard/demo';
   else path = '/dashboard';
 
   if (window.location.pathname !== path) {

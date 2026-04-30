@@ -4,12 +4,19 @@
 export {
   DEMO_SCENARIOS,
   DEMO_SCENARIO_IDS,
+  DEMO_CATEGORY_ORDER,
+  DEMO_CATEGORY_LABELS,
+  DEMO_DIMENSION_LABELS,
+  DEMO_VIEW_LABELS,
   DEFAULT_SCENARIO,
   getDemoData,
   isDemoScenarioId,
   type DemoData,
   type DemoScenario,
   type DemoScenarioId,
+  type DemoCategory,
+  type DemoDimension,
+  type DemoView,
 } from './scenarios.js';
 
 export { createBaselineAnalytics } from './baseline.js';

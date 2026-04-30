@@ -45,14 +45,49 @@ export type DemoScenarioId =
   | 'empty'
   | 'solo-cc'
   | 'solo-no-hooks'
+  | 'mixed-capture'
   | 'stale-pricing'
   | 'models-without-pricing'
   | 'first-period'
-  | 'team-conflicts'
   | 'negative-delta'
   | 'no-live-agents'
+  | 'team-conflicts'
+  | 'failure-heavy'
+  | 'stuck-heavy'
+  | 'high-cost'
   | 'memory-stale'
   | 'memory-concentrated';
+
+// Top-level grouping. Drives the popover headings + the /demo browse page
+// category filter. Pick one per scenario; if a scenario fits two equally,
+// pick the one a dev would search first.
+export type DemoCategory =
+  | 'baseline'
+  | 'empty-states'
+  | 'coverage'
+  | 'pricing'
+  | 'deltas'
+  | 'coordination'
+  | 'outcomes'
+  | 'memory';
+
+// Independent variables a scenario varies vs the healthy baseline. Used for
+// column chips in the /demo table and dimension filters in the popover.
+// "I want to test X" → filter by the dimension that varies X.
+export type DemoDimension =
+  | 'team-size' // solo vs team
+  | 'capture-depth' // hooks / tokens / conversation present
+  | 'pricing' // cost data fresh + complete
+  | 'deltas' // previous-period comparison usable
+  | 'coordination' // conflicts, retries, overlap
+  | 'memory' // memory aging, concentration, hit rate
+  | 'live-presence' // live agents present
+  | 'outcomes'; // outcome mix (completed/abandoned/failed/stuck)
+
+// Routes that meaningfully change vs the healthy baseline. The picker uses
+// this to scope itself to scenarios that actually affect the screen the dev
+// is on. "All" means a baseline-comparable change is visible everywhere.
+export type DemoView = 'overview' | 'reports' | 'tools' | 'project' | 'global';
 
 export interface DemoData {
   analytics: UserAnalytics;
@@ -71,7 +106,15 @@ export interface DemoData {
 export interface DemoScenario {
   id: DemoScenarioId;
   label: string;
-  description: string;
+  category: DemoCategory;
+  /** What this scenario varies vs the healthy baseline. */
+  dimensions: DemoDimension[];
+  /** Routes whose UI meaningfully changes under this scenario. */
+  views: DemoView[];
+  /** One-line summary in plain English. Replaces widget-jargon descriptions. */
+  summary: string;
+  /** What a dev should look for when this scenario is active. One sentence. */
+  whatToCheck: string;
   build: () => DemoData;
 }
 
@@ -663,81 +706,439 @@ function memoryConcentrated(): DemoData {
   };
 }
 
+// Mixed capture: realistic team where some tools have hooks and some don't.
+// The default healthy baseline assumes every tool reports full capability;
+// in real teams most have at least one MCP-only tool (JetBrains, Amazon Q,
+// VS Code Copilot) producing only session metadata. Coverage notes fire
+// across cost, conversation, and tool-call widgets.
+function mixedCapture(): DemoData {
+  const base = createBaselineAnalytics();
+  return {
+    analytics: {
+      ...base,
+      data_coverage: {
+        tools_reporting: ['claude-code', 'cursor', 'aider', 'cline', 'windsurf'],
+        tools_without_data: ['jetbrains'],
+        coverage_rate: 5 / 6,
+        capabilities_available: ['hooks', 'tokenUsage', 'conversationLogs', 'toolCallLogs'],
+        capabilities_missing: ['commitTracking'],
+      },
+    },
+    conversation: createBaselineConversation(),
+    live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
+  };
+}
+
+// Failure heavy: outcome mix tilts hard toward abandoned/failed, completion
+// rate drops, retry patterns spike. Lights up the Failures report story
+// (and the failed-files list inside it once the runner is wired).
+function failureHeavy(): DemoData {
+  const base = createBaselineAnalytics();
+  const totalSessions = base.completion_summary.total_sessions;
+  // Re-target the outcome mix: 38% completed, 28% abandoned, 28% failed,
+  // 6% unknown. Keeps the math internally consistent without rebuilding
+  // the whole ledger.
+  const completed = Math.round(totalSessions * 0.38);
+  const abandoned = Math.round(totalSessions * 0.28);
+  const failed = Math.round(totalSessions * 0.28);
+  const unknown = totalSessions - completed - abandoned - failed;
+  const completionRate = Math.round((completed / totalSessions) * 1000) / 10;
+  return {
+    analytics: {
+      ...base,
+      outcome_distribution: [
+        { outcome: 'completed', count: completed },
+        { outcome: 'abandoned', count: abandoned },
+        { outcome: 'failed', count: failed },
+        { outcome: 'unknown', count: unknown },
+      ].filter((o) => o.count > 0),
+      completion_summary: {
+        ...base.completion_summary,
+        completed,
+        abandoned,
+        failed,
+        unknown,
+        completion_rate: completionRate,
+      },
+      retry_patterns: [
+        ...base.retry_patterns,
+        {
+          file: 'packages/worker/src/dos/team/sessions.ts',
+          attempts: 11,
+          agents: 3,
+          tools: ['claude-code', 'cursor'],
+          final_outcome: 'failed',
+          resolved: false,
+        },
+        {
+          file: 'packages/web/src/widgets/bodies/ToolWidgets.tsx',
+          attempts: 8,
+          agents: 2,
+          tools: ['cursor', 'claude-code'],
+          final_outcome: 'abandoned',
+          resolved: false,
+        },
+        {
+          file: 'packages/mcp/lib/extraction/engine.ts',
+          attempts: 7,
+          agents: 2,
+          tools: ['claude-code'],
+          final_outcome: 'failed',
+          resolved: false,
+        },
+      ],
+    },
+    conversation: createBaselineConversation(),
+    live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
+  };
+}
+
+// Stuck heavy: ~32% of sessions hit the 15-min stuckness threshold. Lights
+// up the stuckness stat, the stuck-vs-normal completion split, and the
+// retry-pattern volume. Outcome mix stays roughly healthy: this scenario
+// isolates the "agents kept going but spent a lot of time stuck" question.
+function stuckHeavy(): DemoData {
+  const base = createBaselineAnalytics();
+  const totalSessions = base.completion_summary.total_sessions;
+  const stuckSessions = Math.round(totalSessions * 0.32);
+  const stuckCompleted = Math.round(stuckSessions * 0.42);
+  const normalSessions = totalSessions - stuckSessions;
+  const normalCompleted = Math.max(0, base.completion_summary.completed - stuckCompleted);
+  return {
+    analytics: {
+      ...base,
+      stuckness: {
+        total_sessions: totalSessions,
+        stuck_sessions: stuckSessions,
+        stuckness_rate: Math.round((stuckSessions / totalSessions) * 100),
+        stuck_completion_rate: Math.round((stuckCompleted / Math.max(1, stuckSessions)) * 100),
+        normal_completion_rate: Math.round((normalCompleted / Math.max(1, normalSessions)) * 100),
+      },
+      retry_patterns: [
+        ...base.retry_patterns,
+        {
+          file: 'packages/worker/src/dos/team/context.ts',
+          attempts: 9,
+          agents: 3,
+          tools: ['claude-code', 'cursor', 'aider'],
+          final_outcome: 'completed',
+          resolved: true,
+        },
+        {
+          file: 'packages/web/src/views/OverviewView/OverviewView.tsx',
+          attempts: 8,
+          agents: 2,
+          tools: ['cursor', 'claude-code'],
+          final_outcome: 'completed',
+          resolved: true,
+        },
+      ],
+    },
+    conversation: createBaselineConversation(),
+    live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
+  };
+}
+
+// High cost: cost-per-edit elevated, Opus dominant in by_model. The current
+// period is materially more expensive than the previous, so the cost stat
+// card's delta turns red and the model breakdown leans toward the costly
+// model.
+function highCost(): DemoData {
+  const base = createBaselineAnalytics();
+  const inflateCost = 1.85;
+  const inflateCostPerEdit = 1.68;
+  const byModel = base.token_usage.by_model.map((m) => {
+    const isOpus = m.agent_model.toLowerCase().includes('opus');
+    const factor = isOpus ? 2.4 : 0.85;
+    return {
+      ...m,
+      estimated_cost_usd:
+        m.estimated_cost_usd != null ? Math.round(m.estimated_cost_usd * factor * 100) / 100 : null,
+    };
+  });
+  const newTotalCost =
+    base.token_usage.total_estimated_cost_usd != null
+      ? Math.round(base.token_usage.total_estimated_cost_usd * inflateCost * 100) / 100
+      : null;
+  const newCostPerEdit =
+    base.token_usage.cost_per_edit != null
+      ? Math.round(base.token_usage.cost_per_edit * inflateCostPerEdit * 10_000) / 10_000
+      : null;
+  const curr = base.period_comparison.current;
+  return {
+    analytics: {
+      ...base,
+      token_usage: {
+        ...base.token_usage,
+        total_estimated_cost_usd: newTotalCost,
+        cost_per_edit: newCostPerEdit,
+        by_model: byModel,
+      },
+      period_comparison: {
+        current: {
+          ...curr,
+          total_estimated_cost_usd: newTotalCost,
+          cost_per_edit: newCostPerEdit,
+        },
+        previous: base.period_comparison.previous
+          ? {
+              ...base.period_comparison.previous,
+              total_estimated_cost_usd:
+                base.period_comparison.previous.total_estimated_cost_usd != null
+                  ? Math.round(
+                      base.period_comparison.previous.total_estimated_cost_usd * 0.62 * 100,
+                    ) / 100
+                  : null,
+              cost_per_edit:
+                base.period_comparison.previous.cost_per_edit != null
+                  ? Math.round(base.period_comparison.previous.cost_per_edit * 0.6 * 10_000) /
+                    10_000
+                  : null,
+            }
+          : null,
+      },
+    },
+    conversation: createBaselineConversation(),
+    live: createBaselineLive(),
+    reports: createBaselineReports(),
+    ...baselineFrame(),
+  };
+}
+
 // ── Registry ────────────────────────────────────────────────────────
 
 export const DEMO_SCENARIOS: Record<DemoScenarioId, DemoScenario> = {
   healthy: {
     id: 'healthy',
-    label: 'Healthy',
-    description: 'Full team, full coverage, positive delta',
+    label: 'Healthy team',
+    category: 'baseline',
+    dimensions: [],
+    views: ['overview', 'reports', 'tools', 'project', 'global'],
+    summary: 'Full team, every widget populated, deltas trending up.',
+    whatToCheck:
+      'Use as the reference. Everything looks good - compare other scenarios against this one.',
     build: healthy,
   },
   empty: {
     id: 'empty',
-    label: 'Empty period',
-    description: 'Zero sessions - every empty state at once',
+    label: 'Empty account',
+    category: 'empty-states',
+    dimensions: [
+      'team-size',
+      'capture-depth',
+      'deltas',
+      'coordination',
+      'memory',
+      'live-presence',
+      'outcomes',
+    ],
+    views: ['overview', 'reports', 'tools', 'project', 'global'],
+    summary: 'A new account with zero activity yet.',
+    whatToCheck: 'Every widget should show a real empty state, never a fake zero or ghost bars.',
     build: empty,
   },
   'solo-cc': {
     id: 'solo-cc',
-    label: 'Solo · Claude Code',
-    description: 'One user, full capture, no team coordination',
+    label: 'Solo, Claude Code',
+    category: 'coverage',
+    dimensions: ['team-size', 'coordination'],
+    views: ['overview', 'project', 'reports', 'tools'],
+    summary: 'One person on Claude Code only. No team to coordinate with.',
+    whatToCheck:
+      'Team and handoff widgets show empty states; deep-capture stats stay rich because Claude Code has the data.',
     build: soloCC,
   },
   'solo-no-hooks': {
     id: 'solo-no-hooks',
-    label: 'Solo · no hooks',
-    description: 'MCP-only tool, no deep capture - coverage notes everywhere',
+    label: 'Solo, no hooks',
+    category: 'coverage',
+    dimensions: ['team-size', 'capture-depth', 'coordination'],
+    views: ['overview', 'project', 'reports', 'tools'],
+    summary: 'One person on JetBrains. MCP only, no hooks, no deep capture.',
+    whatToCheck:
+      'Cost, tokens, tool calls, conversations all show "needs hooks" coverage notes instead of fake zeros.',
     build: soloNoHooks,
+  },
+  'mixed-capture': {
+    id: 'mixed-capture',
+    label: 'Mixed capture',
+    category: 'coverage',
+    dimensions: ['capture-depth'],
+    views: ['overview', 'reports', 'tools'],
+    summary: 'Realistic team where some tools have hooks and some do not.',
+    whatToCheck:
+      'Coverage notes appear on cost / conversation / tool-call widgets; data-coverage tile shows partial.',
+    build: mixedCapture,
   },
   'stale-pricing': {
     id: 'stale-pricing',
     label: 'Stale pricing',
-    description: 'Pricing snapshot >7 days old, cost paused',
+    category: 'pricing',
+    dimensions: ['pricing'],
+    views: ['overview', 'tools'],
+    summary: 'Pricing data is more than a week old, so cost is paused.',
+    whatToCheck:
+      'Cost stat renders "--" with a "pricing refresh pending" coverage note instead of $0.',
     build: stalePricing,
   },
   'models-without-pricing': {
     id: 'models-without-pricing',
     label: 'Unpriced models',
-    description: 'Some models missing from LiteLLM',
+    category: 'pricing',
+    dimensions: ['pricing'],
+    views: ['overview', 'tools'],
+    summary: 'Some models that ran are not in the LiteLLM pricing snapshot.',
+    whatToCheck:
+      'Cost is partial; coverage note names which models lack pricing instead of dropping them silently.',
     build: modelsWithoutPricing,
   },
   'first-period': {
     id: 'first-period',
     label: 'First period',
-    description: 'No previous window - delta pills suppress',
+    category: 'deltas',
+    dimensions: ['deltas'],
+    views: ['overview', 'project'],
+    summary: 'First time using the dashboard. No prior week to compare against.',
+    whatToCheck: 'Every "+X% vs prior" pill should disappear, not show a fake green zero.',
     build: firstPeriod,
-  },
-  'team-conflicts': {
-    id: 'team-conflicts',
-    label: 'Team conflicts',
-    description: 'Active collisions, retries, overlap - coordination story',
-    build: teamConflicts,
   },
   'negative-delta': {
     id: 'negative-delta',
-    label: 'Negative delta',
-    description: 'Period got worse - red arrows, invert semantics',
+    label: 'Things got worse',
+    category: 'deltas',
+    dimensions: ['deltas', 'outcomes'],
+    views: ['overview', 'project'],
+    summary: 'Completion is down and cost is up versus last period.',
+    whatToCheck:
+      'Stat-card deltas turn red and point down; bad-direction colours invert correctly (cost-up = red, completion-down = red).',
     build: negativeDelta,
   },
   'no-live-agents': {
     id: 'no-live-agents',
-    label: 'No live presence',
-    description: 'Analytics intact, zero active agents',
+    label: 'No one online',
+    category: 'empty-states',
+    dimensions: ['live-presence'],
+    views: ['overview', 'project'],
+    summary: 'Nobody is working right now, but historical data is intact.',
+    whatToCheck:
+      'Live presence + live conflicts show their empty states. Period KPIs stay populated.',
     build: noLiveAgents,
+  },
+  'team-conflicts': {
+    id: 'team-conflicts',
+    label: 'Team in conflict',
+    category: 'coordination',
+    dimensions: ['coordination', 'outcomes'],
+    views: ['overview', 'reports', 'project'],
+    summary: 'Active team with collisions, retries, and overlapping edits.',
+    whatToCheck:
+      'Live conflicts populated; retry hotspots and file-overlap surfaces show the coordination story end-to-end.',
+    build: teamConflicts,
+  },
+  'failure-heavy': {
+    id: 'failure-heavy',
+    label: 'Lots of failures',
+    category: 'outcomes',
+    dimensions: ['outcomes'],
+    views: ['overview', 'reports'],
+    summary: 'Many sessions are being abandoned or failing outright.',
+    whatToCheck:
+      'Outcome ring tilts toward red; failed-files / retry-pattern widgets dominate; Failures report has a real story.',
+    build: failureHeavy,
+  },
+  'stuck-heavy': {
+    id: 'stuck-heavy',
+    label: 'Sessions get stuck',
+    category: 'outcomes',
+    dimensions: ['outcomes'],
+    views: ['overview', 'reports'],
+    summary: 'About a third of sessions hit the 15-minute stuck threshold.',
+    whatToCheck:
+      'Stuckness stat elevated; stuck-vs-normal completion split widens; retry-pattern list lights up.',
+    build: stuckHeavy,
+  },
+  'high-cost': {
+    id: 'high-cost',
+    label: 'High cost period',
+    category: 'outcomes',
+    dimensions: ['pricing', 'outcomes'],
+    views: ['overview', 'tools'],
+    summary: 'Cost is up; the expensive model dominates the mix.',
+    whatToCheck:
+      'Cost-per-edit stat shows a red delta vs prior; by-model bar leans toward Opus; tool cost ranking shifts.',
+    build: highCost,
   },
   'memory-stale': {
     id: 'memory-stale',
-    label: 'Memory · stale',
-    description: 'Aging skews to >90d, stale count high - freshness warn',
+    label: 'Memory, stale',
+    category: 'memory',
+    dimensions: ['memory'],
+    views: ['overview'],
+    summary: 'Memory has not been pruned in months. Most entries are over 90 days old.',
+    whatToCheck:
+      'Memory tile + freshness panel show stale warning tints; supersession proposals queue up.',
     build: memoryStale,
   },
   'memory-concentrated': {
     id: 'memory-concentrated',
-    label: 'Memory · concentrated',
-    description: 'Single-author directories with severe shares - concentration warn',
+    label: 'Memory, concentrated',
+    category: 'memory',
+    dimensions: ['memory'],
+    views: ['overview'],
+    summary: 'Most directories have only one memory author. High concentration risk.',
+    whatToCheck: 'Single-author directory list shows severe-share tints (>=80%).',
     build: memoryConcentrated,
   },
+};
+
+/** Stable display order for the category headings in the popover and the
+ *  /demo browse page. Coverage / outcomes / coordination come before the
+ *  edge-state buckets so devs hit the meatier scenarios first. */
+export const DEMO_CATEGORY_ORDER: DemoCategory[] = [
+  'baseline',
+  'coverage',
+  'outcomes',
+  'coordination',
+  'pricing',
+  'deltas',
+  'memory',
+  'empty-states',
+];
+
+export const DEMO_CATEGORY_LABELS: Record<DemoCategory, string> = {
+  baseline: 'Baseline',
+  coverage: 'Tool coverage',
+  outcomes: 'Outcomes',
+  coordination: 'Coordination',
+  pricing: 'Pricing',
+  deltas: 'Period deltas',
+  memory: 'Memory',
+  'empty-states': 'Empty states',
+};
+
+export const DEMO_DIMENSION_LABELS: Record<DemoDimension, string> = {
+  'team-size': 'Team size',
+  'capture-depth': 'Capture depth',
+  pricing: 'Pricing',
+  deltas: 'Deltas',
+  coordination: 'Coordination',
+  memory: 'Memory',
+  'live-presence': 'Live presence',
+  outcomes: 'Outcomes',
+};
+
+export const DEMO_VIEW_LABELS: Record<DemoView, string> = {
+  overview: 'Overview',
+  reports: 'Reports',
+  tools: 'Tools',
+  project: 'Project',
+  global: 'Global',
 };
 
 export const DEMO_SCENARIO_IDS = Object.keys(DEMO_SCENARIOS) as DemoScenarioId[];

@@ -28,6 +28,7 @@ const SettingsView = lazy(() => import('./views/SettingsView/SettingsView.js'));
 const ToolsView = lazy(() => import('./views/ToolsView/ToolsView.js'));
 const GlobalView = lazy(() => import('./views/GlobalView/GlobalView.js'));
 const ReportsView = lazy(() => import('./views/ReportsView/ReportsView.js'));
+const DemoView = lazy(() => import('./views/DemoView/DemoView.js'));
 
 import styles from './App.module.css';
 
@@ -278,6 +279,13 @@ export default function App(): ReactNode {
             <RenderErrorBoundary label="SettingsView" resetKey={activeView}>
               <Suspense fallback={<ViewLoading />}>
                 <SettingsView />
+              </Suspense>
+            </RenderErrorBoundary>
+          )}
+          {activeView === 'demo' && (
+            <RenderErrorBoundary label="DemoView" resetKey={activeView}>
+              <Suspense fallback={<ViewLoading />}>
+                <DemoView />
               </Suspense>
             </RenderErrorBoundary>
           )}
