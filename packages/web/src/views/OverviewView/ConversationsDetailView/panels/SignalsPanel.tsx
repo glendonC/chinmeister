@@ -27,7 +27,87 @@ export function SignalsPanel({ analytics }: { analytics: UserAnalytics }) {
   const handoffs = analytics.cross_tool_handoff_questions;
   const unanswered = analytics.unanswered_questions;
 
+  // Friction hotspots: the small set of files that are BOTH on the
+  // confused-files list and on the cross-tool handoff list. Two
+  // independent struggle signals converging on the same path is the
+  // strongest "go look at this file" indicator the conversation stream
+  // produces, so it leads the panel as the thesis. Score = confused
+  // sessions + handoff count (each weighted equally; the goal is rank
+  // not absolute scale). Empty when the two lists do not intersect; the
+  // empty state directs the user to the underlying signals below.
+  const hotspots = (() => {
+    if (confusedFiles.length === 0 || handoffs.length === 0) return [];
+    const handoffByFile = new Map<string, { count: number; tools: Set<string> }>();
+    for (const h of handoffs) {
+      const entry = handoffByFile.get(h.file) ?? { count: 0, tools: new Set<string>() };
+      entry.count += 1;
+      entry.tools.add(h.tool_from);
+      entry.tools.add(h.tool_to);
+      handoffByFile.set(h.file, entry);
+    }
+    return confusedFiles
+      .map((f) => {
+        const h = handoffByFile.get(f.file);
+        if (!h) return null;
+        return {
+          file: f.file,
+          confused: f.confused_sessions,
+          retried: f.retried_sessions,
+          handoffs: h.count,
+          tools: h.tools,
+          score: f.confused_sessions + h.count,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row !== null)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, 10);
+  })();
+
   const questions: FocusedQuestion[] = [
+    {
+      id: 'friction-hotspots',
+      question: 'Where is the friction concentrated?',
+      answer:
+        hotspots.length > 0 ? (
+          <>
+            <Metric>{lastPathSegment(hotspots[0].file)}</Metric> shows{' '}
+            <Metric tone="warning">{fmtCount(hotspots[0].confused)}</Metric> confused sessions and{' '}
+            <Metric tone="warning">{fmtCount(hotspots[0].handoffs)}</Metric> cross-tool handoffs.
+          </>
+        ) : (
+          <>No file is on both the confused list and the handoff list right now.</>
+        ),
+      children: (
+        <>
+          {hotspots.length > 0 ? (
+            <div className={shared.dataList}>
+              {hotspots.map((row, i) => (
+                <div
+                  key={row.file}
+                  className={shared.dataRow}
+                  style={{ '--row-index': i } as CSSProperties}
+                >
+                  <FilePath path={row.file} order="name-first" />
+                  <div className={shared.dataMeta}>
+                    <span className={shared.dataStat}>{fmtCount(row.confused)} confused</span>
+                    <span className={shared.dataStat}>{fmtCount(row.handoffs)} handoffs</span>
+                    <span className={shared.dataStat}>
+                      {row.tools.size} {row.tools.size === 1 ? 'tool' : 'tools'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <span className={styles.empty}>
+              Hotspots appear when the same file shows both confused sessions and cross-tool
+              handoffs in this window.
+            </span>
+          )}
+          <CoverageNote text={note} />
+        </>
+      ),
+    },
     {
       id: 'confused-files',
       question: 'Which files made agents struggle?',

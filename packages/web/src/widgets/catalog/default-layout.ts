@@ -57,10 +57,15 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'tool-handoffs', colSpan: 6, rowSpan: 3 },
   { id: 'tool-call-errors', colSpan: 3, rowSpan: 2 },
 
-  // Memory — memory-outcomes is full-width to keep the bars wide enough
-  // to read as data; the per-bucket min-N floor + min-2-bucket guard
-  // kills the lonely-strip case.
-  { id: 'memory-outcomes', colSpan: 12, rowSpan: 3 },
+  // Memory — memory-cross-tool-flow is the substrate-unique entry: a
+  // memory written by one tool that another tool's session actually
+  // retrieved this period. No single-IDE dashboard can produce this
+  // signal by construction. Renders honestly empty for solo-with-one-
+  // tool users (cross-tool reads are structurally impossible), and
+  // grows as the user's stack widens. memory-outcomes stays available
+  // via the picker; per-memory attribution waits on the
+  // memory_search_results join table.
+  { id: 'memory-cross-tool-flow', colSpan: 6, rowSpan: 3 },
 
   // Projects + stuckness — 8 + 4. The comparator-table redesign doesn't
   // earn full width, so an 8-col projects tile pairs with stuckness on

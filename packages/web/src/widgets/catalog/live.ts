@@ -36,6 +36,13 @@ export const LIVE_WIDGETS: WidgetDef[] = [
     dataKeys: ['dashboard'],
     timeScope: 'live',
     fitContent: true,
+    // The drill opens a single conflicts question. That is the honest
+    // floor: we read multi-editor state from the live presence stream,
+    // which has no historical dimension. A richer drill (recent collision
+    // events, who-blocked-whom, MTTR) needs the planned conflict_events
+    // table; until that ships, an extra Q here would either restate the
+    // same row set or fabricate signal. Cross-link to codebase risk
+    // collisions covers the historical lens.
     drillTarget: { view: 'live', tab: 'conflicts', q: 'conflicts' },
     ownsClick: true,
   },

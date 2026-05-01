@@ -106,9 +106,10 @@ export function MixPanel({ analytics }: { analytics: UserAnalytics }) {
       </>
     ) : null;
 
-  // completion-by-work-type. Mirrors OutcomesDetailView WorkTypesPanel so
-  // the Mix tab carries both the volume share and the completion lens, with
-  // a cross-link back to the canonical outcomes view.
+  // completion-by-work-type. Mirrors the work-type question inside
+  // OutcomesDetailView's sessions tab so the Mix tab carries both the
+  // volume share and the completion lens, with a cross-link back to the
+  // canonical outcomes view.
   const wto = analytics.work_type_outcomes;
   const completionRows = wto.map((w) => ({
     key: w.work_type,

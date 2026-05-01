@@ -16,7 +16,6 @@ import { FilesTouchedPanel } from '../UsageDetailView/panels/FilesTouchedPanel.j
 
 import { SessionsPanel as OutcomesSessions } from '../OutcomesDetailView/panels/SessionsPanel.js';
 import { RetriesPanel } from '../OutcomesDetailView/panels/RetriesPanel.js';
-import { WorkTypesPanel } from '../OutcomesDetailView/panels/WorkTypesPanel.js';
 
 import { RhythmPanel } from '../ActivityDetailView/panels/RhythmPanel.js';
 import { MixPanel } from '../ActivityDetailView/panels/MixPanel.js';
@@ -105,7 +104,6 @@ const cases: PanelCase[] = [
   // Outcomes
   ['OutcomesSessions', () => <OutcomesSessions analytics={analytics} />],
   ['Retries', () => <RetriesPanel analytics={analytics} />],
-  ['WorkTypes', () => <WorkTypesPanel analytics={analytics} />],
 
   // Activity
   ['Rhythm', () => <RhythmPanel analytics={analytics} peakCell={peakCell} />],

@@ -4,12 +4,14 @@ import {
   getCrossLinks,
   type FocusedQuestion,
 } from '../../../../components/DetailView/index.js';
-import { FileFrictionRow, FileList } from '../../../../components/viz/index.js';
+import { FileFrictionRow, FileList, HeroStatRow } from '../../../../components/viz/index.js';
+import type { HeroStatDef } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
 import {
   capabilityCoverageNote,
   CoverageNote,
   isSoloTeam,
+  Sparkline,
 } from '../../../../widgets/bodies/shared.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
@@ -28,11 +30,22 @@ export function RiskPanel({ analytics }: { analytics: UserAnalytics }) {
   const ce = analytics.concurrent_edits;
   const fh = analytics.file_heatmap;
   const confusedFiles = analytics.confused_files;
+  const fileOverlap = analytics.file_overlap;
+  const conflictStats = analytics.conflict_stats;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
   const hooksNote = capabilityCoverageNote(tools, 'hooks');
   const conversationNote = capabilityCoverageNote(tools, 'conversationLogs');
 
-  if (fr.length === 0 && ce.length === 0 && confusedFiles.length === 0) {
+  const hasOverlapData = fileOverlap.total_files > 0;
+  const hasBlockedData = conflictStats.blocked_period > 0 || conflictStats.found_period > 0;
+
+  if (
+    fr.length === 0 &&
+    ce.length === 0 &&
+    confusedFiles.length === 0 &&
+    !hasOverlapData &&
+    !hasBlockedData
+  ) {
     return (
       <div className={styles.panel}>
         <CoverageNote text={hooksNote} />
@@ -94,6 +107,26 @@ export function RiskPanel({ analytics }: { analytics: UserAnalytics }) {
         <Metric>{fmtCount(collisionTop.edit_count)}</Metric> edits.
       </>
     ) : null;
+
+  // Density rate for the overlap-rate question. Counts only, no rate
+  // baked in (`fileOverlapStatsSchema` keeps rate consumer-side per its
+  // doc-comment): compute here so the answer prose and the hero stat
+  // stay aligned. High overlap is not inherently bad (paired work) and
+  // low overlap is not inherently good (silos), so neutral tone.
+  const overlapRate = hasOverlapData
+    ? Math.round((fileOverlap.overlapping_files / fileOverlap.total_files) * 100)
+    : 0;
+
+  // Block-rate for the blocked-count question. `found_period` covers
+  // every detection (advisory MCP lookups + hook blocks); `blocked_period`
+  // is the hook subset that prevented the edit. The rate communicates
+  // coordination-layer effectiveness: 100% means every detected conflict
+  // was blocked, less means advisory-only paths exist.
+  const blockedDaily = (conflictStats.daily_blocked ?? []).map((d) => d.blocked);
+  const blockRate =
+    conflictStats.found_period > 0
+      ? Math.round((conflictStats.blocked_period / conflictStats.found_period) * 100)
+      : null;
 
   const questions: FocusedQuestion[] = [];
   if (failingAnswer && fr.length > 0) {
@@ -213,6 +246,142 @@ export function RiskPanel({ analytics }: { analytics: UserAnalytics }) {
         <span className={styles.empty}>
           No multi-agent edits in this window, the team is touching disjoint files.
         </span>
+      ),
+    });
+  }
+
+  // Q4 overlap-rate. Density companion to `collisions` (which lists the
+  // files): this answers "how much of our file surface sees more than
+  // one agent." Drilled into by team-category `file-overlap`. Solo case
+  // mirrors the `collisions` empty pattern.
+  if (hasOverlapData && !solo) {
+    const overlapStats: HeroStatDef[] = [
+      {
+        key: 'rate',
+        value: `${overlapRate}`,
+        unit: '%',
+        label: 'files with multiple agents',
+        sublabel: (
+          <>
+            <Metric>{fmtCount(fileOverlap.overlapping_files)}</Metric> of{' '}
+            <Metric>{fmtCount(fileOverlap.total_files)}</Metric> files
+          </>
+        ),
+      },
+    ];
+    questions.push({
+      id: 'overlap-rate',
+      question: 'What share of files do agents share?',
+      answer: (
+        <>
+          <Metric>{overlapRate}%</Metric> of files saw more than one agent this period,{' '}
+          <Metric>{fmtCount(fileOverlap.overlapping_files)}</Metric> of{' '}
+          <Metric>{fmtCount(fileOverlap.total_files)}</Metric>. High overlap can read as paired work
+          or as contention, the file list below tells you which.
+        </>
+      ),
+      children: <HeroStatRow stats={overlapStats} />,
+      relatedLinks: getCrossLinks('codebase', 'risk', 'overlap-rate'),
+    });
+  } else if (solo) {
+    questions.push({
+      id: 'overlap-rate',
+      question: 'What share of files do agents share?',
+      answer: <>Requires 2+ agents touching the same file. Solo right now, structurally zero.</>,
+      children: (
+        <span className={styles.empty}>
+          Requires 2+ agents touching the same file. Solo right now, structurally zero.
+        </span>
+      ),
+    });
+  } else {
+    questions.push({
+      id: 'overlap-rate',
+      question: 'What share of files do agents share?',
+      answer: <>No file activity in this window.</>,
+      children: <span className={styles.empty}>No file activity in this window.</span>,
+    });
+  }
+
+  // Q5 blocked-count. Prevention companion to `collisions` (which lists
+  // observed pile-ups): this answers "how often did the coordination
+  // layer prevent a collision before it happened." Drilled into by
+  // team-category `conflicts-blocked`. Hook-gated: solo or hook-less
+  // setups render the honest empty path with the hooks coverage note.
+  if (hasBlockedData) {
+    const blockedStats: HeroStatDef[] = [
+      {
+        key: 'blocked',
+        value: fmtCount(conflictStats.blocked_period),
+        label: 'edits blocked',
+        sublabel:
+          conflictStats.found_period > conflictStats.blocked_period ? (
+            <>
+              <Metric>{fmtCount(conflictStats.found_period)}</Metric> total detections
+            </>
+          ) : null,
+      },
+    ];
+    if (blockRate != null) {
+      blockedStats.push({
+        key: 'rate',
+        value: `${blockRate}`,
+        unit: '%',
+        label: 'block rate',
+        sublabel:
+          blockRate < 100 ? (
+            <>advisory paths handled the rest</>
+          ) : (
+            <>every detection prevented the edit</>
+          ),
+      });
+    }
+    questions.push({
+      id: 'blocked-count',
+      question: 'How often did chinmeister prevent collisions?',
+      answer: (
+        <>
+          <Metric tone="positive">{fmtCount(conflictStats.blocked_period)}</Metric> edits blocked
+          before two agents collided
+          {conflictStats.found_period > conflictStats.blocked_period && (
+            <>
+              , out of <Metric>{fmtCount(conflictStats.found_period)}</Metric> total detections
+            </>
+          )}
+          .
+        </>
+      ),
+      children: (
+        <>
+          <HeroStatRow stats={blockedStats} />
+          {blockedDaily.length >= 2 && (
+            <div className={styles.blockedSpark}>
+              <Sparkline values={blockedDaily} color="var(--success)" endDot />
+            </div>
+          )}
+          <CoverageNote text={hooksNote} />
+        </>
+      ),
+      relatedLinks: getCrossLinks('codebase', 'risk', 'blocked-count'),
+    });
+  } else {
+    questions.push({
+      id: 'blocked-count',
+      question: 'How often did chinmeister prevent collisions?',
+      answer: solo ? (
+        <>Requires 2+ agents in parallel. Solo right now, no collisions to prevent.</>
+      ) : (
+        <>No collisions detected this period. Either coordination is clean or hooks are off.</>
+      ),
+      children: (
+        <>
+          <span className={styles.empty}>
+            {solo
+              ? 'Requires 2+ agents in parallel. Solo right now, no collisions to prevent.'
+              : 'No collisions detected this period. Either coordination is clean or hooks are off.'}
+          </span>
+          <CoverageNote text={hooksNote} />
+        </>
       ),
     });
   }

@@ -171,6 +171,103 @@
   color: var(--on-accent);
 }
 
+/* ── 24h history + file retry matrix ── */
+
+.historyTable,
+.fileMatrixTable {
+  display: flex;
+  flex-direction: column;
+}
+
+.historyHeader,
+.historyRow {
+  display: grid;
+  grid-template-columns:
+    minmax(80px, 100px)
+    minmax(140px, 200px)
+    minmax(140px, 180px)
+    64px
+    80px
+    72px
+    minmax(0, 1fr);
+  gap: var(--space-md);
+  align-items: center;
+  margin: 0 -14px;
+}
+
+.fileMatrixHeader,
+.fileMatrixRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 80px 80px minmax(120px, 160px);
+  gap: var(--space-md);
+  align-items: center;
+  margin: 0 -14px;
+}
+
+.historyHeader,
+.fileMatrixHeader {
+  padding: 0 14px 10px;
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-table);
+  color: var(--soft);
+}
+
+.historyRow,
+.fileMatrixRow {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  font-family: var(--sans);
+  animation: rowReveal 0.3s var(--motion) both;
+  animation-delay: calc(var(--row-index, 0) * 35ms);
+}
+
+.historyCell {
+  font-size: var(--text-sm);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileMatrixName {
+  font-size: var(--text-sm);
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.outcomeChip {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-table);
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+}
+
+.outcomeOk {
+  color: var(--success);
+  background: var(--success-bg);
+}
+
+.outcomeFail {
+  color: var(--danger);
+  background: var(--danger-bg);
+}
+
+.outcomeLive {
+  color: var(--live);
+  background: var(--live-bg);
+}
+
+.outcomeMuted {
+  color: var(--soft);
+}
+
 /* Conflicts and Files tabs render via the shared FileRow component
  * imported from LiveWidgets (and styled by LiveWidgets.module.css), so
  * the detail view reads identically to the widget that drilled into it.
