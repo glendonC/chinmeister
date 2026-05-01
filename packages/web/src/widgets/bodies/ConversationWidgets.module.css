@@ -20,7 +20,7 @@
   column-gap: var(--space-md);
   row-gap: 0;
   align-content: start;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 

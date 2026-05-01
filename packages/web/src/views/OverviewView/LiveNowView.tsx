@@ -362,6 +362,7 @@ export default function LiveNowView({
           <span>Status</span>
           <span className={widgetStyles.conflictDurationHeader}>Duration</span>
           <span>Editors</span>
+          <span aria-hidden="true" />
         </div>
         <div className={widgetStyles.conflictTableBody}>
           {groups.map((group, i) => (

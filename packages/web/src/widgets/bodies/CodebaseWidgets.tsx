@@ -1,6 +1,6 @@
 import { useMemo, type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
-import sharedStyles from '../widget-shared.module.css';
+import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import styles from './CodebaseWidgets.module.css';
 import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
 import { setQueryParams } from '../../lib/router.js';
@@ -17,6 +17,31 @@ import {
 
 function openCodebase(tab: string, q: string) {
   return () => setQueryParams({ codebase: tab, q });
+}
+
+function visibleRowsForTable(
+  total: number,
+  noOverflowCap: number,
+  withOverflowCap: number,
+): number {
+  return total > noOverflowCap ? withOverflowCap : total;
+}
+
+function TableOverflow({
+  count,
+  label,
+  onClick,
+}: {
+  count: number;
+  label: string;
+  onClick: () => void;
+}) {
+  if (count <= 0) return null;
+  return (
+    <div className={styles.tableOverflow}>
+      <SectionOverflow count={count} label={label} onClick={onClick} />
+    </div>
+  );
 }
 
 function outcomeRateColor(rate: number): string {
@@ -130,7 +155,10 @@ const DIR_RING_CX = 80;
 const DIR_RING_CY = 80;
 const DIR_RING_R = 58;
 const DIR_RING_GAP_DEG = 12;
-const DIRECTORIES_VISIBLE = 8;
+const TALL_TABLE_ROWS_NO_OVERFLOW = 6;
+const TALL_TABLE_ROWS_WITH_OVERFLOW = 5;
+const SHORT_TABLE_ROWS_NO_OVERFLOW = 4;
+const SHORT_TABLE_ROWS_WITH_OVERFLOW = 3;
 const DIR_RING_SLICES = 5;
 
 interface DirArc {
@@ -166,90 +194,91 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
-  const visible = dirs.slice(0, DIRECTORIES_VISIBLE);
+  const visible = dirs.slice(
+    0,
+    visibleRowsForTable(dirs.length, TALL_TABLE_ROWS_NO_OVERFLOW, TALL_TABLE_ROWS_WITH_OVERFLOW),
+  );
   const hidden = dirs.length - visible.length;
+  const open = openCodebase('directories', 'top-dirs');
 
   return (
-    <>
-      <div className={styles.dirFrame}>
-        <div className={styles.dirRingBlock}>
-          <svg
-            viewBox={`0 0 ${DIR_RING_VIEW} ${DIR_RING_VIEW}`}
-            className={styles.dirRingSvg}
-            role="img"
-            aria-label={`Top ${arcs.length} directories by touches`}
-          >
-            <circle
-              cx={DIR_RING_CX}
-              cy={DIR_RING_CY}
-              r={DIR_RING_R}
-              className={styles.dirRingTrack}
-            />
-            {arcs
-              .filter((a) => a.sweepDeg > 0.2)
-              .map((a, i) => (
-                <path
-                  key={i}
-                  d={arcPath(DIR_RING_CX, DIR_RING_CY, DIR_RING_R, a.startDeg, a.sweepDeg)}
-                  className={styles.dirRingArc}
-                  style={{ stroke: a.color }}
-                />
-              ))}
-          </svg>
-        </div>
-        <div className={styles.dirTable} role="table">
-          <div className={styles.dirHeadRow} role="row">
-            <span role="columnheader">directory</span>
-            <span role="columnheader" className={styles.dirHeadNum}>
-              touches
-            </span>
-            <span role="columnheader">completion</span>
-            <span aria-hidden="true" />
-          </div>
-          {visible.map((d, i) => {
-            const completionColor = outcomeRateColor(d.completion_rate);
-            const completionPct = Math.round(d.completion_rate);
-            const content = (
-              <>
-                <FilePath path={d.directory} parentSegments={1} />
-                <span className={styles.dirTouches}>{d.touch_count.toLocaleString()}</span>
-                <span className={styles.dirCompletion}>
-                  <span className={styles.dirCompletionTrack}>
-                    <span
-                      className={styles.dirCompletionFill}
-                      style={{
-                        width: `${Math.max(2, completionPct)}%`,
-                        background: completionColor,
-                        opacity: 'var(--opacity-bar-fill)',
-                      }}
-                    />
-                  </span>
-                  <span className={styles.dirCompletionValue} style={{ color: completionColor }}>
-                    {completionPct}%
-                  </span>
-                </span>
-                <span className={styles.viewButton}>View</span>
-              </>
-            );
-            return (
-              <button
-                key={d.directory}
-                type="button"
-                role="row"
-                className={styles.dirDataRow}
-                style={{ '--row-index': i } as CSSProperties}
-                onClick={openCodebase('directories', 'top-dirs')}
-                aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
-              >
-                {content}
-              </button>
-            );
-          })}
-          {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more directories</div>}
-        </div>
+    <div className={styles.dirFrame}>
+      <div className={styles.dirRingBlock}>
+        <svg
+          viewBox={`0 0 ${DIR_RING_VIEW} ${DIR_RING_VIEW}`}
+          className={styles.dirRingSvg}
+          role="img"
+          aria-label={`Top ${arcs.length} directories by touches`}
+        >
+          <circle
+            cx={DIR_RING_CX}
+            cy={DIR_RING_CY}
+            r={DIR_RING_R}
+            className={styles.dirRingTrack}
+          />
+          {arcs
+            .filter((a) => a.sweepDeg > 0.2)
+            .map((a, i) => (
+              <path
+                key={i}
+                d={arcPath(DIR_RING_CX, DIR_RING_CY, DIR_RING_R, a.startDeg, a.sweepDeg)}
+                className={styles.dirRingArc}
+                style={{ stroke: a.color }}
+              />
+            ))}
+        </svg>
       </div>
-      <CoverageNote text={note} />
-    </>
+      <div className={styles.dirTable} role="table">
+        <div className={styles.dirHeadRow} role="row">
+          <span role="columnheader">directory</span>
+          <span role="columnheader" className={styles.dirHeadNum}>
+            touches
+          </span>
+          <span role="columnheader">completion</span>
+          <span aria-hidden="true" />
+        </div>
+        {visible.map((d, i) => {
+          const completionColor = outcomeRateColor(d.completion_rate);
+          const completionPct = Math.round(d.completion_rate);
+          const content = (
+            <>
+              <FilePath path={d.directory} parentSegments={1} />
+              <span className={styles.dirTouches}>{d.touch_count.toLocaleString()}</span>
+              <span className={styles.dirCompletion}>
+                <span className={styles.dirCompletionTrack}>
+                  <span
+                    className={styles.dirCompletionFill}
+                    style={{
+                      width: `${Math.max(2, completionPct)}%`,
+                      background: completionColor,
+                      opacity: 'var(--opacity-bar-fill)',
+                    }}
+                  />
+                </span>
+                <span className={styles.dirCompletionValue} style={{ color: completionColor }}>
+                  {completionPct}%
+                </span>
+              </span>
+              <span className={styles.viewButton}>View</span>
+            </>
+          );
+          return (
+            <button
+              key={d.directory}
+              type="button"
+              role="row"
+              className={styles.dirDataRow}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={open}
+              aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
+            >
+              {content}
+            </button>
+          );
+        })}
+        <TableOverflow count={hidden} label="directories" onClick={open} />
+      </div>
+    </div>
   );
 }
 
@@ -258,8 +287,6 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
 // width = touches share within the visible top-N, colored by outcome
 // severity. Filename + churn (+/-) anchor the right rail. Header carries
 // the View affordance; rows are buttons that drill into the landscape tab.
-const FILES_VISIBLE = 8;
-
 function FilesWidget({ analytics }: WidgetBodyProps) {
   const files = analytics.file_heatmap;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
@@ -273,83 +300,84 @@ function FilesWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
-  const visible = files.slice(0, FILES_VISIBLE);
+  const visible = files.slice(
+    0,
+    visibleRowsForTable(files.length, TALL_TABLE_ROWS_NO_OVERFLOW, TALL_TABLE_ROWS_WITH_OVERFLOW),
+  );
   const hidden = files.length - visible.length;
   const maxTouches = Math.max(...visible.map((f) => f.touch_count), 1);
+  const open = openCodebase('landscape', 'landscape');
 
   return (
-    <>
-      <div className={styles.beamTable} role="table">
-        <div className={styles.beamHeadRow} role="row">
-          <span role="columnheader">file</span>
-          <span role="columnheader">touches · outcome</span>
-          <span role="columnheader" className={styles.beamHeadNum}>
-            churn
-          </span>
-          <span aria-hidden="true" />
-        </div>
-        {visible.map((f, i) => {
-          const linesAdded = f.total_lines_added ?? 0;
-          const linesRemoved = f.total_lines_removed ?? 0;
-          const hasLines = linesAdded > 0 || linesRemoved > 0;
-          const hasOutcome = f.outcome_rate != null && f.outcome_rate > 0;
-          const beamColor = hasOutcome ? outcomeRateColor(f.outcome_rate as number) : 'var(--soft)';
-          const beamWidth = (f.touch_count / maxTouches) * 100;
-          const content = (
-            <>
-              <FilePath path={f.file} />
+    <div className={styles.beamTable} role="table">
+      <div className={styles.beamHeadRow} role="row">
+        <span role="columnheader">file</span>
+        <span role="columnheader">touches · outcome</span>
+        <span role="columnheader" className={styles.beamHeadNum}>
+          churn
+        </span>
+        <span aria-hidden="true" />
+      </div>
+      {visible.map((f, i) => {
+        const linesAdded = f.total_lines_added ?? 0;
+        const linesRemoved = f.total_lines_removed ?? 0;
+        const hasLines = linesAdded > 0 || linesRemoved > 0;
+        const hasOutcome = f.outcome_rate != null && f.outcome_rate > 0;
+        const beamColor = hasOutcome ? outcomeRateColor(f.outcome_rate as number) : 'var(--soft)';
+        const beamWidth = (f.touch_count / maxTouches) * 100;
+        const content = (
+          <>
+            <FilePath path={f.file} />
 
-              <span className={styles.beamCell}>
-                <span className={styles.beamTrack}>
-                  <span
-                    className={styles.beamFill}
-                    style={{
-                      width: `${Math.max(3, beamWidth)}%`,
-                      background: beamColor,
-                    }}
-                  />
-                </span>
-                <span className={styles.beamMeta}>
-                  <span className={styles.beamTouches}>{f.touch_count.toLocaleString()}</span>
-                  {hasOutcome && (
-                    <span className={styles.beamOutcome} style={{ color: beamColor }}>
-                      {f.outcome_rate}%
-                    </span>
-                  )}
-                </span>
+            <span className={styles.beamCell}>
+              <span className={styles.beamTrack}>
+                <span
+                  className={styles.beamFill}
+                  style={{
+                    width: `${Math.max(3, beamWidth)}%`,
+                    background: beamColor,
+                  }}
+                />
               </span>
-              <span className={styles.beamChurn}>
-                {hasLines ? (
-                  <>
-                    <span className={styles.beamChurnAdd}>+{linesAdded}</span>
-                    <span className={styles.beamChurnSep}>/</span>
-                    <span className={styles.beamChurnRem}>-{linesRemoved}</span>
-                  </>
-                ) : (
-                  <span className={styles.beamChurnNone}>—</span>
+              <span className={styles.beamMeta}>
+                <span className={styles.beamTouches}>{f.touch_count.toLocaleString()}</span>
+                {hasOutcome && (
+                  <span className={styles.beamOutcome} style={{ color: beamColor }}>
+                    {f.outcome_rate}%
+                  </span>
                 )}
               </span>
-              <span className={styles.viewButton}>View</span>
-            </>
-          );
-          return (
-            <button
-              key={f.file}
-              type="button"
-              role="row"
-              className={styles.beamRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openCodebase('landscape', 'landscape')}
-              aria-label={`Open file landscape detail · ${f.file} ${f.touch_count} touches`}
-            >
-              {content}
-            </button>
-          );
-        })}
-        {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
-      </div>
-      <CoverageNote text={note} />
-    </>
+            </span>
+            <span className={styles.beamChurn}>
+              {hasLines ? (
+                <>
+                  <span className={styles.beamChurnAdd}>+{linesAdded}</span>
+                  <span className={styles.beamChurnSep}>/</span>
+                  <span className={styles.beamChurnRem}>-{linesRemoved}</span>
+                </>
+              ) : (
+                <span className={styles.beamChurnNone}>—</span>
+              )}
+            </span>
+            <span className={styles.viewButton}>View</span>
+          </>
+        );
+        return (
+          <button
+            key={f.file}
+            type="button"
+            role="row"
+            className={styles.beamRow}
+            style={{ '--row-index': i } as CSSProperties}
+            onClick={open}
+            aria-label={`Open file landscape detail · ${f.file} ${f.touch_count} touches`}
+          >
+            {content}
+          </button>
+        );
+      })}
+      <TableOverflow count={hidden} label="files" onClick={open} />
+    </div>
   );
 }
 
@@ -360,7 +388,6 @@ function FilesWidget({ analytics }: WidgetBodyProps) {
 // vocabulary used in OutcomeWidgets without fabricating time-series
 // data — the schema only carries a single ratio per file. Severity tier
 // flips at 50%.
-const FILE_REWORK_VISIBLE = 8;
 const REWORK_SPARK_W = 100;
 const REWORK_SPARK_H = 22;
 
@@ -409,10 +436,14 @@ function ReworkSpark({ ratio, max, color }: { ratio: number; max: number; color:
 function FileReworkWidget({ analytics }: WidgetBodyProps) {
   const fr = analytics.file_rework;
   if (fr.length === 0) return <SectionEmpty>No rework signal</SectionEmpty>;
-  const visible = fr.slice(0, FILE_REWORK_VISIBLE);
+  const visible = fr.slice(
+    0,
+    visibleRowsForTable(fr.length, TALL_TABLE_ROWS_NO_OVERFLOW, TALL_TABLE_ROWS_WITH_OVERFLOW),
+  );
   const hidden = fr.length - visible.length;
   const sorted = [...visible].sort((a, b) => b.rework_ratio - a.rework_ratio);
   const maxRatio = Math.max(...sorted.map((f) => f.rework_ratio), 1);
+  const open = openCodebase('risk', 'failing-files');
 
   return (
     <div className={styles.lollipopTable} role="table">
@@ -451,14 +482,14 @@ function FileReworkWidget({ analytics }: WidgetBodyProps) {
             role="row"
             className={styles.lollipopRow}
             style={{ '--row-index': i } as CSSProperties}
-            onClick={openCodebase('risk', 'failing-files')}
+            onClick={open}
             aria-label={`Open rework detail · ${f.file} ${f.rework_ratio}% rework`}
           >
             {content}
           </button>
         );
       })}
-      {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
+      <TableOverflow count={hidden} label="files" onClick={open} />
     </div>
   );
 }
@@ -482,11 +513,22 @@ function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
-  const sorted = [...data].sort((a, b) => b.days_since - a.days_since);
+  const sortedAll = [...data].sort((a, b) => b.days_since - a.days_since);
+  const sorted = sortedAll.slice(
+    0,
+    visibleRowsForTable(
+      sortedAll.length,
+      SHORT_TABLE_ROWS_NO_OVERFLOW,
+      SHORT_TABLE_ROWS_WITH_OVERFLOW,
+    ),
+  );
+  const hidden = sortedAll.length - sorted.length;
   const maxDays = Math.max(...sorted.map((d) => d.days_since), 14);
   const minDays = 14;
   const span = Math.max(1, maxDays - minDays);
   const maxMass = Math.max(...sorted.map((d) => d.prior_edit_count), 1);
+
+  const open = openCodebase('directories', 'cold-dirs');
 
   return (
     <div className={styles.thermoFrame}>
@@ -533,13 +575,14 @@ function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
             type="button"
             className={styles.thermoLane}
             style={{ '--row-index': i } as CSSProperties}
-            onClick={openCodebase('directories', 'cold-dirs')}
+            onClick={open}
             aria-label={`Open cold directories · ${d.directory} ${d.days_since} days`}
           >
             {lane}
           </button>
         );
       })}
+      <TableOverflow count={hidden} label="directories" onClick={open} />
     </div>
   );
 }
@@ -549,7 +592,6 @@ function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
 // instead of dots-in-a-row. Each agent above the floor of two stacks as a
 // short bar; tier color flips as collision count climbs (2 = soft, 3 =
 // warn, 4+ = danger). Header carries the View affordance.
-const CONCURRENT_EDITS_VISIBLE = 8;
 const CONTENTION_STACK_CAP = 6;
 
 function contentionColor(agents: number): string {
@@ -570,9 +612,13 @@ function ConcurrentEditsWidget({ analytics }: WidgetBodyProps) {
     }
     return <SectionEmpty>No concurrent edits this period</SectionEmpty>;
   }
-  const visible = ce.slice(0, CONCURRENT_EDITS_VISIBLE);
+  const visible = ce.slice(
+    0,
+    visibleRowsForTable(ce.length, SHORT_TABLE_ROWS_NO_OVERFLOW, SHORT_TABLE_ROWS_WITH_OVERFLOW),
+  );
   const hidden = ce.length - visible.length;
   const maxEdits = Math.max(...visible.map((f) => f.edit_count), 1);
+  const open = openCodebase('risk', 'collisions');
 
   return (
     <div className={styles.collisionTable} role="table">
@@ -631,14 +677,14 @@ function ConcurrentEditsWidget({ analytics }: WidgetBodyProps) {
             role="row"
             className={styles.collisionRow}
             style={{ '--row-index': i } as CSSProperties}
-            onClick={openCodebase('risk', 'collisions')}
+            onClick={open}
             aria-label={`Open collisions detail · ${f.file} ${f.agents} agents`}
           >
             {content}
           </button>
         );
       })}
-      {hidden > 0 && <div className={sharedStyles.moreHidden}>+{hidden} more files</div>}
+      <TableOverflow count={hidden} label="files" onClick={open} />
     </div>
   );
 }

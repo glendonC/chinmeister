@@ -109,11 +109,11 @@ export function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'live-agents' && s.colSpan === 12 ? { ...s, colSpan: 6 } : s));
 }
 
-// projects at colSpan: 12 sprawls across the full row because the
-// comparator table has way more leftover space than the cells need. Heal
-// back to the 8-col catalog default.
+// projects at wider spans sprawls because the comparator table has way more
+// leftover space than the cells need. Heal back to the compact 6-col catalog
+// default, including the older 8-col persisted layout.
 export function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => (s.id === 'projects' && s.colSpan === 12 ? { ...s, colSpan: 8 } : s));
+  return slots.map((s) => (s.id === 'projects' && s.colSpan > 6 ? { ...s, colSpan: 6 } : s));
 }
 
 // outcomes renders as a hero stat + 4-column table (OUTCOME | COUNT |

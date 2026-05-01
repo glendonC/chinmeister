@@ -23,6 +23,10 @@
   composes: viewPill from '../widget-shared.module.css';
 }
 
+.tableOverflow {
+  grid-column: 1 / -1;
+}
+
 /* ════════════════════════════════════════════════════
  * commit-stats: hero count + skyline bars
  * ════════════════════════════════════════════════════ */
@@ -149,7 +153,7 @@
   grid-template-columns:
     minmax(0, 1fr)
     auto
-    minmax(110px, 1.4fr)
+    minmax(120px, 160px)
     56px;
   column-gap: var(--space-md);
   align-content: start;
@@ -183,11 +187,11 @@
 
 .dirTouches {
   font-family: var(--mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   text-align: right;
 }
 
@@ -224,13 +228,13 @@
 .beamTable {
   display: grid;
   grid-template-columns:
-    minmax(0, 1.2fr)
-    minmax(120px, 1.6fr)
+    minmax(0, 1fr)
+    minmax(140px, 180px)
     auto
     56px;
-  column-gap: var(--space-lg);
+  column-gap: var(--space-md);
   align-content: start;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
@@ -330,14 +334,14 @@
 .lollipopTable {
   display: grid;
   grid-template-columns:
-    minmax(0, 1.1fr)
-    minmax(140px, 1.6fr)
+    minmax(0, 1fr)
+    minmax(160px, 220px)
     auto
     auto
     56px;
-  column-gap: var(--space-lg);
+  column-gap: var(--space-md);
   align-content: start;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
@@ -382,21 +386,21 @@
 
 .lollipopValue {
   font-family: var(--mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   min-width: 40px;
   text-align: right;
 }
 
 .lollipopNum {
   font-family: var(--mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   text-align: right;
 }
 
@@ -408,10 +412,10 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   padding: var(--space-sm) 0;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .thermoLane {
@@ -476,11 +480,11 @@
   grid-template-columns:
     minmax(0, 1fr)
     auto
-    minmax(96px, 1.2fr)
+    minmax(96px, 140px)
     56px;
-  column-gap: var(--space-lg);
+  column-gap: var(--space-md);
   align-content: start;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
@@ -550,10 +554,10 @@
 
 .collisionAgentCount {
   font-family: var(--mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 
 .collisionEdits {
@@ -578,11 +582,11 @@
 
 .collisionEditsValue {
   font-family: var(--mono);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   color: var(--ink);
   font-weight: 500;
   font-variant-numeric: tabular-nums;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
   min-width: 36px;
   text-align: right;
 }

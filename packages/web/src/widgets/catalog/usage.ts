@@ -126,11 +126,9 @@ export const USAGE_WIDGETS: WidgetDef[] = [
     category: 'usage',
     scope: 'overview',
     viz: 'project-list',
-    // 8-col default: the table has 6 fixed-track columns + a View pill, so a
-    // half-to-two-thirds tile matches the live-agents/live-conflicts density
-    // precedent. Users can resize down to 6 or up to 12 from the customize
-    // panel.
-    w: 8,
+    // 6-col default: project rows are a compact comparator table, not a
+    // hero-width surface. Users can still resize wider from customize.
+    w: 6,
     h: 3,
     minW: 6,
     minH: 2,

@@ -41,9 +41,14 @@ describe('healLiveAgentsWidth', () => {
 });
 
 describe('healProjectsWidth', () => {
-  it('snaps a stale 12-col projects slot back to 8', () => {
+  it('snaps a stale 12-col projects slot back to 6', () => {
     const out = healProjectsWidth([{ id: 'projects', colSpan: 12, rowSpan: 3 }]);
-    expect(out).toEqual([{ id: 'projects', colSpan: 8, rowSpan: 3 }]);
+    expect(out).toEqual([{ id: 'projects', colSpan: 6, rowSpan: 3 }]);
+  });
+
+  it('also snaps the old 8-col projects default back to 6', () => {
+    const out = healProjectsWidth([{ id: 'projects', colSpan: 8, rowSpan: 3 }]);
+    expect(out).toEqual([{ id: 'projects', colSpan: 6, rowSpan: 3 }]);
   });
 });
 
@@ -164,7 +169,7 @@ describe('healAll (chain order)', () => {
     const byId = new Map(out.map((s) => [s.id, s]));
 
     expect(byId.get('live-agents')?.colSpan).toBe(6);
-    expect(byId.get('projects')?.colSpan).toBe(8);
+    expect(byId.get('projects')?.colSpan).toBe(6);
     expect(byId.get('outcomes')?.colSpan).toBe(8);
     expect(byId.get('scope-complexity')?.colSpan).toBe(8);
     expect(byId.get('tool-call-errors')).toEqual({

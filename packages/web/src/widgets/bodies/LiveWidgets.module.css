@@ -27,7 +27,7 @@
    * the widget body — making a single row look like it has 30px of vertical
    * padding. `start` anchors rows to the top at their natural height. */
   align-content: start;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
@@ -77,10 +77,10 @@
 }
 
 .liveAgentName {
-  font-size: var(--text-md);
+  font-size: var(--text-sm);
   font-weight: 500;
   color: var(--ink);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -123,32 +123,40 @@
 
 /* ── Conflicts / files-in-play table ────────────────────────────────
  *
- * 4-column subgrid shared by live-conflicts and files-in-play:
- *   File        | Status             | Duration | Editors
- *   router.ts   | claimed            | 18m      | ada nova orion +3
- *   memory.ts   | mismatch @ada      | 8m       | nova orion
- *   setup.js    | unclaimed          | —        | ada nova orion +3
+ * 5-column subgrid shared by live-conflicts and files-in-play, with an
+ * optional Project column on cross-project surfaces:
+ *   File        | Project  | Status    | Duration | Editors           | View
+ *   router.ts   | platform | claimed   | 18m      | ada nova orion +3 | View
+ *   memory.ts   | frontend | mismatch  | 8m       | nova orion        | View
  *
  * Dense table, same chrome as live-agents but different columns. Sibling
  * widgets share visual vocabulary; the data differs (file-axis vs agent-
  * axis) and the reader tells them apart by content, not by layout. */
 .conflictTable {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto auto 56px;
   column-gap: var(--space-lg);
   row-gap: 0;
   align-content: start;
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
 /* No-status variant: drops the second column (Status) when no rendered
- * row carries lock data. Same row chrome, three columns instead of four.
+ * row carries lock data. Same row chrome, four columns instead of five.
  * Used on Overview where cross-project lock state is intentionally not
  * aggregated (every row would render an em-dash); the column degrades
  * cleanly by going away rather than painting an empty cell on every row. */
 .conflictTableNoStatus {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto auto 56px;
+}
+
+.conflictTableWithProject {
+  grid-template-columns: minmax(0, 1fr) auto auto auto auto 56px;
+}
+
+.conflictTableWithProject.conflictTableNoStatus {
+  grid-template-columns: minmax(0, 1fr) auto auto auto 56px;
 }
 
 .conflictTableHeader,
@@ -169,12 +177,13 @@
   display: contents;
 }
 
-/* SectionOverflow wrapper: spans the full row so the "+N more files" link
+/* SectionOverflow wrapper: spans the full row so the "+N more" link
  * lines up under the first column, not inside the last subgrid track. Only
- * files-in-play uses this — live-conflicts renders every conflict. */
+ * rendered when a live table caps its row set. */
 .conflictTableOverflow {
   grid-column: 1 / -1;
-  margin: 0 -14px;
+  margin: 0;
+  padding-left: 0;
 }
 
 .conflictTableRow {
@@ -185,6 +194,13 @@
 /* File cell rendering uses the shared `FilePath` primitive in
  * widgets/bodies/shared.tsx (filename ink + sans 500, parent muted +
  * mono xs). No local class set here. */
+
+.conflictProjectCell {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  color: var(--soft);
+  white-space: nowrap;
+}
 
 /* ── Status cell ─────────────────────────────────────────────────
  *
@@ -287,6 +303,10 @@
   color: var(--soft);
   font-weight: 400;
   white-space: nowrap;
+}
+
+.conflictViewButton {
+  composes: viewPill from '../widget-shared.module.css';
 }
 
 @media (prefers-reduced-motion: reduce) {

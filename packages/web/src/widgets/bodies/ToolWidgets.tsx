@@ -24,6 +24,7 @@
 
 import { useMemo, useState, type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import { aggregateModels, completionColor, formatCost } from '../utils.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
@@ -36,6 +37,23 @@ import { GhostRows, CoverageNote, capabilityCoverageNote, StatWidget } from './s
 
 function openTools(tab: string, q: string) {
   return () => setQueryParams({ tools: tab, q });
+}
+
+function visibleRowsForTable(
+  total: number,
+  noOverflowCap: number,
+  withOverflowCap: number,
+): number {
+  return total > noOverflowCap ? withOverflowCap : total;
+}
+
+function TableOverflow({ count, onClick }: { count: number; onClick: () => void }) {
+  if (count <= 0) return null;
+  return (
+    <div className={styles.tableOverflow}>
+      <SectionOverflow count={count} label="tools" onClick={onClick} />
+    </div>
+  );
 }
 
 // ── Shared constants ───────────────────────────────
@@ -220,7 +238,10 @@ function ToolWorkTypeFitWidget({ analytics }: WidgetBodyProps) {
     }
   }
 
-  const rows = [...byTool.values()].sort((a, b) => b.total_sessions - a.total_sessions);
+  const allRows = [...byTool.values()].sort((a, b) => b.total_sessions - a.total_sessions);
+  const rows = allRows.slice(0, visibleRowsForTable(allRows.length, 6, 5));
+  const hidden = allRows.length - rows.length;
+  const open = openTools('tools', 'work-type');
 
   return (
     <div className={styles.fitTable} role="table">
@@ -275,13 +296,14 @@ function ToolWorkTypeFitWidget({ analytics }: WidgetBodyProps) {
             role="row"
             className={styles.fitDataRow}
             style={{ '--row-index': i } as CSSProperties}
-            onClick={openTools('tools', 'work-type')}
+            onClick={open}
             aria-label={`Open tools detail · ${meta.label} strongest at ${r.best_work_type ?? 'no work-type yet'}`}
           >
             {content}
           </button>
         );
       })}
+      <TableOverflow count={hidden} onClick={open} />
     </div>
   );
 }
@@ -311,6 +333,10 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
+  const visible = rows.slice(0, visibleRowsForTable(rows.length, 4, 3));
+  const hidden = rows.length - visible.length;
+  const open = openTools('tools', 'one-shot');
+
   return (
     <>
       <div className={styles.oneShotWrap}>
@@ -323,7 +349,7 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
             <span role="columnheader">first-try rate</span>
             <span aria-hidden="true" />
           </div>
-          {rows.map((r, i) => {
+          {visible.map((r, i) => {
             const meta = getToolMeta(r.host_tool);
             const enough = r.sessions >= MIN_TOOL_SAMPLE;
             const rate = r.one_shot_rate;
@@ -362,13 +388,14 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
                 role="row"
                 className={styles.oneShotRow}
                 style={{ '--row-index': i } as CSSProperties}
-                onClick={openTools('tools', 'one-shot')}
+                onClick={open}
                 aria-label={`Open tools detail · ${meta.label} first-try rate ${enough ? `${rate}%` : 'not enough sessions'}`}
               >
                 {content}
               </button>
             );
           })}
+          <TableOverflow count={hidden} onClick={open} />
         </div>
       </div>
       <CoverageNote text={note} />
