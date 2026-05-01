@@ -47,7 +47,7 @@ function ConflictsBlockedWidget({ analytics }: WidgetBodyProps) {
       <StatWidget
         value={value}
         delta={delta}
-        onOpenDetail={() => navigateToDetail('codebase', 'risk', 'collisions')}
+        onOpenDetail={() => navigateToDetail('codebase', 'risk', 'blocked-count')}
         detailAriaLabel={`Open codebase risk · ${value} collisions blocked`}
       />
       <CoverageNote text={capabilityCoverageNote(tools, 'hooks')} />
@@ -94,7 +94,7 @@ function FileOverlapWidget({ analytics }: WidgetBodyProps) {
   return (
     <StatWidget
       value={value}
-      onOpenDetail={() => navigateToDetail('codebase', 'risk', 'collisions')}
+      onOpenDetail={() => navigateToDetail('codebase', 'risk', 'overlap-rate')}
       detailAriaLabel={`Open codebase risk · ${value} file overlap`}
     />
   );

@@ -31,7 +31,8 @@ export const WIDGET_ALIASES: Record<string, string[]> = {
 
   // Activity cuts. prompt-efficiency rides the same Simpson's-paradox
   // trap that cut edit-velocity (turns ↔ outcome). work-type-outcomes
-  // is fully absorbed into OutcomesDetailView's WorkTypesPanel.
+  // is fully absorbed into the work-type question inside
+  // OutcomesDetailView's sessions tab.
   'prompt-efficiency': [],
   'work-type-outcomes': [],
 

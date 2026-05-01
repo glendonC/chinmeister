@@ -109,6 +109,7 @@ export default function ProjectView(_props: Props) {
     memoryBreakdown,
     availableSpawnTools,
     locks,
+    allSessions,
   } = useProjectData();
 
   const { activeTab, setActiveTab, hint, ref: statsRef } = useTabs(PROJECT_TABS);
@@ -384,6 +385,7 @@ export default function ProjectView(_props: Props) {
           onBack={closeAll}
           backLabel="Project"
           scopeLabel="in this project"
+          recentSessions={allSessions}
           onOpenProject={(teamId) => {
             closeAll();
             selectTeam(teamId);

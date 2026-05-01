@@ -43,9 +43,8 @@ function resolveFill(
 /**
  * Horizontal rate bars: `label | track | fill | value+sublabel`. Bar fill
  * width is the literal rate value (0-100), NOT normalized against the
- * row max. Two detail panels share this shape: WorkTypesPanel (color per
- * work type) and CommitsPanel's commits-vs-completion buckets (color per
- * completion threshold).
+ * row max. Used for completion-by-work-type (color per work type) and
+ * commits-vs-completion buckets (color per completion threshold).
  */
 export default function RateBars({
   rows,

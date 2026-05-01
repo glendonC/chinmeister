@@ -123,6 +123,17 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* Constrained sparkline frame for the blocked-count question. The shared
+ * `Sparkline` stretches to 100% of its container; the daily-blocked
+ * series rarely needs more than a chip-width to read as trend. Capping
+ * the visual width keeps the prevention curve from dominating the
+ * answer column when blocked counts are in the single digits. */
+.blockedSpark {
+  width: 100%;
+  max-width: 280px;
+  height: 36px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dataRow {
     animation: none !important;

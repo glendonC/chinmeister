@@ -21,12 +21,14 @@ export const TEAM_WIDGETS: WidgetDef[] = [
     minW: 2,
     minH: 2,
     dataKeys: ['file_overlap'],
-    // The codebase Risk panel's collisions question already shows the
-    // directional version of this rate (which files multiple agents
-    // touched, per agent count). Drilling there reuses an answered
-    // question instead of opening a new tab the team detail view does
-    // not have.
-    drillTarget: { view: 'codebase', tab: 'risk', q: 'collisions' },
+    // Drills to the codebase Risk panel's overlap-rate question, which
+    // renders the same density rate as a HeroStat alongside the raw
+    // file counts. The widget hero is the rate; the detail's
+    // overlap-rate slot is the answer prose plus the same numbers
+    // restated, with relatedLinks to the file-list collisions question
+    // and the cross-tool flow view. One drill destination, one matching
+    // question, no team detail view required.
+    drillTarget: { view: 'codebase', tab: 'risk', q: 'overlap-rate' },
     // The body wires onOpenDetail through StatWidget so the inline ↗
     // affordance matches Usage/Outcomes stats. Without this gate,
     // WidgetRenderer would paint its outer container hover on top,
@@ -50,13 +52,14 @@ export const TEAM_WIDGETS: WidgetDef[] = [
     minH: 2,
     dataKeys: ['conflict_stats'],
     requiredCapability: 'hooks',
-    // Drill points at the same codebase Risk collisions question that
-    // file-overlap uses, the conceptual area is identical (files where
-    // multiple agents collided / would have collided). One drill
-    // destination, two read angles. ownsClick keeps WidgetRenderer's
-    // outer container hover from double-stacking the inline ↗ that
-    // StatWidget paints.
-    drillTarget: { view: 'codebase', tab: 'risk', q: 'collisions' },
+    // Drills to the codebase Risk panel's blocked-count question, which
+    // renders the same blocked total as a HeroStat plus a daily trend
+    // sparkline and the block-rate (blocked/found). The widget hero is
+    // the count; the detail's blocked-count slot is the count plus
+    // trend plus the advisory-vs-blocked split. ownsClick keeps
+    // WidgetRenderer's outer container hover from double-stacking the
+    // inline ↗ that StatWidget paints.
+    drillTarget: { view: 'codebase', tab: 'risk', q: 'blocked-count' },
     ownsClick: true,
   },
 ];

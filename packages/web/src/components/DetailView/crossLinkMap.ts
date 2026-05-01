@@ -44,7 +44,7 @@ const MAP: Record<string, CrossLink[]> = {
   'outcomes:retries:one-shot': [
     { label: 'Tool-call error topology', view: 'tools', tab: 'errors', q: 'top' },
   ],
-  'outcomes:types:finish': [
+  'outcomes:sessions:work-type': [
     { label: 'Work-type mix in Activity', view: 'activity', tab: 'mix', q: 'share' },
     { label: 'Completion by work type in Activity', view: 'activity', tab: 'mix', q: 'completion' },
   ],
@@ -54,10 +54,10 @@ const MAP: Record<string, CrossLink[]> = {
     { label: 'Completion at peak hour', view: 'outcomes', tab: 'sessions', q: 'completion' },
   ],
   'activity:mix:share': [
-    { label: 'Completion by work type', view: 'outcomes', tab: 'types', q: 'finish' },
+    { label: 'Completion by work type', view: 'outcomes', tab: 'sessions', q: 'work-type' },
   ],
   'activity:mix:completion': [
-    { label: 'Outcomes by work type', view: 'outcomes', tab: 'types', q: 'finish' },
+    { label: 'Outcomes by work type', view: 'outcomes', tab: 'sessions', q: 'work-type' },
   ],
   'activity:effective-hours:peak-completion': [
     { label: 'Session completion detail', view: 'outcomes', tab: 'sessions', q: 'completion' },
@@ -73,6 +73,12 @@ const MAP: Record<string, CrossLink[]> = {
   'codebase:risk:collisions': [
     { label: 'Cross-tool file flow', view: 'tools', tab: 'flow', q: 'pairs' },
   ],
+  'codebase:risk:overlap-rate': [
+    { label: 'Cross-tool file flow', view: 'tools', tab: 'flow', q: 'pairs' },
+  ],
+  'codebase:risk:blocked-count': [
+    { label: 'Cross-tool file flow', view: 'tools', tab: 'flow', q: 'pairs' },
+  ],
   'codebase:commits:commits-headline': [
     { label: 'Lines + cost context', view: 'usage', tab: 'lines' },
   ],
@@ -82,7 +88,7 @@ const MAP: Record<string, CrossLink[]> = {
     { label: 'Per-tool sessions', view: 'usage', tab: 'sessions', q: 'by-tool' },
   ],
   'tools:tools:work-type': [
-    { label: 'Completion by work type', view: 'outcomes', tab: 'types', q: 'finish' },
+    { label: 'Completion by work type', view: 'outcomes', tab: 'sessions', q: 'work-type' },
     { label: 'Work-type mix in Activity', view: 'activity', tab: 'mix', q: 'share' },
   ],
   'tools:tools:one-shot': [

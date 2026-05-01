@@ -6,12 +6,13 @@ import {
   getCrossLinks,
   type FocusedQuestion,
 } from '../../../../components/DetailView/index.js';
-import { RateVolumeColumns } from '../../../../components/viz/index.js';
+import { RateBars, RateVolumeColumns } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
 import { arcPath, computeArcSlices } from '../../../../lib/svgArcs.js';
 import { getToolMeta } from '../../../../lib/toolMeta.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 import { capabilityCoverageNote, CoverageNote } from '../../../../widgets/bodies/shared.js';
+import { workTypeColor } from '../../../../widgets/utils.js';
 import shared from '../../../../widgets/widget-shared.module.css';
 
 import { fmtCount, formatMinutes } from '../format.js';
@@ -76,6 +77,48 @@ export function SessionsPanel({ analytics }: { analytics: UserAnalytics }) {
       question: 'Is completion improving?',
       answer: dailyTrendAnswer,
       children: <CompletionTrendDetail trends={analytics.daily_trends} />,
+    });
+  }
+  // Work-type completion lives inside the sessions tab so the
+  // "did the work land" thesis stays a sibling of "which kinds land".
+  // The mirror in Activity (mix:completion) is the same shape against
+  // the activity-mix lens; this one keeps the outcomes vocabulary.
+  const wto = analytics.work_type_outcomes;
+  if (wto.length > 0) {
+    const best = [...wto].sort((a, b) => b.completion_rate - a.completion_rate)[0];
+    const worst = [...wto].sort((a, b) => a.completion_rate - b.completion_rate)[0];
+    const worstTone: 'warning' | 'negative' = worst.completion_rate < 40 ? 'negative' : 'warning';
+    const sameRow = best.work_type === worst.work_type;
+    questions.push({
+      id: 'work-type',
+      question: 'Which kinds of work finish?',
+      answer: sameRow ? (
+        <>
+          Only <Metric>{best.work_type}</Metric> has enough sessions to score; it completes at{' '}
+          <Metric tone="positive">{best.completion_rate}%</Metric>.
+        </>
+      ) : (
+        <>
+          <Metric>{best.work_type}</Metric> completes at{' '}
+          <Metric tone="positive">{best.completion_rate}%</Metric>;{' '}
+          <Metric>{worst.work_type}</Metric> trails at{' '}
+          <Metric tone={worstTone}>{worst.completion_rate}%</Metric>.
+        </>
+      ),
+      children: (
+        <RateBars
+          labelWidth={120}
+          rows={wto.map((w) => ({
+            key: w.work_type,
+            label: w.work_type,
+            rate: w.completion_rate,
+            value: `${w.completion_rate}%`,
+            sublabel: `${fmtCount(w.sessions)} sessions`,
+            fillColor: workTypeColor(w.work_type),
+          }))}
+        />
+      ),
+      relatedLinks: getCrossLinks('outcomes', 'sessions', 'work-type'),
     });
   }
   questions.push({

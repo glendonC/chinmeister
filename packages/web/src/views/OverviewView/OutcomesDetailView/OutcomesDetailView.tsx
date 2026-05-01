@@ -6,26 +6,25 @@ import { useTabs } from '../../../hooks/useTabs.js';
 import type { UserAnalytics } from '../../../lib/apiSchemas.js';
 
 import { RANGES, formatScope, type RangeDays } from '../overview-utils.js';
-import { MISSING_DELTA, formatRateDelta } from '../detailDelta.js';
+import { formatRateDelta } from '../detailDelta.js';
 
-import { fmtCount } from './format.js';
 import { SessionsPanel } from './panels/SessionsPanel.js';
 import { RetriesPanel } from './panels/RetriesPanel.js';
-import { WorkTypesPanel } from './panels/WorkTypesPanel.js';
 
 /* OutcomesDetailView, "did the work land" at scale.
  *
  * Mirrors the UsageDetailView structure (DetailView shell, DetailSection
  * blocks, tab-driven panels) but answers a different question family:
  *
- *   sessions   - completion health and stall behavior
+ *   sessions   - completion health, stall behavior, work-type completion
  *   retries    - difficulty: one-shot rate and scope completion scale
- *   types      - work-type completion bars
  *
- * First-edit latency and duration shape live in UsageDetailView; they are
- * about cadence and pacing, not about whether work landed. */
+ * Work-type completion lives as a question inside the sessions tab so the
+ * "did it land" thesis stays one click away from "which kinds of work
+ * land". The per-period cadence (when sessions ran) and per-tool routing
+ * live in Activity and Tools respectively. */
 
-const OUTCOMES_TABS = ['sessions', 'retries', 'types'] as const;
+const OUTCOMES_TABS = ['sessions', 'retries'] as const;
 type OutcomesTab = (typeof OUTCOMES_TABS)[number];
 
 function isOutcomesTab(value: string | null | undefined): value is OutcomesTab {
@@ -62,7 +61,6 @@ export default function OutcomesDetailView({
 
   // Tabs whose value is a scalar quantity over the period MUST set a real delta
   // via splitDelta+formatCountDelta / formatRateDelta / formatUsdDelta.
-  // Categorical or structural tab values use MISSING_DELTA with a one-line rationale comment.
   const tabs: Array<DetailTabDef<OutcomesTab>> = [
     {
       id: 'sessions',
@@ -75,13 +73,6 @@ export default function OutcomesDetailView({
       label: 'Difficulty',
       value: oneShot.one_shot_sessions > 0 ? `${oneShot.one_shot_rate}%` : '--',
       delta: formatRateDelta(oneShot.one_shot_rate, pc.previous?.one_shot_rate ?? null),
-    },
-    {
-      id: 'types',
-      label: 'By work type',
-      value: fmtCount(analytics.work_type_outcomes.length),
-      // rationale: tab value is count of distinct work-type categories, not period-additive.
-      delta: MISSING_DELTA,
     },
   ];
 
@@ -109,7 +100,6 @@ export default function OutcomesDetailView({
     >
       {activeTab === 'sessions' && <SessionsPanel analytics={analytics} />}
       {activeTab === 'retries' && <RetriesPanel analytics={analytics} />}
-      {activeTab === 'types' && <WorkTypesPanel analytics={analytics} />}
     </DetailView>
   );
 }
