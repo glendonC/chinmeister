@@ -21,12 +21,12 @@ import { FilePath } from './shared.js';
 // body scrolls if the cap exceeds the current rowSpan height.
 const LIVE_AGENTS_CAP = 8;
 
-// files-in-play is preemptive coordination ("don't touch what's in flight"),
-// so the cap trades list length for glanceability. 12 rows covers the Activity
-// tab's 12-col full-width rendering at rowSpan 3 without scroll; beyond that
-// the SectionOverflow link is the honest fallback. Silent truncation of the
-// 13th most-contested file would hide the exact signal the widget exists for.
-const ACTIVE_FILES_CAP = 12;
+// File-axis live widgets sit in 6×3 default slots. Four data rows fit only
+// when there is no overflow affordance. When overflow exists, the "+N more"
+// control occupies row space, so the safe composition is three rows + overflow.
+// The full row set remains available in LiveNowView.
+const FILE_ROWS_NO_OVERFLOW_CAP = 4;
+const FILE_ROWS_WITH_OVERFLOW_CAP = 3;
 
 // Max tool-colored handles rendered inline in the Editors column before the
 // row overflows into `+N`. Three keeps the cell narrow enough that 2-way
@@ -39,6 +39,10 @@ const EDITOR_CAP = 3;
 // signal — a conflict where one party is idle reads differently from one
 // where both are actively typing.
 const STALE_AFTER_SECONDS = 30;
+
+function visibleFileRowCount(total: number): number {
+  return total > FILE_ROWS_NO_OVERFLOW_CAP ? FILE_ROWS_WITH_OVERFLOW_CAP : total;
+}
 
 function LiveAgentsWidget({ liveAgents }: WidgetBodyProps) {
   if (liveAgents.length === 0) {
@@ -135,15 +139,17 @@ interface FileRowProps {
   // sites (the LiveNowView drill-in) keep their full layout.
   showStatus?: boolean;
   // Cross-project disambiguator. When the rendered set spans 2+ teams,
-  // the parent passes through a per-row teamLabel so two router.ts rows
-  // from different repos do not look identical. Single-project surfaces
-  // pass null and the FilePath stays bare.
-  teamLabel?: string | null;
+  // the row gets a dedicated Project column. Do not append this into the file
+  // cell; project is a separate table field, not path metadata.
+  showProject?: boolean;
+  projectLabel?: string | null;
 }
 
 // Shared row for live-conflicts and files-in-play. Subgrid columns:
-//   File      — filename (Manrope 500) + immediate parent dir (mono soft).
+//   File      — immediate parent dir (mono soft) + filename (Manrope 500).
 //               Parent is always rendered when present.
+//   Project   — shown only on cross-project surfaces where the visible files
+//               span 2+ teams.
 //   Status    — `claimed` / `unclaimed` / `mismatch @handle`. State word,
 //               not a person; the handle only appears on mismatch because
 //               that's the one case where the claim holder isn't already
@@ -155,13 +161,15 @@ interface FileRowProps {
 //               the coordination signal.
 //   Editors   — up to 3 tool-colored handles + `+N` overflow. Cell font-
 //               weight scales with editor count for at-a-glance severity.
+//   View      — shared per-row table affordance; opens the live detail target.
 function FileRow({
   group,
   lock,
   index,
   onClick,
   showStatus = true,
-  teamLabel = null,
+  showProject = false,
+  projectLabel = null,
 }: FileRowProps) {
   const editors = sortEditors(group.agents);
   const visibleEditors = editors.slice(0, EDITOR_CAP);
@@ -183,7 +191,9 @@ function FileRow({
       style={{ '--row-index': index } as CSSProperties}
       onClick={onClick}
     >
-      <FilePath path={group.file} order="name-first" teamLabel={teamLabel} />
+      <FilePath path={group.file} />
+
+      {showProject && <span className={styles.conflictProjectCell}>{projectLabel || '—'}</span>}
 
       {showStatus && (
         <span className={styles.conflictStatusCell}>
@@ -230,7 +240,84 @@ function FileRow({
         })}
         {extra > 0 && <span className={styles.conflictEditorsOverflow}>+{extra}</span>}
       </span>
+      <span className={styles.conflictViewButton}>View</span>
     </button>
+  );
+}
+
+interface LiveFileTableProps {
+  groups: FileGroup[];
+  locks: Lock[];
+  overflowSingular: string;
+  overflowPlural: string;
+  onOpen: () => void;
+}
+
+function LiveFileTable({
+  groups,
+  locks,
+  overflowSingular,
+  overflowPlural,
+  onOpen,
+}: LiveFileTableProps) {
+  const visible = groups.slice(0, visibleFileRowCount(groups.length));
+  const overflow = groups.length - visible.length;
+  const locksByFile = useMemo(() => {
+    const map = new Map<string, (typeof locks)[number]>();
+    for (const l of locks) map.set(l.file_path, l);
+    return map;
+  }, [locks]);
+
+  // Status is scoped to the rendered rows. Cross-project Overview often has
+  // no aggregated lock state, so the column disappears instead of filling with
+  // dashes. Project-scoped surfaces keep the column when any visible row has a
+  // lock.
+  const showStatus = visible.some((g) => locksByFile.has(g.file));
+
+  // Cross-project disambiguator. Only show the team suffix when the visible
+  // set spans multiple projects.
+  const showProject = new Set(visible.map((g) => g.teamId)).size > 1;
+
+  return (
+    <div
+      className={clsx(
+        styles.conflictTable,
+        showProject && styles.conflictTableWithProject,
+        !showStatus && styles.conflictTableNoStatus,
+      )}
+    >
+      <div className={styles.conflictTableHeader}>
+        <span>File</span>
+        {showProject && <span>Project</span>}
+        {showStatus && <span>Status</span>}
+        <span className={styles.conflictDurationHeader}>Duration</span>
+        <span>Editors</span>
+        <span aria-hidden="true" />
+      </div>
+      <div className={styles.conflictTableBody}>
+        {visible.map((group, i) => (
+          <FileRow
+            key={`${group.teamId}\u0000${group.file}`}
+            group={group}
+            lock={locksByFile.get(group.file)}
+            index={i}
+            showStatus={showStatus}
+            showProject={showProject}
+            projectLabel={group.teamName}
+            onClick={onOpen}
+          />
+        ))}
+      </div>
+      {overflow > 0 && (
+        <div className={styles.conflictTableOverflow}>
+          <SectionOverflow
+            count={overflow}
+            label={overflow === 1 ? overflowSingular : overflowPlural}
+            onClick={onOpen}
+          />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -239,28 +326,6 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
     () => groupFilesByTeam(liveAgents).filter((g) => g.agents.length > 1),
     [liveAgents],
   );
-  const locksByFile = useMemo(() => {
-    const map = new Map<string, (typeof locks)[number]>();
-    for (const l of locks) map.set(l.file_path, l);
-    return map;
-  }, [locks]);
-
-  // Status column is meaningful only when at least one rendered row has
-  // a corresponding lock. On Overview, cross-project lock state is not
-  // aggregated and `locks` is empty, so every row would print an em-dash
-  // in the Status cell. Drop the column instead. Same widget body, two
-  // scopes: the column appears on Project where lock data exists,
-  // disappears on Overview where it does not.
-  const showStatus = conflicts.some((c) => locksByFile.has(c.file));
-
-  // Cross-project disambiguator. Two router.ts rows from different repos
-  // would otherwise render identically on Overview. The strip already
-  // groups files by (team, file) in live-data.ts, so showing the team
-  // identity per row when the rendered set spans 2+ teams costs no extra
-  // data plumbing. Single-project surfaces (Project tab) collapse to one
-  // teamId and the suffix stays hidden.
-  const teamCount = new Set(conflicts.map((c) => c.teamId)).size;
-  const showTeam = teamCount > 1;
 
   if (conflicts.length === 0) {
     return (
@@ -271,27 +336,13 @@ function LiveConflictsWidget({ liveAgents, locks }: WidgetBodyProps) {
   }
 
   return (
-    <div className={clsx(styles.conflictTable, !showStatus && styles.conflictTableNoStatus)}>
-      <div className={styles.conflictTableHeader}>
-        <span>File</span>
-        {showStatus && <span>Status</span>}
-        <span className={styles.conflictDurationHeader}>Duration</span>
-        <span>Editors</span>
-      </div>
-      <div className={styles.conflictTableBody}>
-        {conflicts.map((c, i) => (
-          <FileRow
-            key={`${c.teamId}\u0000${c.file}`}
-            group={c}
-            lock={locksByFile.get(c.file)}
-            index={i}
-            showStatus={showStatus}
-            teamLabel={showTeam ? c.teamName : null}
-            onClick={() => setQueryParams({ live: '', 'live-tab': 'conflicts', q: null })}
-          />
-        ))}
-      </div>
-    </div>
+    <LiveFileTable
+      groups={conflicts}
+      locks={locks}
+      overflowSingular="conflict"
+      overflowPlural="conflicts"
+      onOpen={() => setQueryParams({ live: '', 'live-tab': 'conflicts', q: null })}
+    />
   );
 }
 
@@ -307,26 +358,7 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
       }),
     [liveAgents],
   );
-  const visible = allFiles.slice(0, ACTIVE_FILES_CAP);
-  const overflow = allFiles.length - visible.length;
-  const locksByFile = useMemo(() => {
-    const map = new Map<string, (typeof locks)[number]>();
-    for (const l of locks) map.set(l.file_path, l);
-    return map;
-  }, [locks]);
-
-  // Same Status-column gate as LiveConflictsWidget. When no rendered
-  // file matches a lock (e.g. cross-project Overview where lock state is
-  // not aggregated), drop the column rather than render an em-dash on
-  // every row. Project, where locks exist, keeps the full layout.
-  const showStatus = visible.some((f) => locksByFile.has(f.file));
-
-  // Same cross-project gate as LiveConflictsWidget. teamLabel renders
-  // only when the visible set spans 2+ teams. Computed off `visible` not
-  // `allFiles` so a single-team prefix still hides the suffix even when
-  // the unrendered tail spans multiple repos.
-  const teamCount = new Set(visible.map((f) => f.teamId)).size;
-  const showTeam = teamCount > 1;
+  const visible = allFiles.slice(0, visibleFileRowCount(allFiles.length));
 
   if (visible.length === 0) {
     return (
@@ -337,36 +369,13 @@ function FilesInPlayWidget({ liveAgents, locks }: WidgetBodyProps) {
   }
 
   return (
-    <div className={clsx(styles.conflictTable, !showStatus && styles.conflictTableNoStatus)}>
-      <div className={styles.conflictTableHeader}>
-        <span>File</span>
-        {showStatus && <span>Status</span>}
-        <span className={styles.conflictDurationHeader}>Duration</span>
-        <span>Editors</span>
-      </div>
-      <div className={styles.conflictTableBody}>
-        {visible.map((f, i) => (
-          <FileRow
-            key={`${f.teamId}\u0000${f.file}`}
-            group={f}
-            lock={locksByFile.get(f.file)}
-            index={i}
-            showStatus={showStatus}
-            teamLabel={showTeam ? f.teamName : null}
-            onClick={() => setQueryParams({ live: '', 'live-tab': 'files', q: null })}
-          />
-        ))}
-      </div>
-      {overflow > 0 && (
-        <div className={styles.conflictTableOverflow}>
-          <SectionOverflow
-            count={overflow}
-            label={overflow === 1 ? 'file' : 'files'}
-            onClick={() => setQueryParams({ live: '', 'live-tab': 'files', q: null })}
-          />
-        </div>
-      )}
-    </div>
+    <LiveFileTable
+      groups={allFiles}
+      locks={locks}
+      overflowSingular="file"
+      overflowPlural="files"
+      onOpen={() => setQueryParams({ live: '', 'live-tab': 'files', q: null })}
+    />
   );
 }
 

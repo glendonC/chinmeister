@@ -246,6 +246,7 @@ function VizIllustration({ viz }: { viz: WidgetViz }) {
 // ── Filter mode: what to show ─────────────────────
 
 type ShowFilter = 'all' | 'active' | 'inactive';
+type VizFamilyFilter = 'all' | 'stats' | 'tables' | 'bars' | 'trends' | 'heatmaps' | 'grids';
 // Labels read as the answer to "Show:" - `Added` / `Available` map to
 // the user's mental model (widgets I've put on my dashboard vs. ones I
 // could add) far better than the engineering vocabulary `active` /
@@ -257,6 +258,41 @@ const SHOW_LABELS: Record<ShowFilter, string> = {
   inactive: 'Available',
 };
 const SHOW_CYCLE: ShowFilter[] = ['all', 'active', 'inactive'];
+
+const VIZ_FAMILY_LABELS: Record<VizFamilyFilter, string> = {
+  all: 'All',
+  stats: 'Stats',
+  tables: 'Tables',
+  bars: 'Bars',
+  trends: 'Trends',
+  heatmaps: 'Heatmaps',
+  grids: 'Grids',
+};
+const VIZ_FAMILY_CYCLE: VizFamilyFilter[] = [
+  'all',
+  'stats',
+  'tables',
+  'bars',
+  'trends',
+  'heatmaps',
+  'grids',
+];
+const VIZ_FAMILY_BY_TYPE: Record<WidgetViz, Exclude<VizFamilyFilter, 'all'>> = {
+  stat: 'stats',
+  'stat-row': 'stats',
+  sparkline: 'trends',
+  'multi-sparkline': 'trends',
+  heatmap: 'heatmaps',
+  'bar-chart': 'bars',
+  'proportional-bar': 'bars',
+  'data-list': 'tables',
+  'outcome-bar': 'bars',
+  'factual-grid': 'grids',
+  'topic-bars': 'bars',
+  'project-list': 'tables',
+  'bucket-chart': 'bars',
+  'live-list': 'tables',
+};
 
 // ── Category icons ────────────────────────────────
 
@@ -424,6 +460,7 @@ export function WidgetCatalog({
 }) {
   const [activeCategory, setActiveCategory] = useState<'all' | WidgetCategory>('all');
   const [showFilter, setShowFilter] = useState<ShowFilter>('all');
+  const [vizFilter, setVizFilter] = useState<VizFamilyFilter>('all');
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [hoveredWidgetId, setHoveredWidgetId] = useState<string | null>(null);
@@ -439,6 +476,7 @@ export function WidgetCatalog({
   if (open && !lastOpen) {
     setActiveCategory('all');
     setShowFilter('all');
+    setVizFilter('all');
     setSearchOpen(false);
     setSearchQuery('');
     setHoveredWidgetId(null);
@@ -454,7 +492,7 @@ export function WidgetCatalog({
   // Reset scroll on filter changes
   useEffect(() => {
     if (listRef.current) listRef.current.scrollTop = 0;
-  }, [activeCategory, searchQuery, showFilter]);
+  }, [activeCategory, searchQuery, showFilter, vizFilter]);
 
   const updateListFade = useCallback(() => {
     const el = listRef.current;
@@ -478,14 +516,26 @@ export function WidgetCatalog({
   const filteredWidgets = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
     return scopedCatalog.filter((w) => {
+      const family = VIZ_FAMILY_BY_TYPE[w.viz];
       if (activeCategory !== 'all' && w.category !== activeCategory) return false;
       if (showFilter === 'active' && !widgetIds.includes(w.id)) return false;
       if (showFilter === 'inactive' && widgetIds.includes(w.id)) return false;
-      if (q && !w.name.toLowerCase().includes(q) && !w.description.toLowerCase().includes(q))
-        return false;
+      if (vizFilter !== 'all' && family !== vizFilter) return false;
+      if (q) {
+        const haystack = [
+          w.name,
+          w.description,
+          VIZ_LABELS[w.viz],
+          VIZ_FAMILY_LABELS[family],
+          w.viz,
+        ]
+          .join(' ')
+          .toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       return true;
     });
-  }, [searchQuery, activeCategory, showFilter, widgetIds, scopedCatalog]);
+  }, [searchQuery, activeCategory, showFilter, vizFilter, widgetIds, scopedCatalog]);
 
   // Category counts (scope-gated so the "usage (12)" count matches what renders)
   const categoryCounts = useMemo(() => {
@@ -505,6 +555,13 @@ export function WidgetCatalog({
     setShowFilter((prev) => {
       const idx = SHOW_CYCLE.indexOf(prev);
       return SHOW_CYCLE[(idx + 1) % SHOW_CYCLE.length];
+    });
+  }, []);
+
+  const cycleVizFilter = useCallback(() => {
+    setVizFilter((prev) => {
+      const idx = VIZ_FAMILY_CYCLE.indexOf(prev);
+      return VIZ_FAMILY_CYCLE[(idx + 1) % VIZ_FAMILY_CYCLE.length];
     });
   }, []);
 
@@ -615,6 +672,11 @@ export function WidgetCatalog({
           cycleShowFilter();
           e.preventDefault();
           break;
+        case 't':
+        case 'T':
+          cycleVizFilter();
+          e.preventDefault();
+          break;
         case 'ArrowLeft':
           cycleCategory(-1);
           e.preventDefault();
@@ -627,7 +689,16 @@ export function WidgetCatalog({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose, resetToDefault, clearAll, searchOpen, cycleShowFilter, cycleCategory]);
+  }, [
+    open,
+    onClose,
+    resetToDefault,
+    clearAll,
+    searchOpen,
+    cycleShowFilter,
+    cycleVizFilter,
+    cycleCategory,
+  ]);
 
   if (!open) return null;
 
@@ -813,6 +884,14 @@ export function WidgetCatalog({
           onClick={cycleShowFilter}
         >
           Show: {SHOW_LABELS[showFilter]} <kbd className={styles.kbd}>Tab</kbd>
+        </button>
+        <span className={styles.stripDivider} />
+        <button
+          type="button"
+          className={clsx(styles.stripAction, vizFilter !== 'all' && styles.stripActionActive)}
+          onClick={cycleVizFilter}
+        >
+          Type: {VIZ_FAMILY_LABELS[vizFilter]} <kbd className={styles.kbd}>T</kbd>
         </button>
         <span className={styles.stripDivider} />
         <button

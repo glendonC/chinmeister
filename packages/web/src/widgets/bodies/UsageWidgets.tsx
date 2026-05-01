@@ -333,7 +333,7 @@ function ProjectsWidget({ summaries, liveAgents }: WidgetBodyProps) {
                 {daily && daily.length >= 2 ? (
                   <Sparkline values={daily} height={20} endDot />
                 ) : (
-                  <span className={projectsStyles.projectsEmpty}>—</span>
+                  <span className={projectsStyles.projectsEmptyNum}>—</span>
                 )}
               </span>
 
@@ -355,11 +355,11 @@ function ProjectsWidget({ summaries, liveAgents }: WidgetBodyProps) {
                     )}
                   </>
                 ) : (
-                  <span className={projectsStyles.projectsEmpty}>—</span>
+                  <span className={projectsStyles.projectsEmptyNum}>—</span>
                 )}
               </span>
 
-              <span className={projectsStyles.projectsViewButton}>Detail</span>
+              <span className={projectsStyles.projectsViewButton}>View</span>
             </button>
           );
         })}

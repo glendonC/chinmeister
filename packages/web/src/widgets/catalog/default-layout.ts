@@ -38,12 +38,10 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'directories', colSpan: 6, rowSpan: 4 },
   { id: 'files', colSpan: 6, rowSpan: 4 },
 
-  // Codebase deep. file-rework drives "open this file, review" directly.
-  // commit-stats has cross-tool coverage from every host with hook
-  // handlers. Full-width matches the airy stat-strip pattern used
-  // elsewhere in the default layout.
+  // Codebase deep. file-rework pairs with the top-files table: both are
+  // file-axis tables and now share the same compact half-width logic.
   { id: 'commit-stats', colSpan: 12, rowSpan: 2 },
-  { id: 'file-rework', colSpan: 12, rowSpan: 4 },
+  { id: 'file-rework', colSpan: 6, rowSpan: 4 },
 
   // Tools & Models. tool-work-type-fit owns the richer routing table.
   // tool-handoffs is the half-width flow read; pair/gap breakdowns live in
@@ -67,11 +65,9 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   // memory_search_results join table.
   { id: 'memory-cross-tool-flow', colSpan: 6, rowSpan: 3 },
 
-  // Projects + stuckness — 8 + 4. The comparator-table redesign doesn't
-  // earn full width, so an 8-col projects tile pairs with stuckness on
-  // the same row. Bottom-row pairing keeps the layout at 12 per row and
-  // avoids leaving empty grid space.
-  { id: 'projects', colSpan: 8, rowSpan: 3 },
+  // Projects + stuckness. Projects is a compact comparator table; it no
+  // longer needs a two-thirds row slot.
+  { id: 'projects', colSpan: 6, rowSpan: 3 },
   { id: 'stuckness', colSpan: 4, rowSpan: 2 },
 ];
 
