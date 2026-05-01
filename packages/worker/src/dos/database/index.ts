@@ -58,6 +58,10 @@ import {
   consumeRateLimit as consumeRateLimitFn,
   checkAndConsume as checkAndConsumeFn,
 } from './rate-limits.js';
+import {
+  issueWsTicket as issueWsTicketFn,
+  consumeWsTicket as consumeWsTicketFn,
+} from './ws-tickets.js';
 import { updateUserMetrics as updateUserMetricsFn } from './user-metrics.js';
 import {
   addUserTeam as addUserTeamFn,
@@ -251,13 +255,28 @@ export class DatabaseDO extends DurableObject<Env> {
    * Atomic check-and-consume: checks the limit and increments in one call.
    * Eliminates the race window between separate check and consume calls.
    * Use for public/unauthenticated endpoints where every request should count.
+   * `cost` lets a single call charge for N events at once (e.g. batch
+   * uploads); the call is rejected when count + cost exceeds maxPerWindow.
    */
   async checkAndConsume(
     key: string,
     maxPerWindow = 3,
+    cost = 1,
   ): Promise<{ ok: true; allowed: boolean; count: number }> {
     this.#ensureSchema();
-    return checkAndConsumeFn(this.sql, key, maxPerWindow);
+    return checkAndConsumeFn(this.sql, key, maxPerWindow, cost);
+  }
+
+  // -- WebSocket tickets (single-use, stored in DO SQL for atomic consume) --
+
+  async issueWsTicket(ticket: string, userId: string): Promise<{ ok: true }> {
+    this.#ensureSchema();
+    return issueWsTicketFn(this.sql, ticket, userId);
+  }
+
+  async consumeWsTicket(ticket: string): Promise<{ ok: true; user_id: string | null }> {
+    this.#ensureSchema();
+    return consumeWsTicketFn(this.sql, ticket);
   }
 
   // -- Stats --

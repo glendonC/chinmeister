@@ -110,6 +110,22 @@ export const RATE_LIMIT_ACCOUNTS_PER_IP = 3;
 export const RATE_LIMIT_EVALUATIONS = 5;
 export const RATE_LIMIT_SUGGESTIONS = 5;
 export const RATE_LIMIT_WS_TICKETS = 100;
+// Conversation events charge per-event (not per-request) so high-throughput
+// spammers cannot bypass the limit by batching 500 events into a few calls.
+// 50000/day comfortably covers an active developer session (Claude Code
+// emits one event per user/assistant turn).
+export const RATE_LIMIT_CONVERSATION_EVENTS = 50000;
+// Per-team daily ceiling on Workers AI sentiment/topic classifications.
+// Caps AI spend on a single runaway long session: events past the limit
+// still ingest but skip classification and store sentiment/topic as null.
+export const RATE_LIMIT_CONVERSATION_CLASSIFICATIONS = 500;
+// Account-wide daily ceiling on Workers AI sentiment/topic classifications.
+// Bounds the worst-case AI line item across the whole deployment so a viral
+// spike (thousands of teams hitting per-team caps simultaneously) cannot
+// surprise the bill. Far above the natural ceiling implied by the per-team
+// cap, so it only fires under unusual load. Drop it (or flip
+// CLASSIFICATION_ENABLED=false) if costs spike before a billing model lands.
+export const RATE_LIMIT_CONVERSATION_CLASSIFICATIONS_GLOBAL = 1_000_000;
 
 // --- Authenticated read-endpoint rate limits (per user per 24h window) ---
 // Read endpoints that fan out across all of a user's teams (or run heavy

@@ -24,8 +24,10 @@ const CACHE_HEADERS = {
 };
 
 function todayStr(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  // UTC: session.started_at is stored via SQL datetime('now'), which is UTC.
+  // Defaulting from local time slips a day near midnight in non-UTC locales
+  // and silently drops freshly inserted sessions from the response.
+  return new Date().toISOString().slice(0, 10);
 }
 
 // Filter param shape. host_tool ids are alnum + hyphen, capped at 64 so we

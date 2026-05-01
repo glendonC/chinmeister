@@ -309,6 +309,17 @@ export interface AgentMessage {
 // ── Team context ──
 
 /**
+ * Caller-aware coordination hint surfaced by getContext. Hints are advisory:
+ * they describe a cheap-to-derive observation and the MCP tool the calling
+ * agent could use to act on it. Vendor-neutral by construction.
+ */
+export interface TeamContextHint {
+  kind: string;
+  message: string;
+  suggested_tool?: string;
+}
+
+/**
  * Full team context as returned by queryTeamContext.
  * Memories and locks in this response use backward-compatible SQL aliases
  * (see Memory and ContextLockEntry docs). Messages are NOT included here --
@@ -329,6 +340,8 @@ export interface TeamContext {
   surfaces_seen: Array<{ agent_surface: string; joins: number }>;
   models_seen: Array<{ agent_model: string; count: number }>;
   usage: Record<string, number>;
+  /** Caller-aware advisory hints. Capped at 3. Optional for backward compat. */
+  hints?: TeamContextHint[];
 }
 
 export interface ActiveMemberSummary {
@@ -441,10 +454,16 @@ export interface Env {
   ENVIRONMENT: string;
   DASHBOARD_URL: string;
   MODERATION_MODE?: string;
+  /** Kill-switch for conversation sentiment/topic classification.
+   *  Treated as enabled when unset; set to "false" to skip Workers AI calls
+   *  without redeploying. Events still ingest with null sentiment/topic. */
+  CLASSIFICATION_ENABLED?: string;
   GITHUB_CLIENT_ID?: string;
   GITHUB_CLIENT_SECRET?: string;
   ADMIN_KEY?: string;
   GITHUB_TOKEN?: string;
+  /** Comma-separated additional CORS origins. Merged with built-in defaults. */
+  CORS_ALLOWED_ORIGINS?: string;
 }
 
 // ── Parsed request body (from parseBody) ──

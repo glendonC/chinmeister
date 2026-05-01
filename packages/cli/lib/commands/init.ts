@@ -215,16 +215,23 @@ export async function runInit(): Promise<void> {
 
   // Next steps
   console.log('');
+  console.log(`  ${chalk.green.bold('chinmeister is ready.')}`);
+  console.log('');
   if (configured.length > 0) {
     console.log(`  ${dim('Open or restart your tools to activate chinmeister:')}`);
     for (const { name } of configured) {
       console.log(`    ${bullet} ${name}`);
     }
     console.log('');
+  } else if (detected.length === 0) {
+    console.log(
+      `  ${dim('Connect a tool: open Claude Code, Cursor, Windsurf, etc. in this directory.')}`,
+    );
+    console.log('');
   }
-  console.log(`  ${chalk.cyan('npx chinmeister')}           ${dim('open the dashboard')}`);
-  console.log(`  ${chalk.cyan('npx chinmeister add')}       ${dim('add more tools')}`);
-  console.log(`  ${chalk.cyan('npx chinmeister doctor')}    ${dim('scan integration health')}`);
+  console.log(`  ${dim('Open the dashboard:')}      ${chalk.cyan('npx chinmeister')}`);
+  console.log(`  ${dim('Add more tools:')}          ${chalk.cyan('npx chinmeister add')}`);
+  console.log(`  ${dim('Scan integration health:')} ${chalk.cyan('npx chinmeister doctor')}`);
   console.log('');
   console.log(`  ${dim('Commit')} ${chalk.cyan('.chinmeister')} ${dim('so teammates auto-join.')}`);
   console.log('');

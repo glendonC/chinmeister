@@ -2,6 +2,7 @@
 
 import * as z from 'zod/v4';
 import { withTimeout } from '../utils/responses.js';
+import { sanitizeText } from '../utils/sanitize-text.js';
 import { MAX_MESSAGE_LENGTH, MESSAGE_TARGET_MAX_LENGTH, API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
@@ -32,7 +33,14 @@ export function registerMessagingTool(
     withTeam(
       deps,
       async (args) => {
-        const { text, target } = args as SendMessageArgs;
+        const { text: rawText, target } = args as SendMessageArgs;
+        const text = sanitizeText(rawText, MAX_MESSAGE_LENGTH);
+        if (!text) {
+          return {
+            content: [{ type: 'text' as const, text: 'Message text is empty after sanitization.' }],
+            isError: true,
+          };
+        }
         await withTimeout(team.sendMessage(state.teamId!, text, target), API_TIMEOUT_MS);
         const dest = target ? `to ${target}` : 'to team';
         return {

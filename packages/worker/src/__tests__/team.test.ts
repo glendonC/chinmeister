@@ -652,3 +652,46 @@ describe('Lock release - edge cases', () => {
     expect(claim.blocked).toHaveLength(0);
   });
 });
+
+// --- Context hints ---
+
+describe('Context hints', () => {
+  const team = () => getTeam('context-hints-tests');
+  const me = 'cursor:hint-me';
+  const peer = 'claude:hint-peer';
+  const myOwner = 'user-hint-me';
+  const peerOwner = 'user-hint-peer';
+
+  it('surfaces recent_peer_memories hint when another agent saved memory in last hour, and excludes caller s own memories', async () => {
+    await team().join(me, myOwner, 'alice', 'cursor');
+    await team().join(peer, peerOwner, 'bob', 'claude');
+
+    const myOwn = await team().saveMemory(
+      me,
+      'My own recent note about the caching layer',
+      ['cache'],
+      null,
+      'alice',
+      myOwner,
+    );
+    expect(myOwn.ok).toBe(true);
+
+    const peerSave = await team().saveMemory(
+      peer,
+      'Refactored auth flow to use shared session helper',
+      ['auth'],
+      null,
+      'bob',
+      peerOwner,
+    );
+    expect(peerSave.ok).toBe(true);
+
+    const ctx = await team().getContext(me, myOwner);
+    expect(ctx.error).toBeUndefined();
+    expect(Array.isArray(ctx.hints)).toBe(true);
+    const peerHint = ctx.hints.find((h) => h.kind === 'recent_peer_memories');
+    expect(peerHint).toBeDefined();
+    expect(peerHint.suggested_tool).toBe('chinmeister_search_memory');
+    expect(peerHint.message).toContain('bob');
+  });
+});

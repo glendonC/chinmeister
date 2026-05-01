@@ -52,6 +52,7 @@ export async function rpcStartSession(
     ownerId,
     (resolved) => startSessionFn(ctx.sql, resolved, handle, framework, runtime, ctx.transact),
     {
+      broadcast: (r) => ({ type: 'session_started', session_id: r.session_id }),
       metric: () => 'sessions_started',
     },
   );
@@ -67,10 +68,18 @@ export async function rpcEndSession(
   | DOError
 > {
   return ctx.op(agentId, ownerId, (resolved) => endSessionFn(ctx.sql, resolved, sessionId), {
+    broadcast: (r) => ({
+      type: 'session_ended',
+      session_id: sessionId,
+      outcome: r.outcome ?? null,
+    }),
     metric: (r) => (r.outcome ? `outcome:${r.outcome}` : null),
   });
 }
 
+// reason: high-throughput edit stream (10s/min during active sessions). The
+// 5s cache TTL absorbs the staleness; invalidating here would churn the
+// cache continuously and starve concurrent reads of the cache benefit.
 export async function rpcRecordEdit(
   ctx: RpcCtx,
   agentId: string,
@@ -92,8 +101,13 @@ export async function rpcReportOutcome(
   ownerId: string | null = null,
   outcomeTags?: string[] | null,
 ): Promise<DOResult<{ ok: true }> | DOError> {
-  return ctx.withMember(agentId, ownerId, (resolved) =>
-    reportOutcomeFn(ctx.sql, resolved, outcome, summary, outcomeTags),
+  return ctx.op(
+    agentId,
+    ownerId,
+    (resolved) => reportOutcomeFn(ctx.sql, resolved, outcome, summary, outcomeTags),
+    {
+      broadcast: () => ({ type: 'outcome_reported', outcome }),
+    },
   );
 }
 
@@ -163,11 +177,20 @@ export async function rpcEnrichModel(
   model: string,
   ownerId: string | null = null,
 ): Promise<{ ok: true } | DOError> {
-  return ctx.withMember(agentId, ownerId, (resolved) =>
-    enrichSessionModelFn(ctx.sql, resolved, model, ctx.boundRecordMetric, ctx.transact),
+  return ctx.op(
+    agentId,
+    ownerId,
+    (resolved) =>
+      enrichSessionModelFn(ctx.sql, resolved, model, ctx.boundRecordMetric, ctx.transact),
+    {
+      broadcast: (_r, resolved) => ({ type: 'session_enriched', agent_id: resolved, model }),
+    },
   );
 }
 
+// reason: high-throughput append-only token usage stream; not surfaced in
+// queryTeamContext (only recentSessions counters are), so cache staleness
+// is irrelevant.
 export async function rpcRecordTokenUsage(
   ctx: RpcCtx,
   agentId: string,
@@ -191,6 +214,8 @@ export async function rpcRecordTokenUsage(
   );
 }
 
+// reason: high-throughput append-only tool-call stream; not consumed by
+// queryTeamContext.
 export async function rpcRecordToolCalls(
   ctx: RpcCtx,
   agentId: string,
@@ -205,6 +230,8 @@ export async function rpcRecordToolCalls(
   );
 }
 
+// reason: high-throughput append-only commit stream; not consumed by
+// queryTeamContext.
 export async function rpcRecordCommits(
   ctx: RpcCtx,
   agentId: string,

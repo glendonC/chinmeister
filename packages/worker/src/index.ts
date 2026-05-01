@@ -26,13 +26,34 @@ export {
 } from './lib/request-utils.js';
 
 // --- CORS ---
+//
+// Allowlist is env-driven. CORS_ALLOWED_ORIGINS (comma-separated) overrides
+// the built-in defaults. Built-ins cover production hosts plus any loopback
+// origin so contributor dev servers (Vite, wrangler dev) work without extra
+// configuration. Unknown origins receive no Access-Control-Allow-Origin
+// header at all; we never echo the wildcard.
 
-const PROD_ORIGINS = new Set(['https://chinmeister.com', 'https://www.chinmeister.com']);
-const DEV_ORIGINS = new Set([
-  'http://localhost:8788',
+const DEFAULT_ALLOWED_ORIGINS = new Set([
+  'https://chinmeister.com',
+  'https://www.chinmeister.com',
+  'http://localhost:5173',
   'http://localhost:3000',
-  'http://127.0.0.1:8788',
+  'http://localhost:8788',
 ]);
+
+const ALLOWED_METHODS = 'GET, POST, PUT, DELETE, OPTIONS';
+const ALLOWED_HEADERS =
+  'Content-Type, Authorization, X-Agent-Id, X-Agent-Host-Tool, X-Agent-Surface, X-Agent-Transport, X-Agent-Tier';
+
+function parseAllowedOrigins(raw: string | undefined): Set<string> {
+  if (!raw) return DEFAULT_ALLOWED_ORIGINS;
+  const merged = new Set(DEFAULT_ALLOWED_ORIGINS);
+  for (const item of raw.split(',')) {
+    const trimmed = item.trim();
+    if (trimmed) merged.add(trimmed);
+  }
+  return merged;
+}
 
 function isLoopbackOrigin(origin: string): boolean {
   try {
@@ -48,24 +69,40 @@ function isLoopbackOrigin(origin: string): boolean {
   }
 }
 
-function getAllowedOrigin(origin: string, environment: string): string {
-  if (!origin) return 'https://chinmeister.com';
-  if (PROD_ORIGINS.has(origin)) return origin;
-  if (environment !== 'production' && DEV_ORIGINS.has(origin)) return origin;
-  if (isLoopbackOrigin(origin)) return origin;
-  return '';
+/**
+ * Resolve the origin to echo back. Returns the request origin only when it
+ * matches the allowlist (prod hosts, configured extras, or any loopback host
+ * in non-production). Returns null when no origin should be echoed.
+ */
+function getAllowedOrigin(origin: string, env: Env): string | null {
+  if (!origin) return null;
+  const allowed = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
+  if (allowed.has(origin)) return origin;
+  if (env.ENVIRONMENT !== 'production' && isLoopbackOrigin(origin)) return origin;
+  return null;
+}
+
+function corsHeadersFor(origin: string, env: Env): Record<string, string> {
+  const allowed = getAllowedOrigin(origin, env);
+  const headers: Record<string, string> = {
+    'Access-Control-Allow-Methods': ALLOWED_METHODS,
+    'Access-Control-Allow-Headers': ALLOWED_HEADERS,
+    Vary: 'Origin',
+  };
+  if (allowed) headers['Access-Control-Allow-Origin'] = allowed;
+  return headers;
 }
 
 /**
  * Validate Origin header for WebSocket upgrades.
  * Browsers always send Origin on WS handshakes. Non-browser clients
- * (MCP servers, CLI) may omit it - that's fine, they're not subject
+ * (MCP servers, CLI) may omit it; that's fine, they're not subject
  * to same-origin policy. We reject only when Origin IS present but
  * does not match our allowlist, which blocks cross-site WS hijacking.
  */
-function isWebSocketOriginAllowed(origin: string, environment: string): boolean {
+function isWebSocketOriginAllowed(origin: string, env: Env): boolean {
   if (!origin) return true; // non-browser client - no Origin header
-  return getAllowedOrigin(origin, environment) !== '';
+  return getAllowedOrigin(origin, env) !== null;
 }
 
 // --- Route table ---
@@ -130,13 +167,7 @@ export default {
     const log = createLogger('router');
 
     const origin = request.headers.get('Origin') || '';
-    const corsHeaders: Record<string, string> = {
-      'Access-Control-Allow-Origin': getAllowedOrigin(origin, env.ENVIRONMENT),
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers':
-        'Content-Type, Authorization, X-Agent-Id, X-Agent-Host-Tool, X-Agent-Surface, X-Agent-Transport, X-Agent-Tier',
-      Vary: 'Origin',
-    };
+    const corsHeaders = corsHeadersFor(origin, env);
 
     if (method === 'OPTIONS') {
       return new Response(null, { headers: corsHeaders });
@@ -161,7 +192,7 @@ export default {
 
       // Validate Origin for WebSocket upgrades - reject cross-site hijacking
       if (isWebSocketRoute(path)) {
-        if (!isWebSocketOriginAllowed(origin, env.ENVIRONMENT)) {
+        if (!isWebSocketOriginAllowed(origin, env)) {
           return json({ error: 'Origin not allowed' }, 403, corsHeaders);
         }
       }
@@ -179,14 +210,22 @@ export default {
       }
       return new Response(response.body, { status: response.status, headers });
     } catch (err: unknown) {
-      log.error('request failed', {
+      // In production, omit raw stack from operator logs to avoid leaking
+      // implementation details if logs are exported. Dev / staging keep the
+      // full stack for debugging.
+      const isProd = env.ENVIRONMENT === 'production';
+      const errorPayload: Record<string, unknown> = {
         ref,
         method,
         path,
         status: 500,
         error: getErrorMessage(err),
-        stack: err instanceof Error ? err.stack : undefined,
-      });
+      };
+      if (err instanceof Error) {
+        errorPayload.name = err.name;
+        if (!isProd) errorPayload.stack = err.stack;
+      }
+      log.error('request failed', errorPayload);
       return json({ error: `Internal server error (ref: ${ref})` }, 500, corsHeaders);
     }
   },

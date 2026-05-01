@@ -103,10 +103,11 @@ export async function withRateLimit(
   max: number,
   errorMsg: string,
   handler: () => Promise<Response>,
+  cost = 1,
 ): Promise<Response> {
   let result: { allowed: boolean };
   try {
-    result = rpc(await db.checkAndConsume(key, max));
+    result = rpc(await db.checkAndConsume(key, max, cost));
   } catch (err) {
     log.error('rate limit check-and-consume failed', {
       key,

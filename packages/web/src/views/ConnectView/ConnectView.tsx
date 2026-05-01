@@ -18,6 +18,7 @@ const GITHUB_ERROR_MAP: Record<string, string> = {
 
 interface Props {
   error?: string | null;
+  notice?: string | null;
 }
 
 function friendlyGithubError(code: string): string {
@@ -37,7 +38,7 @@ function friendlyError(msg: string | null | undefined, tokenCommand: string): st
   return msg || 'Something went wrong. Try again.';
 }
 
-export default function ConnectView({ error: initialError = null }: Props) {
+export default function ConnectView({ error: initialError = null, notice = null }: Props) {
   const runtime = getRuntimeTargets();
   const isLocalProfile = runtime.profile === 'local';
   const dashboardCommand = isLocalProfile
@@ -123,6 +124,12 @@ export default function ConnectView({ error: initialError = null }: Props) {
                 ? 'Local profile: isolated auth, local worker, no production data.'
                 : 'Production profile: connects to the live chinmeister service.'}
             </p>
+
+            {notice && (
+              <p className={styles.sessionNotice} role="status">
+                {notice}
+              </p>
+            )}
 
             <a className={styles.githubButton} href={`${getApiUrl()}/auth/github`}>
               <svg

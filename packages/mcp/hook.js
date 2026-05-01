@@ -273,13 +273,20 @@ async function reportCommit(team, teamId, input) {
 }
 
 async function sessionStart(team, teamId, hasExactSession) {
-  try {
-    // Avoid creating duplicate base-ID memberships when the exact MCP session
-    // has not registered its per-process agent id yet.
-    if (hasExactSession) {
+  // Avoid creating duplicate base-ID memberships when the exact MCP session
+  // has not registered its per-process agent id yet.
+  if (hasExactSession) {
+    try {
       await team.joinTeam(teamId, basename(process.cwd()));
+    } catch (err) {
+      reportJoinFailure(teamId, err);
+      // Still exit 0: do not block the user's session even when join fails.
+      process.exit(0);
+      return;
     }
+  }
 
+  try {
     const ctx = await team.getTeamContext(teamId);
 
     if (ctx.members && ctx.members.length > 0) {
@@ -295,6 +302,27 @@ async function sessionStart(team, teamId, hasExactSession) {
   }
 
   process.exit(0);
+}
+
+// Map a join failure to an actionable hint for the developer. Visibility
+// matters: silent exits leave coordination off without warning, so the user
+// keeps editing while other agents have no idea this session is alive.
+function reportJoinFailure(teamId, err) {
+  const message = err?.message || String(err);
+  const status = err?.status;
+  let hint;
+  if (status === 401 || /unauthor|token|auth/i.test(message)) {
+    hint =
+      'Auth looks expired or invalid. Run `chinmeister token` to refresh, then restart your editor.';
+  } else if (status === 403 || status === 404 || /team|membership|not found/i.test(message)) {
+    hint = `Team "${teamId}" is unreachable or you are not a member. Run \`chinmeister init\` in this project to rejoin.`;
+  } else {
+    hint = 'Run `chinmeister doctor` to diagnose the connection.';
+  }
+  process.stderr.write(
+    `chinmeister: failed to join team "${teamId}" (${message}). ` +
+      `Coordination is OFF for this session - other agents will not see you. ${hint}\n`,
+  );
 }
 
 // --- Helpers ---

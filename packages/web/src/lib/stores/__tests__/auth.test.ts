@@ -24,6 +24,10 @@ async function loadAuthModule({ apiMock = vi.fn(), hash = '' } = {}) {
     location: {
       hash,
       pathname: '/dashboard',
+      // The auth store refuses to read or write the token unless the page
+      // is on https or a local development host. localhost satisfies that.
+      protocol: 'http:',
+      hostname: 'localhost',
     },
     history: {
       replaceState: vi.fn(),

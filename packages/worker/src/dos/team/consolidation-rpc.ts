@@ -37,11 +37,22 @@ export async function rpcApplyConsolidationProposal(
   reviewerHandle: string,
   ownerId: string | null = null,
 ): Promise<ReturnType<typeof applyConsolidationProposalFn> | DOError> {
-  return ctx.withMember(agentId, ownerId, () =>
-    applyConsolidationProposalFn(ctx.sql, proposalId, reviewerHandle),
+  return ctx.op(
+    agentId,
+    ownerId,
+    () => applyConsolidationProposalFn(ctx.sql, proposalId, reviewerHandle),
+    {
+      broadcast: (r) => ({
+        type: 'consolidation_applied',
+        proposal_id: proposalId,
+        kind: r.kind,
+      }),
+    },
   );
 }
 
+// reason: rejecting a proposal touches only the consolidation_proposals
+// table, which is not surfaced in queryTeamContext. No cache bust needed.
 export async function rpcRejectConsolidationProposal(
   ctx: RpcCtx,
   agentId: string,
@@ -60,5 +71,7 @@ export async function rpcUnmergeMemory(
   memoryId: string,
   ownerId: string | null = null,
 ): Promise<ReturnType<typeof unmergeMemoryFn> | DOError> {
-  return ctx.withMember(agentId, ownerId, () => unmergeMemoryFn(ctx.sql, memoryId));
+  return ctx.op(agentId, ownerId, () => unmergeMemoryFn(ctx.sql, memoryId), {
+    broadcast: () => ({ type: 'memory_unmerged', memory_id: memoryId }),
+  });
 }

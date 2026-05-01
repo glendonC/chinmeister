@@ -30,11 +30,20 @@ enabled = true
 ENVIRONMENT = "production"
 DASHBOARD_URL = "https://chinmeister.com"
 MODERATION_MODE = "strict"
+# Kill-switch for conversation sentiment/topic classification. Set to "false"
+# to skip Workers AI calls without a redeploy if the classifier regresses.
+# Events still ingest with null sentiment/topic.
+CLASSIFICATION_ENABLED = "true"
+# Optional comma-separated additional CORS origins. Merged with the built-in
+# allowlist (chinmeister.com, www.chinmeister.com, common loopback ports).
+# Override here to onboard a new public client without a code deploy.
+# CORS_ALLOWED_ORIGINS = "https://app.example.com,https://staging.example.com"
 
 [env.local.vars]
 ENVIRONMENT = "local"
 DASHBOARD_URL = "http://localhost:56790"
 MODERATION_MODE = "local_safe"
+CLASSIFICATION_ENABLED = "true"
 
 # No [env.local.ai] binding on purpose. Workers AI has no local simulator,
 # so declaring it here forces every contributor through Cloudflare OAuth

@@ -338,6 +338,23 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    name: '010_ws_tickets',
+    up(sql) {
+      // Single-use WebSocket tickets. Storing them in the DO's SQL gives
+      // atomic consumption (DELETE ... RETURNING under the DO's single
+      // writer), closing the get-then-delete TOCTOU window the previous
+      // KV-backed flow left open.
+      sql.exec(`
+        CREATE TABLE IF NOT EXISTS ws_tickets (
+          ticket TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_ws_tickets_created_at ON ws_tickets(created_at);
+      `);
+    },
+  },
 ];
 
 export function ensureSchema(sql: SqlStorage, transact: <T>(fn: () => T) => T): void {

@@ -186,6 +186,22 @@ export function setupShutdownHandlers({
   process.on('disconnect', cleanup);
   process.stdin.on('end', cleanup);
   process.stdin.on('close', cleanup);
+  // Crash paths: try to flush telemetry before the process dies. cleanup is
+  // idempotent and time-boxed by FORCE_EXIT_TIMEOUT_MS, so this is safe even
+  // if the underlying error left the runtime in a bad state.
+  process.on('uncaughtException', (err) => {
+    log.error(
+      'uncaughtException: ' + (err instanceof Error ? err.stack || err.message : String(err)),
+    );
+    cleanup();
+  });
+  process.on('unhandledRejection', (reason) => {
+    log.error(
+      'unhandledRejection: ' +
+        (reason instanceof Error ? reason.stack || reason.message : String(reason)),
+    );
+    cleanup();
+  });
 
   // Watch for parent process exit (orphan detection)
   const parentPid = process.ppid;
@@ -256,13 +272,7 @@ export async function cleanupProcessSession(
     }
 
   if (state.sessionId && state.teamId) {
-    if (state.toolCalls.length > 0) {
-      await team
-        .recordToolCalls(state.teamId, state.sessionId, state.toolCalls)
-        .catch((err: Error) => {
-          log.error('Failed to flush tool calls: ' + err.message);
-        });
-    }
+    await flushToolCalls(team, state);
     await team.endSession(state.teamId, state.sessionId).catch((err: Error) => {
       log.error('Failed to end session: ' + err.message);
     });
@@ -271,5 +281,44 @@ export async function cleanupProcessSession(
     await team.leaveTeam(state.teamId).catch((err: Error) => {
       log.error('Failed to leave team: ' + err.message);
     });
+  }
+}
+
+// Largest single batch the worker route accepts comfortably; anything beyond
+// gets chunked. The current /tool-calls handler validates the array shape but
+// does not advertise a documented limit, so chunking conservatively keeps the
+// request body small enough to ride out slow links during shutdown.
+const TOOL_CALL_FLUSH_CHUNK = 200;
+
+// TODO: a dedicated batch endpoint that takes { session_id, calls[] } in one
+// hit and returns counts would let us skip the loop entirely. For now we use
+// recordToolCalls (which already accepts an array) and chunk locally.
+
+/**
+ * Best-effort flush of accumulated tool calls to the backend.
+ *
+ * Always clears `state.toolCalls` after attempting the flush so a re-entrant
+ * shutdown (signal arrives twice, parent-watch races SIGTERM, etc.) does not
+ * resend the same batch. Swallows all errors: shutdown must not be blocked
+ * by a slow or unreachable backend, and the force-exit timeout in
+ * `setupShutdownHandlers` will tear the process down regardless.
+ */
+async function flushToolCalls(team: TeamHandlers, state: McpState): Promise<void> {
+  if (!state.sessionId || !state.teamId) return;
+  const buffered = state.toolCalls;
+  if (!buffered || buffered.length === 0) return;
+  // Snapshot and clear up-front so a duplicate cleanup pass cannot resend.
+  state.toolCalls = [];
+
+  for (let i = 0; i < buffered.length; i += TOOL_CALL_FLUSH_CHUNK) {
+    const chunk = buffered.slice(i, i + TOOL_CALL_FLUSH_CHUNK);
+    try {
+      await team.recordToolCalls(state.teamId, state.sessionId, chunk);
+    } catch (err: unknown) {
+      log.error('Failed to flush tool calls: ' + getErrorMessage(err));
+      // Stop on the first failure: subsequent chunks are likely to fail for the
+      // same reason, and shutdown is time-boxed by FORCE_EXIT_TIMEOUT_MS.
+      return;
+    }
   }
 }

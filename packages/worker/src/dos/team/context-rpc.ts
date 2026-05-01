@@ -6,7 +6,7 @@
 // owner-scoped variant for cross-project dashboards.
 
 import type { DOError } from '../../types.js';
-import { queryTeamContext, queryTeamSummary } from './context.js';
+import { queryTeamContext, queryTeamSummary, computeContextHints } from './context.js';
 import type { RpcCtx } from './rpc-ctx.js';
 
 export async function rpcGetContext(
@@ -39,10 +39,14 @@ export async function rpcGetContext(
       available_tools: ctx.getAvailableSpawnTools(),
     };
 
+    // Caller-aware advisory hints. Computed outside the team-wide cache because
+    // the "peer = not me" filter is per-caller. Single indexed query, capped.
+    const hints = computeContextHints(ctx.sql, resolved);
+
     // Return cached team-wide context if fresh
     const cached = ctx.contextCache.get();
     if (cached) {
-      return { ...cached, messages, daemon };
+      return { ...cached, messages, daemon, hints };
     }
 
     ctx.maybeCleanup();
@@ -52,7 +56,7 @@ export async function rpcGetContext(
 
     ctx.contextCache.set(teamContext);
 
-    return { ...teamContext, messages, daemon };
+    return { ...teamContext, messages, daemon, hints };
   });
 }
 

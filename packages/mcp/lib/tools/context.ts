@@ -5,7 +5,12 @@ import { refreshContext, offlinePrefix } from '../context.js';
 import { createLogger } from '../utils/logger.js';
 import { getErrorMessage, safeArray, withTimeout } from '../utils/responses.js';
 import { formatToolTag, formatWho, type TeamMember } from '../utils/formatting.js';
-import type { LockContextInfo, MessageInfo, MemoryInfo } from '../utils/display.js';
+import type {
+  LockContextInfo,
+  MessageInfo,
+  MemoryInfo,
+  TeamContextHint,
+} from '../utils/display.js';
 import { MAX_MODEL_LENGTH, API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
@@ -94,6 +99,7 @@ export function registerContextTool(
         const locks = safeArray<LockContextInfo>(ctx, 'locks');
         const messages = safeArray<MessageInfo>(ctx, 'messages');
         const memories = safeArray<MemoryInfo>(ctx, 'memories');
+        const hints = safeArray<TeamContextHint>(ctx, 'hints');
 
         if (members.length === 0) {
           lines.push('No other agents connected.');
@@ -132,6 +138,15 @@ export function registerContextTool(
           for (const mem of memories) {
             const tagStr = mem.tags?.length ? ` [${mem.tags.join(', ')}]` : '';
             lines.push(`  ${mem.text}${tagStr}`);
+          }
+        }
+
+        if (hints.length > 0) {
+          lines.push('');
+          lines.push('Hints:');
+          for (const h of hints) {
+            const tool = h.suggested_tool ? ` (try ${h.suggested_tool})` : '';
+            lines.push(`  ${h.message}${tool}`);
           }
         }
 

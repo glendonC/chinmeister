@@ -12,6 +12,7 @@ async function loadPollingModule({
   ensureJoinedMock = vi.fn(),
   loadTeamsMock = vi.fn(),
   logoutMock = vi.fn(),
+  expireSessionMock = vi.fn(),
   withDocument = false,
 } = {}) {
   vi.resetModules();
@@ -35,6 +36,7 @@ async function loadPollingModule({
     authActions: {
       getState: () => ({ token }),
       logout: logoutMock,
+      expireSession: expireSessionMock,
       subscribe: vi.fn(),
     },
   }));
@@ -52,7 +54,15 @@ async function loadPollingModule({
   }));
 
   const mod = await import('../polling.js');
-  return { ...mod, apiMock, ensureJoinedMock, loadTeamsMock, logoutMock, listeners };
+  return {
+    ...mod,
+    apiMock,
+    ensureJoinedMock,
+    loadTeamsMock,
+    logoutMock,
+    expireSessionMock,
+    listeners,
+  };
 }
 
 afterEach(() => {
@@ -198,16 +208,16 @@ describe('polling store', () => {
       expect(pollingActions.getState().pollError).toBe('HTTP 500 (server error)');
     });
 
-    it('logs out on 401 responses', async () => {
+    it('expires the session on 401 responses', async () => {
       const err = Object.assign(new Error('Unauthorized'), { status: 401 });
       const apiMock = vi.fn().mockRejectedValue(err);
-      const logoutMock = vi.fn();
-      const { forceRefresh } = await loadPollingModule({ apiMock, logoutMock });
+      const expireSessionMock = vi.fn();
+      const { forceRefresh } = await loadPollingModule({ apiMock, expireSessionMock });
 
       forceRefresh();
       await flushPromises();
 
-      expect(logoutMock).toHaveBeenCalledTimes(1);
+      expect(expireSessionMock).toHaveBeenCalledTimes(1);
     });
 
     it('formats string errors directly', async () => {

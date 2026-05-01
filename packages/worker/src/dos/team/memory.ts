@@ -708,10 +708,7 @@ export function updateMemory(
   text: string | undefined,
   tags: string[] | undefined,
 ): DOResult<{ ok: true }> {
-  const existing = sql.exec('SELECT id FROM memories WHERE id = ?', memoryId).toArray();
-  if (existing.length === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
-
-  // Any team member can update -- memories are team knowledge
+  // Any team member can update: memories are team knowledge.
   const sets: string[] = [];
   const params: unknown[] = [];
   if (text !== undefined) {
@@ -726,6 +723,7 @@ export function updateMemory(
   params.push(memoryId);
 
   sql.exec(`UPDATE memories SET ${sets.join(', ')} WHERE id = ?`, ...params);
+  if (sqlChanges(sql) === 0) return { error: 'Memory not found', code: 'NOT_FOUND' };
   return { ok: true };
 }
 

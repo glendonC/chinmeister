@@ -282,6 +282,9 @@ export function useDashboardConnection({
 
       try {
         const ws = new WebSocket(wsUrl);
+        // Capture this WS instance so handlers can ignore stale events from
+        // a prior connect() cycle that fires after wsRef has moved on.
+        wsRef.current = ws;
 
         // Timeout: if still CONNECTING after 10s, close and fall back to polling
         wsConnectTimeout = timers.setTimeout(() => {
@@ -296,7 +299,7 @@ export function useDashboardConnection({
             timers.clearTimeout(wsConnectTimeout);
             wsConnectTimeout = null;
           }
-          if (destroyedRef.current) {
+          if (destroyedRef.current || wsRef.current !== ws) {
             ws.close();
             return;
           }
@@ -315,7 +318,7 @@ export function useDashboardConnection({
         };
 
         ws.onmessage = (evt: MessageEvent): void => {
-          if (destroyedRef.current) return;
+          if (destroyedRef.current || wsRef.current !== ws) return;
           try {
             const event = JSON.parse(typeof evt.data === 'string' ? evt.data : evt.data.toString());
             if (event.type === 'context') {
@@ -329,7 +332,7 @@ export function useDashboardConnection({
         };
 
         ws.onclose = (): void => {
-          if (destroyedRef.current) return;
+          if (destroyedRef.current || wsRef.current !== ws) return;
           wsRef.current = null;
           if (reconcileInterval) {
             timers.clearInterval(reconcileInterval);
@@ -341,8 +344,6 @@ export function useDashboardConnection({
         ws.onerror = (): void => {
           /* onclose fires after onerror */
         };
-
-        wsRef.current = ws;
       } catch (err: unknown) {
         log.error(formatError(err));
         startPolling();
@@ -354,13 +355,20 @@ export function useDashboardConnection({
     return () => {
       destroyedRef.current = true;
       timers.clearAll();
-      if (wsRef.current) {
+      const ws = wsRef.current;
+      wsRef.current = null;
+      if (ws) {
+        // Drop handlers first so any in-flight events from this WS don't
+        // touch React state after unmount, then close explicitly.
+        ws.onopen = null;
+        ws.onmessage = null;
+        ws.onclose = null;
+        ws.onerror = null;
         try {
-          wsRef.current.close();
+          ws.close();
         } catch (err: unknown) {
           log.error(formatError(err));
         }
-        wsRef.current = null;
       }
     };
   }, [teamId, teamName, refreshKey, config, timers]);

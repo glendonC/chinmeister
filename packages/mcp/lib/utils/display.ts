@@ -31,6 +31,12 @@ export interface MemoryInfo {
   handle?: string;
 }
 
+export interface TeamContextHint {
+  kind: string;
+  message: string;
+  suggested_tool?: string;
+}
+
 export interface TeamContext {
   members?: TeamMember[];
   locks?: LockContextInfo[];
@@ -39,6 +45,7 @@ export interface TeamContext {
   tools_configured?: string[];
   usage?: Record<string, unknown>;
   recentSessions?: SessionInfo[];
+  hints?: TeamContextHint[];
 }
 
 export interface MessageInfo {

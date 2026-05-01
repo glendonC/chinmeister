@@ -24,8 +24,13 @@ export async function rpcCreateCategory(
   embedding: ArrayBuffer | null = null,
   ownerId: string | null = null,
 ): Promise<DOResult<{ ok: true; id: string }> | DOError> {
-  return ctx.withMember(agentId, ownerId, () =>
-    createCategoryFn(ctx.sql, name, description, color, embedding),
+  return ctx.op(
+    agentId,
+    ownerId,
+    () => createCategoryFn(ctx.sql, name, description, color, embedding),
+    {
+      broadcast: (r) => ({ type: 'category_created', id: r.id, name }),
+    },
   );
 }
 
@@ -58,8 +63,13 @@ export async function rpcUpdateCategory(
   embedding: ArrayBuffer | null | undefined,
   ownerId: string | null = null,
 ): Promise<DOResult<{ ok: true }> | DOError> {
-  return ctx.withMember(agentId, ownerId, () =>
-    updateCategoryFn(ctx.sql, categoryId, name, description, color, embedding),
+  return ctx.op(
+    agentId,
+    ownerId,
+    () => updateCategoryFn(ctx.sql, categoryId, name, description, color, embedding),
+    {
+      broadcast: () => ({ type: 'category_updated', id: categoryId }),
+    },
   );
 }
 
@@ -69,7 +79,9 @@ export async function rpcDeleteCategory(
   categoryId: string,
   ownerId: string | null = null,
 ): Promise<DOResult<{ ok: true }> | DOError> {
-  return ctx.withMember(agentId, ownerId, () => deleteCategoryFn(ctx.sql, categoryId));
+  return ctx.op(agentId, ownerId, () => deleteCategoryFn(ctx.sql, categoryId), {
+    broadcast: () => ({ type: 'category_deleted', id: categoryId }),
+  });
 }
 
 export async function rpcGetPromotableTags(

@@ -76,10 +76,11 @@ export default function App(): ReactNode {
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => readSidebarCollapsed());
   const route = useRoute();
 
-  const { token, user } = useAuthStore(
+  const { token, user, sessionExpired } = useAuthStore(
     useShallow((s) => ({
       token: s.token,
       user: s.user,
+      sessionExpired: s.sessionExpired,
     })),
   );
   const {
@@ -213,7 +214,8 @@ export default function App(): ReactNode {
   }
 
   if (bootState === 'unauthenticated') {
-    return <ConnectView error={bootError} />;
+    const notice = sessionExpired ? 'Your session expired. Please sign in again.' : null;
+    return <ConnectView error={bootError} notice={notice} />;
   }
 
   return (

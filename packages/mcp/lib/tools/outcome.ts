@@ -2,9 +2,12 @@
 
 import * as z from 'zod/v4';
 import { withTimeout } from '../utils/responses.js';
+import { sanitizeText } from '../utils/sanitize-text.js';
 import { API_TIMEOUT_MS } from '../constants.js';
 import { withTeam } from './middleware.js';
 import type { AddToolFn, ToolDeps } from './types.js';
+
+const OUTCOME_SUMMARY_MAX_LENGTH = 500;
 
 const reportOutcomeSchema = z.object({
   outcome: z
@@ -14,7 +17,7 @@ const reportOutcomeSchema = z.object({
     ),
   summary: z
     .string()
-    .max(500)
+    .max(OUTCOME_SUMMARY_MAX_LENGTH)
     .optional()
     .describe('Brief description of what was accomplished or why the session ended this way'),
 });
@@ -34,7 +37,8 @@ export function registerOutcomeTool(
       inputSchema: reportOutcomeSchema,
     },
     withTeam(deps, async (args, { preamble }) => {
-      const { outcome, summary } = args as ReportOutcomeArgs;
+      const { outcome, summary: rawSummary } = args as ReportOutcomeArgs;
+      const summary = rawSummary ? sanitizeText(rawSummary, OUTCOME_SUMMARY_MAX_LENGTH) : '';
       await withTimeout(
         team.reportOutcome(state.teamId!, outcome, summary || null),
         API_TIMEOUT_MS,

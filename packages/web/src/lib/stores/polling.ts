@@ -231,7 +231,9 @@ async function poll(): Promise<void> {
     const apiErr = toApiError(err);
 
     if (apiErr.status === 401) {
-      authActions.logout();
+      // Web has no refresh-token endpoint; clear auth and surface the
+      // session-expired flag so ConnectView can show a calm prompt.
+      authActions.expireSession();
       stopPolling();
       return;
     }
