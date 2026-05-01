@@ -32,6 +32,11 @@ const VALID_TOPICS = new Set([
 // Classify up to this many messages per batch to stay within token limits
 const BATCH_SIZE = 20;
 
+// Small instruction-tuned model: cheap enough for per-event classification at
+// volume, accurate enough for the 5-sentiment / 10-topic taxonomy. Larger
+// models drove unsustainable AI spend on long sessions.
+const CLASSIFIER_MODEL = '@cf/meta/llama-3.2-1b-instruct';
+
 /**
  * Classify user messages with sentiment and topic using Workers AI.
  * Returns classifications indexed by position in the input array.
@@ -69,18 +74,19 @@ async function classifyBatch(
     .map((m, i) => `[${i + 1}] ${m.content.slice(0, 500)}`)
     .join('\n\n');
 
-  const prompt = `Classify each user message below with a sentiment and topic.
+  const prompt = `Classify each numbered message with one sentiment and one topic from the lists below.
 
 Sentiments: positive, neutral, frustrated, confused, negative
 Topics: bug-fix, feature, refactor, testing, documentation, debugging, configuration, question, review, other
 
-Reply ONLY with one line per message in this exact format:
-[number] sentiment topic
+Output exactly one line per message, no prose, no extra punctuation:
+[N] <sentiment> <topic>
 
 Messages:
 ${numberedMessages}`;
 
   const output = await chatCompletion(env.AI, {
+    model: CLASSIFIER_MODEL,
     messages: [{ role: 'user', content: prompt }],
     max_tokens: messages.length * 20,
   });
@@ -93,16 +99,20 @@ ${numberedMessages}`;
   return parseClassificationResponse(output, messages);
 }
 
+// Tolerate optional punctuation between fields and surrounding markdown the
+// smaller model occasionally emits ([1]: positive, bug-fix / **[1]** ...).
+const LINE_RE = /\[(\d+)\][\s:.\-*)]*([a-z-]+)[\s,]+([a-z-]+)/i;
+
 function parseClassificationResponse(
   output: string,
   messages: Array<{ content: string; index: number }>,
 ): ClassifiedMessage[] {
   const lines = output.split('\n').filter(Boolean);
 
-  // Build a lookup from line number → parsed classification
+  // Build a lookup from line number to parsed classification
   const byNumber = new Map<number, { sentiment: string; topic: string }>();
   for (const line of lines) {
-    const match = line.match(/\[(\d+)\]\s+(\S+)\s+(\S+)/);
+    const match = line.match(LINE_RE);
     if (match && match[1] && match[2] && match[3]) {
       byNumber.set(parseInt(match[1], 10), {
         sentiment: match[2].toLowerCase(),

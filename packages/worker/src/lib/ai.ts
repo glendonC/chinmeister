@@ -55,6 +55,12 @@ interface ChatMessage {
 interface ChatOptions {
   messages: ChatMessage[];
   max_tokens?: number;
+  /**
+   * Optional per-call model override. Defaults to CHAT_MODEL. Use a smaller
+   * model for high-volume, low-stakes classification (e.g. conversation
+   * sentiment/topic) where the larger default would dominate AI spend.
+   */
+  model?: string;
 }
 
 /**
@@ -62,13 +68,15 @@ interface ChatOptions {
  * Returns the response string, or null on failure.
  */
 export async function chatCompletion(ai: Ai, options: ChatOptions): Promise<string | null> {
+  const { model: modelOverride, ...runOptions } = options;
+  const model: AiModel = modelOverride ?? CHAT_MODEL;
   try {
-    const response = await ai.run(CHAT_MODEL, options);
+    const response = await ai.run(model, runOptions);
     const raw = (response as { response?: string })?.response;
     return typeof raw === 'string' ? raw.trim() : null;
   } catch (err) {
     log.warn('chat completion failed', {
-      model: CHAT_MODEL,
+      model,
       error: err instanceof Error ? err.message : String(err),
     });
     return null;

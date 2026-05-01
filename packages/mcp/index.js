@@ -260,17 +260,15 @@ async function main() {
   const server = new McpServer({
     name: 'chinmeister',
     version: PKG.version,
-    instructions: `You are connected to chinmeister - a shared brain for your team's AI coding agents. Other agents (potentially from different tools like Cursor, Claude Code, Windsurf) may be working on this project right now.
+    instructions: `You are connected to chinmeister, a shared coordination layer for AI coding agents working on this project. Other agents may be active on the same codebase.
 
-CRITICAL WORKFLOW - follow these steps every session:
-1. FIRST call chinmeister_get_team_context to see who's working, what files are active, any locked files, recent messages, and shared project knowledge. Include your model identifier if you know it (e.g. "claude-opus-4-6", "gpt-4o").
-2. BEFORE editing any file, call chinmeister_check_conflicts with the files you plan to modify. If a file is locked or another agent is editing it, coordinate first - use chinmeister_send_message to notify them.
-3. AFTER you start editing, call chinmeister_claim_files to lock the files you're working on, then call chinmeister_update_activity with your file list and a brief summary.
-4. When you discover something important about the project (setup requirements, gotchas, conventions, decisions), call chinmeister_save_memory so every future agent session starts with that knowledge.
-5. AFTER running git commit, call chinmeister_report_commits with the commit SHA(s), branch name, and commit message. This links your commits to this session for git attribution analytics.
-6. When done with files, call chinmeister_release_files so other agents can work on them.
-
-This coordination prevents merge conflicts across tools and builds shared project intelligence.`,
+Workflow per session:
+1. At session start, call chinmeister_get_team_context to see active agents, recent file activity, locks, messages, and shared project memory.
+2. Before any file edit, call chinmeister_check_conflicts with the file paths you plan to modify. If a file is locked or another agent is editing it, call chinmeister_send_message to coordinate.
+3. While working, call chinmeister_claim_files on the files you are actively editing, then chinmeister_update_activity with the file list and a short summary.
+4. When you discover a project fact worth keeping (setup requirements, gotchas, conventions, decisions), call chinmeister_save_memory.
+5. After a successful git commit, call chinmeister_report_commits with the commit SHA, branch, and message.
+6. When you finish with files, call chinmeister_release_files.`,
   });
 
   const integrationDoctor = { scanHostIntegrations, configureHostIntegration };

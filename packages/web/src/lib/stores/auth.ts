@@ -5,12 +5,55 @@ import { userProfileSchema, validateResponse } from '../apiSchemas.js';
 import { isDemoActive, getActiveScenarioId } from '../demoMode.js';
 import { getDemoData } from '../demo/index.js';
 
+// XSS surface: the auth token sits in localStorage so it survives reloads,
+// but any script that runs in this origin can read it. Migrating to an
+// in-memory token plus a refresh-on-load flow is the next step. Until then,
+// the HTTPS guard below blocks reads/writes on insecure origins so the
+// token cannot leak via mixed content.
 const TOKEN_KEY = 'chinmeister_token';
 // Synthetic token used when demo is active and no real token is in storage.
 // The api() call is bypassed entirely on the demo path, so the value never
 // reaches the wire - it's just a non-null marker so the App boot flow
 // proceeds past its `if (!t)` guard into authenticate().
 const DEMO_TOKEN = '__demo__';
+
+/**
+ * Token storage is allowed only on https or local development origins. On
+ * any other origin the read/write is refused so the token cannot be sniffed
+ * over plaintext or leaked via mixed content.
+ */
+function isSecureOrigin(): boolean {
+  if (typeof window === 'undefined' || !window.location) return true;
+  const { protocol, hostname } = window.location;
+  if (protocol === 'https:') return true;
+  return hostname === 'localhost' || hostname === '127.0.0.1';
+}
+
+function readToken(): string | null {
+  if (!isSecureOrigin()) return null;
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function writeToken(value: string): void {
+  if (!isSecureOrigin()) return;
+  try {
+    localStorage.setItem(TOKEN_KEY, value);
+  } catch {
+    // Storage may be disabled (e.g. private browsing); session-only auth still works.
+  }
+}
+
+function clearToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 type UserProfile = z.infer<typeof userProfileSchema>;
 
@@ -22,15 +65,18 @@ let inflightAuth: Promise<boolean> | null = null;
 interface AuthState {
   token: string | null;
   user: UserProfile | null;
+  sessionExpired: boolean;
   readTokenFromHash: () => string | null;
   getStoredToken: () => string | null;
   authenticate: (t: string) => Promise<boolean>;
   logout: () => void;
+  expireSession: () => void;
 }
 
 const authStore = createStore<AuthState>((set) => ({
   token: null,
   user: null,
+  sessionExpired: false,
 
   readTokenFromHash() {
     const hash = window.location.hash;
@@ -42,7 +88,7 @@ const authStore = createStore<AuthState>((set) => ({
   },
 
   getStoredToken() {
-    const stored = localStorage.getItem(TOKEN_KEY);
+    const stored = readToken();
     if (stored) return stored;
     // Demo mode without a real token: hand back a synthetic so the App
     // boot path proceeds into authenticate(), which will short-circuit on
@@ -56,7 +102,7 @@ const authStore = createStore<AuthState>((set) => ({
     if (inflightAuth) return inflightAuth;
 
     inflightAuth = (async () => {
-      set({ token: t });
+      set({ token: t, sessionExpired: false });
       try {
         // Demo path: skip the API and inject the scenario's user. Don't
         // touch localStorage so toggling demo off restores any real token.
@@ -70,11 +116,11 @@ const authStore = createStore<AuthState>((set) => ({
           throwOnError: true,
         }) as UserProfile;
         set({ user: userData });
-        localStorage.setItem(TOKEN_KEY, t);
+        writeToken(t);
         return true;
       } catch (err) {
         set({ token: null, user: null });
-        localStorage.removeItem(TOKEN_KEY);
+        clearToken();
         throw err;
       }
     })().finally(() => {
@@ -85,8 +131,13 @@ const authStore = createStore<AuthState>((set) => ({
   },
 
   logout() {
-    set({ token: null, user: null });
-    localStorage.removeItem(TOKEN_KEY);
+    set({ token: null, user: null, sessionExpired: false });
+    clearToken();
+  },
+
+  expireSession() {
+    set({ token: null, user: null, sessionExpired: true });
+    clearToken();
   },
 }));
 
@@ -102,7 +153,7 @@ const authStore = createStore<AuthState>((set) => ({
 // module evaluation to crash in that case.
 if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
   window.addEventListener('chinmeister:demo-scenario-changed', () => {
-    const stored = localStorage.getItem(TOKEN_KEY);
+    const stored = readToken();
     if (stored) {
       authStore
         .getState()
@@ -127,6 +178,7 @@ export const authActions = {
   getState: (): AuthState => authStore.getState(),
   authenticate: (t: string): Promise<boolean> => authStore.getState().authenticate(t),
   logout: (): void => authStore.getState().logout(),
+  expireSession: (): void => authStore.getState().expireSession(),
   readTokenFromHash: (): string | null => authStore.getState().readTokenFromHash(),
   getStoredToken: (): string | null => authStore.getState().getStoredToken(),
   subscribe: authStore.subscribe,

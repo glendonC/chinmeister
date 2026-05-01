@@ -60,7 +60,9 @@ export function checkAndConsume(
   sql: SqlStorage,
   key: string,
   maxPerWindow = 3,
+  cost = 1,
 ): { ok: true; allowed: boolean; count: number } {
+  const inc = Math.max(1, Math.trunc(cost));
   const now = Date.now();
   const windowStart = hourBucket(now - 24 * 60 * 60 * 1000);
   const bucket = hourBucket(now);
@@ -74,16 +76,18 @@ export function checkAndConsume(
     .toArray();
 
   const count = ((rows[0] as Record<string, unknown>)?.total as number) || 0;
-  if (count >= maxPerWindow) {
+  if (count + inc > maxPerWindow) {
     return { ok: true, allowed: false, count };
   }
 
   sql.exec(
-    `INSERT INTO account_limits (ip, date, count) VALUES (?, ?, 1)
-     ON CONFLICT(ip, date) DO UPDATE SET count = count + 1`,
+    `INSERT INTO account_limits (ip, date, count) VALUES (?, ?, ?)
+     ON CONFLICT(ip, date) DO UPDATE SET count = count + ?`,
     key,
     bucket,
+    inc,
+    inc,
   );
 
-  return { ok: true, allowed: true, count: count + 1 };
+  return { ok: true, allowed: true, count: count + inc };
 }

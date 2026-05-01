@@ -8,6 +8,11 @@ import { teamErrorStatus } from '../../lib/request-utils.js';
 import { withRateLimit } from '../../lib/validation.js';
 import { createLogger } from '../../lib/logger.js';
 import { classifyConversationMessages } from '../../lib/conversation-classify.js';
+import {
+  RATE_LIMIT_CONVERSATION_EVENTS,
+  RATE_LIMIT_CONVERSATION_CLASSIFICATIONS,
+  RATE_LIMIT_CONVERSATION_CLASSIFICATIONS_GLOBAL,
+} from '../../lib/constants.js';
 
 const log = createLogger('routes.conversations');
 
@@ -15,7 +20,6 @@ const ANALYTICS_DEFAULT_DAYS = 7;
 const ANALYTICS_MAX_DAYS = 90;
 const MAX_EVENTS_PER_REQUEST = 500;
 const MAX_CONTENT_LENGTH = 50000;
-const RATE_LIMIT_CONVERSATION_UPLOADS = 200;
 const VALID_ROLES = new Set(['user', 'assistant']);
 const VALID_SENTIMENTS = new Set(['positive', 'neutral', 'frustrated', 'confused', 'negative']);
 const VALID_TOPICS = new Set([
@@ -37,7 +41,7 @@ const VALID_TOPICS = new Set([
  * User messages are classified with sentiment and topic via Workers AI (non-critical).
  */
 export const handleTeamRecordConversation = teamJsonRoute(
-  async ({ body, user, env, db, agentId, team }) => {
+  async ({ body, user, env, db, agentId, team, teamId }) => {
     const { session_id, events } = body;
 
     if (typeof session_id !== 'string' || !session_id.trim()) {
@@ -101,26 +105,99 @@ export const handleTeamRecordConversation = teamJsonRoute(
       .map((e, i) => ({ content: e.content, index: i }))
       .filter((_, i) => typedEvents[i]?.role === 'user');
 
-    if (userMessages.length > 0) {
+    // Kill-switch and per-team daily cap. Both paths leave events ingestible
+    // with null sentiment/topic; only one log line per request to avoid spam.
+    const classificationEnabled =
+      String(env.CLASSIFICATION_ENABLED ?? 'true').toLowerCase() !== 'false';
+
+    if (userMessages.length > 0 && classificationEnabled) {
+      let cap: { allowed: boolean; count: number };
       try {
-        const classifications = await classifyConversationMessages(userMessages, env);
-        for (const c of classifications) {
-          const target = typedEvents[c.index];
-          if (!target) continue;
-          if (c.sentiment) target.sentiment = c.sentiment;
-          if (c.topic) target.topic = c.topic;
-        }
+        cap = rpc(
+          await db.checkAndConsume(
+            `conversation-classify:${teamId}`,
+            RATE_LIMIT_CONVERSATION_CLASSIFICATIONS,
+            userMessages.length,
+          ),
+        );
       } catch (err) {
-        // Non-critical: store events without classification
-        log.warn(`conversation classification skipped: ${err}`);
+        cap = { allowed: false, count: 0 };
+        log.warn('conversation classification cap check failed', {
+          team_id: teamId,
+          reason: 'cap_check_error',
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
+
+      if (!cap.allowed) {
+        log.warn('conversation classification skipped', {
+          team_id: teamId,
+          reason: 'daily_cap_reached',
+          requested: userMessages.length,
+          cap: RATE_LIMIT_CONVERSATION_CLASSIFICATIONS,
+        });
+      } else {
+        // Account-wide ceiling on top of the per-team cap. Coarse safety net
+        // against a viral spike pushing the AI bill past the budget.
+        let globalCap: { allowed: boolean; count: number };
+        try {
+          globalCap = rpc(
+            await db.checkAndConsume(
+              'conversation-classify:_global',
+              RATE_LIMIT_CONVERSATION_CLASSIFICATIONS_GLOBAL,
+              userMessages.length,
+            ),
+          );
+        } catch (err) {
+          globalCap = { allowed: false, count: 0 };
+          log.warn('global classification cap check failed', {
+            reason: 'global_cap_check_error',
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+
+        if (!globalCap.allowed) {
+          log.warn('conversation classification skipped', {
+            team_id: teamId,
+            reason: 'account_cap_reached',
+            requested: userMessages.length,
+            cap: RATE_LIMIT_CONVERSATION_CLASSIFICATIONS_GLOBAL,
+          });
+        } else {
+          try {
+            const classifications = await classifyConversationMessages(userMessages, env);
+            for (const c of classifications) {
+              const target = typedEvents[c.index];
+              if (!target) continue;
+              if (c.sentiment) target.sentiment = c.sentiment;
+              if (c.topic) target.topic = c.topic;
+            }
+          } catch (err) {
+            // Non-critical: store events without classification
+            log.warn('conversation classification failed', {
+              team_id: teamId,
+              reason: 'ai_error',
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      }
+    } else if (userMessages.length > 0 && !classificationEnabled) {
+      log.warn('conversation classification skipped', {
+        team_id: teamId,
+        reason: 'kill_switch_off',
+        requested: userMessages.length,
+      });
     }
 
+    // Per-event rate limit: charge `events.length` against the daily quota
+    // so a 500-event batch counts as 500, not 1. Keeps the daily ceiling
+    // honest regardless of how the client batches its uploads.
     return withRateLimit(
       db,
-      `conversation:${user.id}`,
-      RATE_LIMIT_CONVERSATION_UPLOADS,
-      'Conversation upload limit reached. Try again tomorrow.',
+      `conversation-events:${user.id}`,
+      RATE_LIMIT_CONVERSATION_EVENTS,
+      'Conversation event limit reached. Try again tomorrow.',
       async () => {
         const result = rpc(
           await team.recordConversationEvents(
@@ -138,6 +215,7 @@ export const handleTeamRecordConversation = teamJsonRoute(
         }
         return json(result, 201);
       },
+      typedEvents.length,
     );
   },
 );

@@ -254,36 +254,59 @@ export interface SupersessionDecision {
  *      < incoming.valid_at).
  *
  * When true, the returned `newInvalidAt` is the string-valued
- * `incoming.valid_at` - assigning it to `candidate.invalid_at` truncates
+ * `incoming.valid_at`, assigning it to `candidate.invalid_at` truncates
  * the candidate's validity at the exact moment the superseding fact began.
+ *
+ * Comparisons run through SQLite's `julianday()` so the temporal domain
+ * matches the rest of the storage layer (no JS Date math). On malformed
+ * inputs julianday() returns NULL and we refuse to make a call.
  */
 export function resolveSupersession(
+  sql: SqlStorage,
   incoming: SupersessionCandidate,
   candidate: SupersessionCandidate,
 ): SupersessionDecision {
-  const incomingValid = new Date(incoming.valid_at).getTime();
-  const candidateValid = new Date(candidate.valid_at).getTime();
-  if (Number.isNaN(incomingValid) || Number.isNaN(candidateValid)) {
-    // Corrupt timestamps - refuse to make a supersession call rather than
+  const result = sql
+    .exec(
+      `SELECT
+         julianday(?) AS inc_valid,
+         julianday(?) AS cand_valid,
+         CASE WHEN ? IS NULL THEN NULL ELSE julianday(?) END AS inc_invalid,
+         CASE WHEN ? IS NULL THEN NULL ELSE julianday(?) END AS cand_invalid`,
+      incoming.valid_at,
+      candidate.valid_at,
+      incoming.invalid_at,
+      incoming.invalid_at,
+      candidate.invalid_at,
+      candidate.invalid_at,
+    )
+    .toArray()[0] as Record<string, number | null> | undefined;
+
+  if (!result) return { shouldInvalidate: false, newInvalidAt: null };
+  const incValid = result.inc_valid;
+  const candValid = result.cand_valid;
+  if (incValid == null || candValid == null) {
+    // Corrupt timestamps: refuse to make a supersession call rather than
     // guess. The caller keeps the candidate active.
     return { shouldInvalidate: false, newInvalidAt: null };
   }
-
-  const candidateInvalid = candidate.invalid_at
-    ? new Date(candidate.invalid_at).getTime()
-    : Number.POSITIVE_INFINITY;
-  const incomingInvalid = incoming.invalid_at
-    ? new Date(incoming.invalid_at).getTime()
-    : Number.POSITIVE_INFINITY;
+  const incInvalid = result.inc_invalid;
+  const candInvalid = result.cand_invalid;
 
   // Non-overlap: the two intervals don't share any wall-clock moment.
-  if (candidateInvalid <= incomingValid) return { shouldInvalidate: false, newInvalidAt: null };
-  if (incomingInvalid <= candidateValid) return { shouldInvalidate: false, newInvalidAt: null };
+  // Open intervals (NULL invalid) extend to +infinity, so only check the
+  // bound when it exists.
+  if (candInvalid != null && candInvalid <= incValid) {
+    return { shouldInvalidate: false, newInvalidAt: null };
+  }
+  if (incInvalid != null && incInvalid <= candValid) {
+    return { shouldInvalidate: false, newInvalidAt: null };
+  }
 
-  // Overlap exists. Only invalidate if candidate is strictly older - a
-  // newer candidate overlapping with an even-newer incoming is not
-  // supersession, it's concurrent knowledge.
-  if (candidateValid >= incomingValid) return { shouldInvalidate: false, newInvalidAt: null };
+  // Overlap exists. Only invalidate if candidate is strictly older. A
+  // newer candidate overlapping with an even-newer incoming is concurrent
+  // knowledge, not supersession.
+  if (candValid >= incValid) return { shouldInvalidate: false, newInvalidAt: null };
 
   return { shouldInvalidate: true, newInvalidAt: incoming.valid_at };
 }
@@ -386,13 +409,17 @@ export function applyConsolidationProposal(
     // For supersession: the source is the newer fact, target is the older
     // one being invalidated. Apply target.invalid_at = source.valid_at so
     // the target's validity interval closes at the exact moment the source
-    // became true. Falls back to NOW if source.valid_at is somehow null
-    // (shouldn't happen post-migration-023 but keeps the write total).
-    const sourceRaw = sql.exec('SELECT valid_at FROM memories WHERE id = ?', sourceId).toArray()[0];
-    const invalidAt = (sourceRaw && row(sourceRaw).string('valid_at')) || new Date().toISOString();
+    // became true. Falls back to SQL's datetime('now') when source.valid_at
+    // is somehow null (shouldn't happen post-migration-023). Both branches
+    // stay in the SQL temporal domain; no JS Date math.
     sql.exec(
-      'UPDATE memories SET invalid_at = ? WHERE id = ? AND invalid_at IS NULL',
-      invalidAt,
+      `UPDATE memories
+         SET invalid_at = COALESCE(
+           (SELECT valid_at FROM memories WHERE id = ?),
+           datetime('now')
+         )
+         WHERE id = ? AND invalid_at IS NULL`,
+      sourceId,
       targetId,
     );
   } else {

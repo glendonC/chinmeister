@@ -62,20 +62,13 @@ export async function authenticate(request: Request, env: Env): Promise<User | n
     // Prefer ticket (short-lived, single-use) over token for WS auth
     const ticket = url.searchParams.get('ticket');
     if (ticket) {
-      // TOCTOU: KV get-then-delete is not atomic. Two concurrent requests with the
-      // same ticket could both pass the null check before either deletes the key.
-      // Risk is minimal: tickets are random UUIDs with 30s TTL, rate-limited, and the
-      // race window is sub-millisecond within a single CF colo. Atomic delete would
-      // require a Durable Object, adding latency for negligible security gain.
-      const kvKey = `ticket:${ticket}`;
-      const userId = await env.AUTH_KV.get(kvKey);
-      if (!userId) return null;
-      await env.AUTH_KV.delete(kvKey);
+      // Consume via DatabaseDO so the lookup-and-delete runs under SQLite's
+      // single-writer lock. Closes the get-then-delete TOCTOU window the
+      // previous KV-backed flow left open.
       const db = getDB(env);
-      if (!userId.includes('-')) {
-        const result = rpc(await db.getUserByHandle(userId));
-        return 'error' in result ? null : result.user;
-      }
+      const consumed = rpc(await db.consumeWsTicket(ticket));
+      const userId = consumed.user_id;
+      if (!userId) return null;
       const result = rpc(await db.getUser(userId));
       return 'error' in result ? null : result.user;
     }
@@ -191,7 +184,7 @@ export const handleGetWsTicket = authedRoute(async ({ user, env }) => {
     'Ticket request limit reached. Try again later.',
     async () => {
       const ticket = `tk_${crypto.randomUUID().replace(/-/g, '').slice(0, 24)}`;
-      await env.AUTH_KV.put(`ticket:${ticket}`, user.id, { expirationTtl: 30 });
+      await db.issueWsTicket(ticket, user.id);
       return json({ ticket });
     },
   );

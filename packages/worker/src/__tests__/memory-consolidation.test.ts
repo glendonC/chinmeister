@@ -2,12 +2,22 @@
 // Jaccard structural → tag agreement) writes propose-only candidates,
 // the apply path soft-merges with audit trail, and unmerge restores.
 
-import { env } from 'cloudflare:test';
+import { env, runInDurableObject } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
 import { jaccardTrigrams, tagsAgree, resolveSupersession } from '../dos/team/consolidation.js';
 
 function getTeam(id) {
   return env.TEAM.get(env.TEAM.idFromName(id));
+}
+
+// Run resolveSupersession inside a real TeamDO so it has access to a
+// SqlStorage handle for julianday() temporal arithmetic.
+async function resolveInsideDO(incoming, candidate) {
+  const id = env.TEAM.idFromName('supersession-helper');
+  const stub = env.TEAM.get(id);
+  return runInDurableObject(stub, (instance) =>
+    resolveSupersession(instance.sql, incoming, candidate),
+  );
 }
 
 describe('jaccardTrigrams', () => {
@@ -72,24 +82,24 @@ describe('resolveSupersession (bi-temporal interval algebra, Graphiti port)', ()
   const incoming = (valid_at, invalid_at = null) => ({ id: 'new', valid_at, invalid_at });
   const candidate = (valid_at, invalid_at = null) => ({ id: 'old', valid_at, invalid_at });
 
-  it('does not invalidate when intervals do not overlap (candidate ended before incoming began)', () => {
-    const result = resolveSupersession(
+  it('does not invalidate when intervals do not overlap (candidate ended before incoming began)', async () => {
+    const result = await resolveInsideDO(
       incoming('2026-03-01T00:00:00Z'),
       candidate('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
     );
     expect(result.shouldInvalidate).toBe(false);
   });
 
-  it('does not invalidate when incoming ends before candidate begins', () => {
-    const result = resolveSupersession(
+  it('does not invalidate when incoming ends before candidate begins', async () => {
+    const result = await resolveInsideDO(
       incoming('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
       candidate('2026-03-01T00:00:00Z'),
     );
     expect(result.shouldInvalidate).toBe(false);
   });
 
-  it('does not invalidate when intervals are identical (duplicates, not supersession)', () => {
-    const result = resolveSupersession(
+  it('does not invalidate when intervals are identical (duplicates, not supersession)', async () => {
+    const result = await resolveInsideDO(
       incoming('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
       candidate('2026-01-01T00:00:00Z', '2026-02-01T00:00:00Z'),
     );
@@ -97,8 +107,8 @@ describe('resolveSupersession (bi-temporal interval algebra, Graphiti port)', ()
     expect(result.shouldInvalidate).toBe(false);
   });
 
-  it('invalidates the older fact on partial overlap (old started earlier, still open)', () => {
-    const result = resolveSupersession(
+  it('invalidates the older fact on partial overlap (old started earlier, still open)', async () => {
+    const result = await resolveInsideDO(
       incoming('2026-02-01T00:00:00Z'),
       candidate('2026-01-01T00:00:00Z'),
     );
@@ -107,8 +117,8 @@ describe('resolveSupersession (bi-temporal interval algebra, Graphiti port)', ()
     expect(result.newInvalidAt).toBe('2026-02-01T00:00:00Z');
   });
 
-  it('invalidates on partial overlap with bounded intervals', () => {
-    const result = resolveSupersession(
+  it('invalidates on partial overlap with bounded intervals', async () => {
+    const result = await resolveInsideDO(
       incoming('2026-02-01T00:00:00Z', '2026-04-01T00:00:00Z'),
       candidate('2026-01-01T00:00:00Z', '2026-03-01T00:00:00Z'),
     );
@@ -116,8 +126,8 @@ describe('resolveSupersession (bi-temporal interval algebra, Graphiti port)', ()
     expect(result.newInvalidAt).toBe('2026-02-01T00:00:00Z');
   });
 
-  it('does not invalidate when timestamps are malformed - refuses to guess', () => {
-    const result = resolveSupersession(incoming('not-a-date'), candidate('2026-01-01T00:00:00Z'));
+  it('does not invalidate when timestamps are malformed - refuses to guess', async () => {
+    const result = await resolveInsideDO(incoming('not-a-date'), candidate('2026-01-01T00:00:00Z'));
     expect(result.shouldInvalidate).toBe(false);
     expect(result.newInvalidAt).toBe(null);
   });

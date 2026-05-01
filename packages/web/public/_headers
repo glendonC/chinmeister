@@ -1,0 +1,23 @@
+# Cloudflare Pages headers. Vite copies public/ to dist/, so this lands at
+# the site root. Routes are evaluated top-down; first match wins per header.
+
+/dashboard*
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-HpwCSvysRfi4cTdM+l1KHPB8y+udCMlnerfxfiViPFQ='; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://api.chinmeister.com wss://api.chinmeister.com; frame-ancestors 'self'
+  # TODO: when partner IDE-embed origins are confirmed, append them to
+  # frame-ancestors above (space-separated, e.g. "frame-ancestors 'self' https://partner.example").
+
+/
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'self'
+
+/index.html
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'self'
+
+/privacy.html
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self'; frame-ancestors 'self'
+
+# Common headers for every route.
+/*
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Content-Type-Options: nosniff
+  Permissions-Policy: geolocation=(), microphone=(), camera=()
+  Strict-Transport-Security: max-age=31536000; includeSubDomains

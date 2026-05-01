@@ -47,7 +47,10 @@ async function main() {
 
   // Channel capability check (not part of bootstrap - channel-specific logic)
   if (!runtime.capabilities.includes('channel')) {
-    console.error(`[chinmeister-channel] Parent host is ${toolName}; channel disabled.`);
+    console.error(
+      `[chinmeister-channel] channel disabled: host "${toolName}" does not support push capability. ` +
+        'Coordination still works through the MCP server via polling; only server-initiated push notifications are unavailable for this host.',
+    );
     process.exit(0);
     return;
   }

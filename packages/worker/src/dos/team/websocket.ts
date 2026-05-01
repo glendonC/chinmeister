@@ -9,7 +9,6 @@
 
 import { getErrorMessage, isDOError } from '../../lib/errors.js';
 import { createLogger } from '../../lib/logger.js';
-import { toSQLDateTime } from '../../lib/text-utils.js';
 import { updateActivity as updateActivityFn, reportFile as reportFileFn } from './activity.js';
 import { releaseFiles as releaseFilesFn } from './locks.js';
 import {
@@ -175,21 +174,18 @@ export async function handleMessage(
 
     if (data.type === 'ping') {
       wsCtx.ensureSchema();
-      if (data.lastToolUseAt) {
-        const parsed = new Date(data.lastToolUseAt as string);
-        if (!isNaN(parsed.getTime())) {
-          const ts = toSQLDateTime(parsed);
-          wsCtx.sql.exec(
-            "UPDATE members SET last_heartbeat = datetime('now'), last_tool_use = ? WHERE agent_id = ?",
-            ts,
-            agentId,
-          );
-        } else {
-          wsCtx.sql.exec(
-            "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",
-            agentId,
-          );
-        }
+      const rawToolTs =
+        typeof data.lastToolUseAt === 'string' ? (data.lastToolUseAt as string) : '';
+      // Lightweight format gate: accept the string only if it parses as a
+      // wall-clock timestamp. SQLite stores it verbatim and runs all
+      // comparisons via datetime()/julianday(); no JS Date math here.
+      const validToolTs = rawToolTs && Number.isFinite(Date.parse(rawToolTs));
+      if (validToolTs) {
+        wsCtx.sql.exec(
+          "UPDATE members SET last_heartbeat = datetime('now'), last_tool_use = ? WHERE agent_id = ?",
+          rawToolTs,
+          agentId,
+        );
       } else {
         wsCtx.sql.exec(
           "UPDATE members SET last_heartbeat = datetime('now') WHERE agent_id = ?",

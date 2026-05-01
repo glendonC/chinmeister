@@ -116,6 +116,14 @@
   margin-top: var(--space-md);
 }
 
+.sessionNotice {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin-top: var(--space-sm);
+  margin-bottom: var(--space-sm);
+}
+
 /* ── Divider ── */
 
 .dividerRow {

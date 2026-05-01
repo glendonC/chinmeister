@@ -5,6 +5,7 @@ import { setTerminalTitle } from '@chinmeister/shared/session-registry.js';
 import { BUDGET_DEFAULTS } from '@chinmeister/shared/budget-config.js';
 import { normalizeFiles } from '../utils/paths.js';
 import { withTimeout } from '../utils/responses.js';
+import { sanitizeText } from '../utils/sanitize-text.js';
 import {
   TITLE_MAX_LENGTH,
   MAX_FILE_PATH_LENGTH,
@@ -41,8 +42,9 @@ export function registerActivityTool(
       inputSchema: updateActivitySchema,
     },
     withTeam(deps, async (args, { preamble }) => {
-      const { files: rawFiles, summary } = args as UpdateActivityArgs;
+      const { files: rawFiles, summary: rawSummary } = args as UpdateActivityArgs;
       const files = normalizeFiles(rawFiles);
+      const summary = sanitizeText(rawSummary, MAX_SUMMARY_LENGTH);
       // Silent mode: skip the backend broadcast but still update local terminal
       // title so the developer's own environment reflects their intent.
       const budgets = state.budgets ?? BUDGET_DEFAULTS;

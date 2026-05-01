@@ -32,8 +32,10 @@ export async function rpcDeleteUserData(
 ): Promise<DOResult<{ ok: true; result: UserDataDeletionResult }>> {
   const gate = ctx.withOwner(ownerId, () => true);
   if (isDOError(gate)) return gate;
-  return {
-    ok: true,
-    result: deleteForHandleFn(ctx.sql, handle, ctx.transact),
-  };
+  const result = deleteForHandleFn(ctx.sql, handle, ctx.transact);
+  // Erasure removes members, activities, locks, memories, sessions, all of
+  // which feed queryTeamContext. Bust the cache and notify watchers so live
+  // dashboards drop the deleted user immediately.
+  ctx.broadcastToWatchers({ type: 'user_data_deleted', handle });
+  return { ok: true, result };
 }

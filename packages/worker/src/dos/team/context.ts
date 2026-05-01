@@ -5,6 +5,7 @@
 import type {
   TeamMember,
   TeamContext,
+  TeamContextHint,
   TeamSummary,
   ActiveMemberSummary,
   ContextLockEntry,
@@ -272,6 +273,42 @@ export function queryTeamContext(
 }
 
 /**
+ * Caller-aware advisory hints. Cheap and bounded: one indexed query, capped
+ * at 3 hints, derived from data already loaded for the response. The signal
+ * here is "memories saved by other agents in the last hour" -- the agent can
+ * act on it via chinmeister_search_memory. Hints are advisory, not commands.
+ */
+export function computeContextHints(sql: SqlStorage, callerAgentId: string): TeamContextHint[] {
+  const hints: TeamContextHint[] = [];
+
+  const peerCountRow = sql
+    .exec(
+      `SELECT COUNT(*) AS c, MIN(handle) AS sample_handle
+       FROM memories
+       WHERE created_at > datetime('now', '-1 hour')
+         AND agent_id != ?`,
+      callerAgentId,
+    )
+    .toArray();
+  const r = row(peerCountRow[0]);
+  const peerCount = r.number('c');
+  if (peerCount > 0) {
+    const sample = r.nullableString('sample_handle');
+    const who =
+      peerCount === 1 && sample
+        ? `${sample} saved 1 new memory`
+        : `${peerCount} new memories were saved by other agents`;
+    hints.push({
+      kind: 'recent_peer_memories',
+      message: `${who} in the last hour. Consider searching for context before starting related work.`,
+      suggested_tool: 'chinmeister_search_memory',
+    });
+  }
+
+  return hints.slice(0, 3);
+}
+
+/**
  * Lightweight team summary -- counts only, for cross-project dashboard.
  */
 export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakdown & { ok: true } {
@@ -322,9 +359,10 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
     .exec("SELECT COUNT(*) as c FROM sessions WHERE started_at > datetime('now', '-24 hours')")
     .toArray();
 
-  // Daily session counts for last 7 days. Worker runtime + SQLite both UTC,
-  // so YYYY-MM-DD keys align across the two domains. Buckets are filled
-  // oldest → newest so the sparkline renders left-to-right with time.
+  // Daily session counts for last 7 days. Bucket list is derived in SQL so
+  // the wall-clock domain stays consistent with the aggregate query (no JS
+  // Date math). Buckets are filled oldest -> newest so the sparkline
+  // renders left-to-right with time.
   const dailyRows = sql
     .exec(
       `SELECT date(started_at) AS d, COUNT(*) AS c
@@ -338,12 +376,19 @@ export function queryTeamSummary(sql: SqlStorage): TeamSummary & TelemetryBreakd
     const r = row(raw);
     dailyMap.set(r.string('d'), r.number('c'));
   }
-  const daily_sessions_7d: number[] = [];
-  for (let i = 6; i >= 0; i--) {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - i);
-    daily_sessions_7d.push(dailyMap.get(d.toISOString().slice(0, 10)) || 0);
-  }
+  const bucketRows = sql
+    .exec(
+      `WITH RECURSIVE bucket(d, n) AS (
+         SELECT date('now', '-6 days'), 0
+         UNION ALL
+         SELECT date(d, '+1 day'), n + 1 FROM bucket WHERE n < 6
+       )
+       SELECT d FROM bucket ORDER BY n ASC`,
+    )
+    .toArray();
+  const daily_sessions_7d: number[] = bucketRows.map(
+    (raw) => dailyMap.get(row(raw).string('d')) || 0,
+  );
 
   // Conflicts hit over the last 7 days, plus the immediately-prior 7-day
   // window. Sourced from sessions.conflicts_hit (per-session counter), not

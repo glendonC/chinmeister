@@ -121,6 +121,9 @@ export async function rpcHeartbeat(
       const last = ctx.lastHeartbeatBroadcast.get(resolved) || 0;
       if (now - last >= HEARTBEAT_BROADCAST_DEBOUNCE_MS) {
         ctx.lastHeartbeatBroadcast.set(resolved, now);
+        // reason: heartbeats fire every few seconds per agent; busting the
+        // 5s context cache on each one would defeat its purpose. Watchers
+        // get the live frame; the cached context lags by at most one TTL.
         ctx.broadcastToWatchers(
           { type: 'heartbeat', agent_id: resolved, ts: now },
           { invalidateCache: false },

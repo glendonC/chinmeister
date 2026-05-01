@@ -3,6 +3,7 @@
 
 import * as z from 'zod/v4';
 import { safeArray, withTimeout } from '../utils/responses.js';
+import { sanitizeText, sanitizeTags } from '../utils/sanitize-text.js';
 import type { MemoryInfo } from '../utils/display.js';
 import {
   MAX_MEMORY_TEXT_LENGTH,
@@ -129,7 +130,15 @@ export function registerMemoryTools(
       inputSchema: saveMemorySchema,
     },
     withTeam(deps, async (args, { preamble }) => {
-      const { text, tags } = args as SaveMemoryArgs;
+      const { text: rawText, tags: rawTags } = args as SaveMemoryArgs;
+      const text = sanitizeText(rawText, MAX_MEMORY_TEXT_LENGTH);
+      const tags = rawTags === undefined ? undefined : sanitizeTags(rawTags, MAX_TAG_LENGTH);
+      if (!text) {
+        return {
+          content: [{ type: 'text' as const, text: 'Memory text is empty after sanitization.' }],
+          isError: true,
+        };
+      }
       await withTimeout(team.saveMemory(state.teamId!, text, tags), API_TIMEOUT_MS);
       const tagStr = tags?.length ? ` [${tags.join(', ')}]` : '';
       return {
@@ -146,8 +155,8 @@ export function registerMemoryTools(
       inputSchema: updateMemorySchema,
     },
     withTeam(deps, async (args, { preamble }) => {
-      const { id, text, tags } = args as UpdateMemoryArgs;
-      if (!text && !tags) {
+      const { id, text: rawText, tags: rawTags } = args as UpdateMemoryArgs;
+      if (rawText === undefined && rawTags === undefined) {
         return {
           content: [
             { type: 'text' as const, text: 'Provide at least one of text or tags to update.' },
@@ -155,6 +164,9 @@ export function registerMemoryTools(
           isError: true,
         };
       }
+      const text =
+        rawText === undefined ? undefined : sanitizeText(rawText, MAX_MEMORY_TEXT_LENGTH);
+      const tags = rawTags === undefined ? undefined : sanitizeTags(rawTags, MAX_TAG_LENGTH);
       const result = await withTimeout(
         team.updateMemory(state.teamId!, id, text, tags),
         API_TIMEOUT_MS,

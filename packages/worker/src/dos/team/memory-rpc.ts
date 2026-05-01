@@ -122,8 +122,13 @@ export async function rpcUpdateMemory(
   tags: string[] | undefined,
   ownerId: string | null = null,
 ): Promise<DOResult<{ ok: true }> | DOError> {
-  return ctx.withMember(agentId, ownerId, (resolved) =>
-    updateMemoryFn(ctx.sql, resolved, memoryId, text, tags),
+  return ctx.op(
+    agentId,
+    ownerId,
+    (resolved) => updateMemoryFn(ctx.sql, resolved, memoryId, text, tags),
+    {
+      broadcast: () => ({ type: 'memory_updated', memory_id: memoryId }),
+    },
   );
 }
 
@@ -133,7 +138,9 @@ export async function rpcDeleteMemory(
   memoryId: string,
   ownerId: string | null = null,
 ): Promise<DOResult<{ ok: true }> | DOError> {
-  return ctx.withMember(agentId, ownerId, () => deleteMemoryFn(ctx.sql, memoryId));
+  return ctx.op(agentId, ownerId, () => deleteMemoryFn(ctx.sql, memoryId), {
+    broadcast: () => ({ type: 'memory_deleted', memory_id: memoryId }),
+  });
 }
 
 export async function rpcDeleteMemoriesBatch(
@@ -142,7 +149,7 @@ export async function rpcDeleteMemoriesBatch(
   filter: BatchDeleteFilter,
   ownerId: string | null = null,
 ): Promise<DOResult<{ ok: true; deleted: number }> | DOError> {
-  return ctx.withMember(agentId, ownerId, () =>
-    deleteMemoriesBatchFn(ctx.sql, filter, ctx.transact),
-  );
+  return ctx.op(agentId, ownerId, () => deleteMemoriesBatchFn(ctx.sql, filter, ctx.transact), {
+    broadcast: (result) => ({ type: 'memory_deleted_batch', deleted: result.deleted }),
+  });
 }

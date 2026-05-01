@@ -37,6 +37,13 @@ export const modelMetricSchema = z.object({
 });
 export type ModelMetric = z.infer<typeof modelMetricSchema>;
 
+export const teamContextHintSchema = z.object({
+  kind: z.string(),
+  message: z.string(),
+  suggested_tool: z.string().optional(),
+});
+export type TeamContextHint = z.infer<typeof teamContextHintSchema>;
+
 export const teamContextSchema = z.object({
   members: z.array(teamMemberSchema),
   conflicts: z.array(teamConflictSchema),
@@ -50,6 +57,7 @@ export const teamContextSchema = z.object({
   surfaces_seen: z.array(surfaceJoinMetricSchema).optional(),
   models_seen: z.array(modelMetricSchema).optional(),
   usage: z.record(z.string(), z.number()).optional(),
+  hints: z.array(teamContextHintSchema).optional(),
 });
 export type TeamContext = z.infer<typeof teamContextSchema>;
 
