@@ -3,6 +3,7 @@ import clsx from 'clsx';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import ToolIcon from '../../components/ToolIcon/ToolIcon.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
+import { navigateToDetail } from '../../lib/router.js';
 import styles from './ConversationWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import {
@@ -27,17 +28,18 @@ import {
 
 const CONFUSED_FILES_VISIBLE = 8;
 const CROSS_TOOL_HANDOFFS_VISIBLE = 8;
-const CONFUSED_DOTS_MAX = 12;
 
 // ── confused-files (6×3) ────────────────────────────
 //
 // Files where the user-side conversation expressed confusion or
 // frustration in 2+ sessions. Surfaces the file (coordination axis),
-// not the sentiment polarity. Sessions cell: one dot per confused
-// session; abandoned-outcome dots are tinted --danger. The dot stripe
-// encodes magnitude + severity in a single chromeless mark — distinct
-// from the file-friction primitive used by file-rework and audit-
-// staleness so two file-axis widgets don't read as visual duplicates.
+// not the sentiment polarity. Sessions cell is a two-segment stacked
+// bar normalized to the max session count across visible rows: width
+// reads as magnitude, the leading --danger segment reads as the
+// abandoned share, the trailing --warn segment reads as the
+// confused-but-recovered share. Same `fillTrack` / `fillBar` primitive
+// the codebase tables use, so the conversation table speaks the same
+// visual vocabulary as file-rework and audit-staleness.
 function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
   const cf = analytics.confused_files;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
@@ -55,6 +57,8 @@ function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
   }
   const visible = cf.slice(0, CONFUSED_FILES_VISIBLE);
   const hidden = cf.length - visible.length;
+  const maxSessions = Math.max(...visible.map((f) => f.confused_sessions), 1);
+  const open = () => navigateToDetail('conversations', 'signals', 'confused-files');
   return (
     <>
       <div className={clsx(styles.convoTable, styles.confusedTable)}>
@@ -62,24 +66,29 @@ function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
           <span>File</span>
           <span>Sessions</span>
           <span className={styles.convoHeaderNum}>Total</span>
+          <span aria-hidden="true" />
         </div>
         <div className={styles.convoBody}>
           {visible.map((f, i) => {
             const baseName = f.file.split('/').filter(Boolean).pop() ?? f.file;
             return (
-              <div
+              <button
                 key={f.file}
+                type="button"
                 className={styles.convoRow}
                 style={{ '--row-index': i } as CSSProperties}
-                aria-label={`${baseName}: ${f.confused_sessions} confused sessions, ${f.retried_sessions} abandoned`}
+                onClick={open}
+                aria-label={`Open conversation signals · ${baseName}: ${f.confused_sessions} confused sessions, ${f.retried_sessions} abandoned`}
               >
-                <FilePath path={f.file} order="name-first" />
-                <ConfusedSessionsStripe
+                <FilePath path={f.file} />
+                <ConfusedSessionsBar
                   total={f.confused_sessions}
                   abandoned={f.retried_sessions}
+                  max={maxSessions}
                 />
                 <span className={styles.confusedTotal}>{f.confused_sessions}</span>
-              </div>
+                <span className={styles.convoViewButton}>View</span>
+              </button>
             );
           })}
         </div>
@@ -89,24 +98,32 @@ function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// One dot per confused session. Abandoned dots come first (left) so
-// the visual severity reads at a glance — a row that's mostly red on
-// the left is more urgent than one with a single trailing red dot.
-// Caps at CONFUSED_DOTS_MAX so saturation doesn't break row height;
-// excess shows as "+N".
-function ConfusedSessionsStripe({ total, abandoned }: { total: number; abandoned: number }) {
-  const visible = Math.min(total, CONFUSED_DOTS_MAX);
-  const overflow = total - visible;
-  const visibleAbandoned = Math.min(abandoned, visible);
+// Two-segment stacked bar normalized to the max session count across
+// visible rows. The danger segment renders first so the abandoned
+// share reads from the left edge of the bar; trailing warn segment
+// covers the confused-but-recovered share. Air to the right of the
+// fill represents the gap between this row and the worst row in the
+// visible set — magnitude scales without a cap.
+function ConfusedSessionsBar({
+  total,
+  abandoned,
+  max,
+}: {
+  total: number;
+  abandoned: number;
+  max: number;
+}) {
+  const totalPct = (total / max) * 100;
+  const abandonedPct = (Math.min(abandoned, total) / max) * 100;
+  const confusedPct = Math.max(0, totalPct - abandonedPct);
   return (
     <span className={styles.confusedSessionsCell} aria-hidden="true">
-      {Array.from({ length: visible }).map((_, i) => (
-        <span
-          key={i}
-          className={clsx(styles.confusedDot, i < visibleAbandoned && styles.confusedDotAbandoned)}
-        />
-      ))}
-      {overflow > 0 && <span className={styles.fileParent}>+{overflow}</span>}
+      {abandonedPct > 0 && (
+        <span className={styles.confusedSegmentAbandoned} style={{ width: `${abandonedPct}%` }} />
+      )}
+      {confusedPct > 0 && (
+        <span className={styles.confusedSegmentConfused} style={{ width: `${confusedPct}%` }} />
+      )}
     </span>
   );
 }
@@ -135,6 +152,7 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
   }
   const visible = events.slice(0, CROSS_TOOL_HANDOFFS_VISIBLE);
   const hidden = events.length - visible.length;
+  const open = () => navigateToDetail('conversations', 'signals', 'question-handoffs');
   return (
     <>
       <div className={clsx(styles.convoTable, styles.handoffTable)}>
@@ -142,6 +160,7 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
           <span>Route</span>
           <span className={styles.convoHeaderNum}>Gap</span>
           <span>File</span>
+          <span aria-hidden="true" />
         </div>
         <div className={styles.convoBody}>
           {visible.map((e, i) => {
@@ -149,11 +168,13 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
             const fromLabel = getToolMeta(e.tool_from).label;
             const toLabel = getToolMeta(e.tool_to).label;
             return (
-              <div
+              <button
                 key={`${e.handoff_at}-${e.file}-${e.tool_from}-${e.tool_to}`}
+                type="button"
                 className={styles.convoRow}
                 style={{ '--row-index': i } as CSSProperties}
-                aria-label={`${fromLabel} to ${toLabel} on ${baseName}, ${formatGap(e.gap_minutes)} gap`}
+                onClick={open}
+                aria-label={`Open conversation signals · ${fromLabel} to ${toLabel} on ${baseName}, ${formatGap(e.gap_minutes)} gap`}
               >
                 <span className={styles.routeCell}>
                   <span className={styles.routeTool}>
@@ -169,8 +190,9 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
                   </span>
                 </span>
                 <span className={styles.gapCell}>{formatGap(e.gap_minutes)}</span>
-                <FilePath path={e.file} order="name-first" />
-              </div>
+                <FilePath path={e.file} />
+                <span className={styles.convoViewButton}>View</span>
+              </button>
             );
           })}
         </div>
@@ -200,7 +222,14 @@ function UnansweredQuestionsWidget({ analytics }: WidgetBodyProps) {
       </>
     );
   }
-  return <StatWidget value={uq.count.toLocaleString()} />;
+  const value = uq.count.toLocaleString();
+  return (
+    <StatWidget
+      value={value}
+      onOpenDetail={() => navigateToDetail('conversations', 'signals', 'unanswered-questions')}
+      detailAriaLabel={`Open conversation signals · ${value} unanswered questions`}
+    />
+  );
 }
 
 // ── helpers ─────────────────────────────────────────

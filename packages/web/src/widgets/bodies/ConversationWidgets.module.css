@@ -51,69 +51,46 @@
   padding: 12px 14px;
 }
 
-/*
- * Muted mono xs marker — currently only the "+N" overflow indicator at
- * the tail of the confused-sessions dot stripe. The file-path render
- * itself is now the shared `FilePath` primitive in widgets/bodies/
- * shared.tsx, so this class no longer pairs with a filename label.
- */
-.fileParent {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  letter-spacing: var(--tracking-stat);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.convoViewButton {
+  composes: viewPill from '../widget-shared.module.css';
 }
 
 /* ── confused-files table ───────────────────────────────────────── */
 /*
- * 3-col subgrid:
- *   FILE                | SESSIONS                  | TOTAL
- *   team/context.ts     | ●●●○○○                    | 6
- *   memory.ts           | ●●○○○                     | 5
+ * 4-col subgrid:
+ *   FILE                | SESSIONS                  | TOTAL | VIEW
+ *   team/context.ts     | ████████░░░ ░░░░░         | 6     | View
+ *   memory.ts           | ████░░░░░░░ ░░░░░         | 5     | View
  *
- * Sessions cell is the substrate-unique viz: one dot per confused
- * session, abandoned-outcome dots tinted --danger, others --warn.
- * The shape encodes both magnitude (dot count) and severity (color
- * mix) without a separate bar — visually distinct from the
- * file-friction primitive that file-rework / audit-staleness use.
+ * Sessions cell is a 2-segment stacked bar normalized to the row-set
+ * max. Width = magnitude relative to the worst offender; leading
+ * --danger segment = abandoned share; trailing --warn segment =
+ * confused-but-recovered share. Same `fillTrack` / `fillBar`
+ * primitives the codebase tables use, so the conversation table
+ * speaks the same visual vocabulary as file-rework / audit-staleness.
  */
 
 .confusedTable {
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 200px) auto 56px;
 }
 
 .confusedSessionsCell {
+  composes: fillTrack from '../widget-shared.module.css';
+  width: 100%;
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 0;
-  max-width: 180px;
-  justify-content: flex-end;
+  align-items: stretch;
 }
 
-.confusedDot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
+.confusedSegmentAbandoned {
+  composes: fillBar from '../widget-shared.module.css';
+  background: var(--danger);
+  opacity: 0.85;
+}
+
+.confusedSegmentConfused {
+  composes: fillBar from '../widget-shared.module.css';
   background: var(--warn);
   opacity: 0.7;
-  flex-shrink: 0;
-  transition:
-    transform var(--motion-fast) var(--motion),
-    opacity var(--motion-fast) ease;
-}
-
-.confusedDotAbandoned {
-  background: var(--danger);
-  opacity: 0.95;
-}
-
-.convoRow:hover .confusedDot {
-  transform: scale(1.15);
 }
 
 .confusedTotal {
@@ -140,19 +117,23 @@
  */
 
 .handoffTable {
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr) 56px;
 }
 
+/* Tool labels in the route cell read as supporting context, not as
+ * primary identity — the file column carries identity. Match
+ * `liveCellTool`: sans, --text-sm, --muted, so the row hierarchy is
+ *   filename (ink, sans 500) > tool labels (muted, sans) > gap (mono xs).
+ * Mono / ink / 500 here put the tools above the file basename, which is
+ * the wrong reading axis. */
 .routeCell {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  font-family: var(--mono);
   font-size: var(--text-sm);
-  letter-spacing: var(--tracking-stat);
-  color: var(--ink);
-  font-weight: 500;
+  color: var(--muted);
   white-space: nowrap;
+  min-width: 0;
 }
 
 .routeTool {
@@ -180,9 +161,6 @@
 @media (prefers-reduced-motion: reduce) {
   .convoRow {
     animation: none !important;
-    transition: none !important;
-  }
-  .confusedDot {
     transition: none !important;
   }
 }
