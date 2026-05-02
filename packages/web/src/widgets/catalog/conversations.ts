@@ -21,6 +21,7 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
     dataKeys: ['confused_files'],
     requiredCapability: 'conversationLogs',
     drillTarget: { view: 'conversations', tab: 'signals', q: 'confused-files' },
+    ownsClick: true,
   },
   {
     id: 'unanswered-questions',
@@ -40,6 +41,7 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
     dataKeys: ['unanswered_questions'],
     requiredCapability: 'conversationLogs',
     drillTarget: { view: 'conversations', tab: 'signals', q: 'unanswered-questions' },
+    ownsClick: true,
   },
   // cross-tool-handoff-questions: substrate-unique. Surfaces handoff EVENTS
   // (file × tool-from × tool-to × gap-time) where one tool's session
@@ -64,5 +66,6 @@ export const CONVERSATIONS_WIDGETS: WidgetDef[] = [
     dataKeys: ['cross_tool_handoff_questions'],
     requiredCapability: 'conversationLogs',
     drillTarget: { view: 'conversations', tab: 'signals', q: 'question-handoffs' },
+    ownsClick: true,
   },
 ];
