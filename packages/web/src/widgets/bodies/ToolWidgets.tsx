@@ -30,8 +30,8 @@ import { aggregateModels, completionColor, formatCost } from '../utils.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { setQueryParams } from '../../lib/router.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
-import shared from '../widget-shared.module.css';
 import styles from './ToolWidgets.module.css';
+import { AnnotatedStrip, type AnnotatedStripSegment } from './atoms/AnnotatedStrip.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 import { GhostRows, CoverageNote, capabilityCoverageNote, StatWidget } from './shared.js';
 
@@ -78,10 +78,16 @@ interface FlowLink {
  * Main-view flow strip. The overview answers one question quickly:
  * "How much work crossed tool boundaries, and did it generally land?"
  * Pair counts, rates, and timing belong in the Tools detail view.
+ *
+ * The strip is interactive: each segment is a button. At rest the head
+ * caption names the leading pair so colors are interpretable on first
+ * read; clicking a segment swaps the caption to that pair's detail. Same
+ * pattern as model-mix.
  */
 function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
   const handoffs = analytics.tool_handoffs;
   const tools = analytics.tool_comparison;
+  const [activeKey, setActiveKey] = useState<string | null>(null);
 
   if (handoffs.length === 0) {
     const toolCount = tools.length;
@@ -136,6 +142,28 @@ function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
     })
     .join(', ');
 
+  const focusKey = (link: FlowLink) => `${link.from}->${link.to}`;
+  const tailCount = sortedLinks.length - (maxBands - 1);
+  const segments: AnnotatedStripSegment[] = displayLinks.map((link) => {
+    if (link.from === 'other') {
+      return {
+        key: focusKey(link),
+        value: link.file_count,
+        color: 'var(--soft)',
+        label: `+${tailCount} more`,
+      };
+    }
+    const fromMeta = getToolMeta(link.from);
+    const toMeta = getToolMeta(link.to);
+    return {
+      key: focusKey(link),
+      value: link.file_count,
+      color: fromMeta.color,
+      label: `${fromMeta.label} → ${toMeta.label}`,
+    };
+  });
+  const annotatedKey = activeKey ?? (displayLinks[0] ? focusKey(displayLinks[0]) : null);
+
   return (
     <div
       className={styles.handoffWeft}
@@ -148,31 +176,14 @@ function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
           {totalFiles === 1 ? 'file handed off' : 'files handed off'}
         </span>
       </div>
-      <div className={styles.handoffStrip} aria-hidden="true">
-        {displayLinks.map((link, i) => {
-          const meta = link.from === 'other' ? null : getToolMeta(link.from);
-          return (
-            <span
-              key={`${link.from}->${link.to}-${i}`}
-              className={styles.handoffSegment}
-              style={
-                {
-                  flexGrow: link.file_count,
-                  flexBasis: 0,
-                  minWidth: 2,
-                  background: meta?.color ?? 'var(--soft)',
-                  '--cell-index': i,
-                } as CSSProperties
-              }
-              title={
-                link.from === 'other'
-                  ? `${link.file_count} files across other handoff pairs`
-                  : `${getToolMeta(link.from).label} to ${getToolMeta(link.to).label}: ${link.file_count} files`
-              }
-            />
-          );
-        })}
-      </div>
+      <AnnotatedStrip
+        segments={segments}
+        annotatedKey={annotatedKey}
+        activeKey={activeKey}
+        onSegmentClick={(key) => setActiveKey(activeKey === key ? null : key)}
+        ariaLabel="Cross-tool handoff flow"
+        titleFor={(s) => `${s.label}: ${s.value} ${s.value === 1 ? 'file' : 'files'}`}
+      />
     </div>
   );
 }
@@ -467,7 +478,6 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
-  const totalSessions = models.reduce((s, m) => s + m.total, 0) || 1;
   const totalCost = tu.total_estimated_cost_usd;
   const hasCost = totalCost != null && totalCost > 0;
 
@@ -476,7 +486,6 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
   const visible = sortedModels.slice(0, MIX_TOP_N);
   const tail = sortedModels.slice(MIX_TOP_N);
   const tailTotal = tail.reduce((s, m) => s + m.total, 0);
-  const tailLabel = tail.length > 0 ? `+${tail.length} more` : null;
 
   const activeModel = active ? models.find((x) => x.model === active) : null;
   const activeTokens = active ? tokensByModel.get(active) : null;
@@ -489,10 +498,31 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
       ? formatCost(totalCost, 2)
       : String(models.length);
 
+  const TAIL_KEY = '__tail__';
+  const segments: AnnotatedStripSegment[] = [
+    ...visible.map((m) => ({
+      key: m.model,
+      value: m.total,
+      color: hashModelColor(m.model),
+      label: m.model,
+    })),
+    ...(tail.length > 0
+      ? [
+          {
+            key: TAIL_KEY,
+            value: tailTotal,
+            color: 'var(--soft)',
+            label: `+${tail.length} more`,
+          },
+        ]
+      : []),
+  ];
+  const annotatedKey = active ?? segments[0]?.key ?? null;
+
   return (
     <div className={styles.mixWrap}>
       <div className={styles.mixHead}>
-        <span className={shared.heroStatValue}>{heroValue}</span>
+        <span className={styles.mixHeadValueLead}>{heroValue}</span>
         {activeModel && (
           <span className={styles.mixHeadCaption}>
             <span className={styles.mixHeadName}>{activeModel.model}</span>
@@ -511,37 +541,22 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
           </span>
         )}
       </div>
-      <div className={styles.mixStrip} role="group" aria-label="Model session share">
-        {visible.map((m) => {
-          const share = m.total / totalSessions;
-          const isActive = active === m.model;
-          const dim = active != null && !isActive;
-          return (
-            <button
-              key={m.model}
-              type="button"
-              className={styles.mixSegment}
-              style={{
-                width: `${share * 100}%`,
-                background: hashModelColor(m.model),
-                opacity: dim ? 0.2 : 1,
-              }}
-              onClick={() => setActive(isActive ? null : m.model)}
-              aria-pressed={isActive}
-              aria-label={`${m.model}: ${Math.round(share * 100)}%`}
-              title={`${m.model} · ${m.total} ${m.total === 1 ? 'session' : 'sessions'}`}
-            />
-          );
-        })}
-        {tailLabel && (
-          <span
-            className={styles.mixTail}
-            style={{ width: `${(tailTotal / totalSessions) * 100}%` }}
-            aria-label={`${tail.length} more models`}
-            title={tail.map((m) => `${m.model} · ${m.total}`).join(', ')}
-          />
-        )}
-      </div>
+      <AnnotatedStrip
+        segments={segments}
+        annotatedKey={annotatedKey}
+        activeKey={active}
+        onSegmentClick={(key) => {
+          if (key === TAIL_KEY) return;
+          setActive(active === key ? null : key);
+        }}
+        ariaLabel="Model session share"
+        stripHeight={14}
+        titleFor={(s) =>
+          s.key === TAIL_KEY
+            ? tail.map((m) => `${m.model} · ${m.total}`).join(', ')
+            : `${s.label} · ${s.value} ${s.value === 1 ? 'session' : 'sessions'}`
+        }
+      />
     </div>
   );
 }

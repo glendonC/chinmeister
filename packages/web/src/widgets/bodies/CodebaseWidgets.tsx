@@ -407,41 +407,46 @@ function FilesWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// ── file-rework ──────────────────────────────────────
-// Column-headed table whose RATE column carries a sparkline-style mini
-// SVG: a smooth area+stroke curve that ramps from the baseline up to a
-// height encoded from rework_ratio. Visually matches the trend-line
-// vocabulary used in OutcomeWidgets without fabricating time-series
-// data — the schema only carries a single ratio per file. Severity tier
-// flips at 50%.
-const REWORK_SPARK_W = 100;
-const REWORK_SPARK_H = 22;
+// ── shared spark ─────────────────────────────────────
+// Single-value ramp used by file-rework's "fail rate" column and
+// audit-staleness's "days cold" column. Smooth area+stroke curve climbing
+// from a bottom-left baseline to a height encoded from value/max. Stays
+// local because it renders a single-value ramp, not a series — the
+// canonical Sparkline primitive in shared.tsx is for time series.
+const RAMP_SPARK_W = 100;
+const RAMP_SPARK_H = 22;
 
-function ReworkSpark({ ratio, max, color }: { ratio: number; max: number; color: string }) {
-  // Smooth ramp from bottom-left up to the rate's level on the right.
-  // Vertical position is normalized against the visible set's max ratio
-  // so files stratify even when absolute rates are tightly clustered;
-  // the % column carries the absolute number.
-  const norm = max > 0 ? Math.min(1, ratio / max) : 0;
-  const target = REWORK_SPARK_H - norm * (REWORK_SPARK_H - 3) - 2;
-  const baseline = REWORK_SPARK_H - 1;
+function RampSpark({
+  value,
+  max,
+  color,
+  className,
+}: {
+  value: number;
+  max: number;
+  color: string;
+  className?: string;
+}) {
+  const norm = max > 0 ? Math.min(1, value / max) : 0;
+  const target = RAMP_SPARK_H - norm * (RAMP_SPARK_H - 3) - 2;
+  const baseline = RAMP_SPARK_H - 1;
   const samples = 6;
   const points = Array.from({ length: samples + 1 }, (_, i) => {
     const t = i / samples;
     const ease = t * t * (3 - 2 * t);
-    const x = t * REWORK_SPARK_W;
+    const x = t * RAMP_SPARK_W;
     const y = baseline - (baseline - target) * ease;
     return { x, y };
   });
   const line = points
     .map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`)
     .join(' ');
-  const area = `${line} L${REWORK_SPARK_W},${REWORK_SPARK_H} L0,${REWORK_SPARK_H} Z`;
+  const area = `${line} L${RAMP_SPARK_W},${RAMP_SPARK_H} L0,${RAMP_SPARK_H} Z`;
   return (
     <svg
-      viewBox={`0 0 ${REWORK_SPARK_W} ${REWORK_SPARK_H}`}
+      viewBox={`0 0 ${RAMP_SPARK_W} ${RAMP_SPARK_H}`}
       preserveAspectRatio="none"
-      className={styles.lollipopSpark}
+      className={className}
       aria-hidden="true"
     >
       <path d={area} fill={color} opacity={0.15} />
@@ -458,6 +463,10 @@ function ReworkSpark({ ratio, max, color }: { ratio: number; max: number; color:
     </svg>
   );
 }
+
+// ── file-rework ──────────────────────────────────────
+// Column-headed table whose RATE column carries the shared RampSpark.
+// Severity tier flips at 50%.
 
 function FileReworkWidget({ analytics }: WidgetBodyProps) {
   const fr = analytics.file_rework;
@@ -491,7 +500,12 @@ function FileReworkWidget({ analytics }: WidgetBodyProps) {
             <FilePath path={f.file} />
 
             <span className={styles.lollipopCell}>
-              <ReworkSpark ratio={f.rework_ratio} max={maxRatio} color={color} />
+              <RampSpark
+                value={f.rework_ratio}
+                max={maxRatio}
+                color={color}
+                className={styles.lollipopSpark}
+              />
               <span className={styles.lollipopValue} style={{ color }}>
                 {f.rework_ratio}%
               </span>
@@ -521,14 +535,8 @@ function FileReworkWidget({ analytics }: WidgetBodyProps) {
 }
 
 // ── audit-staleness ──────────────────────────────────
-// "Thermocline": each cold directory is a horizontal lane. A circle on
-// the left rail carries prior_edit_count as visual mass (how loaded the
-// directory was before going cold). The bar fills rightward proportional
-// to days_since on a shared 14d-to-Nd scale, color tiered by severity.
-// Heavy circle + long bar = was important, now abandoned.
-const STALE_MASS_MIN = 6;
-const STALE_MASS_MAX = 18;
-
+// Clickable-row table matching file-rework's shape: spark + colored value
+// in the days-cold column. Severity tiers at 30d / 60d.
 function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
   const data = analytics.audit_staleness;
   if (data.length === 0) {
@@ -550,45 +558,30 @@ function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
   );
   const hidden = sortedAll.length - sorted.length;
   const maxDays = Math.max(...sorted.map((d) => d.days_since), 14);
-  const minDays = 14;
-  const span = Math.max(1, maxDays - minDays);
-  const maxMass = Math.max(...sorted.map((d) => d.prior_edit_count), 1);
 
   const open = openCodebase('directories', 'cold-dirs');
 
   return (
-    <div className={styles.thermoFrame}>
+    <div className={styles.staleTable} role="table">
+      <div className={styles.staleHeadRow} role="row">
+        <span role="columnheader">directory</span>
+        <span role="columnheader">days cold</span>
+        <span aria-hidden="true" />
+      </div>
       {sorted.map((d, i) => {
         const color = stalenessSeverityColor(d.days_since);
-        const fillPct = ((d.days_since - minDays) / span) * 100;
-        const massSize =
-          STALE_MASS_MIN + (d.prior_edit_count / maxMass) * (STALE_MASS_MAX - STALE_MASS_MIN);
-        const lane = (
+        const content = (
           <>
-            <span
-              className={styles.thermoMass}
-              style={{
-                width: `${massSize}px`,
-                height: `${massSize}px`,
-                background: color,
-              }}
-              title={`${d.prior_edit_count} prior edits`}
-              aria-hidden="true"
-            />
-            <span className={styles.thermoTrack}>
-              <span
-                className={styles.thermoFill}
-                style={{
-                  width: `${Math.max(4, fillPct)}%`,
-                  background: color,
-                }}
+            <FilePath path={d.directory} />
+
+            <span className={styles.staleCell}>
+              <RampSpark
+                value={d.days_since}
+                max={maxDays}
+                color={color}
+                className={styles.staleSpark}
               />
-            </span>
-            <span className={styles.thermoMeta}>
-              <span className={styles.thermoDir} title={d.directory}>
-                {d.directory}
-              </span>
-              <span className={styles.thermoDays} style={{ color }}>
+              <span className={styles.staleValue} style={{ color }}>
                 {d.days_since}d
               </span>
             </span>
@@ -599,12 +592,13 @@ function AuditStalenessWidget({ analytics }: WidgetBodyProps) {
           <button
             key={d.directory}
             type="button"
-            className={styles.thermoLane}
+            role="row"
+            className={styles.staleRow}
             style={{ '--row-index': i } as CSSProperties}
             onClick={open}
-            aria-label={`Open cold directories · ${d.directory} ${d.days_since} days`}
+            aria-label={`Open cold directories · ${d.directory} ${d.days_since} days · ${d.prior_edit_count} prior edits`}
           >
-            {lane}
+            {content}
           </button>
         );
       })}

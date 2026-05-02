@@ -245,7 +245,7 @@ button.rowBase {
  * Track + fill pair for percent/share visualizations. The track is the
  * empty "ghost" channel; the fill is sized inline (`width: X%`) and
  * tinted inline by the widget. Used wherever a row needs a bar:
- * directory completion, file beam intensity, thermostat staleness,
+ * directory completion, file beam intensity, cold-directory days,
  * collision edit shares, outcome share, one-shot rate, work-type
  * metric bars.
  *

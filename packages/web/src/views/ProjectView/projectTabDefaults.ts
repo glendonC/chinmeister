@@ -35,6 +35,6 @@ export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'files', colSpan: 6, rowSpan: 4 },
   { id: 'tool-work-type-fit', colSpan: 6, rowSpan: 4 },
   { id: 'tool-handoffs', colSpan: 6, rowSpan: 3 },
-  { id: 'model-mix', colSpan: 4, rowSpan: 2 },
+  { id: 'model-mix', colSpan: 4, rowSpan: 3 },
   { id: 'stuckness', colSpan: 4, rowSpan: 2 },
 ];

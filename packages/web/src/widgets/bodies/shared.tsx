@@ -254,8 +254,9 @@ export function GhostSparkline() {
 /**
  * Canonical inline sparkline. Replaces the three independent SVG sparkline
  * implementations (charts.tsx Sparkline, OutcomeWidgets.MiniSparkline) that
- * differed only in opacities and the trailing dot. ReworkSpark stays local
- * because it renders a single-ratio ramp, not a series.
+ * differed only in opacities and the trailing dot. RampSpark in
+ * CodebaseWidgets stays local because it renders a single-value ramp,
+ * not a series.
  *
  *   values  — series to plot (>= 2 points; renders null otherwise).
  *   color   — fill + stroke. Defaults to var(--ink).
