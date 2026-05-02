@@ -7,7 +7,7 @@
  *   directories      donut + clickable-row table (outcomes-shape, View chip)
  *   files            "hotspot beam" (touches share fill colored by outcome)
  *   file-rework      "failure spectrum" (0-100% axis with labeled dots)
- *   audit-staleness  "thermocline" (mass + bar lanes sorted by days_since)
+ *   audit-staleness  clickable-row table with mass + bar intensity column
  *   concurrent-edits clickable-row table with contention-stack micro-primitive
  *
  * Tokens come from app.css / tokens.css. Accent (lavender) is reserved
@@ -451,70 +451,65 @@
 }
 
 /* ════════════════════════════════════════════════════
- * audit-staleness: "thermocline" — mass + bar lanes
+ * audit-staleness: clickable-row table mirroring file-rework's shape.
+ * "days cold" column carries the shared RampSpark + colored numeric value.
  * ════════════════════════════════════════════════════ */
 
-.thermoFrame {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+.staleTable {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(160px, 220px)
+    56px;
+  column-gap: var(--space-md);
+  align-content: start;
   flex: 0 0 auto;
   min-height: 0;
-  padding: var(--space-sm) 0;
-  justify-content: flex-start;
 }
 
-.thermoLane {
-  composes: rowBase from '../widget-shared.module.css';
+.staleHeadRow,
+.staleRow {
+  grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 24px minmax(80px, 1fr) auto 56px;
+  grid-template-columns: subgrid;
+  align-items: center;
+}
+
+.staleHeadRow {
+  composes: tableHead from '../widget-shared.module.css';
+  padding: 0 10px 10px;
+  margin: 0 -10px;
+}
+
+.staleRow {
+  composes: rowBase from '../widget-shared.module.css';
+  padding: 9px 10px;
+  margin: 0 -10px;
+  animation-delay: calc(var(--row-index, 0) * 45ms);
+}
+
+.staleCell {
+  display: flex;
   align-items: center;
   gap: var(--space-md);
-  padding: 8px 10px;
-  margin: 0 -10px;
-  width: calc(100% + 20px);
-  animation-delay: calc(var(--row-index, 0) * 50ms);
-}
-
-.thermoMass {
-  border-radius: 50%;
-  justify-self: center;
-  opacity: 0.8;
-  flex-shrink: 0;
-}
-
-.thermoTrack {
-  composes: fillTrack from '../widget-shared.module.css';
-  border-radius: 4px;
-}
-
-.thermoFill {
-  composes: fillBar from '../widget-shared.module.css';
-  opacity: var(--opacity-bar-fill);
-}
-
-.thermoMeta {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 8px;
   min-width: 0;
+}
+
+.staleSpark {
+  flex: 1;
+  height: 22px;
+  min-width: 80px;
+  display: block;
+}
+
+.staleValue {
   font-family: var(--mono);
   font-size: var(--text-xs);
-  letter-spacing: var(--tracking-stat);
-  white-space: nowrap;
-}
-
-.thermoDir {
-  color: var(--ink);
   font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 320px;
-}
-
-.thermoDays {
   font-variant-numeric: tabular-nums;
-  font-weight: 500;
+  letter-spacing: 0;
+  min-width: 40px;
+  text-align: right;
 }
 
 /* ════════════════════════════════════════════════════
@@ -646,13 +641,12 @@
   .dirDataRow,
   .beamRow,
   .lollipopRow,
-  .thermoLane,
+  .staleRow,
   .collisionRow {
     animation: none !important;
   }
   .beamFill,
   .dirCompletionFill,
-  .thermoFill,
   .collisionEditsFill {
     transition: none !important;
   }

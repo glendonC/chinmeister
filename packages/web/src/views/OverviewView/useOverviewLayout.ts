@@ -162,12 +162,6 @@ export function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
   );
 }
 
-// model-mix renders as a strip with the active-model detail inline in the
-// caption; rowSpan > 2 leaves ~150px of empty space below the strip.
-export function healModelMixSize(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => (s.id === 'model-mix' && s.rowSpan > 2 ? { ...s, rowSpan: 2 } : s));
-}
-
 // file-overlap and conflicts-blocked are bare StatWidget composites at
 // 3×2. Saved layouts at larger sizes show a single small hero floating in
 // a half-row of empty space, breaking visual uniformity with the other
@@ -244,11 +238,9 @@ export function healAll(slots: WidgetSlot[]): WidgetSlot[] {
   return clampToCatalogConstraints(
     healActivityLayout(
       healTeamStatSize(
-        healModelMixSize(
-          healToolCallErrorsSize(
-            healScopeComplexityWidth(
-              healDirectoriesSize(healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(slots)))),
-            ),
+        healToolCallErrorsSize(
+          healScopeComplexityWidth(
+            healDirectoriesSize(healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(slots)))),
           ),
         ),
       ),

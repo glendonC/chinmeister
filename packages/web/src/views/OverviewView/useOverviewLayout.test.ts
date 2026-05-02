@@ -6,7 +6,6 @@ import {
   healOutcomesWidth,
   healScopeComplexityWidth,
   healToolCallErrorsSize,
-  healModelMixSize,
   healTeamStatSize,
   clampToCatalogConstraints,
   healActivityLayout,
@@ -85,13 +84,6 @@ describe('healToolCallErrorsSize', () => {
   it('also catches the intermediate 4x2 phase', () => {
     const out = healToolCallErrorsSize([{ id: 'tool-call-errors', colSpan: 4, rowSpan: 2 }]);
     expect(out).toEqual([{ id: 'tool-call-errors', colSpan: 3, rowSpan: 2 }]);
-  });
-});
-
-describe('healModelMixSize', () => {
-  it('shrinks the stale 4x3 height back to 4x2', () => {
-    const out = healModelMixSize([{ id: 'model-mix', colSpan: 4, rowSpan: 3 }]);
-    expect(out).toEqual([{ id: 'model-mix', colSpan: 4, rowSpan: 2 }]);
   });
 });
 
@@ -183,7 +175,7 @@ describe('healAll (chain order)', () => {
       colSpan: 3,
       rowSpan: 2,
     });
-    expect(byId.get('model-mix')?.rowSpan).toBe(2);
+    expect(byId.get('model-mix')?.rowSpan).toBe(3);
     expect(byId.get('file-overlap')).toEqual({ id: 'file-overlap', colSpan: 3, rowSpan: 2 });
     expect(byId.get('conflicts-blocked')).toEqual({
       id: 'conflicts-blocked',

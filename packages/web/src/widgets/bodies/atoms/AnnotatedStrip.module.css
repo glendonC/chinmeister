@@ -1,0 +1,159 @@
+/*
+ * Typography + layout for AnnotatedStrip.
+ *
+ * Mirrors AnnotatedRing's vocabulary on a horizontal axis: dashed leader
+ * stroke from the strip up to a stacked label (share% in segment color +
+ * name in --muted). The annotation occupies a reserved row above the
+ * strip so the strip itself stays at constant height regardless of label
+ * presence.
+ *
+ * The annotation is absolutely positioned with `left: X%` driven by the
+ * annotated segment's cumulative center, so the leader anchors at the
+ * segment's center. `data-anchor=start|end` swap the transform so labels
+ * near the strip's edges stay inside the strip's horizontal bounds.
+ */
+
+.wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+/* Holds the absolutely-positioned annotation. Fixed height reserves the
+ * vertical space below the strip; the annotation inside stretches to fill
+ * this height so the leader always lands exactly at the strip's bottom edge,
+ * regardless of the share/name text's natural height. */
+.annotationRow {
+  position: relative;
+  height: 28px;
+  width: 100%;
+}
+
+.annotation {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.annotation[data-anchor='start'] {
+  transform: translateX(0);
+  align-items: flex-start;
+}
+
+.annotation[data-anchor='end'] {
+  transform: translateX(-100%);
+  align-items: flex-end;
+}
+
+.share {
+  font-family: var(--display);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.name {
+  font-family: var(--sans);
+  font-size: var(--text-2xs);
+  font-weight: 500;
+  color: var(--muted);
+  margin-top: 2px;
+  line-height: 1;
+}
+
+/* Dashed leader from the strip's bottom edge down to the share/name
+ * stack. `flex: 1` makes the leader fill whatever vertical space remains
+ * in the annotation row, so its top edge lands exactly on the strip's
+ * bottom regardless of how tall the share/name text rendered. Mirrors
+ * AnnotatedRing's leader stroke: 1px dashed, var(--muted). */
+.leader {
+  flex: 1;
+  width: 1px;
+  min-height: 6px;
+  margin-bottom: 4px;
+  background-image: linear-gradient(
+    to bottom,
+    var(--muted) 0,
+    var(--muted) 2px,
+    transparent 2px,
+    transparent 5px
+  );
+  background-size: 1px 3px;
+  background-repeat: repeat-y;
+}
+
+.annotation[data-anchor='middle'] .leader {
+  align-self: center;
+}
+
+.annotation[data-anchor='end'] .leader {
+  align-self: flex-end;
+}
+
+.strip {
+  display: flex;
+  width: 100%;
+  height: var(--strip-height, 22px);
+  border-radius: var(--radius-pill);
+  overflow: hidden;
+  background: var(--ghost);
+}
+
+.segment {
+  appearance: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  height: 100%;
+  cursor: default;
+  animation: stripSegmentIn 0.32s var(--motion) both;
+  animation-delay: calc(var(--cell-index, 0) * 30ms);
+  transform-origin: left center;
+  transition:
+    opacity var(--motion-base) var(--motion),
+    filter var(--motion-base) var(--motion);
+}
+
+button.segment {
+  cursor: pointer;
+}
+
+button.segment:hover {
+  filter: brightness(1.08);
+}
+
+button.segment:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  z-index: 1;
+}
+
+@keyframes stripSegmentIn {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segment {
+    animation: none !important;
+    transition: none !important;
+  }
+  button.segment:hover {
+    filter: none;
+  }
+}

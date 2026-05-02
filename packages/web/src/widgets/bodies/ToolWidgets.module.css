@@ -32,9 +32,7 @@
 .handoffWeft {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: var(--space-md);
-  flex: 1;
+  gap: var(--space-sm);
   min-width: 0;
   width: 100%;
 }
@@ -49,10 +47,10 @@
 
 .handoffLeadValue {
   font-family: var(--display);
-  font-size: clamp(2.1rem, 4.2vw, 3.4rem);
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
   font-weight: 200;
-  line-height: 0.94;
-  letter-spacing: -0.055em;
+  line-height: 0.96;
+  letter-spacing: -0.05em;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
 }
@@ -65,39 +63,10 @@
   text-transform: lowercase;
 }
 
-.handoffStrip {
-  display: flex;
-  flex: 0 0 auto;
-  width: 100%;
-  height: clamp(18px, 3.4vw, 28px);
-  border-radius: var(--radius-pill);
-  overflow: hidden;
-  background: var(--hover-bg);
-}
-
-.handoffSegment {
-  height: 100%;
-  min-width: 1px;
-  opacity: 0.82;
-  animation: handoffSegmentIn 0.32s var(--motion) both;
-  animation-delay: calc(var(--cell-index, 0) * 30ms);
-  transform-origin: left center;
-}
-
-@keyframes handoffSegmentIn {
-  from {
-    transform: scaleX(0);
-  }
-  to {
-    transform: scaleX(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .handoffSegment {
-    animation: none !important;
-  }
-}
+/* The strip itself comes from the shared AnnotatedStrip primitive in
+ * `atoms/AnnotatedStrip.tsx`. Strip chrome (segment buttons, animation,
+ * leader-line annotation) lives there so the model-mix widget shares the
+ * exact same vocabulary. */
 
 /* ================================================================
  * 2) tool-work-type-fit (Where Each Tool Wins)
@@ -371,13 +340,30 @@
 .mixWrap {
   display: flex;
   flex-direction: column;
-  gap: var(--space-md);
+  gap: var(--space-sm);
 }
 
 .mixHead {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+/* Compact hero that mirrors handoff's strip-widget vocabulary. The strip
+ * is the primary viz here; the cost/count is a supplemental anchor, not
+ * the entire content like a stat-card hero. Sized so the body fits the
+ * fitContent sweet spot at h:2 (≤184px). */
+.mixHeadValueLead {
+  font-family: var(--display);
+  font-size: clamp(1.6rem, 2.6vw, 2.1rem);
+  font-weight: 200;
+  line-height: 0.96;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .mixHeadCaption {
@@ -406,45 +392,7 @@
   margin: 0 6px;
 }
 
-.mixStrip {
-  display: flex;
-  height: 14px;
-  border-radius: 3px;
-  overflow: hidden;
-  gap: 1px;
-  background: var(--ghost);
-}
-
-.mixSegment {
-  appearance: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  height: 100%;
-  cursor: pointer;
-  transition: opacity var(--motion-base) var(--motion);
-}
-
-.mixSegment:hover {
-  filter: brightness(1.08);
-}
-
-.mixSegment:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 2px;
-}
-
-.mixTail {
-  height: 100%;
-  background: var(--ghost);
-  border-left: 1px solid var(--page-bg);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mixSegment {
-    transition: none !important;
-  }
-  .mixSegment:hover {
-    filter: none;
-  }
-}
+/* The strip itself comes from the shared AnnotatedStrip primitive in
+ * `atoms/AnnotatedStrip.tsx`. Strip chrome (segment buttons, animation,
+ * leader-line annotation) lives there so the cross-tool flow widget
+ * shares the exact same vocabulary. */
