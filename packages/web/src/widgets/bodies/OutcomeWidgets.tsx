@@ -1,18 +1,13 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
+import clsx from 'clsx';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import { navigateToDetail, setQueryParam } from '../../lib/router.js';
-import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
 import { completionColor } from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import styles from './OutcomeWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import {
-  capabilityCoverageNote,
-  CoverageNote,
-  InlineDelta,
-  Sparkline,
-  StatWidget,
-} from './shared.js';
+import { AnnotatedRing, type AnnotatedRingArc } from './atoms/AnnotatedRing.js';
+import { CoverageNote, Sparkline, StatWidget } from './shared.js';
 
 function openOutcomes(tab: string) {
   return () => setQueryParam('outcomes', tab);
@@ -41,12 +36,6 @@ function openOutcomes(tab: string) {
 // buttons. The ring is the visual identity; the table is the
 // breakdown + drill affordance.
 
-const RING_VIEW = 160;
-const RING_CX = 80;
-const RING_CY = 80;
-const RING_R = 58;
-const RING_GAP_DEG = 14;
-
 type OutcomeKey = 'completed' | 'abandoned' | 'failed' | 'unknown';
 
 interface OutcomeSlice {
@@ -59,10 +48,7 @@ interface OutcomeSlice {
 
 function OutcomesWidget({ analytics }: WidgetBodyProps) {
   const cs = analytics.completion_summary;
-  const pc = analytics.period_comparison;
-  const prevRate = pc.previous?.completion_rate;
-  const currRate = pc.current.completion_rate;
-  const completionDelta = prevRate != null && prevRate > 0 ? currRate - prevRate : null;
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
   if (cs.total_sessions === 0) {
     return <SectionEmpty>No sessions yet</SectionEmpty>;
@@ -87,7 +73,6 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
     { key: 'unknown', label: 'no outcome', count: cs.unknown, color: 'var(--ghost)', muted: true },
   ];
   const slices = allSlices.filter((s) => s.count > 0);
-  const reported = cs.total_sessions - cs.unknown;
 
   // Per-outcome daily series for the TREND mini-sparkline column.
   const trends: Record<OutcomeKey, number[]> = {
@@ -106,8 +91,8 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
       <OutcomeRing
         slices={slices.filter((s) => !s.muted)}
         cs={cs}
-        completionDelta={completionDelta}
-        reported={reported}
+        hoveredKey={hoveredKey}
+        onHover={setHoveredKey}
       />
       <div className={styles.outcomeTable} role="table">
         <div className={styles.outcomeHeadRow} role="row">
@@ -123,8 +108,19 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
           const share = cs.total_sessions > 0 ? s.count / cs.total_sessions : 0;
           const sharePct = Math.round(share * 100);
           const series = trends[s.key];
-          const content = (
-            <>
+          const dimmed = !s.muted && hoveredKey != null && hoveredKey !== s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              role="row"
+              className={clsx(styles.outcomeDataRow, dimmed && styles.outcomeDataRowDim)}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={openOutcomes('sessions')}
+              onMouseEnter={s.muted ? undefined : () => setHoveredKey(s.key)}
+              onMouseLeave={s.muted ? undefined : () => setHoveredKey(null)}
+              aria-label={`Open outcomes detail · ${s.label} ${s.count}`}
+            >
               <span className={styles.outcomeCellOutcome}>
                 <span
                   className={styles.outcomeDot}
@@ -159,19 +155,6 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
                 )}
               </span>
               <span className={styles.outcomeViewButton}>View</span>
-            </>
-          );
-          return (
-            <button
-              key={s.key}
-              type="button"
-              role="row"
-              className={styles.outcomeDataRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={openOutcomes('sessions')}
-              aria-label={`Open outcomes detail · ${s.label} ${s.count}`}
-            >
-              {content}
             </button>
           );
         })}
@@ -180,93 +163,45 @@ function OutcomesWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-/** Ring component — mirrors UsageDetailView's ToolRing: 160×160
- *  SVG, R=58, SW=8, center value + caption as SVG text. `unknown`
- *  outcome is excluded from arcs (caller pre-filters) because the
- *  arc has no audience signal; it surfaces instead as the small
- *  reported-count caption underneath the ring when its share is
- *  high enough to matter. */
+// Center text reads completion rate; leader-line labels per slice show the
+// share split. labelSide='left' keeps the labels off the table to the right.
+// Unknown is pre-filtered out by the caller because it has no audience
+// signal in the arc. Hover state is shared with the row table so hovering a
+// row dims the other arcs and vice versa.
 function OutcomeRing({
   slices,
   cs,
-  completionDelta,
-  reported,
+  hoveredKey,
+  onHover,
 }: {
   slices: OutcomeSlice[];
   cs: UserAnalytics['completion_summary'];
-  completionDelta: number | null;
-  reported: number;
+  hoveredKey: string | null;
+  onHover: (key: string | null) => void;
 }) {
-  const arcs = useMemo(
+  const arcs = useMemo<AnnotatedRingArc[]>(
     () =>
-      computeArcSlices(
-        slices.map((s) => s.count),
-        RING_GAP_DEG,
-      ).map((seg, i) => ({ ...slices[i], ...seg })),
+      slices.map((s) => ({
+        key: s.key,
+        value: s.count,
+        color: s.color,
+        label: s.label,
+      })),
     [slices],
   );
-
   const rate = Math.round(cs.completion_rate);
-  const highUnknown = cs.unknown > 0 && reported / cs.total_sessions < 0.7;
-
   return (
     <div className={styles.ringBlock}>
-      <svg
-        viewBox={`0 0 ${RING_VIEW} ${RING_VIEW}`}
+      <AnnotatedRing
+        arcs={arcs}
+        centerValue={`${rate}%`}
+        centerEyebrow="COMPLETED"
+        labelSide="right"
+        ariaLabel={`Completion rate ${rate}%, ${cs.completed} of ${cs.total_sessions} sessions completed`}
         className={styles.ringSvg}
-        role="img"
-        aria-label={`Completion rate ${rate}%, ${cs.completed} of ${cs.total_sessions} sessions completed`}
-      >
-        <circle cx={RING_CX} cy={RING_CY} r={RING_R} className={styles.ringTrack} />
-        {arcs
-          .filter((a) => a.sweepDeg > 0.2)
-          .map((a) => (
-            <path
-              key={a.key}
-              d={arcPath(RING_CX, RING_CY, RING_R, a.startDeg, a.sweepDeg)}
-              className={styles.ringArc}
-              style={{ stroke: a.color, opacity: 0.9 }}
-            >
-              <title>
-                {a.label}: {a.count}
-              </title>
-            </path>
-          ))}
-        <text
-          x={RING_CX}
-          y={RING_CY - 2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill="var(--ink)"
-          fontSize="30"
-          fontWeight="200"
-          fontFamily="var(--display)"
-          letterSpacing="-0.04em"
-        >
-          {rate}%
-        </text>
-        <text
-          x={RING_CX}
-          y={RING_CY + 20}
-          textAnchor="middle"
-          fill="var(--soft)"
-          fontSize="8"
-          fontFamily="var(--mono)"
-          letterSpacing="0.14em"
-        >
-          COMPLETED
-        </text>
-      </svg>
-      {completionDelta != null && (
-        <span className={styles.ringCaption}>
-          <InlineDelta value={completionDelta} /> vs prior period
-        </span>
-      )}
-      {highUnknown && (
-        <span className={styles.ringCaption}>
-          {reported} of {cs.total_sessions} reported
-        </span>
-      )}
+        hoveredKey={hoveredKey}
+        onHover={onHover}
+      />
     </div>
   );
 }
@@ -293,16 +228,12 @@ function OneShotRateWidget({ analytics }: WidgetBodyProps) {
     );
   }
   const value = `${s.one_shot_rate}%`;
-  const tools = analytics.data_coverage?.tools_reporting ?? [];
   return (
-    <>
-      <StatWidget
-        value={value}
-        onOpenDetail={openOutcomes('retries')}
-        detailAriaLabel={`Open outcomes detail · ${value} one-shot rate`}
-      />
-      <CoverageNote text={capabilityCoverageNote(tools, 'toolCallLogs')} />
-    </>
+    <StatWidget
+      value={value}
+      onOpenDetail={openOutcomes('retries')}
+      detailAriaLabel={`Open outcomes detail · ${value} one-shot rate`}
+    />
   );
 }
 

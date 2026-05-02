@@ -64,9 +64,8 @@ export function perMillion(value: number | undefined | null): number | null {
 
 /**
  * Decide whether a LiteLLM entry is a text-token-priced model we want to
- * store. Nullish (not falsy) check so free-tier models with
- * `input_cost_per_token: 0` are kept - this was the CodeBurn bug that
- * dropped legitimate zero-priced models (see models.ts:58 in that repo).
+ * store. Use a nullish (not falsy) check so free-tier models with
+ * `input_cost_per_token: 0` are kept rather than dropped as falsy.
  */
 export function isTextTokenModel(name: string, entry: LiteLLMEntry): boolean {
   if (name === 'sample_spec') return false;

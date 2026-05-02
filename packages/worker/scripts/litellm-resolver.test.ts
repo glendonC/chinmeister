@@ -156,7 +156,7 @@ export const CASES: TestCase[] = [
   { category: 'openai', raw: 'o4-mini', expected: 'o4-mini' },
   { category: 'openai', raw: 'openai/gpt-5', expected: 'gpt-5' },
 
-  // ---- Codex forms (CodeBurn FALLBACK_PRICING compatibility) ----
+  // ---- Codex forms ----
   { category: 'codex', raw: 'gpt-5-codex', expected: 'gpt-5-codex' },
   { category: 'codex', raw: 'gpt-5.1-codex', expected: 'gpt-5.1-codex' },
 

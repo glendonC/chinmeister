@@ -116,12 +116,29 @@ export function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
   return slots.map((s) => (s.id === 'projects' && s.colSpan > 6 ? { ...s, colSpan: 6 } : s));
 }
 
-// outcomes renders as a hero stat + 4-column table (OUTCOME | COUNT |
-// SHARE | TREND) that can't fit in a 4-col slot - labels clip, headers
-// collide. Snap any saved slot narrower than the 6-col minimum up to the
-// 8-col default.
+// outcomes renders a 260px ring + 5-column table that needs the full
+// 12-col footprint and at least 4 rows of vertical room to fit cleanly.
+// Promote any narrower or shorter saved slot up to the catalog default.
 export function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => (s.id === 'outcomes' && s.colSpan < 6 ? { ...s, colSpan: 8 } : s));
+  return slots.map((s) => {
+    if (s.id !== 'outcomes') return s;
+    const colSpan = s.colSpan < 12 ? 12 : s.colSpan;
+    const rowSpan = s.rowSpan < 4 ? 4 : s.rowSpan;
+    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
+    return { ...s, colSpan, rowSpan };
+  });
+}
+
+// directories renders the same ring-plus-table shape as outcomes; heal
+// saved 6×4 slots up to 12×4 so the table columns stop colliding.
+export function healDirectoriesSize(slots: WidgetSlot[]): WidgetSlot[] {
+  return slots.map((s) => {
+    if (s.id !== 'directories') return s;
+    const colSpan = s.colSpan < 12 ? 12 : s.colSpan;
+    const rowSpan = s.rowSpan < 4 ? 4 : s.rowSpan;
+    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
+    return { ...s, colSpan, rowSpan };
+  });
 }
 
 // scope-complexity needs enough horizontal room for the hero + bucket
@@ -185,10 +202,8 @@ export function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
   });
 }
 
-// Activity row: heatmap full-width 12×3, with hourly-effectiveness paired
-// beside work-types at 6 cols each. Heal saved layouts so existing users
-// see the curated row instead of an 8×4 heatmap with unused vertical
-// space.
+// Activity row: heatmap full-width 12×3, work-types full-width 12×4 (ring
+// + table needs the room), hourly-effectiveness on its own row at 8×3.
 export function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
   const hasHourly = slots.some((s) => s.id === 'hourly-effectiveness');
   const out: WidgetSlot[] = [];
@@ -198,14 +213,14 @@ export function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
       continue;
     }
     if (slot.id === 'work-types') {
-      out.push({ ...slot, colSpan: 6, rowSpan: 3 });
+      out.push({ ...slot, colSpan: 12, rowSpan: 4 });
       if (!hasHourly) {
-        out.push({ id: 'hourly-effectiveness', colSpan: 6, rowSpan: 3 });
+        out.push({ id: 'hourly-effectiveness', colSpan: 8, rowSpan: 3 });
       }
       continue;
     }
     if (slot.id === 'hourly-effectiveness') {
-      out.push({ ...slot, colSpan: 6, rowSpan: 3 });
+      out.push({ ...slot, colSpan: 8, rowSpan: 3 });
       continue;
     }
     out.push(slot);
@@ -232,7 +247,7 @@ export function healAll(slots: WidgetSlot[]): WidgetSlot[] {
         healModelMixSize(
           healToolCallErrorsSize(
             healScopeComplexityWidth(
-              healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(slots))),
+              healDirectoriesSize(healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(slots)))),
             ),
           ),
         ),

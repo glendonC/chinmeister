@@ -76,9 +76,8 @@ function CompositeBlock({
           / 100
         </span>
       </div>
-      {/* Gauge track. Fill width encodes percentile; marker dot sits at the
-          current position; a subtle tick at 50% anchors the community median
-          as a visual reference. Matches the QOVES range-bar treatment. */}
+      {/* Fill width = percentile, marker dot = current position, tick at 50%
+          anchors the community median as a visual reference. */}
       <div className={styles.compositeGauge}>
         <div className={styles.compositeGaugeTrack}>
           <div className={styles.compositeGaugeFill} style={{ width: `${width}%` }} />

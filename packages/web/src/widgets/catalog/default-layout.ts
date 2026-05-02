@@ -21,21 +21,13 @@ export const DEFAULT_LAYOUT: WidgetSlot[] = [
   { id: 'cost-per-edit', colSpan: 3, rowSpan: 2 },
   { id: 'one-shot-rate', colSpan: 3, rowSpan: 2 },
 
-  // Outcomes — 8×3. Stands alone on its row. No forced backfill: the grid
-  // is modular, users add other widgets via the picker if they want the
-  // leftover 4 cols filled.
-  { id: 'outcomes', colSpan: 8, rowSpan: 3 },
+  { id: 'outcomes', colSpan: 12, rowSpan: 4 },
 
-  // Activity — heatmap gets a full row; mix + effectiveness share the next row.
   { id: 'heatmap', colSpan: 12, rowSpan: 3 },
-  { id: 'work-types', colSpan: 6, rowSpan: 3 },
-  { id: 'hourly-effectiveness', colSpan: 6, rowSpan: 3 },
+  { id: 'work-types', colSpan: 12, rowSpan: 4 },
+  { id: 'hourly-effectiveness', colSpan: 8, rowSpan: 3 },
 
-  // Codebase — directories + files. `directories` renders completion_rate
-  // colored by severity, with MoreHidden tail past top-10 and a
-  // hooks-capability CoverageNote. The substrate-unique angle here is
-  // per-directory completion rate weighted by agent-session outcomes.
-  { id: 'directories', colSpan: 6, rowSpan: 4 },
+  { id: 'directories', colSpan: 12, rowSpan: 4 },
   { id: 'files', colSpan: 6, rowSpan: 4 },
 
   // Codebase deep. file-rework pairs with the top-files table: both are

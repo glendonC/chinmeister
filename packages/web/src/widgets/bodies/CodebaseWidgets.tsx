@@ -1,10 +1,12 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
+import clsx from 'clsx';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import styles from './CodebaseWidgets.module.css';
-import { arcPath, computeArcSlices } from '../../lib/svgArcs.js';
 import { setQueryParams } from '../../lib/router.js';
+import { fmtCount } from '../utils.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
+import { AnnotatedRing, type AnnotatedRingArc } from './atoms/AnnotatedRing.js';
 import {
   capabilityCoverageNote,
   CoverageNote,
@@ -12,7 +14,9 @@ import {
   GhostBars,
   GhostRows,
   GhostStatRow,
+  InlineDelta,
   isSoloTeam,
+  splitPeriodDelta,
 } from './shared.js';
 
 function openCodebase(tab: string, q: string) {
@@ -78,9 +82,10 @@ const DIR_RING_PALETTE = [
 ];
 
 // ── commit-stats ─────────────────────────────────────
-// Hero count alone (no inline delta). To the right, a skyline of vertical
-// bars, one per day, height = commits that day, color tier = intensity.
-// One secondary line: median time to first commit + sessions that committed.
+// Hero count + inline delta vs prior period. To the right, a skyline of
+// vertical bars, one per day, height = commits that day, color tier =
+// intensity. Period-over-period count belongs inline with the hero
+// (matches sessions/edits cards); cadence shape lives in the bars.
 function CommitStatsWidget({ analytics }: WidgetBodyProps) {
   const cs = analytics.commit_stats;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
@@ -95,21 +100,48 @@ function CommitStatsWidget({ analytics }: WidgetBodyProps) {
     );
   }
 
-  const maxDay = Math.max(...cs.daily_commits.map((d) => d.commits), 1);
+  const days = cs.daily_commits;
+  const maxDay = Math.max(...days.map((d) => d.commits), 1);
+  const peakIndex = days.reduce((best, d, i) => (d.commits > days[best].commits ? i : best), 0);
+  const periodDelta = splitPeriodDelta(days, (d) => d.commits);
+  const showDelta =
+    periodDelta != null &&
+    periodDelta.current != null &&
+    periodDelta.previous != null &&
+    periodDelta.previous > 0;
+  const startLabel = formatCommitDay(days[0]?.day);
+  const endLabel = formatCommitDay(days[days.length - 1]?.day);
+  // Peak label sits above the tallest bar. Center it on the bar's column by
+  // anchoring left at (i + 0.5) / N, then translating -50% on the element.
+  const peakLeftPct = days.length > 0 ? ((peakIndex + 0.5) / days.length) * 100 : 50;
 
   return (
-    <>
-      <div className={styles.commitFrame}>
-        <div className={styles.commitHero}>
-          <span className={styles.commitHeroValue}>{cs.total_commits.toLocaleString()}</span>
-        </div>
-        <div className={styles.commitTrend}>
+    <div className={styles.commitFrame}>
+      <div className={styles.commitHero}>
+        <span className={styles.commitHeroValue}>
+          {cs.total_commits.toLocaleString()}
+          {showDelta && (
+            <InlineDelta
+              value={(periodDelta!.current as number) - (periodDelta!.previous as number)}
+            />
+          )}
+        </span>
+      </div>
+      <div className={styles.commitTrend}>
+        <div className={styles.commitSkylineFrame}>
+          <span
+            className={styles.commitPeakLabel}
+            style={{ left: `${peakLeftPct}%` } as CSSProperties}
+            aria-hidden="true"
+          >
+            {days[peakIndex].commits.toLocaleString()}
+          </span>
           <div
             className={styles.commitSkyline}
             role="img"
-            aria-label={`Commits over ${cs.daily_commits.length} days`}
+            aria-label={`Commits over ${days.length} days, peak ${days[peakIndex].commits} on ${days[peakIndex].day}`}
           >
-            {cs.daily_commits.map((d, i) => (
+            {days.map((d, i) => (
               <span
                 key={d.day}
                 className={styles.commitSkylineBar}
@@ -124,65 +156,57 @@ function CommitStatsWidget({ analytics }: WidgetBodyProps) {
               />
             ))}
           </div>
-          <div className={styles.commitSecondary}>
-            {cs.avg_time_to_first_commit_min != null && (
-              <>
-                <span className={styles.commitSecondaryValue}>
-                  {cs.avg_time_to_first_commit_min.toFixed(1)}m
-                </span>{' '}
-                to first commit
-                <span className={styles.commitSecondarySep}>·</span>
-              </>
-            )}
-            <span className={styles.commitSecondaryValue}>
-              {cs.sessions_with_commits.toLocaleString()}
-            </span>{' '}
-            sessions committed
-          </div>
+        </div>
+        <div className={styles.commitAxis} aria-hidden="true">
+          <span>{startLabel}</span>
+          <span>{endLabel}</span>
         </div>
       </div>
-      <CoverageNote text={note} />
-    </>
+    </div>
   );
 }
 
+function formatCommitDay(day: string | undefined): string {
+  if (!day) return '';
+  const d = new Date(`${day}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+
 // ── directories ──────────────────────────────────────
-// Ring + clickable-row table, mirroring the OutcomeWidgets primitive so
-// the codebase tab reads as the same product. Donut on the left, table
-// on the right with directory · touches · completion · View.
-const DIR_RING_VIEW = 160;
-const DIR_RING_CX = 80;
-const DIR_RING_CY = 80;
-const DIR_RING_R = 58;
-const DIR_RING_GAP_DEG = 12;
+// Ring (left, with leader labels) + clickable-row table (right). Color
+// swatches in each table row mirror the ring arc colors so a reader can
+// trace any row back to its slice. The shared AnnotatedRing primitive
+// owns the SVG; layout, palette, and table chrome live here.
 const TALL_TABLE_ROWS_NO_OVERFLOW = 6;
 const TALL_TABLE_ROWS_WITH_OVERFLOW = 5;
 const SHORT_TABLE_ROWS_NO_OVERFLOW = 4;
 const SHORT_TABLE_ROWS_WITH_OVERFLOW = 3;
 const DIR_RING_SLICES = 5;
 
-interface DirArc {
-  startDeg: number;
-  sweepDeg: number;
-  color: string;
+function dirLabel(path: string): string {
+  // Last non-empty path segment makes a readable leader-line label without
+  // needing the FilePath truncation logic, which is tuned for table cells.
+  const segs = path.split('/').filter(Boolean);
+  return segs[segs.length - 1] ?? path;
 }
 
 function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   const dirs = analytics.directory_heatmap;
   const tools = analytics.data_coverage?.tools_reporting ?? [];
   const note = capabilityCoverageNote(tools, 'hooks');
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
 
-  const arcs = useMemo<DirArc[]>(() => {
+  const ringArcs = useMemo<AnnotatedRingArc[]>(() => {
     const top = dirs.slice(0, DIR_RING_SLICES);
-    const totalTouches = dirs.reduce((s, d) => s + d.touch_count, 0);
-    if (totalTouches === 0) return [];
-    return computeArcSlices(
-      top.map((d) => d.touch_count),
-      DIR_RING_GAP_DEG,
-    ).map((slice, i) => ({
-      ...slice,
-      color: DIR_RING_PALETTE[i] ?? 'var(--soft)',
-    }));
+    return top
+      .filter((d) => d.touch_count > 0)
+      .map((d, i) => ({
+        key: d.directory,
+        value: d.touch_count,
+        color: DIR_RING_PALETTE[i] ?? 'var(--soft)',
+        label: dirLabel(d.directory),
+      }));
   }, [dirs]);
 
   if (dirs.length === 0) {
@@ -200,33 +224,21 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
   );
   const hidden = dirs.length - visible.length;
   const open = openCodebase('directories', 'top-dirs');
+  const totalTouches = ringArcs.reduce((s, a) => s + a.value, 0);
 
   return (
     <div className={styles.dirFrame}>
       <div className={styles.dirRingBlock}>
-        <svg
-          viewBox={`0 0 ${DIR_RING_VIEW} ${DIR_RING_VIEW}`}
+        <AnnotatedRing
+          arcs={ringArcs}
+          centerValue={fmtCount(totalTouches)}
+          centerEyebrow="TOUCHES"
+          labelSide="right"
+          ariaLabel={`Top ${ringArcs.length} directories by touches`}
           className={styles.dirRingSvg}
-          role="img"
-          aria-label={`Top ${arcs.length} directories by touches`}
-        >
-          <circle
-            cx={DIR_RING_CX}
-            cy={DIR_RING_CY}
-            r={DIR_RING_R}
-            className={styles.dirRingTrack}
-          />
-          {arcs
-            .filter((a) => a.sweepDeg > 0.2)
-            .map((a, i) => (
-              <path
-                key={i}
-                d={arcPath(DIR_RING_CX, DIR_RING_CY, DIR_RING_R, a.startDeg, a.sweepDeg)}
-                className={styles.dirRingArc}
-                style={{ stroke: a.color }}
-              />
-            ))}
-        </svg>
+          hoveredKey={hoveredKey}
+          onHover={setHoveredKey}
+        />
       </div>
       <div className={styles.dirTable} role="table">
         <div className={styles.dirHeadRow} role="row">
@@ -240,9 +252,36 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
         {visible.map((d, i) => {
           const completionColor = outcomeRateColor(d.completion_rate);
           const completionPct = Math.round(d.completion_rate);
-          const content = (
-            <>
-              <FilePath path={d.directory} parentSegments={1} />
+          const swatch = i < DIR_RING_SLICES ? DIR_RING_PALETTE[i] : null;
+          const dimmed = hoveredKey != null && hoveredKey !== d.directory;
+          const interactive = i < DIR_RING_SLICES;
+          return (
+            <button
+              key={d.directory}
+              type="button"
+              role="row"
+              className={clsx(styles.dirDataRow, dimmed && styles.dirDataRowDim)}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={open}
+              onMouseEnter={interactive ? () => setHoveredKey(d.directory) : undefined}
+              onMouseLeave={interactive ? () => setHoveredKey(null) : undefined}
+              aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
+            >
+              <span className={styles.dirIdentity}>
+                <span
+                  className={styles.dirSwatch}
+                  style={
+                    {
+                      background: swatch ?? 'transparent',
+                      visibility: swatch ? 'visible' : 'hidden',
+                    } as CSSProperties
+                  }
+                  aria-hidden
+                />
+                <span className={styles.dirName} title={d.directory}>
+                  {dirLabel(d.directory)}
+                </span>
+              </span>
               <span className={styles.dirTouches}>{d.touch_count.toLocaleString()}</span>
               <span className={styles.dirCompletion}>
                 <span className={styles.dirCompletionTrack}>
@@ -260,19 +299,6 @@ function DirectoriesWidget({ analytics }: WidgetBodyProps) {
                 </span>
               </span>
               <span className={styles.viewButton}>View</span>
-            </>
-          );
-          return (
-            <button
-              key={d.directory}
-              type="button"
-              role="row"
-              className={styles.dirDataRow}
-              style={{ '--row-index': i } as CSSProperties}
-              onClick={open}
-              aria-label={`Open directories detail · ${d.directory} ${d.touch_count} touches`}
-            >
-              {content}
             </button>
           );
         })}
