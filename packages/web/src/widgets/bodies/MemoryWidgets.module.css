@@ -86,16 +86,6 @@
   text-overflow: ellipsis;
 }
 
-.kpiCaptionAccent {
-  color: var(--ink);
-  font-weight: 500;
-}
-
-.kpiCaptionWarn {
-  color: var(--warn);
-  font-weight: 500;
-}
-
 /* ── Freshness terrace (mirrors OutcomeWidgets.scopeTerrace) ──
  *
  * Four stepped bars, height encoded by bucket count, color encoded by age

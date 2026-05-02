@@ -247,7 +247,6 @@ export function DirectoriesPanel({ analytics }: { analytics: UserAnalytics }) {
 
   return (
     <div className={styles.panel}>
-      <CoverageNote text={hooksNote} />
       <FocusedDetailView
         questions={questions}
         activeId={activeId}

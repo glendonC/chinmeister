@@ -63,21 +63,11 @@ function MemoryHealthWidget({ analytics }: WidgetBodyProps) {
       </div>
     );
   }
-  const avg = Math.round(m.avg_memory_age_days);
   return (
     <div className={s.kpi}>
       <div className={s.kpiHero}>
         <span className={s.kpiHeroValue}>{fmt(m.total_memories)}</span>
       </div>
-      <span className={s.kpiCaption}>
-        <span className={s.kpiCaptionAccent}>{avg}d</span> avg age
-        {m.stale_memories > 0 && (
-          <>
-            {' · '}
-            <span className={s.kpiCaptionWarn}>{fmt(m.stale_memories)}</span> stale
-          </>
-        )}
-      </span>
     </div>
   );
 }
@@ -378,16 +368,6 @@ function MemorySupersessionFlowWidget({ analytics }: WidgetBodyProps) {
         </span>
         <span className={s.kpiHeroSuffix}>pending</span>
       </div>
-      <span className={s.kpiCaption}>
-        {idle ? (
-          'consolidation idle'
-        ) : (
-          <>
-            <span className={s.kpiCaptionAccent}>{fmt(sup.invalidated_period)}</span> invalidated ·{' '}
-            <span className={s.kpiCaptionAccent}>{fmt(sup.merged_period)}</span> merged
-          </>
-        )}
-      </span>
     </div>
   );
 }
@@ -396,7 +376,6 @@ function MemorySupersessionFlowWidget({ analytics }: WidgetBodyProps) {
 
 function MemorySecretsShieldWidget({ analytics }: WidgetBodyProps) {
   const ss = analytics.memory_secrets_shield;
-  const idle = ss.blocked_period === 0 && ss.blocked_24h === 0;
   return (
     <div className={s.kpi}>
       <div className={s.kpiHero}>
@@ -409,18 +388,6 @@ function MemorySecretsShieldWidget({ analytics }: WidgetBodyProps) {
         </span>
         <span className={s.kpiHeroSuffix}>blocked</span>
       </div>
-      <span className={s.kpiCaption}>
-        {idle ? (
-          'shield active'
-        ) : (
-          <>
-            <span className={ss.blocked_24h > 0 ? s.kpiCaptionWarn : s.kpiCaptionAccent}>
-              {fmt(ss.blocked_24h)}
-            </span>{' '}
-            in last 24h
-          </>
-        )}
-      </span>
     </div>
   );
 }

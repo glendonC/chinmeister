@@ -82,8 +82,8 @@ describe('OutcomeTrendWidget resilience', () => {
 
   it('renders per-day completion-rate cells when outcomes are recorded', async () => {
     // Both active days are fully completed; the widget renders the period
-    // rate, a delta token (↑/↓/→<n>pt), the per-day tape, and the active-
-    // day footer. No composite labels per ANALYTICS_SPEC §10 #2.
+    // rate hero and the per-day tape. Body stays chromeless: no delta token,
+    // no active-day footer. No composite labels per ANALYTICS_SPEC §10 #2.
     const { OutcomeTrendWidget, createEmptyUserAnalytics } = await loadModule();
     const analytics = createEmptyUserAnalytics();
     analytics.daily_trends = [
@@ -95,9 +95,9 @@ describe('OutcomeTrendWidget resilience', () => {
     const r = render(OutcomeTrendWidget, makeProps(analytics));
     const cells = r.container.querySelectorAll('[title]');
     expect(cells.length).toBe(analytics.daily_trends.length);
-    expect(r.container.textContent).toMatch(/active days/);
-    expect(r.container.textContent).toMatch(/[↑↓→]\d+pt/);
-    expect(r.container.textContent).toMatch(/vs start/);
+    expect(r.container.textContent).toMatch(/100%/);
+    expect(r.container.textContent).not.toMatch(/vs start/);
+    expect(r.container.textContent).not.toMatch(/active days/);
     r.unmount();
   });
 });

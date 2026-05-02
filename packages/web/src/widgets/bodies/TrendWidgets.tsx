@@ -20,8 +20,8 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
   //
   // No composite labels. ANALYTICS_SPEC §10 #2 forbids "AI development score"
   // composites that conflate unrelated metrics into a meaningless word. We
-  // render the trending facts (period rate, end-to-end delta, daily tape)
-  // and let the reader compose the read.
+  // render the trending facts (period rate and daily tape) and let the
+  // reader compose the read.
   const days = analytics.daily_trends;
   const observed = days.filter((d) => (d.sessions ?? 0) > 0);
   if (observed.length < 2) {
@@ -29,39 +29,20 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
   }
 
   const maxSessions = Math.max(...observed.map((d) => d.sessions ?? 0), 1);
-  const firstDay = observed[0].day;
-  const lastDay = observed[observed.length - 1].day;
-  const dateRange = formatDateRange(firstDay, lastDay);
   const completed = observed.reduce((sum, d) => sum + (d.completed ?? 0), 0);
   const sessions = observed.reduce((sum, d) => sum + (d.sessions ?? 0), 0);
   const periodRate = sessions > 0 ? Math.round((completed / sessions) * 100) : 0;
-  const firstRate = Math.round(((observed[0].completed ?? 0) / (observed[0].sessions ?? 1)) * 100);
-  const lastObserved = observed[observed.length - 1];
-  const lastRate = Math.round(((lastObserved.completed ?? 0) / (lastObserved.sessions ?? 1)) * 100);
-  const delta = lastRate - firstRate;
-  const deltaTone = delta === 0 ? 'var(--muted)' : delta > 0 ? 'var(--success)' : 'var(--danger)';
   const detailLabel = `Open outcomes detail · ${periodRate}% completion rate trend`;
 
   const content = (
     <>
-      <div className={trend.rateHeader}>
-        <div className={trend.rateHeroBlock}>
-          <span className={trend.rateHero}>{periodRate}%</span>
-          <span className={trend.rateSignal}>
-            <span className={trend.rateDelta} style={{ color: deltaTone }}>
-              {formatDelta(delta)}
-            </span>{' '}
-            vs start
-            <span className={trend.rateDetailArrow} aria-hidden="true">
-              ↗
-            </span>
-          </span>
-        </div>
+      <div className={trend.rateHeroBlock}>
+        <span className={trend.rateHero}>{periodRate}%</span>
       </div>
       <div
         className={trend.rateTape}
         role="img"
-        aria-label={`Daily completion rate, ${periodRate}% over ${observed.length} active days, ${formatDelta(delta)} vs start`}
+        aria-label={`Daily completion rate, ${periodRate}% over ${observed.length} active days`}
       >
         {days.map((d) => {
           const daySessions = d.sessions ?? 0;
@@ -91,10 +72,6 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
           );
         })}
       </div>
-      <div className={trend.rateFooter} aria-hidden="true">
-        <span>{dateRange || `${observed.length} active days`}</span>
-        <span>{observed.length} active days</span>
-      </div>
     </>
   );
 
@@ -110,26 +87,11 @@ function OutcomeTrendWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-function formatDelta(delta: number): string {
-  if (delta === 0) return '→0pt';
-  return `${delta > 0 ? '↑' : '↓'}${Math.abs(delta)}pt`;
-}
-
 /** Render a day ISO string as `Apr 24` for the tooltip. */
 function formatDay(day: string): string {
   const d = new Date(`${day}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return day;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
-}
-
-/** Render the first-to-last-day range as a caption. Same locale as
- *  the per-day tooltip so the vocabulary matches. */
-function formatDateRange(first: string, last: string): string | null {
-  const f = formatDay(first);
-  const l = formatDay(last);
-  if (!f || !l) return null;
-  if (f === l) return f;
-  return `${f} – ${l}`;
 }
 
 export const trendWidgets: WidgetRegistry = {

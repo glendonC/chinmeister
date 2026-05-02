@@ -304,7 +304,6 @@ export function FlowPanel({ analytics }: { analytics: UserAnalytics }) {
 
   return (
     <div className={styles.panel}>
-      <CoverageNote text={conversationNote} />
       <FocusedDetailView
         questions={questions}
         activeId={activeId}

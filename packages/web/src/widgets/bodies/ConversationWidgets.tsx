@@ -85,7 +85,6 @@ function ConfusedFilesWidget({ analytics }: WidgetBodyProps) {
         </div>
       </div>
       <MoreHidden count={hidden} />
-      <CoverageNote text={note} />
     </>
   );
 }
@@ -177,7 +176,6 @@ function CrossToolHandoffsWidget({ analytics }: WidgetBodyProps) {
         </div>
       </div>
       <MoreHidden count={hidden} />
-      <CoverageNote text={note} />
     </>
   );
 }
@@ -202,12 +200,7 @@ function UnansweredQuestionsWidget({ analytics }: WidgetBodyProps) {
       </>
     );
   }
-  return (
-    <>
-      <StatWidget value={uq.count.toLocaleString()} />
-      <CoverageNote text={note} />
-    </>
-  );
+  return <StatWidget value={uq.count.toLocaleString()} />;
 }
 
 // ── helpers ─────────────────────────────────────────

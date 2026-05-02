@@ -451,8 +451,6 @@ export function RiskPanel({ analytics }: { analytics: UserAnalytics }) {
 
   return (
     <div className={styles.panel}>
-      <CoverageNote text={hooksNote} />
-      <CoverageNote text={conversationNote} />
       <FocusedDetailView
         questions={questions}
         activeId={activeId}
