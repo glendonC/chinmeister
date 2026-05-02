@@ -11,16 +11,11 @@ export const OUTCOMES_WIDGETS: WidgetDef[] = [
       'How sessions ended this period: finished, abandoned, or failed. Click in for the full list with per-file context.',
     category: 'outcomes',
     scope: 'both',
-    viz: 'outcome-bar',
-    // 8-col width is required for the hero-stat + 5-column table
-    // (OUTCOME / COUNT / SHARE bar / DELTA / TREND sparkline). Share bars
-    // become legible, per-outcome trend sparklines fit, drill arrows have
-    // room. A narrower slot clips labels and forces the table into a
-    // column.
-    w: 8,
-    h: 3,
-    minW: 6,
-    minH: 2,
+    viz: 'ring',
+    w: 12,
+    h: 4,
+    minW: 8,
+    minH: 4,
     maxW: 12,
     dataKeys: ['completion_summary'],
     drillTarget: { view: 'outcomes', tab: 'sessions' },

@@ -42,6 +42,7 @@ export type WidgetViz =
   | 'proportional-bar'
   | 'data-list'
   | 'outcome-bar'
+  | 'ring'
   | 'factual-grid'
   | 'topic-bars'
   | 'project-list'

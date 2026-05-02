@@ -28,8 +28,7 @@ export interface TokenUsageInput {
 }
 
 // Fallback ratios used when a LiteLLM record lacks explicit cache fields.
-// These mirror Anthropic's published multipliers and are the same defaults
-// CodeBurn's parseLiteLLMEntry uses (models.ts:62).
+// Mirrors Anthropic's published cache multipliers.
 const CACHE_WRITE_RATIO = 1.25;
 const CACHE_READ_RATIO = 0.1;
 

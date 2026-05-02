@@ -38,6 +38,7 @@ const VIZ_MAX_CONSTRAINTS: Record<WidgetViz, { maxW: number; maxH: number }> = {
   'proportional-bar': { maxW: 12, maxH: 8 },
   'data-list': { maxW: 12, maxH: 8 },
   'outcome-bar': { maxW: 6, maxH: 4 },
+  ring: { maxW: 12, maxH: 6 },
   'factual-grid': { maxW: 12, maxH: 4 },
   'topic-bars': { maxW: 8, maxH: 5 },
   'project-list': { maxW: 12, maxH: 6 },

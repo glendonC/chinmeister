@@ -1,10 +1,14 @@
-import { useMemo, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
+import clsx from 'clsx';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import HourHeatmap, { type HourCell } from '../../components/viz/time/HourHeatmap.js';
 import { qualifyByVolume } from '../../lib/qualifyByVolume.js';
-import { completionColor, workTypeColor } from '../utils.js';
+import { setQueryParams } from '../../lib/router.js';
+import { completionColor, fmtCount, workTypeColor } from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import { BodyLead } from './atoms/BodyLead.js';
+import { AnnotatedRing, type AnnotatedRingArc } from './atoms/AnnotatedRing.js';
 import styles from './ActivityWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
@@ -61,6 +65,24 @@ function Heatmap({ hourly }: { hourly: UserAnalytics['hourly_distribution'] }) {
   );
 }
 
+// Cap branded ring slices at TOP_N; the tail merges into a muted "other"
+// arc so the ring stays legible regardless of category cardinality. The
+// table caps at TABLE_VISIBLE rows and surfaces the rest via a SectionOverflow
+// link, matching the directories/files widget pattern.
+const WORK_TYPE_TOP_N = 5;
+const TABLE_VISIBLE = 8;
+const OTHER_KEY = 'other';
+
+interface WorkTypeSlice {
+  key: string;
+  edits: number;
+  isOther: boolean;
+}
+
+function openWorkTypeMix() {
+  setQueryParams({ activity: 'mix', q: 'share' });
+}
+
 function WorkTypesWidget({ analytics }: WidgetBodyProps) {
   const workTypes = analytics.work_type_distribution;
   // Denominator is edits, not sessions. A session that touches frontend +
@@ -70,73 +92,119 @@ function WorkTypesWidget({ analytics }: WidgetBodyProps) {
   // exactly one work_type via SQL CASE), so sum(w.edits) is the honest
   // denominator that sums to total period edits.
   const totalEdits = workTypes.reduce((s, w) => s + w.edits, 0);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+
+  const ranked = useMemo(
+    () => [...workTypes].filter((w) => w.edits > 0).sort((a, b) => b.edits - a.edits),
+    [workTypes],
+  );
+
+  const ringSlices = useMemo<WorkTypeSlice[]>(() => {
+    if (totalEdits === 0) return [];
+    const head = ranked.slice(0, WORK_TYPE_TOP_N);
+    const tail = ranked.slice(WORK_TYPE_TOP_N);
+    const tailEdits = tail.reduce((s, w) => s + w.edits, 0);
+    return [
+      ...head.map((w) => ({ key: w.work_type, edits: w.edits, isOther: false })),
+      ...(tailEdits > 0 ? [{ key: OTHER_KEY, edits: tailEdits, isOther: true }] : []),
+    ];
+  }, [ranked, totalEdits]);
+
   if (totalEdits === 0) {
     return <SectionEmpty>No sessions yet</SectionEmpty>;
   }
-  const ranked = [...workTypes].sort((a, b) => b.edits - a.edits);
-  // Cap segment count on the weft strip; tail merges into one "other" bucket
-  // (detail view has the full list).
-  const maxBands = 6;
-  const displayRows =
-    ranked.length <= maxBands
-      ? ranked
-      : [
-          ...ranked.slice(0, maxBands - 1),
-          {
-            work_type: 'other',
-            edits: ranked.slice(maxBands - 1).reduce((s, w) => s + w.edits, 0),
-            sessions: ranked.slice(maxBands - 1).reduce((s, w) => s + w.sessions, 0),
-          },
-        ];
-  const primary = displayRows[0]!;
-  const primaryPct = Math.round((primary.edits / totalEdits) * 100);
-  const aria = ranked
+
+  // Visible table rows + overflow link, matching the directories pattern.
+  // When everything fits inside TABLE_VISIBLE, render every row (no link);
+  // otherwise show TABLE_VISIBLE-1 rows and a "+X more" affordance.
+  const tableRows = ranked.length > TABLE_VISIBLE ? ranked.slice(0, TABLE_VISIBLE - 1) : ranked;
+  const hidden = ranked.length - tableRows.length;
+
+  const ringArcs: AnnotatedRingArc[] = ringSlices.map((s) => ({
+    key: s.key,
+    value: s.edits,
+    color: s.isOther ? 'var(--soft)' : workTypeColor(s.key),
+    label: formatWorkTypeLabel(s.key),
+    muted: s.isOther,
+  }));
+  const aria = ringSlices
     .map(
-      (w) =>
-        `${formatWorkTypeLabel(w.work_type)} ${Math.round((w.edits / totalEdits) * 100)} percent of edits`,
+      (s) =>
+        `${formatWorkTypeLabel(s.key)} ${Math.round((s.edits / totalEdits) * 100)} percent of edits`,
     )
     .join(', ');
-  const primaryLabel = formatWorkTypeLabel(primary.work_type);
+
   return (
-    <div
-      className={styles.mixWeft}
-      role="group"
-      aria-label={`${primaryPct} percent of edits in ${primaryLabel}. Full mix: ${aria}`}
-    >
-      <div className={styles.mixStrip} aria-hidden>
-        {displayRows.map((w, i) => {
-          const pct = Math.round((w.edits / totalEdits) * 100);
-          const c = workTypeColor(w.work_type);
+    <div className={styles.workTypesMix}>
+      <div className={styles.workTypesRingBox}>
+        <AnnotatedRing
+          arcs={ringArcs}
+          centerValue={fmtCount(totalEdits)}
+          centerEyebrow="EDITS"
+          labelSide="right"
+          ariaLabel={`Work type mix: ${aria}`}
+          className={styles.workTypesRingSvg}
+          hoveredKey={hoveredKey}
+          onHover={setHoveredKey}
+        />
+      </div>
+      <div className={styles.workTypesTable} role="table">
+        <div className={styles.workTypesHeadRow} role="row">
+          <span role="columnheader">work type</span>
+          <span role="columnheader" className={styles.workTypesHeadNum}>
+            edits
+          </span>
+          <span role="columnheader">share</span>
+          <span aria-hidden="true" />
+        </div>
+        {tableRows.map((w, i) => {
+          const color = workTypeColor(w.work_type);
+          const sharePct = Math.round((w.edits / totalEdits) * 100);
+          const dimmed = hoveredKey != null && hoveredKey !== w.work_type;
           return (
-            <div
-              key={
-                i === displayRows.length - 1 && w.work_type === 'other'
-                  ? 'other-merged'
-                  : w.work_type
-              }
-              className={styles.mixSeg}
-              style={
-                {
-                  flexGrow: w.edits,
-                  flexBasis: 0,
-                  minWidth: 2,
-                  background: c,
-                } as CSSProperties
-              }
-              title={`${w.work_type}: ${pct}% of edits (${w.edits} edits, ${w.sessions} sessions)`}
-            />
+            <button
+              key={w.work_type}
+              type="button"
+              role="row"
+              className={clsx(styles.workTypesDataRow, dimmed && styles.workTypesDataRowDim)}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={openWorkTypeMix}
+              onMouseEnter={() => setHoveredKey(w.work_type)}
+              onMouseLeave={() => setHoveredKey(null)}
+              aria-label={`Open work type detail · ${formatWorkTypeLabel(w.work_type)} ${sharePct}%`}
+            >
+              <span className={styles.workTypesIdentity}>
+                <span
+                  className={styles.workTypesSwatch}
+                  style={{ background: color } as CSSProperties}
+                  aria-hidden
+                />
+                <span className={styles.workTypesLabel}>{formatWorkTypeLabel(w.work_type)}</span>
+              </span>
+              <span className={styles.workTypesNum}>{w.edits.toLocaleString()}</span>
+              <span className={styles.workTypesShareCell}>
+                <span className={styles.workTypesShareTrack}>
+                  <span
+                    className={styles.workTypesShareFill}
+                    style={{
+                      width: `${Math.max(2, sharePct)}%`,
+                      background: color,
+                      opacity: 'var(--opacity-bar-fill)',
+                    }}
+                  />
+                </span>
+                <span className={styles.workTypesShareValue}>{sharePct}%</span>
+              </span>
+              <span className={styles.workTypesViewButton}>View</span>
+            </button>
           );
         })}
+        {hidden > 0 && (
+          <div className={styles.workTypesOverflow}>
+            <SectionOverflow count={hidden} label="work types" onClick={openWorkTypeMix} />
+          </div>
+        )}
       </div>
-      <BodyLead
-        label="top"
-        value={<>{primaryPct}% of edits</>}
-        sublabel={
-          <>
-            in <span style={{ color: workTypeColor(primary.work_type) }}>{primaryLabel}</span>
-          </>
-        }
-      />
     </div>
   );
 }

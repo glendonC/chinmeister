@@ -89,6 +89,7 @@ const VIZ_LABELS: Record<WidgetViz, string> = {
   'proportional-bar': 'proportional bar',
   'data-list': 'data table',
   'outcome-bar': 'outcome bar',
+  ring: 'donut ring',
   'factual-grid': 'fact grid',
   'topic-bars': 'topic bars',
   'project-list': 'project list',
@@ -234,6 +235,13 @@ function VizIllustration({ viz }: { viz: WidgetViz }) {
           <rect x="66" y="21" width="20" height="6" rx="2" fill={fill} />
         </svg>
       );
+    case 'ring':
+      return (
+        <svg width="100" height="48" viewBox="0 0 100 48" fill="none">
+          <circle cx="50" cy="24" r="14" stroke={fill} strokeWidth="4" fill="none" />
+          <path d="M50 10 A14 14 0 0 1 64 24" stroke={stroke} strokeWidth="4" fill="none" />
+        </svg>
+      );
     default:
       return (
         <svg width="100" height="48" viewBox="0 0 100 48" fill="none">
@@ -287,6 +295,7 @@ const VIZ_FAMILY_BY_TYPE: Record<WidgetViz, Exclude<VizFamilyFilter, 'all'>> = {
   'proportional-bar': 'bars',
   'data-list': 'tables',
   'outcome-bar': 'bars',
+  ring: 'bars',
   'factual-grid': 'grids',
   'topic-bars': 'bars',
   'project-list': 'tables',

@@ -1,25 +1,7 @@
-/* ═══════════════════════════════════════════
-   GlobalView: QOVES-inspired analytics
-   Clinical precision, generous space, card surfaces
-
-   Sections (search for "── NAME ──" to jump):
-     Hero                            | line ~10
-     Section rhythm                  | line ~90
-     Gated-section message           | line ~125
-     Composite scores (headline row) | line ~135
-     Gauge rail                      | line ~215
-     Axis glossary                   | line ~315
-     Radar chart                     | line ~355
-     User-vs-community spark         | line ~455
-     Outcome bar                     | line ~520
-     Distribution histogram          | line ~645
-     1-D percentile bar              | line ~700
-     Ghost leaderboard               | line ~880
-
-   When this crosses ~1200 lines, consider extracting region-specific modules
-   alongside matching sub-components from GlobalView.tsx rather than growing
-   this file further.
-   ═══════════════════════════════════════════ */
+/* GlobalView styles. Section dividers are marked inline with `── NAME ──`;
+   search for the marker to jump. Consider splitting into per-section
+   modules if this file grows large enough that scrolling becomes the
+   bottleneck. */
 
 .global {
   animation: dashboardViewFadeIn 0.3s var(--motion) both;

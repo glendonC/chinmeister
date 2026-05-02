@@ -53,14 +53,19 @@ describe('healProjectsWidth', () => {
 });
 
 describe('healOutcomesWidth', () => {
-  it('widens a 4-col outcomes slot to the 8-col table-shape default', () => {
+  it('promotes a narrow outcomes slot to the full 12x4 ring-and-table default', () => {
     const out = healOutcomesWidth([{ id: 'outcomes', colSpan: 4, rowSpan: 3 }]);
-    expect(out).toEqual([{ id: 'outcomes', colSpan: 8, rowSpan: 3 }]);
+    expect(out).toEqual([{ id: 'outcomes', colSpan: 12, rowSpan: 4 }]);
   });
 
-  it('leaves outcomes at 8 cols untouched', () => {
-    const slots: WidgetSlot[] = [{ id: 'outcomes', colSpan: 8, rowSpan: 3 }];
+  it('leaves outcomes at 12x4 untouched', () => {
+    const slots: WidgetSlot[] = [{ id: 'outcomes', colSpan: 12, rowSpan: 4 }];
     expect(healOutcomesWidth(slots)).toEqual(slots);
+  });
+
+  it('only bumps the dimension that is below target', () => {
+    const out = healOutcomesWidth([{ id: 'outcomes', colSpan: 12, rowSpan: 3 }]);
+    expect(out).toEqual([{ id: 'outcomes', colSpan: 12, rowSpan: 4 }]);
   });
 });
 
@@ -119,22 +124,22 @@ describe('clampToCatalogConstraints', () => {
 });
 
 describe('healActivityLayout', () => {
-  it('widens heatmap to 12x3 and resizes work-types to 6x3', () => {
+  it('widens heatmap to 12x3, work-types to 12x4, hourly-effectiveness to 8x3', () => {
     const out = healActivityLayout([
       { id: 'heatmap', colSpan: 8, rowSpan: 4 },
       { id: 'work-types', colSpan: 4, rowSpan: 4 },
       { id: 'hourly-effectiveness', colSpan: 4, rowSpan: 4 },
     ]);
     expect(out[0]).toEqual({ id: 'heatmap', colSpan: 12, rowSpan: 3 });
-    expect(out[1]).toEqual({ id: 'work-types', colSpan: 6, rowSpan: 3 });
-    expect(out[2]).toEqual({ id: 'hourly-effectiveness', colSpan: 6, rowSpan: 3 });
+    expect(out[1]).toEqual({ id: 'work-types', colSpan: 12, rowSpan: 4 });
+    expect(out[2]).toEqual({ id: 'hourly-effectiveness', colSpan: 8, rowSpan: 3 });
   });
 
   it('inserts hourly-effectiveness when a saved layout has work-types but not the new partner', () => {
     const out = healActivityLayout([{ id: 'work-types', colSpan: 4, rowSpan: 4 }]);
     expect(out).toEqual([
-      { id: 'work-types', colSpan: 6, rowSpan: 3 },
-      { id: 'hourly-effectiveness', colSpan: 6, rowSpan: 3 },
+      { id: 'work-types', colSpan: 12, rowSpan: 4 },
+      { id: 'hourly-effectiveness', colSpan: 8, rowSpan: 3 },
     ]);
   });
 
@@ -170,7 +175,8 @@ describe('healAll (chain order)', () => {
 
     expect(byId.get('live-agents')?.colSpan).toBe(6);
     expect(byId.get('projects')?.colSpan).toBe(6);
-    expect(byId.get('outcomes')?.colSpan).toBe(8);
+    expect(byId.get('outcomes')?.colSpan).toBe(12);
+    expect(byId.get('outcomes')?.rowSpan).toBe(4);
     expect(byId.get('scope-complexity')?.colSpan).toBe(8);
     expect(byId.get('tool-call-errors')).toEqual({
       id: 'tool-call-errors',

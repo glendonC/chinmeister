@@ -1,12 +1,11 @@
 /**
  * Generic extraction engine.
  *
- * Executes declarative ParserSpec files against tool log files.
- * Handles JSONL line-by-line processing, JSON parsing, markdown
- * state machines, field resolution with dot-notation + fallbacks,
- * token normalization, and tool call request/result pairing.
- *
- * ~340 lines. Adding a new tool = writing a JSON spec, not code.
+ * Executes declarative ParserSpec files against tool log files. Handles
+ * JSONL line-by-line processing, JSON parsing, markdown state machines,
+ * field resolution with dot-notation + fallbacks, token normalization,
+ * and tool call request/result pairing. Adding a new tool means writing
+ * a JSON spec, not code.
  */
 
 import { readFile, readdir, stat } from 'fs/promises';
