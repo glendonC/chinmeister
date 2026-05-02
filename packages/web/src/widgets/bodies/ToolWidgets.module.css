@@ -93,31 +93,6 @@
   }
 }
 
-.handoffSummary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.45em 0.65em;
-  min-width: 0;
-}
-
-.handoffCompletion {
-  font-family: var(--display);
-  font-size: clamp(1.15rem, 2vw, 1.6rem);
-  font-weight: 300;
-  letter-spacing: -0.045em;
-}
-
-.handoffPair {
-  font-family: var(--mono);
-  font-size: var(--text-2xs);
-  color: var(--soft);
-  letter-spacing: var(--tracking-stat);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .handoffSegment {
     animation: none !important;

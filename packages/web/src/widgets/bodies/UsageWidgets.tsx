@@ -10,7 +10,6 @@ import {
   InlineDelta,
   Sparkline,
   StatWidget,
-  costDegradedReason,
   costEmptyReason,
   deltaAriaSuffix,
   hasCostData,
@@ -175,22 +174,15 @@ function CostWidget({ analytics }: WidgetBodyProps) {
   // matching CostPerEditWidget so the color semantic stays consistent.
   const delta = splitPeriodDelta(analytics.daily_trends, (d) => d.cost ?? 0);
   const ariaDelta = deltaAriaSuffix(delta);
-  // Populated state paints ONLY load-bearing degradation reasons (stale
-  // pricing, unpriced models). Cockpit stat cards stay bare; partial-
-  // capture lives on a dedicated data-quality surface.
-  const degraded = costDegradedReason(t);
   return (
-    <>
-      <StatWidget
-        value={value}
-        delta={delta}
-        deltaInvert
-        deltaFormat="usd"
-        onOpenDetail={openUsage('cost')}
-        detailAriaLabel={`Open usage detail · ${value} cost${ariaDelta}`}
-      />
-      <CoverageNote text={degraded} />
-    </>
+    <StatWidget
+      value={value}
+      delta={delta}
+      deltaInvert
+      deltaFormat="usd"
+      onOpenDetail={openUsage('cost')}
+      detailAriaLabel={`Open usage detail · ${value} cost${ariaDelta}`}
+    />
   );
 }
 
@@ -224,19 +216,15 @@ function CostPerEditWidget({ analytics }: WidgetBodyProps) {
         previous: pc.previous?.cost_per_edit ?? null,
       }
     : null;
-  const degraded = costDegradedReason(t);
   return (
-    <>
-      <StatWidget
-        value={value}
-        delta={delta}
-        deltaInvert
-        deltaFormat="usd-fine"
-        onOpenDetail={() => navigateToDetail('usage', 'cost', 'per-edit')}
-        detailAriaLabel={`Open usage detail · ${value} per edit`}
-      />
-      <CoverageNote text={degraded} />
-    </>
+    <StatWidget
+      value={value}
+      delta={delta}
+      deltaInvert
+      deltaFormat="usd-fine"
+      onOpenDetail={() => navigateToDetail('usage', 'cost', 'per-edit')}
+      detailAriaLabel={`Open usage detail · ${value} per edit`}
+    />
   );
 }
 

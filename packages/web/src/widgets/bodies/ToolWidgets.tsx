@@ -128,10 +128,6 @@ function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
     0,
   );
   const avgComplete = totalFiles > 0 ? Math.round((weightedComplete / totalFiles) * 100) : 0;
-  const topLink = sortedLinks[0];
-  const fromMeta = getToolMeta(topLink.from);
-  const toMeta = getToolMeta(topLink.to);
-  const primaryPair = `${fromMeta.label} to ${toMeta.label}`;
   const aria = sortedLinks
     .map((h) => {
       const from = getToolMeta(h.from).label;
@@ -176,12 +172,6 @@ function ToolHandoffsWidget({ analytics }: WidgetBodyProps) {
             />
           );
         })}
-      </div>
-      <div className={styles.handoffSummary}>
-        <span className={styles.handoffCompletion} style={{ color: completionColor(avgComplete) }}>
-          {avgComplete}% landed
-        </span>
-        <span className={styles.handoffPair}>{primaryPair}</span>
       </div>
     </div>
   );
@@ -398,7 +388,6 @@ function OneShotByToolWidget({ analytics }: WidgetBodyProps) {
           <TableOverflow count={hidden} onClick={open} />
         </div>
       </div>
-      <CoverageNote text={note} />
     </>
   );
 }
@@ -427,14 +416,11 @@ function ToolCallErrorsWidget({ analytics }: WidgetBodyProps) {
 
   const value = `${stats.error_rate}%`;
   return (
-    <>
-      <StatWidget
-        value={value}
-        onOpenDetail={openTools('errors', 'top')}
-        detailAriaLabel={`Open errors detail · ${value} error rate`}
-      />
-      <CoverageNote text={note} />
-    </>
+    <StatWidget
+      value={value}
+      onOpenDetail={openTools('errors', 'top')}
+      detailAriaLabel={`Open errors detail · ${value} error rate`}
+    />
   );
 }
 
@@ -504,62 +490,59 @@ function ModelMixWidget({ analytics }: WidgetBodyProps) {
       : String(models.length);
 
   return (
-    <>
-      <div className={styles.mixWrap}>
-        <div className={styles.mixHead}>
-          <span className={shared.heroStatValue}>{heroValue}</span>
-          {activeModel && (
-            <span className={styles.mixHeadCaption}>
-              <span className={styles.mixHeadName}>{activeModel.model}</span>
-              <span className={styles.mixHeadSep}>·</span>
-              <span className={styles.mixHeadValue}>{activeModel.total.toLocaleString()}</span>{' '}
-              {activeModel.total === 1 ? 'session' : 'sessions'}
-              {activeTokens && activeTokens.tokens > 0 && (
-                <>
-                  <span className={styles.mixHeadSep}>·</span>
-                  <span className={styles.mixHeadValue}>
-                    {formatTokenCount(activeTokens.tokens)}
-                  </span>{' '}
-                  tokens
-                </>
-              )}
-            </span>
-          )}
-        </div>
-        <div className={styles.mixStrip} role="group" aria-label="Model session share">
-          {visible.map((m) => {
-            const share = m.total / totalSessions;
-            const isActive = active === m.model;
-            const dim = active != null && !isActive;
-            return (
-              <button
-                key={m.model}
-                type="button"
-                className={styles.mixSegment}
-                style={{
-                  width: `${share * 100}%`,
-                  background: hashModelColor(m.model),
-                  opacity: dim ? 0.2 : 1,
-                }}
-                onClick={() => setActive(isActive ? null : m.model)}
-                aria-pressed={isActive}
-                aria-label={`${m.model}: ${Math.round(share * 100)}%`}
-                title={`${m.model} · ${m.total} ${m.total === 1 ? 'session' : 'sessions'}`}
-              />
-            );
-          })}
-          {tailLabel && (
-            <span
-              className={styles.mixTail}
-              style={{ width: `${(tailTotal / totalSessions) * 100}%` }}
-              aria-label={`${tail.length} more models`}
-              title={tail.map((m) => `${m.model} · ${m.total}`).join(', ')}
-            />
-          )}
-        </div>
+    <div className={styles.mixWrap}>
+      <div className={styles.mixHead}>
+        <span className={shared.heroStatValue}>{heroValue}</span>
+        {activeModel && (
+          <span className={styles.mixHeadCaption}>
+            <span className={styles.mixHeadName}>{activeModel.model}</span>
+            <span className={styles.mixHeadSep}>·</span>
+            <span className={styles.mixHeadValue}>{activeModel.total.toLocaleString()}</span>{' '}
+            {activeModel.total === 1 ? 'session' : 'sessions'}
+            {activeTokens && activeTokens.tokens > 0 && (
+              <>
+                <span className={styles.mixHeadSep}>·</span>
+                <span className={styles.mixHeadValue}>
+                  {formatTokenCount(activeTokens.tokens)}
+                </span>{' '}
+                tokens
+              </>
+            )}
+          </span>
+        )}
       </div>
-      <CoverageNote text={note} />
-    </>
+      <div className={styles.mixStrip} role="group" aria-label="Model session share">
+        {visible.map((m) => {
+          const share = m.total / totalSessions;
+          const isActive = active === m.model;
+          const dim = active != null && !isActive;
+          return (
+            <button
+              key={m.model}
+              type="button"
+              className={styles.mixSegment}
+              style={{
+                width: `${share * 100}%`,
+                background: hashModelColor(m.model),
+                opacity: dim ? 0.2 : 1,
+              }}
+              onClick={() => setActive(isActive ? null : m.model)}
+              aria-pressed={isActive}
+              aria-label={`${m.model}: ${Math.round(share * 100)}%`}
+              title={`${m.model} · ${m.total} ${m.total === 1 ? 'session' : 'sessions'}`}
+            />
+          );
+        })}
+        {tailLabel && (
+          <span
+            className={styles.mixTail}
+            style={{ width: `${(tailTotal / totalSessions) * 100}%` }}
+            aria-label={`${tail.length} more models`}
+            title={tail.map((m) => `${m.model} · ${m.total}`).join(', ')}
+          />
+        )}
+      </div>
+    </div>
   );
 }
 

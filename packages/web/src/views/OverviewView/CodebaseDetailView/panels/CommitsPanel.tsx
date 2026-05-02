@@ -262,7 +262,6 @@ export function CommitsPanel({ analytics }: { analytics: UserAnalytics }) {
 
   return (
     <div className={styles.panel}>
-      <CoverageNote text={commitsNote} />
       <FocusedDetailView
         questions={questions}
         activeId={activeId}

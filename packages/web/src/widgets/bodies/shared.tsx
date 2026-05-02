@@ -101,29 +101,18 @@ export function StatWidget({
   onOpenDetail?: () => void;
   detailAriaLabel?: string;
 }) {
-  let deltaEl = null;
   // Only render a delta when both sides are measured and previous > 0.
   // Null on either side means "no comparison available" (e.g., stale
   // pricing, all-unpriced models, or first-ever period); zero previous
   // is divide-by-infinity territory where the arrow is misleading.
-  if (delta && delta.current != null && delta.previous != null && delta.previous > 0) {
-    const d = delta.current - delta.previous;
-    const isGood = deltaInvert ? d < 0 : d > 0;
-    const arrow = d > 0 ? '↑' : d < 0 ? '↓' : '→';
-    const color = d === 0 ? 'var(--muted)' : isGood ? 'var(--success)' : 'var(--danger)';
-    const magnitude =
-      deltaFormat === 'usd-fine'
-        ? formatCostDelta(d)
-        : deltaFormat === 'usd'
-          ? formatCost(Math.abs(d), 2)
-          : String(Math.abs(Math.round(d * 10) / 10));
-    deltaEl = (
-      <span className={styles.statInlineDelta} style={{ color }}>
-        {arrow}
-        {magnitude}
-      </span>
-    );
-  }
+  const deltaEl =
+    delta && delta.current != null && delta.previous != null && delta.previous > 0 ? (
+      <InlineDelta
+        value={delta.current - delta.previous}
+        invert={deltaInvert}
+        format={deltaFormat}
+      />
+    ) : null;
 
   // Tab-selector render path: the stat is one of N mutually-exclusive
   // selectors driving an adjacent trend/chart. Active = full ink, inactive
@@ -172,22 +161,36 @@ export function StatWidget({
 }
 
 /**
- * Inline arrow+magnitude delta used alongside stat-row numbers where the
- * bigger `StatWidget` surface doesn't fit. One decimal of precision, token
- * colors. `invert=true` for metrics where lower is better (e.g., stuckness,
- * error rate) — the color choice follows, not the arrow direction.
- *
- * Shared primitive so the stuckness stat-row and the outcome-bar legend
- * stop re-implementing the same arrow+color logic `StatWidget` already has.
+ * Inline arrow+magnitude delta. Single source of truth for the arrow+color
+ * vocabulary used by `StatWidget`, the stuckness stat-row, the outcome-bar
+ * legend, and any cockpit widget that wants a count delta inline with a
+ * hero number. `invert=true` for metrics where lower is better (e.g.,
+ * stuckness, error rate); the color choice follows, not the arrow
+ * direction. `format` selects magnitude rendering: 'count' (default,
+ * 1-decimal), 'usd' (whole-dollar), 'usd-fine' (sub-cent for cost-per-edit).
  */
-export function InlineDelta({ value, invert = false }: { value: number; invert?: boolean }) {
+export function InlineDelta({
+  value,
+  invert = false,
+  format = 'count',
+}: {
+  value: number;
+  invert?: boolean;
+  format?: StatDeltaFormat;
+}) {
   const arrow = value > 0 ? '↑' : value < 0 ? '↓' : '→';
   const isGood = invert ? value < 0 : value > 0;
   const color = value === 0 ? 'var(--muted)' : isGood ? 'var(--success)' : 'var(--danger)';
+  const magnitude =
+    format === 'usd-fine'
+      ? formatCostDelta(value)
+      : format === 'usd'
+        ? formatCost(Math.abs(value), 2)
+        : String(Math.abs(Math.round(value * 10) / 10));
   return (
     <span className={styles.statInlineDelta} style={{ color }}>
       {arrow}
-      {Math.abs(Math.round(value * 10) / 10)}
+      {magnitude}
     </span>
   );
 }
