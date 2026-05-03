@@ -72,6 +72,26 @@ export const COMPLETION_THRESHOLDS = {
 export const TOOL_ERROR_RATE_WARN_THRESHOLD = 10;
 
 /**
+ * Minimum number of qualifying hours (sessions > 0, post p25 volume slice)
+ * before the hourly-effectiveness widget body and the EffectiveHoursPanel
+ * detail render the bar chart. Below this the chart is too thin to read
+ * usefully and a named empty state ships instead. Worker mirrors the same
+ * gate in `dos/team/analytics/comparison.ts` (`QUALIFIED_HOUR_MIN`) so a
+ * thin window cannot publish a noisy median that the UI would then suppress
+ * - cross-package alignment is intentional.
+ */
+export const EFFECTIVE_HOURS_MIN_QUALIFIED = 4;
+
+/**
+ * Minimum total session count before the memory-outcomes correlation
+ * (sessions × memory-search bucket) is considered reliable enough to
+ * publish. Used by both the cockpit MemoryOutcomesWidget body and the
+ * HealthPanel "do sessions that read memory finish more often?" question
+ * so the gate decision is the same in both places.
+ */
+export const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
+
+/**
  * Top-N cap for per-tool widgets (tool-daily, tool-work-type). At 8 the widget
  * stays legible in its default slot height and covers the 2–3 most common
  * teams-with-many-tools scenarios before the hidden tail grows meaningful;

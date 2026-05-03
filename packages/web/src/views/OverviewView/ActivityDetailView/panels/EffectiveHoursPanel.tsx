@@ -6,13 +6,12 @@ import {
 } from '../../../../components/DetailView/index.js';
 import { RateVolumeColumns } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
-import { DAY_LABELS } from '../../../../widgets/utils.js';
+import { DAY_LABELS, EFFECTIVE_HOURS_MIN_QUALIFIED } from '../../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
 import { fmtCount, hourGlyph } from '../format.js';
 import styles from '../ActivityDetailView.module.css';
 
-const EFFECTIVE_HOURS_MIN_QUALIFIED = 4;
 const DOW_DIP_MIN_DELTA = 15;
 const DOW_DIP_MIN_DOW_COUNT = 5;
 
@@ -28,8 +27,8 @@ export function EffectiveHoursPanel({
   if (qualifiedHours.length < EFFECTIVE_HOURS_MIN_QUALIFIED) {
     return (
       <span className={styles.empty}>
-        Per-hour completion rate needs sessions in at least 4 distinct hours. Off-hour bursts wash a
-        2-hour read.
+        Per-hour completion rate needs sessions in at least {EFFECTIVE_HOURS_MIN_QUALIFIED} distinct
+        hours. Off-hour bursts wash a 2-hour read.
       </span>
     );
   }

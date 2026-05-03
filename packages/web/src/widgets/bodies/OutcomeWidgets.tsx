@@ -17,13 +17,15 @@ function openOutcomes(tab: string) {
  * Outcomes category — main-view widgets.
  *
  * The category answers one question: "did the work land?" Every widget
- * visualizes that from a different angle with a distinct viz family:
+ * here visualizes that from a different angle with a distinct viz family.
+ * The catalog (widgets/catalog/outcomes.ts) owns the size + viz contract
+ * per id; this file owns the bodies. The trend variant (`outcome-trend`)
+ * lives in TrendWidgets.tsx.
  *
- *   outcomes             — ring (4×3)
- *   one-shot-rate        — stat (3×2)
- *   stuckness            — stat-row (4×2)
- *   scope-complexity     — scope band (6×3)
- *   work-type-outcomes   — horizontal bars (6×3)
+ *   outcomes         — ring + clickable row table
+ *   one-shot-rate    — KPI stat
+ *   stuckness        — KPI stat
+ *   scope-complexity — scope-bucket terrace
  *
  * Coverage notes only render in empty states. Populated states keep the
  * widget body chromeless: the widget title names the metric; repeating it

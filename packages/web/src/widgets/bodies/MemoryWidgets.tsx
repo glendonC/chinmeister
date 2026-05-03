@@ -3,7 +3,7 @@ import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { navigateToDetail } from '../../lib/router.js';
-import { completionColor } from '../utils.js';
+import { completionColor, MEMORY_OUTCOMES_MIN_SESSIONS } from '../utils.js';
 import { StatWidget, visibleRowsWithOverflow } from './shared.js';
 import s from './MemoryWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
@@ -25,7 +25,6 @@ import type { WidgetBodyProps, WidgetRegistry } from './types.js';
  * outcomes). Mono for measurements, sans/display for identifiers.
  */
 
-const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
 const MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS = 5;
 // Cockpit teasers: keep visible counts in line with files-being-edited
 // (3-4 rows + overflow link). Full tables live in the corresponding detail
