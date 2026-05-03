@@ -6,7 +6,7 @@ import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useProjectTabLayout } from './useProjectTabLayout.js';
-import { TRENDS_DEFAULT_LAYOUT } from './projectTabDefaults.js';
+import { ACTIVITY_DEFAULT_LAYOUT, TRENDS_DEFAULT_LAYOUT } from './projectTabDefaults.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -74,7 +74,7 @@ afterEach(() => {
 });
 
 describe('useProjectTabLayout', () => {
-  it('rewrites a saved layout containing the deprecated `models` id to `model-mix`', () => {
+  it('drops saved ids that are not in the current catalog', () => {
     const stored = {
       version: 3,
       widgets: [
@@ -86,42 +86,15 @@ describe('useProjectTabLayout', () => {
 
     const h = renderHookOnce('trends', TRENDS_DEFAULT_LAYOUT);
     const ids = h.value.slots.map((s) => s.id);
-    expect(ids).toContain('model-mix');
-    expect(ids).not.toContain('models');
-    h.unmount();
-  });
-
-  it('drops widgets aliased to an empty replacement set', () => {
-    const stored = {
-      version: 3,
-      widgets: [
-        { id: 'tools', colSpan: 6, rowSpan: 3 },
-        { id: 'first-edit', colSpan: 6, rowSpan: 3 },
-        { id: 'outcomes', colSpan: 8, rowSpan: 3 },
-      ],
-    };
-    localStorage.setItem('chinmeister:project-trends-dashboard', JSON.stringify(stored));
-
-    const h = renderHookOnce('trends', TRENDS_DEFAULT_LAYOUT);
-    const ids = h.value.slots.map((s) => s.id);
-    expect(ids).not.toContain('tools');
-    expect(ids).not.toContain('first-edit');
     expect(ids).toContain('outcomes');
+    expect(ids).not.toContain('models');
     h.unmount();
   });
 
-  it('seeds default layout through alias resolution so deprecated ids in defaults heal', () => {
-    // No stored layout: the hook seeds from `defaults`. TRENDS_DEFAULT_LAYOUT
-    // intentionally still references some deprecated ids; alias resolution
-    // should rewrite them on first paint rather than drop the slots.
-    const h = renderHookOnce('trends', TRENDS_DEFAULT_LAYOUT);
+  it('seeds default layout from current ids only', () => {
+    const h = renderHookOnce('activity', ACTIVITY_DEFAULT_LAYOUT);
     const ids = h.value.slots.map((s) => s.id);
-    expect(ids).toContain('model-mix');
-    expect(ids).not.toContain('models');
-    expect(ids).not.toContain('first-edit');
-    expect(ids).not.toContain('topics');
-    expect(ids).not.toContain('prompt-clarity');
-    expect(ids).not.toContain('tools');
+    expect(ids).toEqual(ACTIVITY_DEFAULT_LAYOUT.map((s) => s.id));
     h.unmount();
   });
 });

@@ -85,15 +85,9 @@ describe('parseLocation', () => {
     expect(parseLocation()).toEqual({ view: 'project', teamId: 't_1' });
   });
 
-  // Legacy routes without /dashboard prefix should still work
-  it('handles legacy /settings path', async () => {
+  it('ignores routes outside the dashboard namespace', async () => {
     const { parseLocation } = await loadRouter('/settings');
-    expect(parseLocation()).toEqual({ view: 'settings', teamId: null });
-  });
-
-  it('handles legacy /project/:id path', async () => {
-    const { parseLocation } = await loadRouter('/project/t_abc123');
-    expect(parseLocation()).toEqual({ view: 'project', teamId: 't_abc123' });
+    expect(parseLocation()).toEqual({ view: 'overview', teamId: null });
   });
 });
 

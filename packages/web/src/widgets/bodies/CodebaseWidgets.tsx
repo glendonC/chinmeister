@@ -17,6 +17,7 @@ import {
   InlineDelta,
   isSoloTeam,
   splitPeriodDelta,
+  visibleRowsWithOverflow,
 } from './shared.js';
 
 function openCodebase(tab: string, q: string) {
@@ -28,7 +29,7 @@ function visibleRowsForTable(
   noOverflowCap: number,
   withOverflowCap: number,
 ): number {
-  return total > noOverflowCap ? withOverflowCap : total;
+  return visibleRowsWithOverflow(total, noOverflowCap, withOverflowCap);
 }
 
 function TableOverflow({

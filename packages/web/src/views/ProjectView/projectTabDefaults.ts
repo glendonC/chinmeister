@@ -20,9 +20,7 @@ export const ACTIVITY_DEFAULT_LAYOUT: WidgetSlot[] = [
 ];
 
 // Trends tab - historical reflection. Bigger charts, full coverage.
-// Layout ids resolve through the alias map at load, so renames or cuts in
-// the catalog are absorbed transparently. Keep the array honest against
-// the current catalog so the catalog-parity test stays meaningful.
+// Keep ids honest against the current catalog.
 export const TRENDS_DEFAULT_LAYOUT: WidgetSlot[] = [
   // Outcomes sits at its natural 8 cols. No forced backfill on the row;
   // users add other widgets via the picker if they want the leftover 4

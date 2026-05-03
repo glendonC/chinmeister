@@ -10,11 +10,6 @@ export function addRefreshHandler(handler: RefreshHandler): () => void {
   return () => refreshSubscribers.delete(handler);
 }
 
-// Legacy single-handler API - delegates to subscriber set
-export function setRefreshHandler(handler: RefreshHandler): void {
-  refreshSubscribers.add(handler);
-}
-
 export function requestRefresh(): void {
   if (wsConnected) return; // WS will deliver the delta - no need to HTTP poll
   for (const handler of refreshSubscribers) {

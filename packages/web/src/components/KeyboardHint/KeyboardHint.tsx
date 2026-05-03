@@ -5,10 +5,8 @@ import styles from './KeyboardHint.module.css';
 
 // Storage keys split by axis so dismissing the horizontal hint doesn't
 // dismiss the vertical one (the two navs are independent - a user who
-// learned ←/→ may still benefit from seeing ↑/↓). Keeping the
-// horizontal key at its existing value preserves dismissal state for
-// users who've already clicked through the legacy hint.
-const STORAGE_KEY_HORIZONTAL = 'chinmeister:hint:arrow-nav-v2';
+// learned ←/→ may still benefit from seeing ↑/↓).
+const STORAGE_KEY_HORIZONTAL = 'chinmeister:hint:arrow-nav-horizontal-v1';
 const STORAGE_KEY_VERTICAL = 'chinmeister:hint:arrow-nav-vertical-v1';
 
 export type HintAxis = 'horizontal' | 'vertical';
@@ -18,8 +16,7 @@ interface Props {
   open: boolean;
   onOpen: () => void;
   onDismiss: () => void;
-  /** Which arrow axis the hint describes. Defaults to horizontal for
-   *  backward compatibility with the stat-tab caller. */
+  /** Which arrow axis the hint describes. Defaults to horizontal. */
   axis?: HintAxis;
 }
 

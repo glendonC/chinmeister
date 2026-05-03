@@ -688,6 +688,11 @@ export function createBaselineAnalytics(): UserAnalytics {
     { file: FILES[6].path, confused_sessions: 4, retried_sessions: 0 }, // cli/extraction/engine.ts
     { file: FILES[8].path, confused_sessions: 3, retried_sessions: 1 }, // worker/team/sessions.ts
     { file: FILES[2].path, confused_sessions: 2, retried_sessions: 0 }, // OverviewView.tsx
+    { file: FILES[5].path, confused_sessions: 2, retried_sessions: 1 }, // LiveWidgets.tsx
+    { file: FILES[7].path, confused_sessions: 2, retried_sessions: 0 }, // mcp/tools/conflicts.ts
+    { file: FILES[9].path, confused_sessions: 2, retried_sessions: 0 }, // schemas/analytics.ts
+    { file: FILES[3].path, confused_sessions: 2, retried_sessions: 1 }, // shared/tool-registry.ts
+    { file: FILES[10].path, confused_sessions: 2, retried_sessions: 0 }, // UsageWidgets.tsx
   ];
 
   const unanswered_questions = {
@@ -770,6 +775,42 @@ export function createBaselineAnalytics(): UserAnalytics {
       handle_to: 'jae',
       gap_minutes: 1140,
       handoff_at: '2026-04-21T16:50:00Z',
+    },
+    {
+      file: FILES[7].path, // mcp/tools/conflicts.ts
+      tool_from: 'cursor',
+      tool_to: 'claude-code',
+      handle_from: 'sora',
+      handle_to: 'glendon',
+      gap_minutes: 47,
+      handoff_at: '2026-04-20T11:23:00Z',
+    },
+    {
+      file: FILES[3].path, // shared/tool-registry.ts
+      tool_from: 'aider',
+      tool_to: 'cursor',
+      handle_from: 'jae',
+      handle_to: 'sora',
+      gap_minutes: 165,
+      handoff_at: '2026-04-19T08:55:00Z',
+    },
+    {
+      file: FILES[9].path, // schemas/analytics.ts
+      tool_from: 'cline',
+      tool_to: 'aider',
+      handle_from: 'pax',
+      handle_to: 'jae',
+      gap_minutes: 320,
+      handoff_at: '2026-04-18T20:11:00Z',
+    },
+    {
+      file: FILES[5].path, // LiveWidgets.tsx
+      tool_from: 'claude-code',
+      tool_to: 'cline',
+      handle_from: 'glendon',
+      handle_to: 'pax',
+      gap_minutes: 720,
+      handoff_at: '2026-04-17T14:32:00Z',
     },
   ];
 
@@ -1616,7 +1657,7 @@ export function createBaselineAnalytics(): UserAnalytics {
     capabilities_missing: capsMissing,
   };
 
-  // 43. daily_metrics (flat metric timeline - legacy format)
+  // 43. daily_metrics (flat metric timeline)
   const daily_metrics = daily_trends.map((d) => ({
     date: d.day,
     metric: 'sessions',
@@ -1758,6 +1799,10 @@ export function createBaselineAnalytics(): UserAnalytics {
         reading_sessions: 4,
       },
       { author_tool: 'aider', consumer_tool: 'cursor', memories_read: 1, reading_sessions: 3 },
+      { author_tool: 'cline', consumer_tool: 'claude-code', memories_read: 2, reading_sessions: 5 },
+      { author_tool: 'cline', consumer_tool: 'cursor', memories_read: 1, reading_sessions: 2 },
+      { author_tool: 'aider', consumer_tool: 'cline', memories_read: 1, reading_sessions: 1 },
+      { author_tool: 'cursor', consumer_tool: 'cline', memories_read: 1, reading_sessions: 2 },
     ],
     memory_aging: { recent_7d: 7, recent_30d: 11, recent_90d: 7, older: 3 },
     memory_categories: [
@@ -1769,13 +1814,22 @@ export function createBaselineAnalytics(): UserAnalytics {
       { category: 'config', count: 3, last_used_at: nowMinusDays(11) },
       { category: 'patterns', count: 2, last_used_at: nowMinusDays(15) },
       { category: 'infra', count: 1, last_used_at: nowMinusDays(22) },
+      { category: 'parsing', count: 1, last_used_at: nowMinusDays(9) },
+      { category: 'rate-limit', count: 1, last_used_at: nowMinusDays(13) },
+      { category: 'session', count: 1, last_used_at: nowMinusDays(18) },
+      { category: 'webhooks', count: 1, last_used_at: nowMinusDays(25) },
     ],
     memory_single_author_directories: [
       { directory: 'packages/worker/dos/team', single_author_count: 7, total_count: 8 },
-      { directory: 'packages/web/src/widgets', single_author_count: 4, total_count: 9 },
       { directory: 'packages/mcp/lib/tools', single_author_count: 3, total_count: 4 },
-      { directory: 'packages/cli/lib/commands', single_author_count: 2, total_count: 5 },
       { directory: 'packages/shared/contracts', single_author_count: 2, total_count: 3 },
+      { directory: 'packages/web/src/widgets', single_author_count: 4, total_count: 9 },
+      { directory: 'packages/cli/lib/commands', single_author_count: 2, total_count: 5 },
+      { directory: 'packages/worker/src/routes/team', single_author_count: 2, total_count: 5 },
+      { directory: 'packages/web/src/views/OverviewView', single_author_count: 3, total_count: 8 },
+      { directory: 'packages/cli/lib/dashboard', single_author_count: 2, total_count: 6 },
+      { directory: 'packages/mcp/lib/server', single_author_count: 1, total_count: 3 },
+      { directory: 'packages/worker/src/lib', single_author_count: 1, total_count: 4 },
     ],
     memory_supersession: { invalidated_period: 2, merged_period: 4, pending_proposals: 1 },
     // Per-event timeline matching the scalars above: 2 invalidated, 4 merged

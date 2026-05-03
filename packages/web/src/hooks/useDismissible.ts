@@ -14,9 +14,9 @@ function loadSet(key: string): Set<string> {
       if (Array.isArray(parsed)) {
         return new Set(parsed.filter((x): x is string => typeof x === 'string'));
       }
-      return new Set([DEFAULT_ID]);
+      return new Set();
     } catch {
-      return new Set([DEFAULT_ID]);
+      return new Set();
     }
   } catch {
     return new Set();
@@ -78,9 +78,6 @@ function subscribe(key: string, fn: () => void): () => void {
  *
  * All instances using the same key stay in sync via a module-level store,
  * so dismissing in one place re-renders every other consumer.
- *
- * Legacy non-array localStorage values are interpreted as a boolean
- * dismissal so pre-existing hint state survives the upgrade.
  *
  * To force-reshow a hint after a meaningful change, bump the key suffix
  * (e.g. `-v2` → `-v3`).

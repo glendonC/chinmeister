@@ -12,13 +12,17 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
       "Memories one tool wrote that another tool's sessions actually retrieved this period. Tool axis only; the number is reads, not the available pool.",
     category: 'memory',
     scope: 'both',
+    // h: 3 is the first-paint default; fitContent grows the cell up to the
+    // viz cap when content needs more.
     viz: 'data-list',
     w: 6,
     h: 3,
     minW: 4,
     minH: 2,
     dataKeys: ['cross_tool_memory_flow'],
+    fitContent: true,
     drillTarget: { view: 'memory', tab: 'cross-tool', q: 'flow' },
+    ownsClick: true,
   },
   {
     id: 'memory-aging-curve',
@@ -56,10 +60,11 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
     dataKeys: ['memory_categories'],
     // fitContent so a sparse categories list (1-3 rows) doesn't reserve a
     // 4th row of empty space. WidgetGrid measures the body's natural
-    // height and shrinks the cell — capped at h:4 so a populated list
-    // still gets the full slot.
+    // height and shrinks the cell, capped at h:4 so a populated list still
+    // gets the full slot.
     fitContent: true,
     drillTarget: { view: 'memory', tab: 'health', q: 'top-tags' },
+    ownsClick: true,
   },
   {
     id: 'memory-health',
@@ -84,13 +89,19 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
       'Directories where almost all the memory comes from a single person. Shows the share each directory carries, with a warn marker at 80% and up. Directory only, never names anyone.',
     category: 'memory',
     scope: 'both',
+    // h: 4 is the first-paint default; fitContent grows the cell up to the
+    // data-list viz cap (clamped to grid maxH:6) when SINGLE_AUTHOR_VISIBLE
+    // rows + header + SectionOverflow exceed h:4. No widget-specific
+    // hardcoding required - the grid measures and adapts.
     viz: 'data-list',
     w: 6,
-    h: 3,
+    h: 4,
     minW: 4,
     minH: 2,
     dataKeys: ['memory_single_author_directories'],
+    fitContent: true,
     drillTarget: { view: 'memory', tab: 'authorship', q: 'concentration' },
+    ownsClick: true,
   },
   {
     id: 'memory-supersession-flow',

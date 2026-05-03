@@ -29,11 +29,12 @@ export function parseLocation(): Route {
     .replace(/\/+$/, '');
   const segments = path.split('/').filter(Boolean);
 
-  // Strip the /dashboard prefix - all dashboard routes live under it
-  if (segments[0] === 'dashboard') segments.shift();
+  if (segments.length === 0) return { view: 'overview', teamId: null };
+  if (segments[0] !== 'dashboard') return { view: 'overview', teamId: null };
+  const route = segments[1];
 
-  if (segments[0] === 'project' && segments[1]) {
-    const teamId = segments[1].trim();
+  if (route === 'project' && segments[2]) {
+    const teamId = segments[2].trim();
     // Validate teamId is a non-empty, reasonable identifier
     if (teamId.length > 0 && /^[\w-]+$/.test(teamId)) {
       return { view: 'project', teamId };
@@ -41,11 +42,11 @@ export function parseLocation(): Route {
     // Invalid teamId - fall through to overview
     return { view: 'overview', teamId: null };
   }
-  if (segments[0] === 'tools') return { view: 'tools', teamId: null };
-  if (segments[0] === 'global') return { view: 'global', teamId: null };
-  if (segments[0] === 'reports') return { view: 'reports', teamId: null };
-  if (segments[0] === 'settings') return { view: 'settings', teamId: null };
-  if (segments[0] === 'demo') return { view: 'demo', teamId: null };
+  if (route === 'tools') return { view: 'tools', teamId: null };
+  if (route === 'global') return { view: 'global', teamId: null };
+  if (route === 'reports') return { view: 'reports', teamId: null };
+  if (route === 'settings') return { view: 'settings', teamId: null };
+  if (route === 'demo') return { view: 'demo', teamId: null };
   return { view: 'overview', teamId: null };
 }
 
