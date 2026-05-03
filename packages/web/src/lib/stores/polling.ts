@@ -12,7 +12,7 @@ import {
 } from '../apiSchemas.js';
 import { authActions } from './auth.js';
 import { teamActions, clearJoinedCache } from './teams.js';
-import { requestRefresh, setRefreshHandler } from './refresh.js';
+import { addRefreshHandler, requestRefresh } from './refresh.js';
 import { closeWebSocket, connectTeamWebSocket, setPollingBridge } from './websocket.js';
 import { type PollingState, type DataStatus, buildContextReadyPatch } from './pollingTypes.js';
 import { isDemoActive, getActiveScenarioId } from '../demoMode.js';
@@ -291,7 +291,7 @@ async function poll(): Promise<void> {
   }
 }
 
-setRefreshHandler(poll);
+addRefreshHandler(poll);
 
 /** Max consecutive failures before polling stops entirely (circuit breaker). */
 const MAX_CONSECUTIVE_FAILURES = 20;

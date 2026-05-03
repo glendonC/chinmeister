@@ -30,6 +30,19 @@ export type StatDeltaFormat = 'count' | 'usd' | 'usd-fine';
 export { splitDelta as splitPeriodDelta } from '../../views/OverviewView/detailDelta.js';
 
 /**
+ * Row cap for compact cockpit tables that reserve a final line for the
+ * `SectionOverflow` affordance. Each table family still owns its caps because
+ * row density differs by layout; this helper keeps the overflow policy shared.
+ */
+export function visibleRowsWithOverflow(
+  total: number,
+  noOverflowCap: number,
+  withOverflowCap: number,
+): number {
+  return total > noOverflowCap ? withOverflowCap : total;
+}
+
+/**
  * Screen-reader suffix mirroring the visual delta glyph (↑/↓/→). Empty
  * when the visual delta is suppressed (null or previous <= 0).
  */

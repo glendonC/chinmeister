@@ -37,13 +37,6 @@ const RING_GAP_DEG = 12;
 const RING_TOP_N = 5;
 const OTHER_KEY = '__other';
 
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const mid = sorted.length >> 1;
-  return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
-}
-
 /** Humanize a duration expressed in minutes: seconds under one minute,
  *  minutes up to an hour, hours past that. Returns the pair the hero
  *  stat expects so callers spread it into HeroStatDef. */
@@ -65,12 +58,6 @@ export function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
     (best, d) => (d.edits > best.edits ? { day: d.day, edits: d.edits } : best),
     { day: '', edits: 0 },
   );
-
-  const ratesWithHours = analytics.edit_velocity
-    .filter((v) => v.total_session_hours > 0)
-    .map((v) => v.edits_per_hour);
-  const medianRate = median(ratesWithHours);
-  const activeDays = ratesWithHours.length;
 
   const byMember = useMemo<TrueShareEntry[]>(
     () =>
@@ -225,15 +212,6 @@ export function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
           <DeltaChip current={currentRate} previous={previousRate} sense="up" suffix="vs prev" />
         ) : undefined,
     });
-  } else if (medianRate > 0) {
-    // Fallback for legacy payloads where period_comparison isn't populated yet.
-    heroStats.push({
-      key: 'rate',
-      value: medianRate.toFixed(1),
-      unit: '/hr',
-      label: 'edits per hour',
-      sublabel: `median across ${activeDays} active days`,
-    });
   }
   if (peak.edits > 0) {
     heroStats.push({
@@ -270,7 +248,7 @@ export function EditsPanel({ analytics }: { analytics: UserAnalytics }) {
     if (rate) {
       return (
         <>
-          <Metric>{rate}/hr</Metric> median pace across <Metric>{activeDays}</Metric> active days.
+          <Metric>{rate}/hr</Metric> edit pace.
         </>
       );
     }

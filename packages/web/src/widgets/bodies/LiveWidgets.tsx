@@ -12,7 +12,7 @@ import { groupFilesByTeam, type FileGroup } from '../live-data.js';
 import type { LiveAgent } from '../types.js';
 import type { Lock } from '../../lib/schemas/common.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { FilePath } from './shared.js';
+import { FilePath, visibleRowsWithOverflow } from './shared.js';
 
 // Simultaneous-visibility cap. Capping at 3 hides most of a 10-agent team
 // behind a "+N more" link, which defeats the cockpit thesis (cross-tool
@@ -41,7 +41,7 @@ const EDITOR_CAP = 3;
 const STALE_AFTER_SECONDS = 30;
 
 function visibleFileRowCount(total: number): number {
-  return total > FILE_ROWS_NO_OVERFLOW_CAP ? FILE_ROWS_WITH_OVERFLOW_CAP : total;
+  return visibleRowsWithOverflow(total, FILE_ROWS_NO_OVERFLOW_CAP, FILE_ROWS_WITH_OVERFLOW_CAP);
 }
 
 function LiveAgentsWidget({ liveAgents }: WidgetBodyProps) {

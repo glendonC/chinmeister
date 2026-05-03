@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { DetailView, type DetailTabDef } from '../../../components/DetailView/index.js';
 import RangePills from '../../../components/RangePills/RangePills.jsx';
@@ -7,8 +7,6 @@ import type { TeamSummaryLive, UserAnalytics } from '../../../lib/apiSchemas.js'
 import type { LiveAgent } from '../../../widgets/types.js';
 import { formatCost } from '../../../widgets/utils.js';
 import { hasCostData } from '../../../widgets/bodies/shared.js';
-import { setQueryParams } from '../../../lib/router.js';
-import { USAGE_TAB_ALIASES } from '../../../widgets/catalog/aliases.js';
 
 import { RANGES, formatScope, type RangeDays } from '../overview-utils.js';
 import { MISSING_DELTA, formatCountDelta, formatUsdDelta, splitDelta } from '../detailDelta.js';
@@ -67,26 +65,14 @@ export default function UsageDetailView({
     return { sessions, edits, linesAdded, linesRemoved, linesNet, cost, filesTouched };
   }, [analytics]);
 
-  // Resolve legacy tab values through USAGE_TAB_ALIASES so deep links from
-  // before a tab merger still land on the right (tab, q) pair. Live URL
-  // rewrite below keeps the param honest after first paint.
-  const aliasTarget = typeof initialTab === 'string' ? USAGE_TAB_ALIASES[initialTab] : undefined;
-  const initialTabResolved = aliasTarget?.tab ?? initialTab;
-  const resolvedInitialTab: UsageTab = isUsageTab(initialTabResolved)
-    ? initialTabResolved === 'projects' && !hasProjectTab
+  const resolvedInitialTab: UsageTab = isUsageTab(initialTab)
+    ? initialTab === 'projects' && !hasProjectTab
       ? 'sessions'
-      : initialTabResolved
+      : initialTab
     : 'sessions';
   const tabIds = hasProjectTab ? USAGE_TABS : BASE_USAGE_TABS;
   const tabControl = useTabs(tabIds as readonly UsageTab[], resolvedInitialTab);
   const { activeTab } = tabControl;
-
-  // Rewrite the URL when an alias was hit so the address bar matches the
-  // live tab and any q-hint the alias carries is preserved.
-  useEffect(() => {
-    if (!aliasTarget) return;
-    setQueryParams({ usage: aliasTarget.tab, q: aliasTarget.q ?? null });
-  }, [aliasTarget]);
 
   // Tab value for lines is the net signed delta, "+647" or "−120" reads
   // "did the codebase grow or shrink in this window". Total churn

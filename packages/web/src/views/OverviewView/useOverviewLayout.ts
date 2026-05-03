@@ -3,7 +3,6 @@ import {
   DEFAULT_LAYOUT,
   defaultSlot,
   getWidget,
-  resolveWidgetAlias,
   type WidgetSlot,
   type WidgetColSpan,
   type WidgetRowSpan,
@@ -18,9 +17,6 @@ const STORAGE_KEY = 'chinmeister:overview-dashboard';
 const STORAGE_VERSION = 3;
 const UNDO_STACK_LIMIT = 25;
 
-const LEGACY_IDS_KEY = 'chinmeister:overview-layout';
-const LEGACY_POS_KEY = 'chinmeister:overview-positions';
-
 interface DashboardLayout {
   version: number;
   widgets: WidgetSlot[];
@@ -30,250 +26,22 @@ function buildDefaultLayout(): DashboardLayout {
   return { version: STORAGE_VERSION, widgets: DEFAULT_LAYOUT.map((s) => ({ ...s })) };
 }
 
-// Map stored RGL w/h to canonical spans. Clamping logic mirrors the catalog
-// so a user who stored a hand-customized w=5 lands on the nearest 6.
-function mapColSpan(w: number): WidgetColSpan {
-  if (w <= 3) return 3;
-  if (w === 4) return 4;
-  if (w <= 6) return 6;
-  if (w <= 8) return 8;
-  return 12;
-}
-
-function mapRowSpan(h: number): WidgetRowSpan {
-  if (h <= 2) return 2;
-  if (h === 3) return 3;
-  return 4;
-}
-
-// v1/v2 → v3: both prior shapes store {id,x,y,w,h}. We preserve reading
-// order (sort by y then x) and drop positions. Sizes collapse to canonical
-// spans. No data lost that the new renderer can use.
-interface LegacyWidget {
-  id: string;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
-}
-
-function migrateLegacyWidgets(widgets: LegacyWidget[]): WidgetSlot[] {
-  return [...widgets]
-    .sort((a, b) => a.y - b.y || a.x - b.x)
-    .map((w) => ({ id: w.id, colSpan: mapColSpan(w.w), rowSpan: mapRowSpan(w.h) }));
-}
-
-// Expand deprecated widget ids (rename/split) into their replacements. An
-// unaliased id is preserved at the user's stored size. Replacements drop
-// back to catalog defaults since the old slot size may not fit the new
-// widgets. De-duplicates so a user who already has a replacement visible
-// doesn't end up with two copies after the expansion runs.
-function resolveAliases(slots: WidgetSlot[]): WidgetSlot[] {
+export function normalizeCurrentLayout(slots: WidgetSlot[]): WidgetSlot[] {
   const seen = new Set<string>();
   const out: WidgetSlot[] = [];
-  for (const slot of slots) {
-    const ids = resolveWidgetAlias(slot.id);
-    if (ids.length === 1 && ids[0] === slot.id) {
-      if (!seen.has(slot.id) && defaultSlot(slot.id)) {
-        seen.add(slot.id);
-        out.push(slot);
-      }
-      continue;
-    }
-    for (const rid of ids) {
-      if (seen.has(rid)) continue;
-      const def = defaultSlot(rid);
-      if (def) {
-        seen.add(rid);
-        out.push(def);
-      }
-    }
-  }
-  return out;
-}
-
-// Saved-layout healers. Each function snaps a single widget's persisted
-// span back to the catalog default when the persisted shape doesn't fit the
-// current renderer. Users with stale localStorage from earlier catalog
-// shapes hit one of these healers on next load; power users who genuinely
-// want the older size can drag-resize after the snap.
-//
-// Healers are exported for unit testing. Order matters in the chain
-// (heal-then-clamp), so each healer is verified in isolation plus a final
-// integration test pins the chain composition. Application code goes
-// through `healAll` rather than calling the helpers directly.
-
-// live-agents at colSpan: 12 sprawls full width even though the curated
-// default places it at half-width next to live-conflicts. Snap to 6.
-export function healLiveAgentsWidth(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => (s.id === 'live-agents' && s.colSpan === 12 ? { ...s, colSpan: 6 } : s));
-}
-
-// projects at wider spans sprawls because the comparator table has way more
-// leftover space than the cells need. Heal back to the compact 6-col catalog
-// default, including the older 8-col persisted layout.
-export function healProjectsWidth(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => (s.id === 'projects' && s.colSpan > 6 ? { ...s, colSpan: 6 } : s));
-}
-
-// outcomes renders a 260px ring + 5-column table that needs the full
-// 12-col footprint and at least 4 rows of vertical room to fit cleanly.
-// Promote any narrower or shorter saved slot up to the catalog default.
-export function healOutcomesWidth(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => {
-    if (s.id !== 'outcomes') return s;
-    const colSpan = s.colSpan < 12 ? 12 : s.colSpan;
-    const rowSpan = s.rowSpan < 4 ? 4 : s.rowSpan;
-    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
-    return { ...s, colSpan, rowSpan };
-  });
-}
-
-// directories renders the same ring-plus-table shape as outcomes; heal
-// saved 6×4 slots up to 12×4 so the table columns stop colliding.
-export function healDirectoriesSize(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => {
-    if (s.id !== 'directories') return s;
-    const colSpan = s.colSpan < 12 ? 12 : s.colSpan;
-    const rowSpan = s.rowSpan < 4 ? 4 : s.rowSpan;
-    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
-    return { ...s, colSpan, rowSpan };
-  });
-}
-
-// scope-complexity needs enough horizontal room for the hero + bucket
-// marks to breathe; 6-col slots collapse into cramped typography. Heal
-// up to the 8-col default.
-export function healScopeComplexityWidth(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) =>
-    s.id === 'scope-complexity' && s.colSpan < 8 ? { ...s, colSpan: 8 } : s,
-  );
-}
-
-// tool-call-errors is a canonical stat card. Saved layouts larger than
-// 3×2 leave a single hero stat floating in dead space; snap down to the
-// 3×2 default that matches every other KPI stat in the cockpit (sessions,
-// edits, cost, one-shot-rate).
-export function healToolCallErrorsSize(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) =>
-    s.id === 'tool-call-errors' && (s.colSpan > 3 || s.rowSpan > 2)
-      ? { ...s, colSpan: 3, rowSpan: 2 }
-      : s,
-  );
-}
-
-// file-overlap and conflicts-blocked are bare StatWidget composites at
-// 3×2. Saved layouts at larger sizes show a single small hero floating in
-// a half-row of empty space, breaking visual uniformity with the other
-// KPI stats (cost, edits, sessions, stuckness, one-shot-rate at 3×2).
-export function healTeamStatSize(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) =>
-    (s.id === 'file-overlap' || s.id === 'conflicts-blocked') && (s.colSpan > 3 || s.rowSpan > 2)
-      ? { ...s, colSpan: 3, rowSpan: 2 }
-      : s,
-  );
-}
-
-// Generic clamp against catalog min/max. Runs LAST in the heal chain so
-// any saved slot whose size now exceeds its viz constraints (e.g. a stat
-// card persisted at 6×3 from a prior catalog shape) gets normalized even
-// when no widget-specific healer above caught it. Source of truth is the
-// catalog WidgetDef's maxW/maxH (with the VIZ_MAX_CONSTRAINTS fallback
-// applied via getWidget). Matches the constraint that setSlotSize enforces
-// on every resize gesture.
-export function clampToCatalogConstraints(slots: WidgetSlot[]): WidgetSlot[] {
-  return slots.map((s) => {
+  for (const s of slots) {
     const def = getWidget(s.id);
-    if (!def) return s;
+    if (!def || seen.has(s.id)) continue;
     const maxCol = (def.maxW ?? 12) as WidgetColSpan;
-    const maxRow = (def.maxH ?? 4) as WidgetRowSpan;
+    const maxRow = (def.maxH ?? 6) as WidgetRowSpan;
     const minCol = (def.minW ?? 3) as WidgetColSpan;
     const minRow = (def.minH ?? 2) as WidgetRowSpan;
     const colSpan = Math.max(minCol, Math.min(maxCol, s.colSpan)) as WidgetColSpan;
     const rowSpan = Math.max(minRow, Math.min(maxRow, s.rowSpan)) as WidgetRowSpan;
-    if (colSpan === s.colSpan && rowSpan === s.rowSpan) return s;
-    return { ...s, colSpan, rowSpan };
-  });
-}
-
-// Activity row: heatmap full-width 12×3, work-types full-width 12×4 (ring
-// + table needs the room), hourly-effectiveness on its own row at 8×3.
-export function healActivityLayout(slots: WidgetSlot[]): WidgetSlot[] {
-  const hasHourly = slots.some((s) => s.id === 'hourly-effectiveness');
-  const out: WidgetSlot[] = [];
-  for (const slot of slots) {
-    if (slot.id === 'heatmap') {
-      out.push({ ...slot, colSpan: 12, rowSpan: 3 });
-      continue;
-    }
-    if (slot.id === 'work-types') {
-      out.push({ ...slot, colSpan: 12, rowSpan: 4 });
-      if (!hasHourly) {
-        out.push({ id: 'hourly-effectiveness', colSpan: 8, rowSpan: 3 });
-      }
-      continue;
-    }
-    if (slot.id === 'hourly-effectiveness') {
-      out.push({ ...slot, colSpan: 8, rowSpan: 3 });
-      continue;
-    }
-    out.push(slot);
+    seen.add(s.id);
+    out.push({ ...s, colSpan, rowSpan });
   }
   return out;
-}
-
-// Compose the heal chain in one place. Order matters: every per-widget
-// healer assumes its predecessors have already normalized the slot, and
-// the final clamp catches anything still outside the catalog's min/max.
-// The widget-specific healers run first because some widen colSpan past
-// today's catalog limit (e.g. healOutcomesWidth → 8 cols, valid by viz
-// constraint); running the clamp before them would snap that back to
-// the prior maxW. healActivityLayout runs late because it inserts a new
-// slot, so earlier healers should not see synthetic IDs they never wrote.
-//
-// Tested in the heal-chain unit suite: each healer in isolation, then
-// healAll wired against a degenerate input set that exercises every
-// branch in one pass.
-export function healAll(slots: WidgetSlot[]): WidgetSlot[] {
-  return clampToCatalogConstraints(
-    healActivityLayout(
-      healTeamStatSize(
-        healToolCallErrorsSize(
-          healScopeComplexityWidth(
-            healDirectoriesSize(healOutcomesWidth(healProjectsWidth(healLiveAgentsWidth(slots)))),
-          ),
-        ),
-      ),
-    ),
-  );
-}
-
-function migrateFromLegacyKeys(): DashboardLayout | null {
-  try {
-    const idsRaw = localStorage.getItem(LEGACY_IDS_KEY);
-    const posRaw = localStorage.getItem(LEGACY_POS_KEY);
-    if (!idsRaw && !posRaw) return null;
-
-    const ids: string[] = idsRaw ? JSON.parse(idsRaw) : [];
-    const positions: Array<{ i: string; x: number; y: number; w: number; h: number }> = posRaw
-      ? JSON.parse(posRaw)
-      : [];
-    const posMap = new Map(positions.map((p) => [p.i, p]));
-    const legacy: LegacyWidget[] = ids.map((id, idx) => {
-      const pos = posMap.get(id);
-      return pos
-        ? { id, x: pos.x, y: pos.y, w: pos.w, h: pos.h }
-        : { id, x: 0, y: idx, w: 6, h: 3 };
-    });
-    const slots = resolveAliases(migrateLegacyWidgets(legacy));
-
-    localStorage.removeItem(LEGACY_IDS_KEY);
-    localStorage.removeItem(LEGACY_POS_KEY);
-
-    return { version: STORAGE_VERSION, widgets: slots };
-  } catch {
-    return null;
-  }
 }
 
 function loadDashboard(): DashboardLayout {
@@ -281,45 +49,25 @@ function loadDashboard(): DashboardLayout {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if ((parsed?.version === 1 || parsed?.version === 2) && Array.isArray(parsed.widgets)) {
-        const slots = resolveAliases(migrateLegacyWidgets(parsed.widgets as LegacyWidget[]));
-        const migrated: DashboardLayout = { version: STORAGE_VERSION, widgets: slots };
-        saveDashboard(migrated);
-        return migrated;
-      }
       if (parsed?.version === STORAGE_VERSION && Array.isArray(parsed.widgets)) {
-        const expanded = resolveAliases(parsed.widgets as WidgetSlot[]);
-        const healed = healAll(expanded);
+        const normalized = normalizeCurrentLayout(parsed.widgets as WidgetSlot[]);
         const stored = parsed.widgets as WidgetSlot[];
         const changed =
-          healed.length !== stored.length ||
-          healed.some(
+          normalized.length !== stored.length ||
+          normalized.some(
             (s, i) =>
               s.id !== stored[i]?.id ||
               s.colSpan !== stored[i]?.colSpan ||
               s.rowSpan !== stored[i]?.rowSpan,
           );
         if (changed) {
-          saveDashboard({ version: STORAGE_VERSION, widgets: healed });
+          saveDashboard({ version: STORAGE_VERSION, widgets: normalized });
         }
-        return { version: STORAGE_VERSION, widgets: healed };
+        return { version: STORAGE_VERSION, widgets: normalized };
       }
     }
   } catch {
     // Ignore corrupt storage
-  }
-
-  const migrated = migrateFromLegacyKeys();
-  if (migrated && migrated.widgets.length > 0) {
-    saveDashboard(migrated);
-    return migrated;
-  }
-
-  try {
-    localStorage.removeItem(LEGACY_IDS_KEY);
-    localStorage.removeItem(LEGACY_POS_KEY);
-  } catch {
-    /* */
   }
 
   const def = buildDefaultLayout();
@@ -461,12 +209,6 @@ export function useOverviewLayout() {
 
   const resetToDefault = useCallback(() => {
     pushUndoSnapshot();
-    try {
-      localStorage.removeItem(LEGACY_IDS_KEY);
-      localStorage.removeItem(LEGACY_POS_KEY);
-    } catch {
-      /* */
-    }
     const def = buildDefaultLayout();
     saveDashboard(def);
     setDashboardInner(def);

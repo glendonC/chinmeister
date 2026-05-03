@@ -1,8 +1,7 @@
 import type { WidgetDef } from './types.js';
 
 // Team widgets — substrate-unique cross-agent signals only. Productivity
-// ranking and surveillance-shaped comparisons stay out: see WIDGET_ALIASES
-// for the cuts and their reasoning.
+// ranking and surveillance-shaped comparisons stay out of the catalog.
 export const TEAM_WIDGETS: WidgetDef[] = [
   {
     id: 'file-overlap',

@@ -1,13 +1,14 @@
 /* MemoryWidgets — visual vocabulary borrowed from the strong categories.
  *
- * Three primitives:
+ * Four primitives:
  *   1. KPI tile      — hero number + mono caption (memory, hygiene, shield)
  *   2. Terrace       — 4-bucket stepped silhouette (freshness; mirrors
  *                      OutcomeWidgets.scopeTerrace)
- *   3. Subgrid table — header + rows with subgrid columns (cross-tool flow,
- *                      concentration; mirrors LiveWidgets.liveTable)
- *   4. Type ladder   — chromeless ranked list where weight encodes rank
- *                      (categories)
+ *   3. Subgrid table — header + button rows with subgrid columns + per-row
+ *                      View pill (cross-tool flow, concentration; same
+ *                      shape as LiveWidgets.liveTable)
+ *   4. Bar list      — label + fillTrack/fillBar + count, normalized to the
+ *                      visible-row max (categories)
  *
  * Tokens come from app.css / tokens.css — never hardcode hex.
  *
@@ -173,8 +174,8 @@
 
 .flowTable {
   display: grid;
-  /* From | To | Memories | Sessions */
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  /* From | To | Reads | Sessions | View */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto 56px;
   column-gap: var(--space-lg);
   row-gap: 0;
   align-content: start;
@@ -184,8 +185,8 @@
 
 .concTable {
   display: grid;
-  /* Directory | Share % | n / m */
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  /* Directory | Share bar+% | n / m | View */
+  grid-template-columns: minmax(0, 1fr) minmax(120px, 200px) auto 56px;
   column-gap: var(--space-lg);
   row-gap: 0;
   align-content: start;
@@ -215,9 +216,21 @@
   display: contents;
 }
 
+/* Overflow row spans all subgrid columns so the +N pill packs flush with
+ * the table rows above. Matches LiveWidgets.liveTableOverflow — keeping
+ * memory and live tables structurally identical so fitContent measures
+ * both the same way. */
+.tableOverflow {
+  grid-column: 1 / -1;
+}
+
 .tableRow {
   composes: rowBase from '../widget-shared.module.css';
   padding: 10px 14px;
+}
+
+.tableViewButton {
+  composes: viewPill from '../widget-shared.module.css';
 }
 
 .tableTool {
@@ -264,25 +277,51 @@
   letter-spacing: 0;
 }
 
-/* Concentration share %: hero-styled number that doubles as the bar.
- * Severe (≥80% single-author) renders in --warn; otherwise --ink at full
- * opacity for high concentration, fading to --soft as concentration drops. */
-.concShare {
-  font-family: var(--display);
-  font-size: var(--text-2xl);
-  font-weight: 200;
-  letter-spacing: -0.04em;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  line-height: 1;
+/* Concentration share cell: horizontal bar + mono % value, side by side.
+ * Bar fills 0-100% (the value is already a ratio, no row-set max needed).
+ * Severe (≥80% single-author) tints both fill and value --warn; otherwise
+ * fill is --ink at the standard fillBar opacity, value is --ink. Same row
+ * vocabulary as file-rework's RampSpark+value, so concentration reads the
+ * same way the codebase risk tables do. */
+.concShareCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  min-width: 0;
 }
 
-.concShareSevere {
-  color: var(--warn);
+.concShareTrack {
+  composes: fillTrack from '../widget-shared.module.css';
+  flex: 1;
+  min-width: 0;
 }
 
-.concShareNormal {
+.concShareFill {
+  composes: fillBar from '../widget-shared.module.css';
+  background: var(--ink);
+  opacity: 0.4;
+}
+
+.concShareFillSevere {
+  composes: fillBar from '../widget-shared.module.css';
+  background: var(--warn);
+  opacity: 0.85;
+}
+
+.concShareValue {
+  font-family: var(--mono);
+  font-size: var(--text-xs);
+  font-weight: 500;
   color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  min-width: 36px;
+  text-align: right;
+}
+
+.concShareValueSevere {
+  composes: concShareValue;
+  color: var(--warn);
 }
 
 .concPath {
@@ -296,15 +335,16 @@
   white-space: nowrap;
 }
 
-/* ── Type ladder (categories) ──
+/* ── Categories tag chips ──
  *
- * Chromeless ranked list where typography weight encodes rank: rank 1 is
- * weight 600, the tail is 400 with reduced opacity. No bars, no fills, no
- * dividers — just type laid out in a column with mono counts on the right.
- * The rank ladder is the visual gesture.
+ * Per row: a tag chip carrying the identifier and a mono count beside it.
+ * Chip backgrounds tint by rank tier (lead / primary top-3 / muted tail),
+ * so the leaderboard reads from chip saturation rather than a chart bar.
+ * Distinct from any other widget body in the catalog: tags rendered as
+ * actual visual tags.
  */
 
-.ladder {
+.catList {
   display: flex;
   flex-direction: column;
   gap: 0;
@@ -312,33 +352,64 @@
   min-height: 0;
 }
 
-.ladderRow {
+.catRow {
   composes: rowBase from '../widget-shared.module.css';
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: 8px 14px;
   margin: 0 -14px;
 }
 
-.ladderName {
-  font-family: var(--mono);
-  font-weight: var(--ladder-weight, 400);
-  font-size: var(--ladder-size, var(--text-sm));
-  color: var(--ladder-color, var(--ink));
-  letter-spacing: 0;
+.catChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 60%;
+  transition:
+    background var(--motion-fast) ease,
+    color var(--motion-fast) ease;
 }
 
-.ladderCount {
+/* Lead (top): full ink fill, inverted to page-bg, like the row's View pill.
+ * Strong visual anchor for the rank-1 entry. */
+.catChipLead {
+  background: var(--ink);
+  color: var(--page-bg);
+}
+
+/* Primary (top-3 minus lead): a softer ink wash. Reads as "still in the
+ * leading group" but doesn't compete with the lead chip. */
+.catChipPrimary {
+  background: var(--hover-bg);
+  color: var(--ink);
+}
+
+/* Muted (tail): no fill, just an outline at --soft. Tail entries fade out
+ * of the saturated tier without disappearing. */
+.catChipMuted {
+  background: transparent;
+  color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--ghost);
+}
+
+.catCount {
   font-family: var(--mono);
-  font-size: var(--text-xs);
+  font-size: var(--text-sm);
   font-weight: 500;
-  color: var(--soft);
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
+  min-width: 28px;
+  text-align: right;
 }
 
 /* ── Outcomes proportional bars (memory_outcome_correlation) ──
@@ -407,7 +478,7 @@
   .terraceStep,
   .terraceLabel,
   .tableRow,
-  .ladderRow,
+  .catRow,
   .outcomeRow {
     animation: none !important;
   }

@@ -33,7 +33,13 @@ import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import styles from './ToolWidgets.module.css';
 import { AnnotatedStrip, type AnnotatedStripSegment } from './atoms/AnnotatedStrip.js';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
-import { GhostRows, CoverageNote, capabilityCoverageNote, StatWidget } from './shared.js';
+import {
+  GhostRows,
+  CoverageNote,
+  capabilityCoverageNote,
+  StatWidget,
+  visibleRowsWithOverflow,
+} from './shared.js';
 
 function openTools(tab: string, q: string) {
   return () => setQueryParams({ tools: tab, q });
@@ -44,7 +50,7 @@ function visibleRowsForTable(
   noOverflowCap: number,
   withOverflowCap: number,
 ): number {
-  return total > noOverflowCap ? withOverflowCap : total;
+  return visibleRowsWithOverflow(total, noOverflowCap, withOverflowCap);
 }
 
 function TableOverflow({ count, onClick }: { count: number; onClick: () => void }) {

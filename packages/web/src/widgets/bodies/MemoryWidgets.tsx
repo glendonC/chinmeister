@@ -1,7 +1,9 @@
 import { type CSSProperties } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
+import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
-import { MoreHidden } from './shared.js';
+import { navigateToDetail } from '../../lib/router.js';
+import { visibleRowsWithOverflow } from './shared.js';
 import s from './MemoryWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
@@ -25,8 +27,13 @@ import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
 const MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS = 5;
 const TOP_CATEGORIES_VISIBLE = 8;
-const FLOW_PAIRS_VISIBLE = 6;
-const SINGLE_AUTHOR_VISIBLE = 8;
+// Cockpit teasers: keep visible counts in line with files-being-edited
+// (3-4 rows + overflow link). Full tables live in the corresponding detail
+// views — the +N overflow pill is the route there.
+const FLOW_PAIRS_NO_OVERFLOW_CAP = 4;
+const FLOW_PAIRS_WITH_OVERFLOW_CAP = 3;
+const SINGLE_AUTHOR_NO_OVERFLOW_CAP = 5;
+const SINGLE_AUTHOR_WITH_OVERFLOW_CAP = 4;
 
 function fmt(n: number): string {
   return n.toLocaleString();
@@ -156,8 +163,16 @@ function MemoryCrossToolFlowWidget({ analytics }: WidgetBodyProps) {
     );
   }
   const sorted = [...flow].sort((a, b) => b.memories_read - a.memories_read);
-  const visible = sorted.slice(0, FLOW_PAIRS_VISIBLE);
+  const visible = sorted.slice(
+    0,
+    visibleRowsWithOverflow(
+      sorted.length,
+      FLOW_PAIRS_NO_OVERFLOW_CAP,
+      FLOW_PAIRS_WITH_OVERFLOW_CAP,
+    ),
+  );
   const hidden = sorted.length - visible.length;
+  const open = () => navigateToDetail('memory', 'cross-tool', 'flow');
   return (
     <div className={s.flowTable}>
       <div className={s.tableHeader}>
@@ -165,16 +180,20 @@ function MemoryCrossToolFlowWidget({ analytics }: WidgetBodyProps) {
         <span>To</span>
         <span className={s.tableHeaderNum}>Reads</span>
         <span className={s.tableHeaderNum}>Sessions</span>
+        <span aria-hidden="true" />
       </div>
       <div className={s.tableBody}>
         {visible.map((f, i) => {
           const from = getToolMeta(f.author_tool);
           const to = getToolMeta(f.consumer_tool);
           return (
-            <div
+            <button
               key={`${f.author_tool}-${f.consumer_tool}`}
+              type="button"
               className={s.tableRow}
               style={{ '--row-index': i } as CSSProperties}
+              onClick={open}
+              aria-label={`Open cross-tool memory · ${from.label} to ${to.label}, ${fmt(f.memories_read)} reads in ${fmt(f.reading_sessions)} sessions`}
             >
               <span className={s.tableTool}>
                 <span className={s.tableToolDot} style={{ background: from.color }} />
@@ -186,20 +205,26 @@ function MemoryCrossToolFlowWidget({ analytics }: WidgetBodyProps) {
               </span>
               <span className={s.tableNum}>{fmt(f.memories_read)}</span>
               <span className={s.tableNumSecondary}>{fmt(f.reading_sessions)}</span>
-            </div>
+              <span className={s.tableViewButton}>View</span>
+            </button>
           );
         })}
       </div>
-      <MoreHidden count={hidden} />
+      {hidden > 0 && (
+        <div className={s.tableOverflow}>
+          <SectionOverflow count={hidden} label="pairs" onClick={open} />
+        </div>
+      )}
     </div>
   );
 }
 
-// ── memory concentration (subgrid table, hero share %) ──
+// ── memory concentration (subgrid table, share bar) ─────
 //
-// DIRECTORY | SHARE | COUNT — share % rendered as a display-weight number,
-// severity-tinted (warn at ≥80% single-author share). The number itself
-// IS the bar; no separate viz strip.
+// DIRECTORY | SHARE | COUNT — share is a horizontal bar with a mono % beside
+// it. Bar fills 0-100% (it's already a ratio), severity-tinted --warn at the
+// ≥80% threshold. Same fillTrack/fillBar primitives the codebase risk tables
+// use, so concentration speaks the same vocabulary as file-rework.
 
 function MemoryBusFactorWidget({ analytics }: WidgetBodyProps) {
   const dirs = analytics.memory_single_author_directories;
@@ -215,14 +240,23 @@ function MemoryBusFactorWidget({ analytics }: WidgetBodyProps) {
     const sb = b.total_count > 0 ? b.single_author_count / b.total_count : 0;
     return sb - sa;
   });
-  const visible = sorted.slice(0, SINGLE_AUTHOR_VISIBLE);
+  const visible = sorted.slice(
+    0,
+    visibleRowsWithOverflow(
+      sorted.length,
+      SINGLE_AUTHOR_NO_OVERFLOW_CAP,
+      SINGLE_AUTHOR_WITH_OVERFLOW_CAP,
+    ),
+  );
   const hidden = sorted.length - visible.length;
+  const open = () => navigateToDetail('memory', 'authorship', 'concentration');
   return (
     <div className={s.concTable}>
       <div className={s.tableHeader}>
         <span>Directory</span>
-        <span className={s.tableHeaderNum}>Share</span>
+        <span>Share</span>
         <span className={s.tableHeaderNum}>Count</span>
+        <span aria-hidden="true" />
       </div>
       <div className={s.tableBody}>
         {visible.map((d, i) => {
@@ -230,34 +264,53 @@ function MemoryBusFactorWidget({ analytics }: WidgetBodyProps) {
           const sharePct = Math.round(share * 100);
           const severe = share >= 0.8;
           return (
-            <div
+            <button
               key={d.directory}
+              type="button"
               className={s.tableRow}
               style={{ '--row-index': i } as CSSProperties}
+              onClick={open}
+              aria-label={`Open memory authorship · ${d.directory}, ${sharePct}% from one author (${d.single_author_count} of ${d.total_count})`}
               title={d.directory}
             >
               <span className={s.concPath}>{d.directory}</span>
-              <span className={`${s.concShare} ${severe ? s.concShareSevere : s.concShareNormal}`}>
-                {sharePct}%
+              <span className={s.concShareCell}>
+                <span className={s.concShareTrack}>
+                  <span
+                    className={severe ? s.concShareFillSevere : s.concShareFill}
+                    style={{ width: `${sharePct}%` }}
+                  />
+                </span>
+                <span className={severe ? s.concShareValueSevere : s.concShareValue}>
+                  {sharePct}%
+                </span>
               </span>
               <span className={s.tableNumSecondary}>
                 {d.single_author_count}/{d.total_count}
               </span>
-            </div>
+              <span className={s.tableViewButton}>View</span>
+            </button>
           );
         })}
       </div>
-      <MoreHidden count={hidden} />
+      {hidden > 0 && (
+        <div className={s.tableOverflow}>
+          <SectionOverflow count={hidden} label="directories" onClick={open} />
+        </div>
+      )}
     </div>
   );
 }
 
-// ── knowledge categories (type ladder) ──────────────
+// ── knowledge categories (tag chips + count) ────────
 //
-// Chromeless ranked list. The rank itself is the gesture: weight scales
-// from 600 (top) → 400 (tail), and color fades from --ink to --soft. No
-// bars, no fills, no dividers. The eye reads down the column and the type
-// itself communicates importance.
+// Two-column row: a tag chip carrying the category identifier (sans ink in
+// a pill so the row reads as "this is a tag, not a path or filename"), and
+// a mono count beside it. Chips are tinted by rank tier — top three
+// promoted to a stronger background so the leaderboard reads from chip
+// saturation rather than from a chart bar. Avoids the generic gray-bar
+// look that read as decorative; the chip is a deliberate "tag" mark
+// unique to the knowledge-categories surface.
 
 function MemoryCategoriesWidget({ analytics }: WidgetBodyProps) {
   const cats = analytics.memory_categories;
@@ -265,36 +318,30 @@ function MemoryCategoriesWidget({ analytics }: WidgetBodyProps) {
     return <SectionEmpty>Categories appear when agents tag memories on save.</SectionEmpty>;
   }
   const visible = cats.slice(0, TOP_CATEGORIES_VISIBLE);
+  const hidden = cats.length - visible.length;
+  const open = () => navigateToDetail('memory', 'health', 'top-tags');
   return (
-    <div className={s.ladder}>
-      {visible.map((c, i) => {
-        const rank = i / Math.max(visible.length - 1, 1); // 0 → 1
-        const weight = Math.round(600 - rank * 200); // 600 → 400
-        const fontSize = `calc(var(--text-md) - ${(rank * 0.0625).toFixed(3)}rem)`; // 14px → 13px
-        const color = i === 0 ? 'var(--ink)' : i < 3 ? 'var(--ink)' : 'var(--muted)';
-        return (
-          <div
-            key={c.category}
-            className={s.ladderRow}
-            style={{ '--row-index': i } as CSSProperties}
-          >
-            <span
-              className={s.ladderName}
-              style={
-                {
-                  '--ladder-weight': weight,
-                  '--ladder-size': fontSize,
-                  '--ladder-color': color,
-                } as CSSProperties
-              }
+    <>
+      <div className={s.catList}>
+        {visible.map((c, i) => {
+          const tier = i === 0 ? s.catChipLead : i < 3 ? s.catChipPrimary : s.catChipMuted;
+          return (
+            <button
+              key={c.category}
+              type="button"
+              className={s.catRow}
+              style={{ '--row-index': i } as CSSProperties}
+              onClick={open}
+              aria-label={`Open memory categories · ${c.category}, ${fmt(c.count)} memories`}
             >
-              {c.category}
-            </span>
-            <span className={s.ladderCount}>{fmt(c.count)}</span>
-          </div>
-        );
-      })}
-    </div>
+              <span className={`${s.catChip} ${tier}`}>{c.category}</span>
+              <span className={s.catCount}>{fmt(c.count)}</span>
+            </button>
+          );
+        })}
+      </div>
+      <SectionOverflow count={hidden} label="categories" onClick={open} />
+    </>
   );
 }
 

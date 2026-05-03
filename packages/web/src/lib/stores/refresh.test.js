@@ -60,16 +60,6 @@ describe('refresh store', () => {
     expect(handlerB).toHaveBeenCalledTimes(1);
   });
 
-  it('setRefreshHandler registers a handler that fires on requestRefresh', async () => {
-    const { setRefreshHandler, requestRefresh } = await loadRefreshModule();
-    const handler = vi.fn();
-
-    setRefreshHandler(handler);
-    requestRefresh();
-
-    expect(handler).toHaveBeenCalledTimes(1);
-  });
-
   it('suppresses refresh calls while WebSocket is connected', async () => {
     const { addRefreshHandler, requestRefresh, setWsConnected } = await loadRefreshModule();
     const handler = vi.fn();

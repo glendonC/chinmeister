@@ -21,7 +21,6 @@ import { MEMORY_WIDGETS } from './memory.js';
 import { TEAM_WIDGETS } from './team.js';
 
 export * from './types.js';
-export * from './aliases.js';
 export * from './categories.js';
 export * from './default-layout.js';
 

@@ -279,8 +279,7 @@ export const REPORT_CATALOG: ReportDef[] = [
       {
         id: 'merge-candidates',
         name: 'Merge candidates',
-        description:
-          'Memory pairs with overlapping content that should be merged or one deprecated.',
+        description: 'Memory pairs with overlapping content that should be merged or superseded.',
       },
     ],
     reads: [

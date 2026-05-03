@@ -1,2 +1,2 @@
-// Backward-compatible barrel - all schemas now live in ./schemas/.
+// Public schema barrel.
 export * from './schemas/index.js';

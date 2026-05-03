@@ -20,9 +20,24 @@ import {
 import { SortableContext, useSortable, type SortingStrategy } from '@dnd-kit/sortable';
 import { CSS, getEventCoordinates } from '@dnd-kit/utilities';
 
-import { getWidget, type WidgetSlot, type WidgetRowSpan } from '../../widgets/widget-catalog.js';
+import {
+  clampRowSpan,
+  getWidget,
+  type WidgetSlot,
+  type WidgetRowSpan,
+} from '../../widgets/widget-catalog.js';
 
 import styles from './WidgetGrid.module.css';
+
+const GRID_TRACK_PX = 8;
+const CELL_GUTTER_PX = 24;
+const SEMANTIC_ROW_PX = 80;
+const SEMANTIC_ROW_GAP_PX = 24;
+
+function rowSpanToGridTracks(rowSpan: number): number {
+  const semanticHeight = rowSpan * SEMANTIC_ROW_PX + (rowSpan - 1) * SEMANTIC_ROW_GAP_PX;
+  return Math.max(1, Math.ceil((semanticHeight + CELL_GUTTER_PX) / GRID_TRACK_PX));
+}
 
 export interface WidgetGridProps {
   slots: WidgetSlot[];
@@ -100,44 +115,44 @@ interface SortableWidgetProps {
  *
  * The widget renders at content height (via `.widgetFit` CSS → `height: auto`),
  * then this hook measures its natural scrollHeight, computes the minimum
- * number of 80px grid tracks needed to contain it, and reports that back.
- * The caller applies it as the cell's `grid-row: span N`, which shrinks the
- * reserved grid area - neighbors in later rows flow up via `grid-auto-flow:
- * row dense`.
+ * number of physical grid tracks needed to contain it, and reports that back.
+ * The caller applies it as the cell's `grid-row: span N`, which sizes the
+ * reserved grid area to content; neighbors in later rows flow up via
+ * `grid-auto-flow: row dense`.
  *
- * Clamped to [1, declared]. Content above the declared cap scrolls inside
- * `[data-widget-zone='body']`. ResizeObserver keeps the value in sync as
- * content changes (new agents arrive, conflicts resolve, etc.). rAF debounce
+ * Clamped to the widget's catalog h, converted into physical tracks. The
+ * generic viz-family maxH is intentionally ignored here: a compact table
+ * should not jump to an eight-row slot just because `data-list` allows a
+ * large manually resized shape elsewhere.
+ * ResizeObserver keeps the value in sync as content changes; rAF debounce
  * coalesces rapid changes and avoids measurement feedback loops.
  */
 function useFitRowSpan(
   enabled: boolean,
-  declared: WidgetRowSpan,
+  capTracks: number,
   widgetRef: React.RefObject<HTMLDivElement | null>,
-): WidgetRowSpan | null {
-  const [rows, setRows] = useState<WidgetRowSpan | null>(null);
+): number | null {
+  const [rows, setRows] = useState<number | null>(null);
   useLayoutEffect(() => {
     // Skip the effect entirely when disabled. We deliberately do NOT
     // reset `rows` here - when the caller pauses fit measurements (e.g.,
     // a drag is in flight), the last measured value should persist so
     // the cell holds its visible height instead of snapping back to the
-    // declared cap mid-drag, which would itself be jank. After the drag
-    // ends and `enabled` flips true, ResizeObserver re-measures.
+    // cap mid-drag, which would itself be jank. After the drag ends and
+    // `enabled` flips true, ResizeObserver re-measures.
     if (!enabled) return;
     const el = widgetRef.current;
     if (!el) return;
-    const ROW_PX = 80;
-    const GAP_PX = 24;
     let rafId = 0;
     const measure = () => {
       cancelAnimationFrame(rafId);
       rafId = requestAnimationFrame(() => {
         const natural = el.scrollHeight;
-        // N rows span N * ROW + (N-1) * GAP total px. Solve for N:
-        //   natural <= N*ROW + (N-1)*GAP
-        //   N >= (natural + GAP) / (ROW + GAP)
-        const needed = Math.max(1, Math.ceil((natural + GAP_PX) / (ROW_PX + GAP_PX)));
-        const clamped = Math.min(declared, needed) as WidgetRowSpan;
+        // The widget lives inside a cell gutter. The grid area must reserve
+        // the natural widget height plus that gutter; tracks themselves are
+        // tiny and gapless, so fit-content can settle in small increments.
+        const needed = Math.max(1, Math.ceil((natural + CELL_GUTTER_PX) / GRID_TRACK_PX));
+        const clamped = Math.min(capTracks, needed);
         setRows((prev) => (prev === clamped ? prev : clamped));
       });
     };
@@ -148,7 +163,7 @@ function useFitRowSpan(
       cancelAnimationFrame(rafId);
       obs.disconnect();
     };
-  }, [enabled, declared, widgetRef]);
+  }, [enabled, capTracks, widgetRef]);
   return rows;
 }
 
@@ -169,8 +184,19 @@ function SortableWidget({ slot, highlighted, isOver, children, onRemove }: Sorta
   // grid-row span on a moving target, shifting the cursor anchor and
   // making the drag feel laggy. Re-enabled the moment the drag ends.
   const { active: anyDragActive } = useDndContext();
-  const fitRows = useFitRowSpan(fit && !anyDragActive, slot.rowSpan, widgetRef);
-  const effectiveRowSpan: WidgetRowSpan = fitRows ?? slot.rowSpan;
+  // Fit-content widgets cap at their catalog h, not the broad viz-family
+  // maxH. Otherwise every compact data-list can grow to the generic 8-row
+  // maximum and leave large blank tails after overflow rows.
+  const fitCap = rowSpanToGridTracks(clampRowSpan(def?.h ?? slot.rowSpan));
+  const fitRows = useFitRowSpan(fit && !anyDragActive, fitCap, widgetRef);
+  // For fitContent widgets the saved rowSpan is meaningless - height is
+  // content-driven, measured by useFitRowSpan above. Use the catalog h as
+  // the first-paint baseline so the cell doesn't paint at a stale saved
+  // value (e.g. rowSpan: 6 from an earlier catalog iteration where this
+  // widget was bumped) before the measurement converges. Non-fit widgets
+  // keep using slot.rowSpan as before since their height IS user-tunable.
+  const initialRowSpan: WidgetRowSpan = fit && def ? clampRowSpan(def.h) : slot.rowSpan;
+  const effectiveGridTracks = fitRows ?? rowSpanToGridTracks(initialRowSpan);
 
   // No `transition` from useSortable - we don't want the sibling
   // shift-preview animation. With the no-shift strategy, transform stays
@@ -181,7 +207,7 @@ function SortableWidget({ slot, highlighted, isOver, children, onRemove }: Sorta
   // (`grid-column: 1 / -1`) without needing `!important` to beat inline.
   const style: CSSProperties = {
     ['--cell-col-span' as string]: slot.colSpan,
-    ['--cell-row-span' as string]: effectiveRowSpan,
+    ['--cell-row-span' as string]: effectiveGridTracks,
     transform: CSS.Transform.toString(transform),
     zIndex: isDragging ? 2 : undefined,
   };
@@ -328,7 +354,7 @@ function GridPlaceholder({ w, h }: { w: number; h: number }) {
       style={
         {
           ['--cell-col-span' as string]: w,
-          ['--cell-row-span' as string]: h,
+          ['--cell-row-span' as string]: rowSpanToGridTracks(h),
         } as CSSProperties
       }
       aria-hidden="true"

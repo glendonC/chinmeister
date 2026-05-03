@@ -19,7 +19,7 @@ import type { DetailViewKey } from '../../lib/router.js';
  */
 
 export type WidgetColSpan = 3 | 4 | 6 | 8 | 12;
-export type WidgetRowSpan = 2 | 3 | 4;
+export type WidgetRowSpan = 2 | 3 | 4 | 5 | 6;
 
 /**
  * Layout slot persisted in localStorage. `colSpan` maps to grid-column:span,
@@ -156,10 +156,12 @@ function clampColSpan(n: number): WidgetColSpan {
   return 12;
 }
 
-function clampRowSpan(n: number): WidgetRowSpan {
+export function clampRowSpan(n: number): WidgetRowSpan {
   if (n <= 2) return 2;
   if (n === 3) return 3;
-  return 4;
+  if (n === 4) return 4;
+  if (n === 5) return 5;
+  return 6;
 }
 
 /**
