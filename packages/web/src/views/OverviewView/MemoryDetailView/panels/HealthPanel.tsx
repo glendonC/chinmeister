@@ -16,13 +16,11 @@ import {
   type TrueShareEntry,
 } from '../../../../components/viz/index.js';
 import { setQueryParam, useQueryParam } from '../../../../lib/router.js';
-import { completionColor } from '../../../../widgets/utils.js';
+import { completionColor, MEMORY_OUTCOMES_MIN_SESSIONS } from '../../../../widgets/utils.js';
 import type { UserAnalytics } from '../../../../lib/apiSchemas.js';
 
 import { fmtCount } from '../format.js';
 import styles from '../MemoryDetailView.module.css';
-
-const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
 
 function relativeDays(iso: string, nowMs: number): string {
   const days = Math.max(0, Math.floor((nowMs - new Date(iso).getTime()) / 86_400_000));

@@ -5,7 +5,12 @@ import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js
 import HourHeatmap, { type HourCell } from '../../components/viz/time/HourHeatmap.js';
 import { qualifyByVolume } from '../../lib/qualifyByVolume.js';
 import { setQueryParams } from '../../lib/router.js';
-import { completionColor, fmtCount, workTypeColor } from '../utils.js';
+import {
+  completionColor,
+  EFFECTIVE_HOURS_MIN_QUALIFIED,
+  fmtCount,
+  workTypeColor,
+} from '../utils.js';
 import type { UserAnalytics } from '../../lib/apiSchemas.js';
 import { BodyLead } from './atoms/BodyLead.js';
 import { AnnotatedRing, type AnnotatedRingArc } from './atoms/AnnotatedRing.js';
@@ -209,12 +214,10 @@ function WorkTypesWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// Below this many qualifying hours the bar chart is too thin to read
-// usefully. Off-hour bursts wash a 2-hour view, and the slice-by-volume
-// rule (qualifyByVolume p25) usually keeps 6+ hours when sessions are
-// real — so under 4 indicates "not enough data yet" rather than "show
-// a degenerate viz."
-const EFFECTIVE_HOURS_MIN_QUALIFIED = 4;
+// Off-hour bursts wash a 2-hour view, and the slice-by-volume rule
+// (qualifyByVolume p25) usually keeps 6+ hours when sessions are real.
+// EFFECTIVE_HOURS_MIN_QUALIFIED (centralized in widgets/utils) gates the
+// chart vs the empty state; EffectiveHoursPanel uses the same gate.
 const EFFECTIVE_WINDOW_HOURS = 3;
 
 function hourGlyph(h: number): string {
@@ -293,7 +296,11 @@ function HourlyEffectivenessWidget({ analytics }: WidgetBodyProps) {
   }, [analytics.hourly_effectiveness]);
 
   if (qualified.length < EFFECTIVE_HOURS_MIN_QUALIFIED) {
-    return <SectionEmpty>Needs at least 4 high-volume hours — keep working.</SectionEmpty>;
+    return (
+      <SectionEmpty>
+        Needs at least {EFFECTIVE_HOURS_MIN_QUALIFIED} high-volume hours — keep working.
+      </SectionEmpty>
+    );
   }
 
   const bestRangeLabel =
@@ -361,10 +368,9 @@ function HourlyEffectivenessWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// Note: duration-dist, scope-complexity, and first-edit live in
-// OutcomeWidgets.tsx — they are categorized as 'outcomes' in the catalog
-// and share the category's visualization vocabulary (ring / histogram /
-// curve). This registry only owns heatmap, work-types, and
+// Note: scope-complexity is categorized as 'outcomes' and lives in
+// OutcomeWidgets.tsx alongside the rest of the outcomes vocabulary. This
+// registry owns the activity-shape widgets only: heatmap, work-types, and
 // hourly-effectiveness.
 
 export const activityWidgets: WidgetRegistry = {
