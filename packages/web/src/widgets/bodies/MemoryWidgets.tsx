@@ -1,9 +1,10 @@
-import { type CSSProperties } from 'react';
+import { type CSSProperties, type ReactNode } from 'react';
 import SectionEmpty from '../../components/SectionEmpty/SectionEmpty.js';
 import SectionOverflow from '../../components/SectionOverflow/SectionOverflow.js';
 import { getToolMeta } from '../../lib/toolMeta.js';
 import { navigateToDetail } from '../../lib/router.js';
-import { visibleRowsWithOverflow } from './shared.js';
+import { completionColor } from '../utils.js';
+import { StatWidget, visibleRowsWithOverflow } from './shared.js';
 import s from './MemoryWidgets.module.css';
 import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
@@ -16,8 +17,8 @@ import type { WidgetBodyProps, WidgetRegistry } from './types.js';
  *   freshness       → 4-bucket terrace (mirrors scope-complexity)
  *   cross-tool flow → subgrid table (mirrors live-agents)
  *   concentration   → subgrid table with hero share % per row
- *   categories      → type ladder (weight encodes rank, no bars)
- *   outcomes        → proportional bars (real height, not hairlines)
+ *   categories      → ranked table (count bar + per-row View)
+ *   outcomes        → completion lenses (equal-size ring gauges)
  *
  * One color signal per widget. Color tokens never decorate; they encode
  * tool identity (cross-tool flow) or severity tone (freshness, concentration,
@@ -26,7 +27,6 @@ import type { WidgetBodyProps, WidgetRegistry } from './types.js';
 
 const MEMORY_OUTCOMES_MIN_SESSIONS = 10;
 const MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS = 5;
-const TOP_CATEGORIES_VISIBLE = 8;
 // Cockpit teasers: keep visible counts in line with files-being-edited
 // (3-4 rows + overflow link). Full tables live in the corresponding detail
 // views — the +N overflow pill is the route there.
@@ -34,9 +34,57 @@ const FLOW_PAIRS_NO_OVERFLOW_CAP = 4;
 const FLOW_PAIRS_WITH_OVERFLOW_CAP = 3;
 const SINGLE_AUTHOR_NO_OVERFLOW_CAP = 5;
 const SINGLE_AUTHOR_WITH_OVERFLOW_CAP = 4;
+const CATEGORIES_NO_OVERFLOW_CAP = 4;
+const CATEGORIES_WITH_OVERFLOW_CAP = 3;
 
 function fmt(n: number): string {
   return n.toLocaleString();
+}
+
+function fmtDays(n: number): string {
+  return String(Math.max(0, Math.round(n)));
+}
+
+function memoryOutcomeLabel(bucket: string): string {
+  if (/hit memory/i.test(bucket)) return 'with memory';
+  if (/searched/i.test(bucket)) return 'searched empty';
+  if (/no[-\s]search|without/i.test(bucket)) return 'without memory';
+  return bucket;
+}
+
+function memoryOutcomeRank(bucket: string): number {
+  if (/hit memory/i.test(bucket)) return 0;
+  if (/searched/i.test(bucket)) return 1;
+  if (/no[-\s]search|without/i.test(bucket)) return 2;
+  return 3;
+}
+
+interface MemoryStatStripItem {
+  key: string;
+  value: ReactNode;
+  label: string;
+  tone?: 'warning' | 'idle';
+}
+
+function MemoryStatStrip({ items }: { items: MemoryStatStripItem[] }) {
+  return (
+    <div className={s.memoryStatStrip}>
+      {items.map((item) => {
+        const toneClass =
+          item.tone === 'warning'
+            ? s.memoryStatValueWarn
+            : item.tone === 'idle'
+              ? s.memoryStatValueIdle
+              : '';
+        return (
+          <span key={item.key} className={s.memoryStatCell}>
+            <span className={`${s.memoryStatValue} ${toneClass}`}>{item.value}</span>
+            <span className={s.memoryStatLabel}>{item.label}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
 }
 
 // Severity-tinted age palette for the freshness terrace. Fresh reads as
@@ -50,13 +98,7 @@ const AGE_COLORS: Record<string, string> = {
   '90d+': 'var(--soft)',
 };
 
-function completionTone(rate: number): string {
-  if (rate >= 70) return 'var(--success)';
-  if (rate >= 40) return 'var(--warn)';
-  return 'var(--danger)';
-}
-
-// ── memory (KPI hero: count + age + stale) ──────────
+// ── memory (health strip: live + age + stale) ──────────
 
 function MemoryHealthWidget({ analytics }: WidgetBodyProps) {
   const m = analytics.memory_usage;
@@ -71,11 +113,18 @@ function MemoryHealthWidget({ analytics }: WidgetBodyProps) {
     );
   }
   return (
-    <div className={s.kpi}>
-      <div className={s.kpiHero}>
-        <span className={s.kpiHeroValue}>{fmt(m.total_memories)}</span>
-      </div>
-    </div>
+    <MemoryStatStrip
+      items={[
+        { key: 'live', value: fmt(m.total_memories), label: 'live' },
+        { key: 'age', value: `${fmtDays(m.avg_memory_age_days)}d`, label: 'avg age' },
+        {
+          key: 'stale',
+          value: fmt(m.stale_memories),
+          label: 'stale >30d',
+          tone: m.stale_memories > 0 ? 'warning' : undefined,
+        },
+      ]}
+    />
   );
 }
 
@@ -302,29 +351,33 @@ function MemoryBusFactorWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// ── knowledge categories (tag chips + count) ────────
+// ── knowledge categories (ranked tag table) ────────
 //
-// Two-column row: a tag chip carrying the category identifier (sans ink in
-// a pill so the row reads as "this is a tag, not a path or filename"), and
-// a mono count beside it. Chips are tinted by rank tier — top three
-// promoted to a stronger background so the leaderboard reads from chip
-// saturation rather than from a chart bar. Avoids the generic gray-bar
-// look that read as decorative; the chip is a deliberate "tag" mark
-// unique to the knowledge-categories surface.
+// TAG | MEMORIES | VIEW. Counts get a proportional fill so the reader sees
+// distribution immediately, while the row still follows the table + View
+// convention used by the rest of the memory category.
 
 function MemoryCategoriesWidget({ analytics }: WidgetBodyProps) {
   const cats = analytics.memory_categories;
   if (cats.length === 0) {
     return <SectionEmpty>Categories appear when agents tag memories on save.</SectionEmpty>;
   }
-  const visible = cats.slice(0, TOP_CATEGORIES_VISIBLE);
+  const visible = cats.slice(
+    0,
+    visibleRowsWithOverflow(cats.length, CATEGORIES_NO_OVERFLOW_CAP, CATEGORIES_WITH_OVERFLOW_CAP),
+  );
   const hidden = cats.length - visible.length;
+  const maxCount = Math.max(...visible.map((c) => c.count), 1);
   const open = () => navigateToDetail('memory', 'health', 'top-tags');
   return (
     <>
-      <div className={s.catList}>
+      <div className={s.catTable}>
+        <div className={s.catHeader}>
+          <span>Tag</span>
+          <span>Memories</span>
+          <span aria-hidden="true" />
+        </div>
         {visible.map((c, i) => {
-          const tier = i === 0 ? s.catChipLead : i < 3 ? s.catChipPrimary : s.catChipMuted;
           return (
             <button
               key={c.category}
@@ -334,8 +387,17 @@ function MemoryCategoriesWidget({ analytics }: WidgetBodyProps) {
               onClick={open}
               aria-label={`Open memory categories · ${c.category}, ${fmt(c.count)} memories`}
             >
-              <span className={`${s.catChip} ${tier}`}>{c.category}</span>
-              <span className={s.catCount}>{fmt(c.count)}</span>
+              <span className={s.catTag}>{c.category}</span>
+              <span className={s.catMetric}>
+                <span className={s.catTrack}>
+                  <span
+                    className={i === 0 ? s.catFillLead : s.catFill}
+                    style={{ width: `${(c.count / maxCount) * 100}%` }}
+                  />
+                </span>
+                <span className={s.catCount}>{fmt(c.count)}</span>
+              </span>
+              <span className={s.tableViewButton}>View</span>
             </button>
           );
         })}
@@ -345,11 +407,10 @@ function MemoryCategoriesWidget({ analytics }: WidgetBodyProps) {
   );
 }
 
-// ── outcomes by memory (proportional bars) ──────────
+// ── outcomes by memory (completion lenses) ──────────
 //
-// Three rows: mono label / 10px-tall proportional bar / mono percent +
-// session count. Color tones the bar by completion-rate severity. Real
-// height (not hairlines) so the bars register as data, not strokes.
+// Equal-size lenses per bucket. Arc length encodes completion rate; sample
+// size stays as text so n never becomes a hidden area/height channel.
 
 function MemoryOutcomesWidget({ analytics }: WidgetBodyProps) {
   const moc = analytics.memory_outcome_correlation;
@@ -366,7 +427,9 @@ function MemoryOutcomesWidget({ analytics }: WidgetBodyProps) {
   // and read as "memory works" when it's just noise. Drop sub-floor buckets,
   // and require at least two cleared buckets so the chart is a comparison,
   // not a lone bar.
-  const visible = moc.filter((m) => m.sessions >= MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS);
+  const visible = moc
+    .filter((m) => m.sessions >= MEMORY_OUTCOMES_MIN_BUCKET_SESSIONS)
+    .sort((a, b) => memoryOutcomeRank(a.bucket) - memoryOutcomeRank(b.bucket));
   if (visible.length < 2) {
     return (
       <SectionEmpty>
@@ -375,67 +438,88 @@ function MemoryOutcomesWidget({ analytics }: WidgetBodyProps) {
     );
   }
   return (
-    <div className={s.outcomeBars}>
-      {visible.map((m, i) => (
-        <div key={m.bucket} className={s.outcomeRow} style={{ '--row-index': i } as CSSProperties}>
-          <span className={s.outcomeLabel}>{m.bucket}</span>
-          <span
-            className={s.outcomeBar}
+    <div className={s.outcomeLenses}>
+      {visible.map((m, i) => {
+        const tone = completionColor(m.completion_rate);
+        const label = memoryOutcomeLabel(m.bucket);
+        const dash = Math.max(0, Math.min(100, m.completion_rate));
+        return (
+          <div
+            key={m.bucket}
+            className={s.outcomeLens}
             style={
               {
-                '--bar-w': `${m.completion_rate}%`,
-                '--bar-color': completionTone(m.completion_rate),
+                '--row-index': i,
+                '--lens-color': tone,
+                '--lens-dash': dash,
               } as CSSProperties
             }
-          />
-          <span className={s.outcomeStat}>
-            {m.completion_rate}%<span className={s.outcomeStatSessions}>· {fmt(m.sessions)}</span>
-          </span>
-        </div>
-      ))}
+          >
+            <span className={s.outcomeLensChart}>
+              <svg
+                className={s.outcomeLensSvg}
+                viewBox="0 0 120 120"
+                role="img"
+                aria-label={`${label}: ${m.completion_rate}% complete, ${fmt(m.completed)} of ${fmt(m.sessions)} sessions`}
+              >
+                <circle className={s.outcomeLensTrack} cx="60" cy="60" r="46" pathLength="100" />
+                <circle className={s.outcomeLensArc} cx="60" cy="60" r="46" pathLength="100" />
+              </svg>
+              <span className={s.outcomeLensRate}>{m.completion_rate}%</span>
+            </span>
+            <span className={s.outcomeLensLabel}>{label}</span>
+            <span className={s.outcomeLensMeta}>
+              {fmt(m.completed)} of {fmt(m.sessions)} sessions
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-// ── memory hygiene (KPI hero: pending + flow caption) ──
+// ── memory hygiene (status strip: invalidated + merged + pending) ──
 
 function MemorySupersessionFlowWidget({ analytics }: WidgetBodyProps) {
   const sup = analytics.memory_supersession;
   const idle =
     sup.pending_proposals === 0 && sup.invalidated_period === 0 && sup.merged_period === 0;
   return (
-    <div className={s.kpi}>
-      <div className={s.kpiHero}>
-        <span
-          className={`${s.kpiHeroValue} ${
-            sup.pending_proposals > 0 ? s.kpiHeroValueWarn : idle ? s.kpiHeroValueIdle : ''
-          }`}
-        >
-          {fmt(sup.pending_proposals)}
-        </span>
-        <span className={s.kpiHeroSuffix}>pending</span>
-      </div>
-    </div>
+    <MemoryStatStrip
+      items={[
+        {
+          key: 'invalidated',
+          value: fmt(sup.invalidated_period),
+          label: 'invalidated',
+          tone: idle ? 'idle' : undefined,
+        },
+        {
+          key: 'merged',
+          value: fmt(sup.merged_period),
+          label: 'merged',
+          tone: idle ? 'idle' : undefined,
+        },
+        {
+          key: 'pending',
+          value: fmt(sup.pending_proposals),
+          label: 'pending',
+          tone: sup.pending_proposals > 0 ? 'warning' : idle ? 'idle' : undefined,
+        },
+      ]}
+    />
   );
 }
 
-// ── secrets blocked (KPI hero: blocked + 24h caption) ──
+// ── secrets blocked (period stat) ──
 
 function MemorySecretsShieldWidget({ analytics }: WidgetBodyProps) {
   const ss = analytics.memory_secrets_shield;
   return (
-    <div className={s.kpi}>
-      <div className={s.kpiHero}>
-        <span
-          className={`${s.kpiHeroValue} ${
-            ss.blocked_period > 0 ? s.kpiHeroValueWarn : s.kpiHeroValueIdle
-          }`}
-        >
-          {fmt(ss.blocked_period)}
-        </span>
-        <span className={s.kpiHeroSuffix}>blocked</span>
-      </div>
-    </div>
+    <StatWidget
+      value={fmt(ss.blocked_period)}
+      onOpenDetail={() => navigateToDetail('memory', 'health', 'secrets')}
+      detailAriaLabel={`Open secrets blocked detail, ${fmt(ss.blocked_period)} blocked this period`}
+    />
   );
 }
 

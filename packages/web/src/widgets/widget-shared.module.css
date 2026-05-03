@@ -12,14 +12,30 @@
 
 .heroStatValue {
   font-family: var(--display);
-  font-size: 3.6rem;
+  font-size: var(--display-hero);
   font-weight: 200;
-  letter-spacing: -0.04em;
-  line-height: 1;
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.heroStatInactive {
+  color: var(--soft);
+}
+
+.statSelectButton {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
 .statInlineDelta {
@@ -117,6 +133,42 @@
   gap: 16px 24px;
   flex: 1;
   align-content: flex-start;
+}
+
+/* ── Chart typography ────────────────────────────────
+ *
+ * For compact chart-centered numbers, labels, and sample metadata. These are
+ * smaller than StatWidget heroes but keep the same light display language.
+ */
+
+.chartRateValue {
+  font-family: var(--display);
+  font-size: clamp(var(--text-lg), 1.5vw, var(--text-xl));
+  font-weight: 300;
+  letter-spacing: var(--display-spacing);
+  line-height: var(--display-line);
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.chartLabel {
+  font-family: var(--sans);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.chartMeta {
+  font-family: var(--mono);
+  font-size: var(--text-2xs);
+  color: var(--soft);
+  font-weight: 400;
+  letter-spacing: var(--tracking-stat);
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
 /* ── Row interaction base ─────────────────────────────

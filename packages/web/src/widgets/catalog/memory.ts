@@ -48,20 +48,18 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
       'Freeform categories your agents tag memories with. Stays empty until agents start tagging.',
     category: 'memory',
     scope: 'both',
-    // The body renders a chromeless type-ladder (rank by font weight + size,
-    // not bars). data-list is the catalog viz that matches the rendered
-    // primitive — the prior 'bar-chart' tag was a stale leftover from a
-    // pre-ladder iteration and confused the picker filter.
+    // Ranked tag table with proportional count bars and per-row View pills.
+    // data-list is the catalog viz that matches the rendered primitive.
     viz: 'data-list',
     w: 6,
-    h: 4,
+    h: 3,
     minW: 4,
     minH: 3,
     dataKeys: ['memory_categories'],
-    // fitContent so a sparse categories list (1-3 rows) doesn't reserve a
-    // 4th row of empty space. WidgetGrid measures the body's natural
-    // height and shrinks the cell, capped at h:4 so a populated list still
-    // gets the full slot.
+    // fitContent so a sparse categories list (1-3 rows) doesn't reserve
+    // empty space. WidgetGrid measures the body's natural height and
+    // shrinks the cell, capped at h:3 so a populated list still gets the
+    // full slot.
     fitContent: true,
     drillTarget: { view: 'memory', tab: 'health', q: 'top-tags' },
     ownsClick: true,
@@ -74,9 +72,10 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
     category: 'memory',
     scope: 'both',
     viz: 'stat-row',
-    w: 6,
+    w: 4,
     h: 2,
     minW: 3,
+    maxW: 4,
     minH: 2,
     dataKeys: ['memory_usage'],
     timeScope: 'all-time',
@@ -107,16 +106,16 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
     id: 'memory-supersession-flow',
     name: 'memory hygiene',
     description:
-      'Pending consolidation proposals, with how many got invalidated or merged. Stays quiet until Memory Hygiene runs on its cadence.',
+      'Memory Cleanup flow this period, plus the current pending review queue. Stays quiet until Memory Hygiene runs on its cadence.',
     category: 'memory',
     scope: 'both',
     viz: 'stat-row',
-    w: 6,
+    w: 4,
     h: 2,
     minW: 3,
+    maxW: 4,
     minH: 2,
     dataKeys: ['memory_supersession'],
-    timeScope: 'live',
     drillTarget: { view: 'memory', tab: 'hygiene', q: 'flow' },
   },
   {
@@ -126,13 +125,15 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
       'Secrets caught before they were saved into shared memory. Chinmeister sees writes from every tool, so it catches what no individual tool can.',
     category: 'memory',
     scope: 'both',
-    viz: 'stat-row',
-    w: 4,
+    viz: 'stat',
+    w: 3,
     h: 2,
     minW: 3,
+    maxW: 3,
     minH: 2,
     dataKeys: ['memory_secrets_shield'],
     drillTarget: { view: 'memory', tab: 'health', q: 'secrets' },
+    ownsClick: true,
   },
   {
     id: 'memory-outcomes',
@@ -141,11 +142,13 @@ export const MEMORY_WIDGETS: WidgetDef[] = [
       "How often sessions that read memory finish, compared to sessions that didn't. Session-grain comparison; the per-memory question lives inside the Memory detail view's Health tab.",
     category: 'memory',
     scope: 'both',
-    viz: 'bar-chart',
-    w: 6,
+    viz: 'ring',
+    w: 4,
     h: 3,
     minW: 4,
-    minH: 2,
+    maxW: 4,
+    minH: 3,
+    maxH: 3,
     dataKeys: ['memory_outcome_correlation'],
     drillTarget: { view: 'memory', tab: 'health', q: 'outcomes' },
   },

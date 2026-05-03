@@ -79,7 +79,7 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
     {
       key: 'stale',
       value: fmtCount(m.stale_memories),
-      label: 'stale (>90d)',
+      label: 'stale (>30d)',
       sublabel: `${Math.round(stalePct)}% of live`,
       color: staleTone === 'warning' ? 'var(--warn)' : undefined,
       viz:
@@ -99,7 +99,7 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
       <Metric>{Math.round(m.avg_memory_age_days)}d</Metric> old
       {m.stale_memories > 0 && (
         <>
-          ; <Metric tone={staleTone}>{fmtCount(m.stale_memories)}</Metric> over 90 days
+          ; <Metric tone={staleTone}>{fmtCount(m.stale_memories)}</Metric> over 30 days
         </>
       )}
       .
@@ -117,8 +117,8 @@ export function HealthPanel({ analytics }: { analytics: UserAnalytics }) {
     color: completionColor(b.completion_rate),
     meta: <>{b.completion_rate}% complete</>,
   }));
-  const searchedHit = moc.find((b) => /searched.*results/i.test(b.bucket));
-  const noSearch = moc.find((b) => /no-search|without/i.test(b.bucket));
+  const searchedHit = moc.find((b) => /hit memory/i.test(b.bucket));
+  const noSearch = moc.find((b) => /no[-\s]search|without/i.test(b.bucket));
   const outcomesAnswer =
     searchedHit && noSearch && totalOutcomeSessions >= MEMORY_OUTCOMES_MIN_SESSIONS ? (
       <>
