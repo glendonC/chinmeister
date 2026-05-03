@@ -41,10 +41,10 @@
  * frame (flex column, no min-height), adds a subtle hover lift via the
  * existing --hover-bg token, and parks a small ↗ corner affordance so the
  * surface reads as drillable without competing with the body's own
- * typography. The arrow is softly visible at rest for touch discoverability,
- * then strengthens on hover/focus. The button role is on the div so the
- * entire body area is the click target — keyboard activation comes through
- * the onKeyDown handler in WidgetRenderer.
+ * typography. Geometry is tokenized in tokens.css: bleed controls the hover
+ * surface extension, inset controls chart breathing room, arrow-space keeps
+ * content out from under the ↗. Tables/stat widgets skip this wrapper via
+ * `ownsClick`, so this standard only applies to full-background CTA charts.
  */
 .widgetBodyClickable {
   flex: 1;
@@ -54,9 +54,10 @@
   position: relative;
   cursor: pointer;
   border-radius: 8px;
-  margin: -8px;
-  /* Room for the corner ↗ so bar charts and edge-to-edge vizzes don’t run under it */
-  padding: 8px 2.25rem 8px 8px;
+  margin: calc(var(--widget-clickable-bleed) * -1);
+  padding: var(--widget-clickable-inset-y)
+    calc(var(--widget-clickable-inset-x) + var(--widget-clickable-arrow-space))
+    var(--widget-clickable-inset-y) var(--widget-clickable-inset-x);
   transition: background 120ms ease;
   outline: none;
 }

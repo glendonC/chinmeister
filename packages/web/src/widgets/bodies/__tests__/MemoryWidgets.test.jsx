@@ -107,10 +107,11 @@ describe('MemoryOutcomesWidget — sample-size gate', () => {
         ],
       }),
     );
-    expect(r.container.textContent).toContain('hit memory');
-    expect(r.container.textContent).toContain('searched, no results');
-    expect(r.container.textContent).toContain('no search');
+    expect(r.container.textContent).toContain('with memory');
+    expect(r.container.textContent).toContain('searched empty');
+    expect(r.container.textContent).toContain('without memory');
     expect(r.container.textContent).toContain('87.5%');
+    expect(r.container.textContent).toContain('7 of 8 sessions');
     r.unmount();
   });
 

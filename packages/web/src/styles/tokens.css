@@ -12,6 +12,14 @@
   --space-xl: 28px;
   --space-2xl: 34px;
 
+  /* Full-background widget CTA geometry.
+     The bleed controls how far the hover surface extends past body content;
+     the inset controls chart breathing room inside that hover surface. */
+  --widget-clickable-bleed: 8px;
+  --widget-clickable-inset-y: 14px;
+  --widget-clickable-inset-x: 14px;
+  --widget-clickable-arrow-space: 2.25rem;
+
   /* ── Border radius ── */
   --radius-pill: 999px;
   --radius-circle: 50%;
