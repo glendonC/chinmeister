@@ -81,7 +81,7 @@ describe('ProjectsWidget — team name binding', () => {
   });
 });
 
-describe('ProjectsWidget — column headers + detail button', () => {
+describe('ProjectsWidget — column headers + row CTA', () => {
   it('renders mono-uppercase column headers above the rows', async () => {
     // Column headers match the LiveAgents/LiveConflicts pattern: mono,
     // uppercase, tracking-table letter spacing. Locks against a regression
@@ -102,10 +102,9 @@ describe('ProjectsWidget — column headers + detail button', () => {
     r.unmount();
   });
 
-  it('renders a "Detail" CTA button on each row', async () => {
-    // Mirrors live-agents' liveViewButton — explicit click target on the
-    // right edge that inverts to accent on row hover. Replaces the earlier
-    // ↗ arrow which read as decoration rather than action.
+  it('renders a "View" CTA on each row', async () => {
+    // Same affordance label as other widget tables (directories, work-types,
+    // live rows): explicit right-edge click target, not a decorative arrow.
     const Projects = await loadProjectsWidget();
     const r = render(
       Projects,
@@ -113,7 +112,7 @@ describe('ProjectsWidget — column headers + detail button', () => {
         summaries: [{ team_id: 't1', team_name: 'chinmeister' }],
       }),
     );
-    expect(r.container.textContent).toContain('Detail');
+    expect(r.container.textContent).toContain('View');
     r.unmount();
   });
 });
